@@ -29,6 +29,7 @@ export function SceneRefinement() {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingStep, setGeneratingStep] = useState<SceneStep | null>(null);
+  const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -224,14 +225,68 @@ export function SceneRefinement() {
     }
   };
 
-  // 一键生成全部
+  // 一键生成全部 - 修复版本
   const generateAll = async () => {
-    await generateSceneDescription();
-    if (currentScene.sceneDescription) {
-      await generateActionDescription();
+    // 防止重复触发
+    if (isBatchGenerating || isGenerating) {
+      return;
     }
-    if (currentScene.actionDescription) {
-      await generateShotPrompt();
+
+    setIsBatchGenerating(true);
+    setError('');
+
+    try {
+      // 第一阶段：生成场景描述
+      if (!currentScene.sceneDescription) {
+        setGeneratingStep('scene_description');
+        await generateSceneDescription();
+        
+        // 添加延迟确保状态更新
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      // 重新获取最新的场景数据
+      let { scenes: updatedScenes1 } = useStoryboardStore.getState();
+      let latestScene1 = updatedScenes1.find(s => s.id === currentScene.id);
+      
+      if (!latestScene1?.sceneDescription) {
+        throw new Error('场景描述生成失败');
+      }
+
+      // 第二阶段：生成动作描述
+      if (!latestScene1.actionDescription) {
+        setGeneratingStep('action_description');
+        await generateActionDescription();
+        
+        // 添加延迟确保状态更新
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      // 再次获取最新的场景数据
+      let { scenes: updatedScenes2 } = useStoryboardStore.getState();
+      let latestScene2 = updatedScenes2.find(s => s.id === currentScene.id);
+      
+      if (!latestScene2?.actionDescription) {
+        throw new Error('动作描述生成失败');
+      }
+
+      // 第三阶段：生成镜头提示词
+      if (!latestScene2.shotPrompt) {
+        setGeneratingStep('shot_prompt');
+        await generateShotPrompt();
+        
+        // 添加延迟确保状态更新
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '一键生成失败';
+      setError(errorMessage);
+      console.error('一键生成全部失败:', err);
+    } finally {
+      setIsBatchGenerating(false);
+      setIsGenerating(false);
+      setGeneratingStep(null);
     }
   };
 
@@ -520,11 +575,20 @@ export function SceneRefinement() {
           <Button
             variant="outline"
             onClick={generateAll}
-            disabled={isGenerating || isCompleted}
+            disabled={isGenerating || isBatchGenerating || isCompleted}
             className="gap-2"
           >
-            <Sparkles className="h-4 w-4" />
-            <span>一键生成全部</span>
+            {isBatchGenerating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>批量生成中...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                <span>一键生成全部</span>
+              </>
+            )}
           </Button>
 
           <div className="flex gap-2">
