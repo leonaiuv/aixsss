@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
@@ -55,18 +55,28 @@ export function SceneGeneration() {
     return null;
   }
 
-  const canGenerate = currentProject.workflowState === 'DATA_COLLECTED' || 
-                      currentProject.workflowState === 'SCENE_LIST_EDITING' ||
-                      currentProject.workflowState === 'SCENE_LIST_CONFIRMED' ||
-                      currentProject.workflowState === 'SCENE_PROCESSING';
+  // 使用 useMemo 缓存计算结果
+  const canGenerate = useMemo(() => 
+    currentProject.workflowState === 'DATA_COLLECTED' || 
+    currentProject.workflowState === 'SCENE_LIST_EDITING' ||
+    currentProject.workflowState === 'SCENE_LIST_CONFIRMED' ||
+    currentProject.workflowState === 'SCENE_PROCESSING',
+    [currentProject.workflowState]
+  );
   
   // 是否已经确认过分镜列表（已进入细化流程）
-  const isAlreadyConfirmed = currentProject.workflowState === 'SCENE_LIST_CONFIRMED' || 
-                             currentProject.workflowState === 'SCENE_PROCESSING' ||
-                             currentProject.workflowState === 'ALL_SCENES_COMPLETE';
+  const isAlreadyConfirmed = useMemo(() => 
+    currentProject.workflowState === 'SCENE_LIST_CONFIRMED' || 
+    currentProject.workflowState === 'SCENE_PROCESSING' ||
+    currentProject.workflowState === 'ALL_SCENES_COMPLETE',
+    [currentProject.workflowState]
+  );
   
-  const canProceed = scenes.length >= 6 && 
-                     (currentProject.workflowState === 'SCENE_LIST_EDITING' || isAlreadyConfirmed);
+  const canProceed = useMemo(() => 
+    scenes.length >= 6 && 
+    (currentProject.workflowState === 'SCENE_LIST_EDITING' || isAlreadyConfirmed),
+    [scenes.length, currentProject.workflowState, isAlreadyConfirmed]
+  );
 
   // 生成分镜列表
   const handleGenerate = async () => {

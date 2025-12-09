@@ -1,30 +1,49 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { useProjectStore } from './stores/projectStore';
 import { useConfigStore } from './stores/configStore';
 import { useThemeStore } from './stores/themeStore';
 import { initStorage } from './lib/storage';
 import { ProjectList } from './components/ProjectList';
-import { Editor } from './components/Editor';
-import { ConfigDialog } from './components/ConfigDialog';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Toaster } from './components/ui/toaster';
-import { DevPanel, DevPanelTrigger } from './components/DevPanel';
 import { AIProgressToast } from './components/AIProgressToast';
 import { initProgressBridge } from './lib/ai/progressBridge';
-import { Settings, Search, Terminal } from 'lucide-react';
+import { Settings, Search, Terminal, Loader2 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent } from './components/ui/dialog';
-import { ProjectSearch } from './components/editor/ProjectSearch';
 import { useAIProgressStore } from './stores/aiProgressStore';
+
+// 懒加载重型组件
+const Editor = lazy(() => import('./components/Editor').then(m => ({ default: m.Editor })));
+const ConfigDialog = lazy(() => import('./components/ConfigDialog').then(m => ({ default: m.ConfigDialog })));
+const DevPanel = lazy(() => import('./components/DevPanel').then(m => ({ default: m.DevPanel })));
+const DevPanelTrigger = lazy(() => import('./components/DevPanel').then(m => ({ default: m.DevPanelTrigger })));
+const ProjectSearch = lazy(() => import('./components/editor/ProjectSearch').then(m => ({ default: m.ProjectSearch })));
+
+// 加载占位组件
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center p-8">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
+  );
+}
 
 function App() {
   const [currentView, setCurrentView] = useState<'list' | 'editor'>('list');
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
-  const { loadProjects, currentProject, projects, setCurrentProject } = useProjectStore();
-  const { loadConfig } = useConfigStore();
-  const { initTheme } = useThemeStore();
-  const { togglePanel, isPanelVisible } = useAIProgressStore();
+  
+  // 使用选择器优化，避免订阅整个 store
+  const loadProjects = useProjectStore(state => state.loadProjects);
+  const currentProject = useProjectStore(state => state.currentProject);
+  const projects = useProjectStore(state => state.projects);
+  const setCurrentProject = useProjectStore(state => state.setCurrentProject);
+  const loadConfig = useConfigStore(state => state.loadConfig);
+  const initTheme = useThemeStore(state => state.initTheme);
+  const togglePanel = useAIProgressStore(state => state.togglePanel);
+  const isPanelVisible = useAIProgressStore(state => state.isPanelVisible);
+  
   const [filteredProjects, setFilteredProjects] = useState(projects);
 
   useEffect(() => {
@@ -53,11 +72,21 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleSearchResultClick = (project: typeof projects[0]) => {
+  // 使用 useCallback 缓存回调函数
+  const handleOpenEditor = useCallback(() => setCurrentView('editor'), []);
+  const handleBackToList = useCallback(() => setCurrentView('list'), []);
+  const handleOpenConfig = useCallback(() => setConfigDialogOpen(true), []);
+  const handleOpenSearch = useCallback(() => setSearchDialogOpen(true), []);
+  
+  const handleSearchResultClick = useCallback((project: typeof projects[0]) => {
     setCurrentProject(project);
     setCurrentView('editor');
     setSearchDialogOpen(false);
-  };
+  }, [setCurrentProject]);
+
+  const handleFilteredProjectsChange = useCallback((projects: typeof filteredProjects) => {
+    setFilteredProjects(projects);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -78,7 +107,7 @@ function App() {
               <Button 
                 variant="ghost" 
                 size="sm"
-                onClick={() => setCurrentView('list')}
+                onClick={handleBackToList}
               >
                 返回项目列表
               </Button>
@@ -86,7 +115,7 @@ function App() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setSearchDialogOpen(true)}
+              onClick={handleOpenSearch}
               title="搜索 (Ctrl+K)"
             >
               <Search className="h-5 w-5" />
@@ -104,7 +133,7 @@ function App() {
             <Button 
               variant="ghost" 
               size="icon"
-              onClick={() => setConfigDialogOpen(true)}
+              onClick={handleOpenConfig}
             >
               <Settings className="h-5 w-5" />
             </Button>
@@ -115,25 +144,31 @@ function App() {
       {/* 主内容区 */}
       <main className="container mx-auto px-6 py-8">
         {currentView === 'list' ? (
-          <ProjectList onOpenEditor={() => setCurrentView('editor')} />
+          <ProjectList onOpenEditor={handleOpenEditor} />
         ) : (
-          <Editor />
+          <Suspense fallback={<LoadingFallback />}>
+            <Editor />
+          </Suspense>
         )}
       </main>
 
       {/* API配置弹窗 */}
-      <ConfigDialog 
-        open={configDialogOpen} 
-        onOpenChange={setConfigDialogOpen} 
-      />
+      <Suspense fallback={null}>
+        <ConfigDialog 
+          open={configDialogOpen} 
+          onOpenChange={setConfigDialogOpen} 
+        />
+      </Suspense>
 
       {/* 全局搜索对话框 */}
       <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
         <DialogContent className="max-w-2xl">
-          <ProjectSearch
-            projects={projects}
-            onResultsChange={setFilteredProjects}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <ProjectSearch
+              projects={projects}
+              onResultsChange={handleFilteredProjectsChange}
+            />
+          </Suspense>
           {filteredProjects.length > 0 && (
             <div className="mt-4 space-y-2 max-h-60 overflow-auto">
               {filteredProjects.slice(0, 5).map((project) => (
@@ -160,8 +195,10 @@ function App() {
       <AIProgressToast />
       
       {/* 开发者面板 */}
-      <DevPanel />
-      <DevPanelTrigger />
+      <Suspense fallback={null}>
+        <DevPanel />
+        <DevPanelTrigger />
+      </Suspense>
     </div>
   );
 }

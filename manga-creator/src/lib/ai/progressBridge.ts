@@ -20,6 +20,7 @@ const callTypeToTitle: Record<AICallType, string> = {
   shot_prompt: '生成镜头提示词',
   keyframe_prompt: '生成关键帧提示词',
   motion_prompt: '生成时空提示词',
+  dialogue: '生成台词',
   custom: '自定义AI调用',
 };
 
@@ -31,6 +32,7 @@ const callTypeToDesc: Record<AICallType, string> = {
   shot_prompt: '生成适合绘图AI的镜头描述',
   keyframe_prompt: '生成静态关键帧图片描述',
   motion_prompt: '生成动作/镜头/变化描述',
+  dialogue: '生成场景台词和对白',
   custom: '执行自定义AI操作',
 };
 

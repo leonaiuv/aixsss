@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { ProjectCard } from './ProjectCard';
 import { Button } from './ui/button';
@@ -112,17 +112,18 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
     onOpenEditor();
   };
 
-  const handleOpenProject = (project: typeof projects[0]) => {
+  // 使用 useCallback 缓存回调函数，防止子组件不必要重渲染
+  const handleOpenProject = useCallback((project: typeof projects[0]) => {
     setCurrentProject(project);
     onOpenEditor();
-  };
+  }, [setCurrentProject, onOpenEditor]);
 
-  const handleDeleteClick = (projectId: string) => {
+  const handleDeleteClick = useCallback((projectId: string) => {
     setProjectToDelete(projectId);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = useCallback(() => {
     if (projectToDelete) {
       deleteProject(projectToDelete);
       toast({
@@ -131,7 +132,7 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
       setProjectToDelete(null);
       setDeleteDialogOpen(false);
     }
-  };
+  }, [projectToDelete, deleteProject, toast]);
 
   return (
     <div className="space-y-6">

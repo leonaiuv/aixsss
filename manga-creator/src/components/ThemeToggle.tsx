@@ -7,6 +7,7 @@
 // 3. 主题持久化
 // ==========================================
 
+import { memo, useCallback } from 'react';
 import { useThemeStore } from '@/stores/themeStore';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,8 +18,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sun, Moon, Monitor } from 'lucide-react';
 
-export function ThemeToggle() {
-  const { mode: theme, setMode: setTheme } = useThemeStore();
+function ThemeToggleComponent() {
+  // 使用选择器优化
+  const theme = useThemeStore(state => state.mode);
+  const setTheme = useThemeStore(state => state.setMode);
+  
+  // 使用 useCallback 缓存回调
+  const handleLightTheme = useCallback(() => setTheme('light'), [setTheme]);
+  const handleDarkTheme = useCallback(() => setTheme('dark'), [setTheme]);
+  const handleSystemTheme = useCallback(() => setTheme('system'), [setTheme]);
 
   return (
     <DropdownMenu>
@@ -30,15 +38,15 @@ export function ThemeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme('light')}>
+        <DropdownMenuItem onClick={handleLightTheme}>
           <Sun className="h-4 w-4 mr-2" />
           亮色
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('dark')}>
+        <DropdownMenuItem onClick={handleDarkTheme}>
           <Moon className="h-4 w-4 mr-2" />
           暗色
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('system')}>
+        <DropdownMenuItem onClick={handleSystemTheme}>
           <Monitor className="h-4 w-4 mr-2" />
           跟随系统
         </DropdownMenuItem>
@@ -46,3 +54,6 @@ export function ThemeToggle() {
     </DropdownMenu>
   );
 }
+
+// 使用 memo 优化重渲染
+export const ThemeToggle = memo(ThemeToggleComponent);

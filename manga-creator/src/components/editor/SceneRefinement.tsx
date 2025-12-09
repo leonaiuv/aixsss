@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
@@ -58,8 +58,11 @@ export function SceneRefinement() {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [characterDialogOpen, setCharacterDialogOpen] = useState(false);
 
-  // 项目角色列表
-  const projectCharacters = characters.filter(c => c.projectId === currentProject?.id);
+// 使用 useMemo 优化项目角色列表过滤
+  const projectCharacters = useMemo(() => 
+    characters.filter(c => c.projectId === currentProject?.id),
+    [characters, currentProject?.id]
+  );
 
   useEffect(() => {
     if (currentProject) {
@@ -74,7 +77,11 @@ export function SceneRefinement() {
   }
 
   const currentScene = scenes[currentSceneIndex];
-  const progress = Math.round(((currentSceneIndex + 1) / scenes.length) * 100);
+  // 缓存进度计算
+  const progress = useMemo(() => 
+    Math.round(((currentSceneIndex + 1) / scenes.length) * 100),
+    [currentSceneIndex, scenes.length]
+  );
 
   // 生成场景描述
   const generateSceneDescription = async () => {
@@ -416,24 +423,24 @@ export function SceneRefinement() {
     }
   };
 
-  // 导航到上/下一个分镜
-  const goToPrevScene = () => {
+  // 使用 useCallback 优化导航回调
+  const goToPrevScene = useCallback(() => {
     if (currentSceneIndex > 0) {
       setCurrentSceneIndex(currentSceneIndex - 1);
       updateProject(currentProject.id, {
         currentSceneOrder: currentSceneIndex,
       });
     }
-  };
+  }, [currentSceneIndex, currentProject?.id, updateProject]);
 
-  const goToNextScene = () => {
+  const goToNextScene = useCallback(() => {
     if (currentSceneIndex < scenes.length - 1) {
       setCurrentSceneIndex(currentSceneIndex + 1);
       updateProject(currentProject.id, {
         currentSceneOrder: currentSceneIndex + 2,
       });
     }
-  };
+  }, [currentSceneIndex, scenes.length, currentProject?.id, updateProject]);
 
   // 一键生成全部 - 优化版本
   const generateAll = async () => {

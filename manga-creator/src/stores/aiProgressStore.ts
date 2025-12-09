@@ -504,6 +504,7 @@ export function getTaskTypeLabel(type: AICallType): string {
     shot_prompt: '镜头提示词',
     keyframe_prompt: '关键帧提示词',
     motion_prompt: '时空提示词',
+    dialogue: '台词生成',
     custom: '自定义调用',
   };
   return labels[type] || type;

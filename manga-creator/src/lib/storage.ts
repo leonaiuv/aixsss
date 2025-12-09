@@ -1,10 +1,65 @@
 import CryptoJS from 'crypto-js';
 import { Project, Scene, UserConfig } from '@/types';
+import { debounce, BatchQueue } from './performance';
 
 // 当前版本号 - 每次数据结构变化时递增
 const STORAGE_VERSION = '1.1.0';
 const ENCRYPTION_KEY = 'aixs-manga-creator-secret-key-2024';
 const BACKUP_PREFIX = 'aixs_backup_';
+
+// ==========================================
+// 防抖和批量处理配置
+// ==========================================
+
+// 项目保存缓存
+let pendingProjectSaves = new Map<string, Project>();
+
+// 防抖保存项目 - 300ms 内的多次保存合并为一次
+const debouncedSaveProjects = debounce(() => {
+  if (pendingProjectSaves.size === 0) return;
+  
+  try {
+    const projects = getProjects();
+    const projectsMap = new Map(projects.map(p => [p.id, p]));
+    
+    // 合并更新
+    for (const [id, project] of pendingProjectSaves) {
+      projectsMap.set(id, { ...project, updatedAt: new Date().toISOString() });
+    }
+    
+    localStorage.setItem(KEYS.PROJECTS, JSON.stringify([...projectsMap.values()]));
+    pendingProjectSaves.clear();
+  } catch (error) {
+    console.error('Debounced save projects failed:', error);
+  }
+}, 300);
+
+// 场景保存批量队列
+const sceneSaveQueue = new BatchQueue<{ projectId: string; scene: Scene }>(
+  (items) => {
+    // 按项目分组
+    const byProject = new Map<string, Scene[]>();
+    for (const { projectId, scene } of items) {
+      const scenes = byProject.get(projectId) || [];
+      scenes.push(scene);
+      byProject.set(projectId, scenes);
+    }
+    
+    // 批量保存
+    for (const [projectId, newScenes] of byProject) {
+      const existingScenes = getScenes(projectId);
+      const sceneMap = new Map(existingScenes.map(s => [s.id, s]));
+      
+      for (const scene of newScenes) {
+        sceneMap.set(scene.id, scene);
+      }
+      
+      saveScenesDirect(projectId, [...sceneMap.values()]);
+    }
+  },
+  200, // 200ms 延迟
+  20   // 最多 20 个场景合并
+);
 
 // ==========================================
 // 加密工具
@@ -331,6 +386,18 @@ export function getProject(projectId: string): Project | null {
 }
 
 export function saveProject(project: Project): void {
+  // 为了测试兼容性，使用立即保存
+  saveProjectImmediate(project);
+}
+
+// 批量保存项目（使用防抖优化，用于频繁更新项目）
+export function saveProjectBatched(project: Project): void {
+  pendingProjectSaves.set(project.id, project);
+  debouncedSaveProjects();
+}
+
+// 立即保存项目（不防抖，用于关键操作）
+export function saveProjectImmediate(project: Project): void {
   try {
     const projects = getProjects();
     const index = projects.findIndex(p => p.id === project.id);
@@ -377,7 +444,8 @@ export function getScenes(projectId: string): Scene[] {
   }
 }
 
-export function saveScenes(projectId: string, scenes: Scene[]): void {
+// 内部直接保存方法（无防抖）
+function saveScenesDirect(projectId: string, scenes: Scene[]): void {
   try {
     localStorage.setItem(KEYS.scenesFor(projectId), JSON.stringify(scenes));
   } catch (error) {
@@ -386,12 +454,18 @@ export function saveScenes(projectId: string, scenes: Scene[]): void {
   }
 }
 
+// 对外暴露的保存方法
+export function saveScenes(projectId: string, scenes: Scene[]): void {
+  saveScenesDirect(projectId, scenes);
+}
+
 export function getScene(projectId: string, sceneId: string): Scene | null {
   const scenes = getScenes(projectId);
   return scenes.find(s => s.id === sceneId) || null;
 }
 
-export function saveScene(projectId: string, scene: Scene): void {
+// 立即保存场景（不使用批量队列，用于测试和关键操作）
+export function saveSceneImmediate(projectId: string, scene: Scene): void {
   try {
     const scenes = getScenes(projectId);
     const index = scenes.findIndex(s => s.id === scene.id);
@@ -402,11 +476,22 @@ export function saveScene(projectId: string, scene: Scene): void {
       scenes.push(scene);
     }
     
-    saveScenes(projectId, scenes);
+    saveScenesDirect(projectId, scenes);
   } catch (error) {
     console.error('Failed to save scene:', error);
     throw new Error('分镜保存失败');
   }
+}
+
+// 默认保存场景（为了测试兼容性，使用立即保存，在需要批量优化时可切换为队列）
+export function saveScene(projectId: string, scene: Scene): void {
+  // 为了测试兼容性，使用立即保存
+  saveSceneImmediate(projectId, scene);
+}
+
+// 批量保存场景（使用队列优化，用于频繁更新场景）
+export function saveSceneBatched(projectId: string, scene: Scene): void {
+  sceneSaveQueue.add({ projectId, scene });
 }
 
 // ==========================================
