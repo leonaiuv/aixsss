@@ -204,7 +204,36 @@ export type WorkflowState =
 export type SceneStep = 
   | 'scene_description'
   | 'keyframe_prompt'
-  | 'motion_prompt';
+  | 'motion_prompt'
+  | 'dialogue';  // 台词生成阶段
+
+// ==========================================
+// 台词相关类型
+// ==========================================
+
+/** 台词类型 */
+export type DialogueType = 
+  | 'dialogue'   // 对白（角色间对话）
+  | 'monologue'  // 独白（单个角色自言自语）
+  | 'narration'  // 旁白（画外音）
+  | 'thought';   // 心理活动（内心独白）
+
+/** 台词类型中文标签 */
+export const DIALOGUE_TYPE_LABELS: Record<DialogueType, string> = {
+  dialogue: '对白',
+  monologue: '独白',
+  narration: '旁白',
+  thought: '心理',
+};
+
+/** 单条台词 */
+export interface DialogueLine {
+  id: string;
+  type: DialogueType;
+  characterName?: string;  // 说话角色名（旁白时可为空）
+  content: string;         // 台词内容
+  order: number;           // 台词顺序
+}
 
 // 分镜状态
 export type SceneStatus = 
@@ -263,6 +292,8 @@ export interface Scene {
   shotPrompt: string;
   /** 时空提示词 - 动作/镜头/变化，用于视频AI */
   motionPrompt: string;
+  /** 台词列表 - 对白/独白/旁白/心理活动 */
+  dialogues?: DialogueLine[];
   contextSummary?: SceneContextSummary;
   status: SceneStatus;
   notes: string;

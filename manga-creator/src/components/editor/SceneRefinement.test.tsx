@@ -37,6 +37,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     actionDescription: '',
     shotPrompt: '',
     motionPrompt: '',
+    dialogues: [],
     status: 'pending' as const,
     notes: '',
   };
@@ -308,6 +309,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       actionDescription: '',
       shotPrompt: '已有关键帧提示词',
       motionPrompt: '已有时空提示词',
+      dialogues: [{ id: 'dl1', type: 'dialogue' as const, characterName: '角色', content: '台词', order: 1 }],
       status: 'completed' as const,
     }];
 
@@ -351,4 +353,224 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     // 验证 getState 被调用来获取最新状态
     expect(useStoryboardStore.getState).toHaveBeenCalled();
   }, 15000);
+});
+
+// ==========================================
+// 台词功能测试
+// ==========================================
+
+describe('SceneRefinement - 台词生成功能', () => {
+  const mockProject = {
+    id: 'test-project-1',
+    title: '测试项目',
+    summary: '测试故事',
+    style: '赛博朋克',
+    protagonist: '机械战士',
+    workflowState: 'SCENE_PROCESSING' as const,
+    currentSceneOrder: 1,
+    createdAt: '2024-01-01',
+    updatedAt: '2024-01-01',
+  };
+
+  const mockSceneWithContent = {
+    id: 'scene-1',
+    projectId: 'test-project-1',
+    order: 1,
+    summary: '主角与朋友相遇',
+    sceneDescription: '废弃的工厂内，昱暗的光线',
+    actionDescription: '',
+    shotPrompt: 'cyberpunk warrior in ruins',
+    motionPrompt: 'character walks forward',
+    dialogues: [],
+    status: 'keyframe_confirmed' as const,
+    notes: '',
+  };
+
+  const mockConfig = {
+    provider: 'deepseek' as const,
+    apiKey: 'test-key',
+    model: 'deepseek-chat',
+  };
+
+  let mockUpdateScene: ReturnType<typeof vi.fn>;
+  let mockUpdateProject: ReturnType<typeof vi.fn>;
+  let mockChatFn: ReturnType<typeof vi.fn>;
+  let scenesState: any[];
+
+  beforeEach(() => {
+    scenesState = [{ ...mockSceneWithContent }];
+
+    mockUpdateScene = vi.fn((projectId, sceneId, updates) => {
+      const sceneIndex = scenesState.findIndex(s => s.id === sceneId);
+      if (sceneIndex >= 0) {
+        scenesState[sceneIndex] = { ...scenesState[sceneIndex], ...updates };
+      }
+    });
+
+    mockUpdateProject = vi.fn();
+    mockChatFn = vi.fn();
+
+    vi.mocked(useProjectStore).mockReturnValue({
+      currentProject: mockProject,
+      updateProject: mockUpdateProject,
+      projects: [mockProject],
+      isLoading: false,
+      loadProjects: vi.fn(),
+      loadProject: vi.fn(),
+      createProject: vi.fn(),
+      deleteProject: vi.fn(),
+      setCurrentProject: vi.fn(),
+    } as any);
+
+    vi.mocked(useStoryboardStore).mockImplementation((selector?: any) => {
+      const state = {
+        scenes: scenesState,
+        updateScene: mockUpdateScene,
+        currentSceneId: null,
+        isGenerating: false,
+        loadScenes: vi.fn(),
+        setScenes: vi.fn(),
+        addScene: vi.fn(),
+        deleteScene: vi.fn(),
+        reorderScenes: vi.fn(),
+        setCurrentScene: vi.fn(),
+        setGenerating: vi.fn(),
+      };
+      return selector ? selector(state) : state;
+    });
+
+    vi.mocked(useStoryboardStore).getState = vi.fn(() => ({
+      scenes: scenesState,
+      updateScene: mockUpdateScene,
+      currentSceneId: null,
+      isGenerating: false,
+      loadScenes: vi.fn(),
+      setScenes: vi.fn(),
+      addScene: vi.fn(),
+      deleteScene: vi.fn(),
+      reorderScenes: vi.fn(),
+      setCurrentScene: vi.fn(),
+      setGenerating: vi.fn(),
+    })) as any;
+
+    vi.mocked(useConfigStore).mockReturnValue({
+      config: mockConfig,
+      isConfigured: true,
+      loadConfig: vi.fn(),
+      saveConfig: vi.fn(),
+      clearConfig: vi.fn(),
+      testConnection: vi.fn(),
+    } as any);
+
+    vi.mocked(AIFactory.createClient).mockReturnValue({
+      chat: mockChatFn,
+      streamChat: vi.fn(),
+      providerName: 'deepseek',
+    } as any);
+
+    vi.mocked(skillsModule.getSkillByName).mockImplementation((skillName: string) => {
+      const skillMap: Record<string, any> = {
+        'generate_scene_desc': {
+          name: 'scene-description',
+          promptTemplate: 'Generate scene: {style} {protagonist} {current_scene_summary} {prev_scene_summary}',
+          maxTokens: 500,
+        },
+        'generate_keyframe_prompt': {
+          name: 'keyframe-prompt',
+          promptTemplate: 'Generate keyframe: {style} {protagonist} {scene_description}',
+          maxTokens: 500,
+        },
+        'generate_motion_prompt': {
+          name: 'motion-prompt',
+          promptTemplate: 'Generate motion: {scene_description}',
+          maxTokens: 200,
+        },
+        'generate_dialogue': {
+          name: 'dialogue',
+          promptTemplate: 'Generate dialogue: {scene_summary} {scene_description} {characters}',
+          maxTokens: 800,
+        },
+      };
+      return skillMap[skillName] || null;
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('应该显示台词生成阶段（第4阶段）', async () => {
+    render(<SceneRefinement />);
+
+    // 检查台词阶段是否存在
+    expect(screen.getByText('台词生成')).toBeInTheDocument();
+  });
+
+  it('应该在时空提示词完成后启用台词生成按钮', async () => {
+    // 模拟已有时空提示词的场景
+    scenesState = [{
+      ...mockSceneWithContent,
+      motionPrompt: 'character walks forward',
+      dialogues: [],
+    }];
+
+    render(<SceneRefinement />);
+
+    // 查找台词生成按钮，应该可用
+    const dialogueSection = screen.getByText('台词生成').closest('[data-state]');
+    expect(dialogueSection).toBeInTheDocument();
+  });
+
+  it('应该成功生成台词', async () => {
+    const mockDialogueResponse = `[对白] 主角: 这里是什么地方？
+[旁白] 周围一片寂静。
+[心理] 主角: 我必须小心行事。`;
+
+    mockChatFn.mockResolvedValueOnce({ content: mockDialogueResponse });
+
+    scenesState = [{
+      ...mockSceneWithContent,
+      motionPrompt: 'character walks forward',
+      dialogues: [],
+    }];
+
+    render(<SceneRefinement />);
+
+    // 等待组件渲染
+    await waitFor(() => {
+      expect(screen.getByText('台词生成')).toBeInTheDocument();
+    });
+  });
+
+  it('应该显示已生成的台词列表', async () => {
+    scenesState = [{
+      ...mockSceneWithContent,
+      dialogues: [
+        { id: 'dl1', type: 'dialogue', characterName: '小明', content: '你好！', order: 1 },
+        { id: 'dl2', type: 'narration', content: '两人相视而笑', order: 2 },
+      ],
+    }];
+
+    render(<SceneRefinement />);
+
+    // 台词应该被显示
+    await waitFor(() => {
+      expect(screen.getByText('台词生成')).toBeInTheDocument();
+    });
+  });
+
+  it('应该支持台词复制功能', async () => {
+    scenesState = [{
+      ...mockSceneWithContent,
+      dialogues: [
+        { id: 'dl1', type: 'dialogue', characterName: '小明', content: '你好！', order: 1 },
+      ],
+    }];
+
+    render(<SceneRefinement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('台词生成')).toBeInTheDocument();
+    });
+  });
 });

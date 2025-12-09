@@ -5,9 +5,11 @@ import {
   ActionDescriptionSkill,
   KeyframePromptSkill,
   MotionPromptSkill,
+  DialogueSkill,
   SkillRegistry,
   getSkillForTask,
   getSkillByName,
+  parseDialoguesFromText,
 } from '@/lib/ai/skills';
 import { Skill } from '@/types';
 
@@ -173,6 +175,50 @@ describe('技能定义', () => {
       expect(MotionPromptSkill.promptTemplate).toContain('示例输出');
     });
   });
+
+  describe('DialogueSkill', () => {
+    it('应有正确的名称和描述', () => {
+      expect(DialogueSkill.name).toBe('dialogue');
+      expect(DialogueSkill.description).toContain('台词');
+    });
+
+    it('应有正确的必需上下文', () => {
+      expect(DialogueSkill.requiredContext).toContain('project_essence');
+      expect(DialogueSkill.requiredContext).toContain('confirmed_content');
+    });
+
+    it('应有正确的输出格式', () => {
+      expect(DialogueSkill.outputFormat.type).toBe('text');
+      expect(DialogueSkill.outputFormat.maxLength).toBeGreaterThan(0);
+    });
+
+    it('应有合理的 maxTokens', () => {
+      expect(DialogueSkill.maxTokens).toBeGreaterThan(0);
+      expect(DialogueSkill.maxTokens).toBeLessThanOrEqual(1000);
+    });
+
+    it('promptTemplate 应包含必要的占位符', () => {
+      expect(DialogueSkill.promptTemplate).toContain('{scene_description}');
+      expect(DialogueSkill.promptTemplate).toContain('{scene_summary}');
+      expect(DialogueSkill.promptTemplate).toContain('{characters}');
+    });
+
+    it('promptTemplate 应包含四种台词类型说明', () => {
+      expect(DialogueSkill.promptTemplate).toContain('对白');
+      expect(DialogueSkill.promptTemplate).toContain('独白');
+      expect(DialogueSkill.promptTemplate).toContain('旁白');
+      expect(DialogueSkill.promptTemplate).toContain('心理');
+    });
+
+    it('promptTemplate 应包含输出格式要求', () => {
+      expect(DialogueSkill.promptTemplate).toContain('[');
+      expect(DialogueSkill.promptTemplate).toContain(']');
+    });
+
+    it('promptTemplate 应要求中文输出', () => {
+      expect(DialogueSkill.promptTemplate).toContain('中文');
+    });
+  });
 });
 
 // ==========================================
@@ -181,12 +227,13 @@ describe('技能定义', () => {
 
 describe('SkillRegistry', () => {
   it('应包含所有预定义技能', () => {
-    expect(SkillRegistry.size).toBe(5);
+    expect(SkillRegistry.size).toBe(6);
     expect(SkillRegistry.has('scene-list')).toBe(true);
     expect(SkillRegistry.has('scene-description')).toBe(true);
     expect(SkillRegistry.has('action-description')).toBe(true);
     expect(SkillRegistry.has('keyframe-prompt')).toBe(true);
     expect(SkillRegistry.has('motion-prompt')).toBe(true);
+    expect(SkillRegistry.has('dialogue')).toBe(true);
   });
 
   it('应返回正确的技能实例', () => {
@@ -195,6 +242,7 @@ describe('SkillRegistry', () => {
     expect(SkillRegistry.get('action-description')).toBe(ActionDescriptionSkill);
     expect(SkillRegistry.get('keyframe-prompt')).toBe(KeyframePromptSkill);
     expect(SkillRegistry.get('motion-prompt')).toBe(MotionPromptSkill);
+    expect(SkillRegistry.get('dialogue')).toBe(DialogueSkill);
   });
 
   it('未注册的技能应返回 undefined', () => {
@@ -225,6 +273,7 @@ describe('getSkillForTask', () => {
     expect(getSkillForTask('action-description')).toBe(ActionDescriptionSkill);
     expect(getSkillForTask('keyframe-prompt')).toBe(KeyframePromptSkill);
     expect(getSkillForTask('motion-prompt')).toBe(MotionPromptSkill);
+    expect(getSkillForTask('dialogue')).toBe(DialogueSkill);
   });
 
   it('未知任务类型应返回 null', () => {
@@ -250,6 +299,7 @@ describe('getSkillByName', () => {
     expect(getSkillByName('generate_keyframe_prompt')).toBe(KeyframePromptSkill);
     expect(getSkillByName('generate_motion_prompt')).toBe(MotionPromptSkill);
     expect(getSkillByName('generate_scene_list')).toBe(SceneListSkill);
+    expect(getSkillByName('generate_dialogue')).toBe(DialogueSkill);
   });
 
   it('应支持直接使用注册表键名', () => {
@@ -258,6 +308,7 @@ describe('getSkillByName', () => {
     expect(getSkillByName('keyframe-prompt')).toBe(KeyframePromptSkill);
     expect(getSkillByName('motion-prompt')).toBe(MotionPromptSkill);
     expect(getSkillByName('scene-list')).toBe(SceneListSkill);
+    expect(getSkillByName('dialogue')).toBe(DialogueSkill);
   });
 
   it('未知名称应返回 null', () => {
@@ -412,5 +463,90 @@ describe('输出格式', () => {
     SkillRegistry.forEach((skill) => {
       expect(skill.outputFormat.type).toBe('text');
     });
+  });
+});
+
+// ==========================================
+// parseDialoguesFromText 测试
+// ==========================================
+
+describe('parseDialoguesFromText', () => {
+  it('应正确解析对白格式', () => {
+    const text = '[对白] 小明: 你好，今天天气真好！';
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0].type).toBe('dialogue');
+    expect(dialogues[0].characterName).toBe('小明');
+    expect(dialogues[0].content).toBe('你好，今天天气真好！');
+  });
+
+  it('应正确解析独白格式', () => {
+    const text = '[独白] 主角: 我一定要成功。';
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0].type).toBe('monologue');
+    expect(dialogues[0].characterName).toBe('主角');
+    expect(dialogues[0].content).toBe('我一定要成功。');
+  });
+
+  it('应正确解析旁白格式（无角色名）', () => {
+    const text = '[旁白] 夜幕降临，城市的灯光渐渐亮起。';
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0].type).toBe('narration');
+    expect(dialogues[0].characterName).toBeUndefined();
+    expect(dialogues[0].content).toBe('夜幕降临，城市的灯光渐渐亮起。');
+  });
+
+  it('应正确解析心理活动格式', () => {
+    const text = '[心理] 小红: 他为什么不理我？';
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0].type).toBe('thought');
+    expect(dialogues[0].characterName).toBe('小红');
+    expect(dialogues[0].content).toBe('他为什么不理我？');
+  });
+
+  it('应正确解析多条台词', () => {
+    const text = `[对白] 小明: 你好！
+[对白] 小红: 你好，很高兴认识你。
+[旁白] 两人相视而笑。
+[心理] 小明: 她好漂亮。`;
+    
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(4);
+    expect(dialogues[0].order).toBe(1);
+    expect(dialogues[1].order).toBe(2);
+    expect(dialogues[2].order).toBe(3);
+    expect(dialogues[3].order).toBe(4);
+  });
+
+  it('应为每条台词生成唯一ID', () => {
+    const text = `[对白] A: 话1
+[对白] B: 话2`;
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues[0].id).toBeDefined();
+    expect(dialogues[1].id).toBeDefined();
+    expect(dialogues[0].id).not.toBe(dialogues[1].id);
+  });
+
+  it('空文本应返回空数组', () => {
+    expect(parseDialoguesFromText('')).toEqual([]);
+    expect(parseDialoguesFromText('   ')).toEqual([]);
+  });
+
+  it('无效格式应被忽略', () => {
+    const text = `这不是有效的台词格式
+[对白] 小明: 这是有效的`;
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0].characterName).toBe('小明');
   });
 });

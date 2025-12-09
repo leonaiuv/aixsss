@@ -379,4 +379,77 @@ describe('storyboardStore', () => {
       expect(useStoryboardStore.getState().isGenerating).toBe(false);
     });
   });
+
+  describe('updateSceneDialogues', () => {
+    const existingScene: Scene = {
+      id: 'scene_1',
+      projectId: 'proj_1',
+      order: 1,
+      summary: 'Test Scene',
+      sceneDescription: 'A test scene',
+      actionDescription: '',
+      shotPrompt: '',
+      motionPrompt: '',
+      status: 'pending',
+      notes: '',
+      dialogues: [],
+    };
+
+    beforeEach(() => {
+      useStoryboardStore.setState({ scenes: [existingScene] });
+    });
+
+    it('should add dialogues to scene', () => {
+      const dialogues = [
+        { id: 'dl_1', type: 'dialogue' as const, characterName: '小明', content: '你好！', order: 1 },
+        { id: 'dl_2', type: 'narration' as const, content: '两人相视而笑', order: 2 },
+      ];
+
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { dialogues });
+
+      const updated = useStoryboardStore.getState().scenes.find(s => s.id === 'scene_1');
+      expect(updated?.dialogues).toHaveLength(2);
+      expect(updated?.dialogues?.[0].characterName).toBe('小明');
+      expect(updated?.dialogues?.[1].type).toBe('narration');
+    });
+
+    it('should replace existing dialogues', () => {
+      // First add some dialogues
+      useStoryboardStore.setState({
+        scenes: [{
+          ...existingScene,
+          dialogues: [{ id: 'old_1', type: 'dialogue' as const, characterName: 'Old', content: 'Old content', order: 1 }],
+        }],
+      });
+
+      const newDialogues = [
+        { id: 'new_1', type: 'monologue' as const, characterName: '主角', content: '新台词', order: 1 },
+      ];
+
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { dialogues: newDialogues });
+
+      const updated = useStoryboardStore.getState().scenes.find(s => s.id === 'scene_1');
+      expect(updated?.dialogues).toHaveLength(1);
+      expect(updated?.dialogues?.[0].id).toBe('new_1');
+    });
+
+    it('should save dialogues to storage', () => {
+      const dialogues = [{ id: 'dl_1', type: 'thought' as const, characterName: '角色', content: '心理活动', order: 1 }];
+
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { dialogues });
+
+      expect(storage.saveScene).toHaveBeenCalled();
+    });
+
+    it('should handle empty dialogues array', () => {
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { dialogues: [] });
+
+      const updated = useStoryboardStore.getState().scenes.find(s => s.id === 'scene_1');
+      expect(updated?.dialogues).toEqual([]);
+    });
+  });
 });

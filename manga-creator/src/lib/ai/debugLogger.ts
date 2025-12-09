@@ -14,6 +14,7 @@ export type AICallType =
   | 'shot_prompt'                // 镜头提示词生成（已废弃，保留兼容）
   | 'keyframe_prompt'            // 关键帧提示词生成
   | 'motion_prompt'              // 时空提示词生成
+  | 'dialogue'                   // 台词生成
   | 'custom';                    // 自定义调用
 
 // ==========================================
@@ -181,6 +182,7 @@ function formatLogOutput(entry: AICallLogEntry): void {
     shot_prompt: '🎯 镜头提示词生成',
     keyframe_prompt: '🖼️ 关键帧提示词生成',
     motion_prompt: '🎬 时空提示词生成',
+    dialogue: '💬 台词生成',
     custom: '⚡ 自定义调用',
   };
 

@@ -1,4 +1,4 @@
-import { Skill } from '@/types';
+import { Skill, DialogueLine, DialogueType } from '@/types';
 
 // ==========================================
 // Agent Skills定义
@@ -117,6 +117,49 @@ character slowly turns head, gentle smile, camera zooms in, soft light shifts
   maxTokens: 200,
 };
 
+// 台词生成技能 - 对白/独白/旁白/心理活动
+export const DialogueSkill: Skill = {
+  name: 'dialogue',
+  description: '生成符合分镜内容的台词，包含对白、独白、旁白、心理活动',
+  requiredContext: ['project_essence', 'confirmed_content'],
+  promptTemplate: `你是一位专业的影视编剧。根据以下场景信息，为这个分镜生成合适的台词。
+
+## 分镜概要
+{scene_summary}
+
+## 场景描述
+{scene_description}
+
+## 场景中的角色
+{characters}
+
+## 台词类型说明
+1. 对白: 角色之间的对话
+2. 独白: 单个角色对观众/镜头说话
+3. 旁白: 无角色的画外音/无声音叙述
+4. 心理: 角色的内心独白/思维活动
+
+## 输出格式要求
+每条台词占一行，格式如下:
+- 对白/独白/心理: [类型] 角色名: 台词内容
+- 旁白: [旁白] 台词内容
+
+示例:
+[对白] 小明: 你好，今天天气真好！
+[对白] 小红: 是啊，适合出去走走。
+[旁白] 两人相视而笑。
+[心理] 小明: 她的笑容真美。
+
+## 要求
+1. 台词要简洁有力，符合角色性格
+2. 符合场景氛围和情节发展
+3. 一个分镜通常只需1-5条台词
+4. 中文输出
+5. 直接输出台词，不要额外解释`,
+  outputFormat: { type: 'text', maxLength: 500 },
+  maxTokens: 800,
+};
+
 // 技能注册表
 export const SkillRegistry = new Map<string, Skill>([
   ['scene-list', SceneListSkill],
@@ -124,6 +167,7 @@ export const SkillRegistry = new Map<string, Skill>([
   ['action-description', ActionDescriptionSkill],
   ['keyframe-prompt', KeyframePromptSkill],
   ['motion-prompt', MotionPromptSkill],
+  ['dialogue', DialogueSkill],
 ]);
 
 // 根据任务类型获取技能
@@ -139,8 +183,66 @@ export function getSkillByName(skillName: string): Skill | null {
     'generate_keyframe_prompt': 'keyframe-prompt',
     'generate_motion_prompt': 'motion-prompt',
     'generate_scene_list': 'scene-list',
+    'generate_dialogue': 'dialogue',
   };
   
   const registryKey = nameMap[skillName] || skillName;
   return SkillRegistry.get(registryKey) || null;
+}
+
+// ==========================================
+// 台词解析工具函数
+// ==========================================
+
+/** 台词类型映射 */
+const DIALOGUE_TYPE_MAP: Record<string, DialogueType> = {
+  '对白': 'dialogue',
+  '独白': 'monologue',
+  '旁白': 'narration',
+  '心理': 'thought',
+};
+
+/**
+ * 解析AI生成的台词文本为结构化数据
+ * 支持格式:
+ * - [对白] 角色名: 台词内容
+ * - [独白] 角色名: 台词内容
+ * - [旁白] 台词内容
+ * - [心理] 角色名: 台词内容
+ */
+export function parseDialoguesFromText(text: string): DialogueLine[] {
+  if (!text || !text.trim()) {
+    return [];
+  }
+
+  const lines = text.split('\n').filter(line => line.trim());
+  const dialogues: DialogueLine[] = [];
+  let order = 0;
+
+  for (const line of lines) {
+    // 匹配格式: [类型] 角色名: 内容 或 [类型] 内容
+    const match = line.match(/^\[(对白|独白|旁白|心理)\]\s*(?:([^:：]+)[:：]\s*)?(.+)$/);
+    
+    if (match) {
+      order++;
+      const [, typeLabel, characterName, content] = match;
+      const type = DIALOGUE_TYPE_MAP[typeLabel];
+      
+      const dialogue: DialogueLine = {
+        id: `dialogue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type,
+        content: content.trim(),
+        order,
+      };
+
+      // 旁白通常没有角色名
+      if (characterName && type !== 'narration') {
+        dialogue.characterName = characterName.trim();
+      }
+
+      dialogues.push(dialogue);
+    }
+  }
+
+  return dialogues;
 }

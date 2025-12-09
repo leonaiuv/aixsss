@@ -19,12 +19,15 @@ import {
   Eye,
   FileText,
   BookOpen,
-  Users
+  Users,
+  MessageSquare,
+  Copy,
+  Trash2
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
-import { getSkillByName } from '@/lib/ai/skills';
+import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
 import { logAICall, updateLogWithResponse, updateLogWithError, updateLogProgress } from '@/lib/ai/debugLogger';
-import { SceneStep, migrateOldStyleToConfig, Project } from '@/types';
+import { SceneStep, migrateOldStyleToConfig, Project, DIALOGUE_TYPE_LABELS, DialogueLine } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
 
 /**
@@ -299,7 +302,7 @@ export function SceneRefinement() {
 
       updateScene(currentProject.id, latestScene.id, {
         motionPrompt: response.content.trim(),
-        status: 'completed',
+        status: 'motion_generating',
       });
 
       // 如果是最后一个分镜,更新项目状态
@@ -315,6 +318,98 @@ export function SceneRefinement() {
       setError(errorMsg);
       console.error('生成时空提示词失败:', err);
       updateLogWithError('motion_prompt_error', errorMsg);
+    } finally {
+      setIsGenerating(false);
+      setGeneratingStep(null);
+    }
+  };
+
+  // 生成台词
+  const generateDialogue = async () => {
+    // 从 store 获取最新的场景数据，避免闭包问题
+    const { scenes: latestScenes } = useStoryboardStore.getState();
+    const latestScene = latestScenes.find(s => s.id === currentScene?.id);
+    
+    if (!config || !latestScene || !latestScene.motionPrompt) return;
+
+    setIsGenerating(true);
+    setGeneratingStep('dialogue');
+    setError('');
+
+    try {
+      const client = AIFactory.createClient(config);
+      const skill = getSkillByName('generate_dialogue');
+
+      if (!skill) {
+        throw new Error('技能配置未找到');
+      }
+
+      // 获取场景中的角色信息
+      const sceneCharacters = projectCharacters
+        .map(c => `${c.name}：${c.personality || '无描述'}`)
+        .join('\n') || '无特定角色';
+
+      const prompt = skill.promptTemplate
+        .replace('{scene_summary}', latestScene.summary)
+        .replace('{scene_description}', latestScene.sceneDescription)
+        .replace('{characters}', sceneCharacters);
+
+      // 记录AI调用日志
+      const logId = logAICall('dialogue', {
+        skillName: skill.name,
+        promptTemplate: skill.promptTemplate,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId: currentProject.id,
+          sceneId: latestScene.id,
+          sceneOrder: currentSceneIndex + 1,
+          sceneSummary: latestScene.summary,
+          sceneDescription: latestScene.sceneDescription,
+          characters: sceneCharacters,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          maxTokens: skill.maxTokens,
+        },
+      });
+      
+      updateLogProgress(logId, 30, '正在生成台词...');
+
+      const response = await client.chat([
+        { role: 'user', content: prompt }
+      ]);
+      
+      updateLogProgress(logId, 80, '正在解析台词...');
+
+      // 更新日志响应
+      updateLogWithResponse(logId, {
+        content: response.content,
+        tokenUsage: response.tokenUsage,
+      });
+
+      // 解析台词文本
+      const dialogues = parseDialoguesFromText(response.content);
+
+      updateScene(currentProject.id, latestScene.id, {
+        dialogues,
+        status: 'completed',
+      });
+
+      // 如果是最后一个分镜,更新项目状态
+      if (currentSceneIndex === scenes.length - 1) {
+        updateProject(currentProject.id, {
+          workflowState: 'ALL_SCENES_COMPLETE',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : '生成失败';
+      setError(errorMsg);
+      console.error('生成台词失败:', err);
+      updateLogWithError('dialogue_error', errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);
@@ -388,6 +483,21 @@ export function SceneRefinement() {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
+      // 获取最新场景数据
+      const { scenes: updatedScenes3 } = useStoryboardStore.getState();
+      const latestScene3 = updatedScenes3.find(s => s.id === currentScene.id);
+      
+      if (!latestScene3?.motionPrompt) {
+        throw new Error('时空提示词生成失败');
+      }
+
+      // 第四阶段：生成台词
+      if (!latestScene3.dialogues || latestScene3.dialogues.length === 0) {
+        setGeneratingStep('dialogue');
+        await generateDialogue();
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '一键生成失败';
       setError(errorMessage);
@@ -402,7 +512,9 @@ export function SceneRefinement() {
   const canGenerateScene = !currentScene.sceneDescription;
   const canGenerateKeyframe = currentScene.sceneDescription && !currentScene.shotPrompt;
   const canGenerateMotion = currentScene.shotPrompt && !currentScene.motionPrompt;
-  const isCompleted = currentScene.status === 'completed';
+  const canGenerateDialogue = currentScene.motionPrompt && (!currentScene.dialogues || currentScene.dialogues.length === 0);
+  const hasDialogues = currentScene.dialogues && currentScene.dialogues.length > 0;
+  const isCompleted = currentScene.status === 'completed' && hasDialogues;
 
   // 应用模板
   const handleApplyTemplate = (template: string, variables: Record<string, string>) => {
@@ -738,6 +850,130 @@ export function SceneRefinement() {
               )}
             </AccordionContent>
           </AccordionItem>
+
+          {/* 阶段4: 台词生成 */}
+          <AccordionItem value="dialogue" className="border rounded-lg px-4">
+            <AccordionTrigger className="hover:no-underline">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  hasDialogues ? 'bg-green-500/10 text-green-600' : 'bg-muted'
+                }`}>
+                  {hasDialogues ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <span className="font-semibold text-sm">4</span>
+                  )}
+                </div>
+                <div className="text-left">
+                  <h4 className="font-semibold">台词生成</h4>
+                  <p className="text-xs text-muted-foreground">
+                    生成对白、独白、旁白、心理活动，用于配音/字幕
+                  </p>
+                </div>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="pt-4">
+              {hasDialogues ? (
+                <div className="space-y-3">
+                  {/* 台词列表 */}
+                  <div className="space-y-2">
+                    {currentScene.dialogues?.map((dialogue, index) => (
+                      <div
+                        key={dialogue.id}
+                        className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 group"
+                      >
+                        <div className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium ${
+                          dialogue.type === 'dialogue' ? 'bg-blue-500/10 text-blue-600' :
+                          dialogue.type === 'monologue' ? 'bg-purple-500/10 text-purple-600' :
+                          dialogue.type === 'narration' ? 'bg-gray-500/10 text-gray-600' :
+                          'bg-pink-500/10 text-pink-600'
+                        }`}>
+                          {DIALOGUE_TYPE_LABELS[dialogue.type]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {dialogue.characterName && (
+                            <span className="font-medium text-sm">{dialogue.characterName}: </span>
+                          )}
+                          <span className="text-sm">{dialogue.content}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                          onClick={() => {
+                            const text = dialogue.characterName 
+                              ? `${dialogue.characterName}: ${dialogue.content}`
+                              : dialogue.content;
+                            navigator.clipboard.writeText(text);
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* 复制全部台词 */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const allDialogues = currentScene.dialogues?.map(d => {
+                          const typeLabel = DIALOGUE_TYPE_LABELS[d.type];
+                          return d.characterName 
+                            ? `[${typeLabel}] ${d.characterName}: ${d.content}`
+                            : `[${typeLabel}] ${d.content}`;
+                        }).join('\n') || '';
+                        navigator.clipboard.writeText(allDialogues);
+                      }}
+                      className="gap-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      <span>复制全部</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={generateDialogue}
+                      disabled={isGenerating}
+                      className="gap-2"
+                    >
+                      <RotateCw className="h-4 w-4" />
+                      <span>重新生成</span>
+                    </Button>
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                    💡 台词可用于视频配音、字幕生成或剧本导出
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                  <p className="text-sm text-muted-foreground">
+                    {canGenerateDialogue ? '准备就绪，可以生成台词' : '请先完成时空提示词'}
+                  </p>
+                  <Button
+                    onClick={generateDialogue}
+                    disabled={!canGenerateDialogue || isGenerating}
+                    className="gap-2"
+                  >
+                    {isGenerating && generatingStep === 'dialogue' ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>生成中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <MessageSquare className="h-4 w-4" />
+                        <span>生成</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </AccordionContent>
+          </AccordionItem>
         </Accordion>
 
         {/* 底部操作栏 */}
@@ -796,9 +1032,10 @@ export function SceneRefinement() {
           <span>细化建议</span>
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
-          <li>• <strong>渐进式生成</strong>: 按顺序完成三个阶段，每步都可手动编辑优化</li>
+          <li>• <strong>渐进式生成</strong>: 按顺序完成四个阶段，每步都可手动编辑优化</li>
           <li>• <strong>关键帧提示词</strong>: 专注静态画面描述，适用于SD/MJ等绘图工具</li>
           <li>• <strong>时空提示词</strong>: 简短的动态描述，用于视频生成AI</li>
+          <li>• <strong>台词生成</strong>: 对白/独白/旁白/心理活动，可用于配音或字幕</li>
           <li>• <strong>批量处理</strong>: 完成所有分镜后可在导出页面统一查看和管理</li>
         </ul>
       </Card>
