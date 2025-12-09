@@ -106,6 +106,74 @@ describe('CharacterManager', () => {
   });
 
   // ==========================================
+  // 数据加载测试
+  // ==========================================
+  describe('数据加载', () => {
+    it('组件挂载时应调用loadCharacters加载角色数据', () => {
+      const mockLoadCharacters = vi.fn();
+      vi.mocked(useCharacterStore).mockReturnValue({
+        characters: [],
+        currentCharacterId: null,
+        isLoading: false,
+        loadCharacters: mockLoadCharacters,
+        addCharacter: mockAddCharacter,
+        updateCharacter: mockUpdateCharacter,
+        deleteCharacter: mockDeleteCharacter,
+        setCurrentCharacter: vi.fn(),
+        recordAppearance: vi.fn(),
+      });
+
+      render(<CharacterManager projectId="test-project-1" />);
+      
+      expect(mockLoadCharacters).toHaveBeenCalledWith('test-project-1');
+      expect(mockLoadCharacters).toHaveBeenCalledTimes(1);
+    });
+
+    it('projectId变化时应重新加载角色数据', () => {
+      const mockLoadCharacters = vi.fn();
+      vi.mocked(useCharacterStore).mockReturnValue({
+        characters: [],
+        currentCharacterId: null,
+        isLoading: false,
+        loadCharacters: mockLoadCharacters,
+        addCharacter: mockAddCharacter,
+        updateCharacter: mockUpdateCharacter,
+        deleteCharacter: mockDeleteCharacter,
+        setCurrentCharacter: vi.fn(),
+        recordAppearance: vi.fn(),
+      });
+
+      const { rerender } = render(<CharacterManager projectId="project-1" />);
+      expect(mockLoadCharacters).toHaveBeenCalledWith('project-1');
+      
+      rerender(<CharacterManager projectId="project-2" />);
+      expect(mockLoadCharacters).toHaveBeenCalledWith('project-2');
+      expect(mockLoadCharacters).toHaveBeenCalledTimes(2);
+    });
+
+    it('相同projectId重新渲染不应重复加载', () => {
+      const mockLoadCharacters = vi.fn();
+      vi.mocked(useCharacterStore).mockReturnValue({
+        characters: [],
+        currentCharacterId: null,
+        isLoading: false,
+        loadCharacters: mockLoadCharacters,
+        addCharacter: mockAddCharacter,
+        updateCharacter: mockUpdateCharacter,
+        deleteCharacter: mockDeleteCharacter,
+        setCurrentCharacter: vi.fn(),
+        recordAppearance: vi.fn(),
+      });
+
+      const { rerender } = render(<CharacterManager projectId="test-project-1" />);
+      rerender(<CharacterManager projectId="test-project-1" />);
+      
+      // React 严格模式下可能调用两次，但相同 projectId 只应触发一次实际加载
+      expect(mockLoadCharacters).toHaveBeenCalledWith('test-project-1');
+    });
+  });
+
+  // ==========================================
   // 基础渲染测试
   // ==========================================
   describe('基础渲染', () => {

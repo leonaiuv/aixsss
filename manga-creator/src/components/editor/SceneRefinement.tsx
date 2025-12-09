@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
 import { getSkillByName } from '@/lib/ai/skills';
+import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
 import { SceneStep } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
 
@@ -92,9 +93,38 @@ export function SceneRefinement() {
         .replace('{current_scene_summary}', currentScene.summary)
         .replace('{prev_scene_summary}', context.prevSceneSummary || '【本场景是第一个分镜】');
 
+      // 记录AI调用日志
+      const logId = logAICall('scene_description', {
+        skillName: skill.name,
+        promptTemplate: skill.promptTemplate,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId: currentProject.id,
+          style: context.projectEssence.style,
+          protagonist: context.projectEssence.protagonistCore,
+          summary: context.projectEssence.storyCore,
+          sceneId: currentScene.id,
+          sceneOrder: currentSceneIndex + 1,
+          sceneSummary: currentScene.summary,
+          prevSceneSummary: context.prevSceneSummary,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          maxTokens: skill.maxTokens,
+        },
+      });
+
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
+
+      // 更新日志响应
+      updateLogWithResponse(logId, {
+        content: response.content,
+        tokenUsage: response.tokenUsage,
+      });
 
       updateScene(currentProject.id, currentScene.id, {
         sceneDescription: response.content.trim(),
@@ -102,8 +132,10 @@ export function SceneRefinement() {
       });
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败');
+      const errorMsg = err instanceof Error ? err.message : '生成失败';
+      setError(errorMsg);
       console.error('生成场景描述失败:', err);
+      updateLogWithError('scene_description_error', errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);
@@ -145,9 +177,38 @@ export function SceneRefinement() {
         .replace('{scene_description}', latestScene.sceneDescription)
         .replace('{current_scene_summary}', latestScene.summary);
 
+      // 记录AI调用日志
+      const logId = logAICall('action_description', {
+        skillName: skill.name,
+        promptTemplate: skill.promptTemplate,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId: currentProject.id,
+          style: context.projectEssence.style,
+          protagonist: context.projectEssence.protagonistCore,
+          summary: context.projectEssence.storyCore,
+          sceneId: latestScene.id,
+          sceneOrder: currentSceneIndex + 1,
+          sceneSummary: latestScene.summary,
+          sceneDescription: latestScene.sceneDescription,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          maxTokens: skill.maxTokens,
+        },
+      });
+
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
+
+      // 更新日志响应
+      updateLogWithResponse(logId, {
+        content: response.content,
+        tokenUsage: response.tokenUsage,
+      });
 
       updateScene(currentProject.id, latestScene.id, {
         actionDescription: response.content.trim(),
@@ -155,8 +216,10 @@ export function SceneRefinement() {
       });
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败');
+      const errorMsg = err instanceof Error ? err.message : '生成失败';
+      setError(errorMsg);
       console.error('生成动作描述失败:', err);
+      updateLogWithError('action_description_error', errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);
@@ -199,9 +262,39 @@ export function SceneRefinement() {
         .replace('{scene_description}', latestScene.sceneDescription)
         .replace('{action_description}', latestScene.actionDescription);
 
+      // 记录AI调用日志
+      const logId = logAICall('shot_prompt', {
+        skillName: skill.name,
+        promptTemplate: skill.promptTemplate,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId: currentProject.id,
+          style: context.projectEssence.style,
+          protagonist: context.projectEssence.protagonistCore,
+          summary: context.projectEssence.storyCore,
+          sceneId: latestScene.id,
+          sceneOrder: currentSceneIndex + 1,
+          sceneSummary: latestScene.summary,
+          sceneDescription: latestScene.sceneDescription,
+          actionDescription: latestScene.actionDescription,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          maxTokens: skill.maxTokens,
+        },
+      });
+
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
+
+      // 更新日志响应
+      updateLogWithResponse(logId, {
+        content: response.content,
+        tokenUsage: response.tokenUsage,
+      });
 
       updateScene(currentProject.id, latestScene.id, {
         shotPrompt: response.content.trim(),
@@ -217,8 +310,10 @@ export function SceneRefinement() {
       }
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : '生成失败');
+      const errorMsg = err instanceof Error ? err.message : '生成失败';
+      setError(errorMsg);
       console.error('生成镜头提示词失败:', err);
+      updateLogWithError('shot_prompt_error', errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);

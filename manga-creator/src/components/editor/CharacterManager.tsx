@@ -8,7 +8,7 @@
 // 4. 角色外观描述AI生成
 // ==========================================
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCharacterStore } from '@/stores/characterStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -57,8 +57,13 @@ interface CharacterManagerProps {
 }
 
 export function CharacterManager({ projectId }: CharacterManagerProps) {
-  const { characters, addCharacter, updateCharacter, deleteCharacter } =
+  const { characters, addCharacter, updateCharacter, deleteCharacter, loadCharacters } =
     useCharacterStore();
+  
+  // 加载角色数据
+  useEffect(() => {
+    loadCharacters(projectId);
+  }, [projectId, loadCharacters]);
   const { config } = useConfigStore();
   const { currentProject } = useProjectStore();
   const [isDialogOpen, setIsDialogOpen] = useState(false);

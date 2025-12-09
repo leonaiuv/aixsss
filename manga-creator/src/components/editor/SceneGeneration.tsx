@@ -19,6 +19,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
+import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
 import { Scene } from '@/types';
 
 export function SceneGeneration() {
@@ -90,6 +91,45 @@ ${currentProject.summary}
 
 请开始生成:`;
 
+      // 记录AI调用日志
+      const logId = logAICall('scene_list_generation', {
+        skillName: 'scene-list-generator',
+        promptTemplate: `你是一位专业的分镜师。基于以下信息,将故事拆解为8-12个关键分镜节点:
+
+**故事梗概**:
+{{summary}}
+
+**画风**: {{style}}
+**主角**: {{protagonist}}
+
+**要求**:
+1. 每个分镜用1句话概括(15-30字)
+2. 覆盖起承转合的关键节点
+3. 包含情绪转折和视觉冲击点
+4. 适合单幅图像表现
+
+**输出格式**(纯文本,每行一个分镜):
+1. [分镜描述]
+2. [分镜描述]
+...
+
+请开始生成:`,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId: currentProject.id,
+          projectTitle: currentProject.title,
+          style: currentProject.style,
+          protagonist: currentProject.protagonist,
+          summary: currentProject.summary,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          maxTokens: 1000,
+        },
+      });
+
       setGenerationProgress(20);
 
       const response = await client.chat([
@@ -97,6 +137,12 @@ ${currentProject.summary}
       ]);
 
       setGenerationProgress(60);
+
+      // 更新日志响应
+      updateLogWithResponse(logId, {
+        content: response.content,
+        tokenUsage: response.tokenUsage,
+      });
 
       // 解析响应
       const lines = response.content
@@ -134,6 +180,10 @@ ${currentProject.summary}
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败');
       console.error('生成分镜失败:', err);
+      // 记录错误日志
+      if (err instanceof Error) {
+        updateLogWithError('scene_list_generation_error', err.message);
+      }
     } finally {
       setTimeout(() => {
         setGenerating(false);
