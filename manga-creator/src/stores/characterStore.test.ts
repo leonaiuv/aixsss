@@ -524,4 +524,172 @@ describe('CharacterStore', () => {
       expect(useCharacterStore.getState().currentCharacterId).toBeNull();
     });
   });
+
+  // ==========================================
+  // P0-1: 角色主题色扩展测试（primaryColor + secondaryColor）
+  // ==========================================
+  describe('角色主题色扩展', () => {
+    it('应该能够存储角色主色(primaryColor)', () => {
+      const store = useCharacterStore.getState();
+      
+      store.addCharacter('project-1', {
+        projectId: 'project-1',
+        name: '主色测试角色',
+        appearance: '红发青年',
+        personality: '热情奔放',
+        background: '消防员',
+        primaryColor: '#FF4500',
+        relationships: [],
+        appearances: [],
+      });
+
+      const character = useCharacterStore.getState().characters[0];
+      expect(character.primaryColor).toBe('#FF4500');
+    });
+
+    it('应该能够存储角色辅色(secondaryColor)', () => {
+      const store = useCharacterStore.getState();
+      
+      store.addCharacter('project-1', {
+        projectId: 'project-1',
+        name: '辅色测试角色',
+        appearance: '蓝发少女',
+        personality: '冷静沉稳',
+        background: '学生',
+        secondaryColor: '#4169E1',
+        relationships: [],
+        appearances: [],
+      });
+
+      const character = useCharacterStore.getState().characters[0];
+      expect(character.secondaryColor).toBe('#4169E1');
+    });
+
+    it('应该能够同时存储主色和辅色', () => {
+      const store = useCharacterStore.getState();
+      
+      store.addCharacter('project-1', {
+        projectId: 'project-1',
+        name: '双色测试角色',
+        appearance: '金发碧眼',
+        personality: '高贵优雅',
+        background: '贵族',
+        primaryColor: '#FFD700',
+        secondaryColor: '#191970',
+        relationships: [],
+        appearances: [],
+      });
+
+      const character = useCharacterStore.getState().characters[0];
+      expect(character.primaryColor).toBe('#FFD700');
+      expect(character.secondaryColor).toBe('#191970');
+    });
+
+    it('主色和辅色应该都是可选字段', () => {
+      const store = useCharacterStore.getState();
+      
+      store.addCharacter('project-1', {
+        projectId: 'project-1',
+        name: '无色彩角色',
+        appearance: '普通青年',
+        personality: '普通',
+        background: '路人',
+        relationships: [],
+        appearances: [],
+      });
+
+      const character = useCharacterStore.getState().characters[0];
+      expect(character.primaryColor).toBeUndefined();
+      expect(character.secondaryColor).toBeUndefined();
+    });
+
+    it('更新时应该能够单独更新主色', () => {
+      const store = useCharacterStore.getState();
+      
+      store.addCharacter('project-1', {
+        projectId: 'project-1',
+        name: '更新主色测试',
+        appearance: '',
+        personality: '',
+        background: '',
+        relationships: [],
+        appearances: [],
+      });
+
+      const characterId = useCharacterStore.getState().characters[0].id;
+
+      store.updateCharacter('project-1', characterId, {
+        primaryColor: '#00FF00',
+      });
+
+      const character = useCharacterStore.getState().characters[0];
+      expect(character.primaryColor).toBe('#00FF00');
+      expect(character.secondaryColor).toBeUndefined();
+    });
+
+    it('更新时应该能够单独更新辅色', () => {
+      const store = useCharacterStore.getState();
+      
+      store.addCharacter('project-1', {
+        projectId: 'project-1',
+        name: '更新辅色测试',
+        appearance: '',
+        personality: '',
+        background: '',
+        primaryColor: '#FF0000',
+        relationships: [],
+        appearances: [],
+      });
+
+      const characterId = useCharacterStore.getState().characters[0].id;
+
+      store.updateCharacter('project-1', characterId, {
+        secondaryColor: '#0000FF',
+      });
+
+      const character = useCharacterStore.getState().characters[0];
+      expect(character.primaryColor).toBe('#FF0000');
+      expect(character.secondaryColor).toBe('#0000FF');
+    });
+
+    it('主色辅色应该持久化到localStorage', () => {
+      const store = useCharacterStore.getState();
+      
+      store.addCharacter('project-1', {
+        projectId: 'project-1',
+        name: '持久化测试',
+        appearance: '',
+        personality: '',
+        background: '',
+        primaryColor: '#123456',
+        secondaryColor: '#654321',
+        relationships: [],
+        appearances: [],
+      });
+
+      const savedData = JSON.parse(mockLocalStorage.store['aixs_characters_project-1']);
+      expect(savedData[0].primaryColor).toBe('#123456');
+      expect(savedData[0].secondaryColor).toBe('#654321');
+    });
+
+    it('旧版themeColor字段应该保持兼容', () => {
+      const store = useCharacterStore.getState();
+      
+      store.addCharacter('project-1', {
+        projectId: 'project-1',
+        name: '兼容性测试',
+        appearance: '',
+        personality: '',
+        background: '',
+        themeColor: '#6366f1',
+        primaryColor: '#FF0000',
+        relationships: [],
+        appearances: [],
+      });
+
+      const character = useCharacterStore.getState().characters[0];
+      expect(character.themeColor).toBe('#6366f1');
+      expect(character.primaryColor).toBe('#FF0000');
+    });
+  });
 });

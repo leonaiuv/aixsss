@@ -3,6 +3,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useCharacterStore } from '@/stores/characterStore';
+import { useWorldViewStore } from '@/stores/worldViewStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,6 +28,10 @@ import {
 import { AIFactory } from '@/lib/ai/factory';
 import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
 import { logAICall, updateLogWithResponse, updateLogWithError, updateLogProgress } from '@/lib/ai/debugLogger';
+import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
+import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
+import { generateBGMPrompt, generateTransitionPrompt, BGMPrompt, TransitionPrompt } from '@/lib/ai/multiModalPrompts';
+import { checkTokenLimit, calculateTotalTokens, compressProjectEssence } from '@/lib/ai/contextCompressor';
 import { SceneStep, migrateOldStyleToConfig, Project, DIALOGUE_TYPE_LABELS, DialogueLine } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
 
@@ -49,6 +54,7 @@ export function SceneRefinement() {
   const { scenes, updateScene, loadScenes } = useStoryboardStore();
   const { config } = useConfigStore();
   const { characters } = useCharacterStore();
+  const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
 
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -64,9 +70,35 @@ export function SceneRefinement() {
     [characters, currentProject?.id]
   );
 
+  // 缓存进度计算 - 必须在条件返回之前调用 hooks
+  const progress = useMemo(() => {
+    if (scenes.length === 0) return 0;
+    return Math.round(((currentSceneIndex + 1) / scenes.length) * 100);
+  }, [currentSceneIndex, scenes.length]);
+
+  // 使用 useCallback 优化导航回调 - 必须在条件返回之前
+  const goToPrevScene = useCallback(() => {
+    if (currentSceneIndex > 0 && currentProject) {
+      setCurrentSceneIndex(currentSceneIndex - 1);
+      updateProject(currentProject.id, {
+        currentSceneOrder: currentSceneIndex,
+      });
+    }
+  }, [currentSceneIndex, currentProject?.id, updateProject]);
+
+  const goToNextScene = useCallback(() => {
+    if (currentSceneIndex < scenes.length - 1 && currentProject) {
+      setCurrentSceneIndex(currentSceneIndex + 1);
+      updateProject(currentProject.id, {
+        currentSceneOrder: currentSceneIndex + 2,
+      });
+    }
+  }, [currentSceneIndex, scenes.length, currentProject?.id, updateProject]);
+
   useEffect(() => {
     if (currentProject) {
       loadScenes(currentProject.id);
+      loadWorldViewElements(currentProject.id);
       const order = currentProject.currentSceneOrder || 1;
       setCurrentSceneIndex(order - 1);
     }
@@ -77,11 +109,6 @@ export function SceneRefinement() {
   }
 
   const currentScene = scenes[currentSceneIndex];
-  // 缓存进度计算
-  const progress = useMemo(() => 
-    Math.round(((currentSceneIndex + 1) / scenes.length) * 100),
-    [currentSceneIndex, scenes.length]
-  );
 
   // 生成场景描述
   const generateSceneDescription = async () => {
@@ -102,25 +129,34 @@ export function SceneRefinement() {
       // 获取完整画风提示词
       const styleFullPrompt = getStyleFullPrompt(currentProject);
 
-      // 构建上下文
-      const context = {
-        projectEssence: {
-          style: styleFullPrompt,
-          protagonistCore: currentProject.protagonist,
-          storyCore: currentProject.summary,
-        },
-        currentScene: currentScene,
-        prevSceneSummary: currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined,
-      };
+      // 获取世界观注入设置
+      const injectionSettings = getInjectionSettings(currentProject.id);
+      const shouldInjectWorldView = shouldInjectAtSceneDescription(injectionSettings);
 
-      // 替换模板变量
-      const prompt = skill.promptTemplate
-        .replace('{style}', context.projectEssence.style)
-        .replace('{protagonist}', context.projectEssence.protagonistCore)
-        .replace('{current_scene_summary}', currentScene.summary)
-        .replace('{prev_scene_summary}', context.prevSceneSummary || '【本场景是第一个分镜】');
+      // 使用 contextBuilder 填充模板
+      const prompt = fillPromptTemplate(skill.promptTemplate, {
+        artStyle: currentProject.artStyleConfig,
+        characters: projectCharacters,
+        worldViewElements: shouldInjectWorldView ? worldViewElements : [],
+        protagonist: currentProject.protagonist,
+        sceneSummary: currentScene.summary,
+        prevSceneSummary: currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined,
+        summary: currentProject.summary,
+      });
+
+      // 检查 Token 使用情况
+      const tokenEstimate = calculateTotalTokens({ task: prompt });
+      const tokenCheck = checkTokenLimit(tokenEstimate, 4000);
+      console.log(`[上下文压缩] Token估算: ${tokenEstimate}, 使用率: ${tokenCheck.usage.toFixed(1)}%`);
+      
+      // 如果接近限制，使用压缩策略
+      if (tokenCheck.usage > 70) {
+        const compressed = compressProjectEssence(currentProject, 'balanced');
+        console.log(`[上下文压缩] 已压缩项目信息: ${compressed.tokens} tokens`);
+      }
 
       // 记录AI调用日志
+      const prevSceneSummary = currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined;
       const logId = logAICall('scene_description', {
         skillName: skill.name,
         promptTemplate: skill.promptTemplate,
@@ -128,13 +164,14 @@ export function SceneRefinement() {
         messages: [{ role: 'user', content: prompt }],
         context: {
           projectId: currentProject.id,
-          style: context.projectEssence.style,
-          protagonist: context.projectEssence.protagonistCore,
-          summary: context.projectEssence.storyCore,
+          style: styleFullPrompt,
+          protagonist: currentProject.protagonist,
+          summary: currentProject.summary,
           sceneId: currentScene.id,
           sceneOrder: currentSceneIndex + 1,
           sceneSummary: currentScene.summary,
-          prevSceneSummary: context.prevSceneSummary,
+          prevSceneSummary,
+          worldViewInjected: shouldInjectWorldView,
         },
         config: {
           provider: config.provider,
@@ -195,10 +232,13 @@ export function SceneRefinement() {
 
       const styleFullPrompt = getStyleFullPrompt(currentProject);
 
-      const prompt = skill.promptTemplate
-        .replace('{scene_description}', latestScene.sceneDescription)
-        .replace('{style}', styleFullPrompt)
-        .replace('{protagonist}', currentProject.protagonist);
+      // 使用 contextBuilder 填充模板
+      const prompt = fillPromptTemplate(skill.promptTemplate, {
+        artStyle: currentProject.artStyleConfig,
+        characters: projectCharacters,
+        protagonist: currentProject.protagonist,
+        sceneDescription: latestScene.sceneDescription,
+      });
 
       // 记录AI调用日志
       const logId = logAICall('keyframe_prompt', {
@@ -351,15 +391,15 @@ export function SceneRefinement() {
         throw new Error('技能配置未找到');
       }
 
-      // 获取场景中的角色信息
-      const sceneCharacters = projectCharacters
-        .map(c => `${c.name}：${c.personality || '无描述'}`)
-        .join('\n') || '无特定角色';
+      // 使用 contextBuilder 构建角色上下文
+      const characterContext = buildCharacterContext(projectCharacters);
 
-      const prompt = skill.promptTemplate
-        .replace('{scene_summary}', latestScene.summary)
-        .replace('{scene_description}', latestScene.sceneDescription)
-        .replace('{characters}', sceneCharacters);
+      // 使用 fillPromptTemplate 填充模板
+      const prompt = fillPromptTemplate(skill.promptTemplate, {
+        characters: projectCharacters,
+        sceneSummary: latestScene.summary,
+        sceneDescription: latestScene.sceneDescription,
+      });
 
       // 记录AI调用日志
       const logId = logAICall('dialogue', {
@@ -373,7 +413,7 @@ export function SceneRefinement() {
           sceneOrder: currentSceneIndex + 1,
           sceneSummary: latestScene.summary,
           sceneDescription: latestScene.sceneDescription,
-          characters: sceneCharacters,
+          characters: characterContext,
         },
         config: {
           provider: config.provider,
@@ -422,25 +462,6 @@ export function SceneRefinement() {
       setGeneratingStep(null);
     }
   };
-
-  // 使用 useCallback 优化导航回调
-  const goToPrevScene = useCallback(() => {
-    if (currentSceneIndex > 0) {
-      setCurrentSceneIndex(currentSceneIndex - 1);
-      updateProject(currentProject.id, {
-        currentSceneOrder: currentSceneIndex,
-      });
-    }
-  }, [currentSceneIndex, currentProject?.id, updateProject]);
-
-  const goToNextScene = useCallback(() => {
-    if (currentSceneIndex < scenes.length - 1) {
-      setCurrentSceneIndex(currentSceneIndex + 1);
-      updateProject(currentProject.id, {
-        currentSceneOrder: currentSceneIndex + 2,
-      });
-    }
-  }, [currentSceneIndex, scenes.length, currentProject?.id, updateProject]);
 
   // 一键生成全部 - 优化版本
   const generateAll = async () => {
@@ -624,6 +645,16 @@ export function SceneRefinement() {
         {error && (
           <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
             <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
+
+        {/* 需要更新提示 */}
+        {currentScene.status === 'needs_update' && (
+          <div className="mb-6 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
+              <span className="text-lg">⚠️</span>
+              <span>该分镜受角色/世界观修改影响，建议重新生成内容</span>
+            </p>
           </div>
         )}
 
@@ -889,19 +920,33 @@ export function SceneRefinement() {
                         key={dialogue.id}
                         className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 group"
                       >
-                        <div className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium ${
-                          dialogue.type === 'dialogue' ? 'bg-blue-500/10 text-blue-600' :
-                          dialogue.type === 'monologue' ? 'bg-purple-500/10 text-purple-600' :
-                          dialogue.type === 'narration' ? 'bg-gray-500/10 text-gray-600' :
-                          'bg-pink-500/10 text-pink-600'
-                        }`}>
-                          {DIALOGUE_TYPE_LABELS[dialogue.type]}
+                        <div className="flex flex-col gap-1">
+                          <div className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium ${
+                            dialogue.type === 'dialogue' ? 'bg-blue-500/10 text-blue-600' :
+                            dialogue.type === 'monologue' ? 'bg-purple-500/10 text-purple-600' :
+                            dialogue.type === 'narration' ? 'bg-gray-500/10 text-gray-600' :
+                            'bg-pink-500/10 text-pink-600'
+                          }`}>
+                            {DIALOGUE_TYPE_LABELS[dialogue.type]}
+                          </div>
+                          {/* 情绪标注 */}
+                          {dialogue.emotion && (
+                            <div className="px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-600">
+                              {dialogue.emotion}
+                            </div>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           {dialogue.characterName && (
                             <span className="font-medium text-sm">{dialogue.characterName}: </span>
                           )}
                           <span className="text-sm">{dialogue.content}</span>
+                          {/* 备注 */}
+                          {dialogue.notes && (
+                            <p className="text-xs text-muted-foreground mt-1 italic">
+                              🎬 {dialogue.notes}
+                            </p>
+                          )}
                         </div>
                         <Button
                           variant="ghost"
@@ -982,6 +1027,77 @@ export function SceneRefinement() {
             </AccordionContent>
           </AccordionItem>
         </Accordion>
+
+        {/* 多模态提示词预览 - 仅在有台词时显示 */}
+        {hasDialogues && (
+          <div className="mt-6 p-4 rounded-lg border bg-gradient-to-r from-purple-500/5 to-blue-500/5">
+            <h3 className="font-semibold mb-4 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-purple-500" />
+              <span>多模态提示词预览</span>
+              <span className="text-xs font-normal text-muted-foreground">(基于当前分镜自动生成)</span>
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* BGM提示词 */}
+              {(() => {
+                const bgmPrompt = generateBGMPrompt(currentScene);
+                return (
+                  <div className="p-3 rounded-lg bg-background border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">🎵</span>
+                      <span className="font-medium text-sm">BGM/音效</span>
+                    </div>
+                    <div className="space-y-1 text-xs">
+                      <p><span className="text-muted-foreground">氛围:</span> {bgmPrompt.mood}</p>
+                      <p><span className="text-muted-foreground">风格:</span> {bgmPrompt.genre}</p>
+                      <p><span className="text-muted-foreground">节奏:</span> {bgmPrompt.tempo}</p>
+                      <p><span className="text-muted-foreground">乐器:</span> {bgmPrompt.instruments.join(', ') || '无'}</p>
+                      {bgmPrompt.soundEffects.length > 0 && (
+                        <p><span className="text-muted-foreground">音效:</span> {bgmPrompt.soundEffects.join(', ')}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+              
+              {/* 转场提示词 */}
+              {(() => {
+                const nextScene = scenes[currentSceneIndex + 1];
+                if (!nextScene) return (
+                  <div className="p-3 rounded-lg bg-background border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">🎬</span>
+                      <span className="font-medium text-sm">转场指令</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">这是最后一个分镜，无需转场</p>
+                  </div>
+                );
+                
+                const transitionPrompt = generateTransitionPrompt(currentScene, nextScene);
+                return (
+                  <div className="p-3 rounded-lg bg-background border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">🎬</span>
+                      <span className="font-medium text-sm">转场指令</span>
+                    </div>
+                    <div className="space-y-1 text-xs">
+                      <p><span className="text-muted-foreground">类型:</span> {transitionPrompt.type}</p>
+                      <p><span className="text-muted-foreground">时长:</span> {transitionPrompt.duration}s</p>
+                      <p><span className="text-muted-foreground">缓动:</span> {transitionPrompt.easing}</p>
+                      {transitionPrompt.direction && (
+                        <p><span className="text-muted-foreground">方向:</span> {transitionPrompt.direction}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            
+            <p className="text-xs text-muted-foreground mt-3">
+              💡 多模态提示词可用于视频配乐、转场效果和配音合成
+            </p>
+          </div>
+        )}
 
         {/* 底部操作栏 */}
         <div className="flex items-center justify-between mt-6 pt-6 border-t">

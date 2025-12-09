@@ -231,8 +231,11 @@ export interface DialogueLine {
   id: string;
   type: DialogueType;
   characterName?: string;  // 说话角色名（旁白时可为空）
+  characterId?: string;    // 角色ID（关联角色库）
   content: string;         // 台词内容
   order: number;           // 台词顺序
+  emotion?: string;        // 情绪标注（如：激动、悲伤）
+  notes?: string;          // 备注（导演指示等）
 }
 
 // 分镜状态
@@ -337,7 +340,15 @@ export type ContextType =
   | 'current_scene_summary'
   | 'prev_scene_summary'
   | 'confirmed_content'
-  | 'scene_list_overview';
+  | 'scene_list_overview'
+  // 多模态提示词生成上下文
+  | 'dialogue_content'
+  | 'character_info'
+  | 'scene_description'
+  | 'scene_summary'
+  | 'style'
+  | 'prev_scene'
+  | 'next_scene';
 
 // 生成任务类型
 export type TaskType = 
@@ -458,7 +469,12 @@ export interface Character {
   customStyle?: string;
   relationships: CharacterRelationship[];
   appearances: SceneAppearance[];
+  /** @deprecated 保留用于向后兼容，请使用 primaryColor 和 secondaryColor */
   themeColor?: string;
+  /** 角色主色（可选）- 传递给AI生成定妆照和分镜描述时使用 */
+  primaryColor?: string;
+  /** 角色辅色（可选）- 传递给AI生成定妆照和分镜描述时使用 */
+  secondaryColor?: string;
   createdAt: string;
   updatedAt: string;
 }

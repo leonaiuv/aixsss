@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { initProgressBridge, createProgressTask } from './progressBridge';
+import { initProgressBridge, createProgressTask, notifyAIFallback, subscribeToFallbackEvents, getFallbackHistory, clearFallbackHistory } from './progressBridge';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
 import * as debugLogger from './debugLogger';
 
@@ -289,6 +289,128 @@ describe('progressBridge', () => {
       expect(task?.status).toBe('running');
       expect(task?.progress).toBe(0);
       expect(task?.currentStep).toBe('准备中...');
+    });
+  });
+
+  // ==========================================
+  // Fallback 通知系统测试
+  // ==========================================
+  describe('notifyAIFallback', () => {
+    beforeEach(() => {
+      clearFallbackHistory();
+    });
+
+    it('应该创建警告任务通知用户', () => {
+      notifyAIFallback('情绪提取', new Error('API超时'), '关键词匹配');
+
+      const tasks = useAIProgressStore.getState().tasks;
+      expect(tasks.length).toBeGreaterThan(0);
+      expect(tasks[0].title).toContain('情绪提取');
+      expect(tasks[0].title).toContain('已降级');
+    });
+
+    it('应该记录到历史', () => {
+      notifyAIFallback('文本压缩', '网络错误', '截断处理');
+
+      const history = getFallbackHistory();
+      expect(history.length).toBe(1);
+      expect(history[0].feature).toBe('文本压缩');
+      expect(history[0].message).toBe('网络错误');
+      expect(history[0].fallbackTo).toBe('截断处理');
+    });
+
+    it('应该正确检测timeout类型', () => {
+      notifyAIFallback('测试', 'Request timeout', '规则');
+
+      const history = getFallbackHistory();
+      expect(history[0].reason).toBe('timeout');
+    });
+
+    it('应该正确检测网络错误类型', () => {
+      notifyAIFallback('测试', '网络连接失败', '规则');
+
+      const history = getFallbackHistory();
+      expect(history[0].reason).toBe('network_error');
+    });
+
+    it('应该正确检测解析错误类型', () => {
+      notifyAIFallback('测试', 'JSON parse error', '规则');
+
+      const history = getFallbackHistory();
+      expect(history[0].reason).toBe('parse_error');
+    });
+
+    it('应该正确检测API错误类型', () => {
+      notifyAIFallback('测试', 'API request failed', '规则');
+
+      const history = getFallbackHistory();
+      expect(history[0].reason).toBe('api_error');
+    });
+
+    it('未知错误应为unknown类型', () => {
+      notifyAIFallback('测试', '一些奇怪的错误', '规则');
+
+      const history = getFallbackHistory();
+      expect(history[0].reason).toBe('unknown');
+    });
+  });
+
+  describe('subscribeToFallbackEvents', () => {
+    beforeEach(() => {
+      clearFallbackHistory();
+    });
+
+    it('应该收到fallback事件', () => {
+      const callback = vi.fn();
+      const unsubscribe = subscribeToFallbackEvents(callback);
+
+      notifyAIFallback('测试功能', 'error', '规则');
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+        feature: '测试功能',
+        message: 'error',
+        fallbackTo: '规则',
+      }));
+
+      unsubscribe();
+    });
+
+    it('取消订阅后不应收到事件', () => {
+      const callback = vi.fn();
+      const unsubscribe = subscribeToFallbackEvents(callback);
+
+      unsubscribe();
+
+      notifyAIFallback('测试', 'error', '规则');
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getFallbackHistory / clearFallbackHistory', () => {
+    beforeEach(() => {
+      clearFallbackHistory();
+    });
+
+    it('应该记录多个fallback', () => {
+      notifyAIFallback('功能1', 'error1', '规则1');
+      notifyAIFallback('功能2', 'error2', '规则2');
+      notifyAIFallback('功能3', 'error3', '规则3');
+
+      const history = getFallbackHistory();
+      expect(history.length).toBe(3);
+      // 最新的在前面
+      expect(history[0].feature).toBe('功能3');
+    });
+
+    it('应该能清空历史', () => {
+      notifyAIFallback('测试', 'error', '规则');
+
+      clearFallbackHistory();
+
+      const history = getFallbackHistory();
+      expect(history.length).toBe(0);
     });
   });
 });

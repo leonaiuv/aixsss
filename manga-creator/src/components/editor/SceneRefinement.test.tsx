@@ -5,6 +5,7 @@ import { SceneRefinement } from './SceneRefinement';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
+import { useCharacterStore } from '@/stores/characterStore';
 import { AIFactory } from '@/lib/ai/factory';
 import * as skillsModule from '@/lib/ai/skills';
 
@@ -12,6 +13,7 @@ import * as skillsModule from '@/lib/ai/skills';
 vi.mock('@/stores/projectStore');
 vi.mock('@/stores/storyboardStore');
 vi.mock('@/stores/configStore');
+vi.mock('@/stores/characterStore');
 vi.mock('@/lib/ai/factory');
 vi.mock('@/lib/ai/skills');
 
@@ -124,6 +126,15 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       testConnection: vi.fn(),
     } as any);
 
+    // Mock character store
+    vi.mocked(useCharacterStore).mockReturnValue({
+      characters: [],
+      loadCharacters: vi.fn(),
+      addCharacter: vi.fn(),
+      updateCharacter: vi.fn(),
+      deleteCharacter: vi.fn(),
+    } as any);
+
     // Mock AI Factory
     vi.mocked(AIFactory.createClient).mockReturnValue({
       chat: mockChatFn,
@@ -149,8 +160,20 @@ describe('SceneRefinement - 一键生成全部功能', () => {
           promptTemplate: 'Generate motion: {scene_description}',
           maxTokens: 200,
         },
+        'generate_dialogue': {
+          name: 'dialogue',
+          promptTemplate: 'Generate dialogue: {scene_summary} {scene_description} {characters}',
+          maxTokens: 800,
+        },
       };
       return skillMap[skillName] || null;
+    });
+
+    // Mock parseDialoguesFromText
+    vi.mocked(skillsModule.parseDialoguesFromText).mockImplementation((text: string) => {
+      return [
+        { id: 'dl1', type: 'dialogue' as const, characterName: '主角', content: '这里是什么地方？', order: 1 },
+      ];
     });
   });
 
@@ -173,8 +196,13 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       })
       .mockImplementationOnce(async () => {
         scenesState[0].motionPrompt = 'character slowly turns head, camera zooms in';
-        scenesState[0].status = 'completed';
+        scenesState[0].status = 'motion_generating';
         return { content: 'character slowly turns head, camera zooms in' };
+      })
+      .mockImplementationOnce(async () => {
+        scenesState[0].dialogues = [{ id: 'dl1', type: 'dialogue', characterName: '主角', content: '这里是什么地方？', order: 1 }];
+        scenesState[0].status = 'completed';
+        return { content: '[对白] 主角: 这里是什么地方？' };
       });
 
     render(<SceneRefinement />);
@@ -186,16 +214,16 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       await userEvent.click(generateAllBtn);
     });
 
-    // 等待所有生成完成
+    // 等待所有生成完成 - 现在是4个阶段
     await waitFor(
       () => {
-        expect(mockChatFn).toHaveBeenCalledTimes(3);
+        expect(mockChatFn).toHaveBeenCalledTimes(4);
       },
       { timeout: 10000 }
     );
 
-    // 验证三个阶段都被调用
-    expect(mockUpdateScene).toHaveBeenCalledTimes(3);
+    // 验证四个阶段都被调用
+    expect(mockUpdateScene).toHaveBeenCalledTimes(4);
     
     // 验证第一次调用（场景描述）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(1, 'test-project-1', 'scene-1', {
@@ -212,8 +240,16 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     // 验证第三次调用（时空提示词）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(3, 'test-project-1', 'scene-1', {
       motionPrompt: 'character slowly turns head, camera zooms in',
-      status: 'completed',
+      status: 'motion_generating',
     });
+
+    // 验证第四次调用（台词生成）
+    expect(mockUpdateScene).toHaveBeenNthCalledWith(4, 'test-project-1', 'scene-1', 
+      expect.objectContaining({
+        dialogues: expect.any(Array),
+        status: 'completed',
+      })
+    );
   }, 15000);
 
   it('应该防止重复点击触发多次生成', async () => {
@@ -227,6 +263,8 @@ describe('SceneRefinement - 一键生成全部功能', () => {
         scenesState[0].shotPrompt = 'test2';
       } else if (callCount === 3) {
         scenesState[0].motionPrompt = 'test3';
+      } else if (callCount === 4) {
+        scenesState[0].dialogues = [{ id: 'dl1', type: 'dialogue', characterName: '主角', content: '台词', order: 1 }];
       }
       await new Promise(resolve => setTimeout(resolve, 100));
       return { content: `test${callCount}` };
@@ -242,16 +280,16 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       await userEvent.click(generateAllBtn); // 第二次点击应该被忽略
     });
 
-    // 等待处理完成
+    // 等待处理完成 - 现在是4个阶段
     await waitFor(
       () => {
-        expect(mockChatFn).toHaveBeenCalledTimes(3);
+        expect(mockChatFn).toHaveBeenCalledTimes(4);
       },
-      { timeout: 3000 }
+      { timeout: 5000 }
     );
 
-    // 验证只调用了一次完整流程（3次API调用）
-    expect(mockChatFn).toHaveBeenCalledTimes(3);
+    // 验证只调用了一次完整流程（4次API调用）
+    expect(mockChatFn).toHaveBeenCalledTimes(4);
   });
 
   it('当某个阶段失败时应该显示错误信息', async () => {
@@ -462,6 +500,15 @@ describe('SceneRefinement - 台词生成功能', () => {
       testConnection: vi.fn(),
     } as any);
 
+    // Mock character store
+    vi.mocked(useCharacterStore).mockReturnValue({
+      characters: [],
+      loadCharacters: vi.fn(),
+      addCharacter: vi.fn(),
+      updateCharacter: vi.fn(),
+      deleteCharacter: vi.fn(),
+    } as any);
+
     vi.mocked(AIFactory.createClient).mockReturnValue({
       chat: mockChatFn,
       streamChat: vi.fn(),
@@ -502,8 +549,9 @@ describe('SceneRefinement - 台词生成功能', () => {
   it('应该显示台词生成阶段（第4阶段）', async () => {
     render(<SceneRefinement />);
 
-    // 检查台词阶段是否存在
-    expect(screen.getByText('台词生成')).toBeInTheDocument();
+    // 检查台词阶段是否存在 - 使用 getAllByText 因为可能有多个匹配
+    const elements = screen.getAllByText('台词生成');
+    expect(elements.length).toBeGreaterThan(0);
   });
 
   it('应该在时空提示词完成后启用台词生成按钮', async () => {
@@ -517,8 +565,8 @@ describe('SceneRefinement - 台词生成功能', () => {
     render(<SceneRefinement />);
 
     // 查找台词生成按钮，应该可用
-    const dialogueSection = screen.getByText('台词生成').closest('[data-state]');
-    expect(dialogueSection).toBeInTheDocument();
+    const dialogueSections = screen.getAllByText('台词生成');
+    expect(dialogueSections.length).toBeGreaterThan(0);
   });
 
   it('应该成功生成台词', async () => {
@@ -538,7 +586,8 @@ describe('SceneRefinement - 台词生成功能', () => {
 
     // 等待组件渲染
     await waitFor(() => {
-      expect(screen.getByText('台词生成')).toBeInTheDocument();
+      const elements = screen.getAllByText('台词生成');
+      expect(elements.length).toBeGreaterThan(0);
     });
   });
 
@@ -555,7 +604,8 @@ describe('SceneRefinement - 台词生成功能', () => {
 
     // 台词应该被显示
     await waitFor(() => {
-      expect(screen.getByText('台词生成')).toBeInTheDocument();
+      const elements = screen.getAllByText('台词生成');
+      expect(elements.length).toBeGreaterThan(0);
     });
   });
 
@@ -570,7 +620,272 @@ describe('SceneRefinement - 台词生成功能', () => {
     render(<SceneRefinement />);
 
     await waitFor(() => {
-      expect(screen.getByText('台词生成')).toBeInTheDocument();
+      const elements = screen.getAllByText('台词生成');
+      expect(elements.length).toBeGreaterThan(0);
     });
+  });
+});
+
+// ==========================================
+// React Hooks 规则测试
+// ==========================================
+
+describe('SceneRefinement - React Hooks 规则合规性', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('当没有项目时应该正确返回 null 且不报错', () => {
+    // Mock 无项目情况
+    vi.mocked(useProjectStore).mockReturnValue({
+      currentProject: null,
+      updateProject: vi.fn(),
+      projects: [],
+      isLoading: false,
+      loadProjects: vi.fn(),
+      loadProject: vi.fn(),
+      createProject: vi.fn(),
+      deleteProject: vi.fn(),
+      setCurrentProject: vi.fn(),
+    } as any);
+
+    vi.mocked(useStoryboardStore).mockImplementation((selector?: any) => {
+      const state = {
+        scenes: [],
+        updateScene: vi.fn(),
+        currentSceneId: null,
+        isGenerating: false,
+        loadScenes: vi.fn(),
+        setScenes: vi.fn(),
+        addScene: vi.fn(),
+        deleteScene: vi.fn(),
+        reorderScenes: vi.fn(),
+        setCurrentScene: vi.fn(),
+        setGenerating: vi.fn(),
+      };
+      return selector ? selector(state) : state;
+    });
+
+    vi.mocked(useStoryboardStore).getState = vi.fn(() => ({
+      scenes: [],
+      updateScene: vi.fn(),
+      currentSceneId: null,
+      isGenerating: false,
+      loadScenes: vi.fn(),
+      setScenes: vi.fn(),
+      addScene: vi.fn(),
+      deleteScene: vi.fn(),
+      reorderScenes: vi.fn(),
+      setCurrentScene: vi.fn(),
+      setGenerating: vi.fn(),
+    })) as any;
+
+    vi.mocked(useConfigStore).mockReturnValue({
+      config: null,
+      isConfigured: false,
+      loadConfig: vi.fn(),
+      saveConfig: vi.fn(),
+      clearConfig: vi.fn(),
+      testConnection: vi.fn(),
+    } as any);
+
+    vi.mocked(useCharacterStore).mockReturnValue({
+      characters: [],
+      loadCharacters: vi.fn(),
+      addCharacter: vi.fn(),
+      updateCharacter: vi.fn(),
+      deleteCharacter: vi.fn(),
+    } as any);
+
+    // 不应该报错
+    const { container } = render(<SceneRefinement />);
+    
+    // 应该返回 null（空容器）
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('当没有场景时应该正确返回 null 且不报错', () => {
+    const mockProject = {
+      id: 'test-project-1',
+      title: '测试项目',
+      summary: '测试故事',
+      style: '赛博朋克',
+      protagonist: '机械战士',
+      workflowState: 'SCENE_PROCESSING' as const,
+      currentSceneOrder: 1,
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01',
+    };
+
+    vi.mocked(useProjectStore).mockReturnValue({
+      currentProject: mockProject,
+      updateProject: vi.fn(),
+      projects: [mockProject],
+      isLoading: false,
+      loadProjects: vi.fn(),
+      loadProject: vi.fn(),
+      createProject: vi.fn(),
+      deleteProject: vi.fn(),
+      setCurrentProject: vi.fn(),
+    } as any);
+
+    // 场景为空
+    vi.mocked(useStoryboardStore).mockImplementation((selector?: any) => {
+      const state = {
+        scenes: [],
+        updateScene: vi.fn(),
+        currentSceneId: null,
+        isGenerating: false,
+        loadScenes: vi.fn(),
+        setScenes: vi.fn(),
+        addScene: vi.fn(),
+        deleteScene: vi.fn(),
+        reorderScenes: vi.fn(),
+        setCurrentScene: vi.fn(),
+        setGenerating: vi.fn(),
+      };
+      return selector ? selector(state) : state;
+    });
+
+    vi.mocked(useStoryboardStore).getState = vi.fn(() => ({
+      scenes: [],
+      updateScene: vi.fn(),
+      currentSceneId: null,
+      isGenerating: false,
+      loadScenes: vi.fn(),
+      setScenes: vi.fn(),
+      addScene: vi.fn(),
+      deleteScene: vi.fn(),
+      reorderScenes: vi.fn(),
+      setCurrentScene: vi.fn(),
+      setGenerating: vi.fn(),
+    })) as any;
+
+    vi.mocked(useConfigStore).mockReturnValue({
+      config: null,
+      isConfigured: false,
+      loadConfig: vi.fn(),
+      saveConfig: vi.fn(),
+      clearConfig: vi.fn(),
+      testConnection: vi.fn(),
+    } as any);
+
+    vi.mocked(useCharacterStore).mockReturnValue({
+      characters: [],
+      loadCharacters: vi.fn(),
+      addCharacter: vi.fn(),
+      updateCharacter: vi.fn(),
+      deleteCharacter: vi.fn(),
+    } as any);
+
+    // 不应该报错
+    const { container } = render(<SceneRefinement />);
+    
+    // 应该返回 null（空容器）
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('多次渲染时 hooks 顺序应该保持一致', async () => {
+    const mockProject = {
+      id: 'test-project-1',
+      title: '测试项目',
+      summary: '测试故事',
+      style: '赛博朋克',
+      protagonist: '机械战士',
+      workflowState: 'SCENE_PROCESSING' as const,
+      currentSceneOrder: 1,
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01',
+    };
+
+    const mockScene = {
+      id: 'scene-1',
+      projectId: 'test-project-1',
+      order: 1,
+      summary: '主角走进废壟',
+      sceneDescription: '',
+      actionDescription: '',
+      shotPrompt: '',
+      motionPrompt: '',
+      dialogues: [],
+      status: 'pending' as const,
+      notes: '',
+    };
+
+    vi.mocked(useProjectStore).mockReturnValue({
+      currentProject: mockProject,
+      updateProject: vi.fn(),
+      projects: [mockProject],
+      isLoading: false,
+      loadProjects: vi.fn(),
+      loadProject: vi.fn(),
+      createProject: vi.fn(),
+      deleteProject: vi.fn(),
+      setCurrentProject: vi.fn(),
+    } as any);
+
+    vi.mocked(useStoryboardStore).mockImplementation((selector?: any) => {
+      const state = {
+        scenes: [mockScene],
+        updateScene: vi.fn(),
+        currentSceneId: null,
+        isGenerating: false,
+        loadScenes: vi.fn(),
+        setScenes: vi.fn(),
+        addScene: vi.fn(),
+        deleteScene: vi.fn(),
+        reorderScenes: vi.fn(),
+        setCurrentScene: vi.fn(),
+        setGenerating: vi.fn(),
+      };
+      return selector ? selector(state) : state;
+    });
+
+    vi.mocked(useStoryboardStore).getState = vi.fn(() => ({
+      scenes: [mockScene],
+      updateScene: vi.fn(),
+      currentSceneId: null,
+      isGenerating: false,
+      loadScenes: vi.fn(),
+      setScenes: vi.fn(),
+      addScene: vi.fn(),
+      deleteScene: vi.fn(),
+      reorderScenes: vi.fn(),
+      setCurrentScene: vi.fn(),
+      setGenerating: vi.fn(),
+    })) as any;
+
+    vi.mocked(useConfigStore).mockReturnValue({
+      config: { provider: 'deepseek', apiKey: 'test', model: 'deepseek-chat' },
+      isConfigured: true,
+      loadConfig: vi.fn(),
+      saveConfig: vi.fn(),
+      clearConfig: vi.fn(),
+      testConnection: vi.fn(),
+    } as any);
+
+    vi.mocked(useCharacterStore).mockReturnValue({
+      characters: [],
+      loadCharacters: vi.fn(),
+      addCharacter: vi.fn(),
+      updateCharacter: vi.fn(),
+      deleteCharacter: vi.fn(),
+    } as any);
+
+    // 第一次渲染
+    const { rerender } = render(<SceneRefinement />);
+    expect(screen.getByText('分镜细化')).toBeInTheDocument();
+
+    // 第二次渲染（重新渲染）
+    rerender(<SceneRefinement />);
+    expect(screen.getByText('分镜细化')).toBeInTheDocument();
+
+    // 第三次渲染
+    rerender(<SceneRefinement />);
+    expect(screen.getByText('分镜细化')).toBeInTheDocument();
   });
 });

@@ -549,4 +549,60 @@ describe('parseDialoguesFromText', () => {
     expect(dialogues).toHaveLength(1);
     expect(dialogues[0].characterName).toBe('小明');
   });
+
+  // ==========================================
+  // 情绪标注解析测试
+  // ==========================================
+  it('应正确解析带情绪标注的对白', () => {
+    const text = '[对白|激动] 小明: 太棒了！';
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0].type).toBe('dialogue');
+    expect(dialogues[0].characterName).toBe('小明');
+    expect(dialogues[0].content).toBe('太棒了！');
+    expect(dialogues[0].emotion).toBe('激动');
+  });
+
+  it('应正确解析带情绪标注的心理活动', () => {
+    const text = '[心理|紧张] 主角: 我一定要成功。';
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0].type).toBe('thought');
+    expect(dialogues[0].emotion).toBe('紧张');
+  });
+
+  it('旁白不应有情绪标注', () => {
+    const text = '[旁白] 夜幕降临。';
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(1);
+    expect(dialogues[0].type).toBe('narration');
+    expect(dialogues[0].emotion).toBeUndefined();
+  });
+
+  it('应正确解析多条带情绪的台词', () => {
+    const text = `[对白|开心] 小明: 你好，今天天气真好！
+[对白|温柔] 小红: 是啊，适合出去走走。
+[旁白] 两人相视而笑。
+[心理|激动] 小明: 她的笑容真美。`;
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(4);
+    expect(dialogues[0].emotion).toBe('开心');
+    expect(dialogues[1].emotion).toBe('温柔');
+    expect(dialogues[2].emotion).toBeUndefined(); // 旁白无情绪
+    expect(dialogues[3].emotion).toBe('激动');
+  });
+
+  it('应兼容无情绪标注的旧格式', () => {
+    const text = `[对白] 小明: 你好！
+[对白|开心] 小红: 你也好！`;
+    const dialogues = parseDialoguesFromText(text);
+    
+    expect(dialogues).toHaveLength(2);
+    expect(dialogues[0].emotion).toBeUndefined(); // 旧格式无情绪
+    expect(dialogues[1].emotion).toBe('开心'); // 新格式有情绪
+  });
 });

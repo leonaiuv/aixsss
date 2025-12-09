@@ -5,9 +5,14 @@
 // 1. 追踪分镜之间的依赖关系
 // 2. 当基础设定修改时，自动标记受影响的分镜
 // 3. 提供批量更新和选择性更新选项
+// 
+// 支持两种模式：
+// - 规则引擎：快速、零延迟
+// - AI智能分析：语义理解、更精准影响评估（带fallback）
 // ==========================================
 
-import { Scene, Project, SceneStatus } from '@/types';
+import { Scene, Project, SceneStatus, Skill, ChatMessage } from '@/types';
+import { notifyAIFallback } from './progressBridge';
 
 // 依赖关系类型
 export type DependencyType = 'project_settings' | 'previous_scene' | 'scene_content';
@@ -30,9 +35,34 @@ export interface UpdateImpact {
 // 更新操作
 export interface UpdateAction {
   sceneId: string;
-  field: 'sceneDescription' | 'actionDescription' | 'shotPrompt';
+  field: 'sceneDescription' | 'actionDescription' | 'shotPrompt' | 'dialogue';
   reason: string;
   priority: 'high' | 'medium' | 'low';
+}
+
+// 角色变更信息
+export interface CharacterChange {
+  characterId: string;
+  field: 'appearance' | 'personality' | 'primaryColor' | 'secondaryColor' | 'name';
+}
+
+// 角色在分镜中的出现关系
+export interface CharacterAppearance {
+  sceneId: string;
+  characterId: string;
+}
+
+// 世界观变更信息
+export interface WorldViewChange {
+  elementId: string;
+  type: string;
+}
+
+// 分镜快照
+export interface SceneSnapshot {
+  sceneId: string;
+  data: Omit<Scene, 'id' | 'projectId'>;
+  createdAt: string;
 }
 
 /**
@@ -294,4 +324,377 @@ export function clearUpdateFlags(
     }
     return scene;
   });
+}
+
+// ==========================================
+// 策略C: 智能标记+批量确认+版本快照
+// ==========================================
+
+/**
+ * 分析角色设定变更的影响
+ */
+export function analyzeCharacterImpact(
+  change: CharacterChange,
+  scenes: Scene[],
+  appearances: CharacterAppearance[]
+): UpdateImpact {
+  const affectedSceneIds = appearances
+    .filter(a => a.characterId === change.characterId)
+    .map(a => a.sceneId);
+
+  const affectedScenes = scenes.filter(
+    scene => 
+      affectedSceneIds.includes(scene.id) &&
+      scene.status !== 'pending' &&
+      scene.status !== 'needs_update'
+  );
+
+  const updatePlan: UpdateAction[] = [];
+
+  affectedScenes.forEach(scene => {
+    // 根据变更的字段决定需要更新的内容
+    switch (change.field) {
+      case 'appearance':
+      case 'primaryColor':
+      case 'secondaryColor':
+        // 外貌和主题色影响关键帧提示词
+        if (scene.shotPrompt) {
+          updatePlan.push({
+            sceneId: scene.id,
+            field: 'shotPrompt',
+            reason: `角色${change.field === 'appearance' ? '外貌' : '主题色'}已修改`,
+            priority: 'high',
+          });
+        }
+        break;
+      case 'personality':
+        // 性格影响台词
+        updatePlan.push({
+          sceneId: scene.id,
+          field: 'dialogue',
+          reason: '角色性格已修改',
+          priority: 'medium',
+        });
+        break;
+      case 'name':
+        // 名字影响所有内容
+        if (scene.sceneDescription) {
+          updatePlan.push({
+            sceneId: scene.id,
+            field: 'sceneDescription',
+            reason: '角色名称已修改',
+            priority: 'high',
+          });
+        }
+        if (scene.shotPrompt) {
+          updatePlan.push({
+            sceneId: scene.id,
+            field: 'shotPrompt',
+            reason: '角色名称已修改',
+            priority: 'high',
+          });
+        }
+        break;
+    }
+  });
+
+  return {
+    affectedScenes,
+    updatePlan,
+    estimatedTime: updatePlan.length * 30,
+  };
+}
+
+/**
+ * 分析世界观变更的影响
+ */
+export function analyzeWorldViewImpact(
+  change: WorldViewChange,
+  scenes: Scene[]
+): UpdateImpact {
+  // 世界观修改影响所有已完成的分镜
+  const affectedScenes = scenes.filter(
+    scene => scene.status !== 'pending' && scene.status !== 'needs_update'
+  );
+
+  const updatePlan: UpdateAction[] = [];
+
+  affectedScenes.forEach(scene => {
+    // 世界观主要影响场景描述
+    if (scene.sceneDescription) {
+      updatePlan.push({
+        sceneId: scene.id,
+        field: 'sceneDescription',
+        reason: `世界观设定(${change.type})已修改`,
+        priority: 'medium',
+      });
+    }
+    // 也可能影响关键帧提示词（取决于世界观类型）
+    if (change.type === 'geography' && scene.shotPrompt) {
+      updatePlan.push({
+        sceneId: scene.id,
+        field: 'shotPrompt',
+        reason: '地理设定已修改',
+        priority: 'low',
+      });
+    }
+  });
+
+  return {
+    affectedScenes,
+    updatePlan,
+    estimatedTime: updatePlan.length * 30,
+  };
+}
+
+/**
+ * 创建单个分镜的快照
+ */
+export function createSceneSnapshot(scene: Scene): SceneSnapshot {
+  const { id, projectId, ...data } = scene;
+  return {
+    sceneId: scene.id,
+    data,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * 批量创建分镜快照
+ */
+export function createBatchSnapshot(scenes: Scene[]): SceneSnapshot[] {
+  return scenes.map(scene => createSceneSnapshot(scene));
+}
+
+/**
+ * 从快照恢复分镜
+ */
+export function restoreFromSnapshot(
+  scene: Scene,
+  snapshot: SceneSnapshot
+): Scene {
+  return {
+    ...scene,
+    ...snapshot.data,
+    id: scene.id,
+    projectId: scene.projectId,
+  };
+}
+
+/**
+ * 根据影响分析生成批量更新选项
+ */
+export function generateUpdateOptions(impact: UpdateImpact): string[] {
+  const options: string[] = ['skip']; // 跳过总是可用
+
+  if (impact.updatePlan.length === 0) {
+    return options;
+  }
+
+  // 添加全部重新生成选项
+  options.unshift('all');
+
+  // 检查是否有场景描述更新
+  const hasSceneUpdates = impact.updatePlan.some(
+    action => action.field === 'sceneDescription'
+  );
+  if (hasSceneUpdates) {
+    options.splice(1, 0, 'scene_only');
+  }
+
+  // 检查是否有提示词更新
+  const hasPromptUpdates = impact.updatePlan.some(
+    action => action.field === 'shotPrompt'
+  );
+  if (hasPromptUpdates) {
+    options.splice(options.indexOf('skip'), 0, 'prompt_only');
+  }
+
+  return options;
+}
+
+// ==========================================
+// AI Skill 定义
+// ==========================================
+
+/** 角色变更影响分析技能 */
+export const CharacterImpactAnalysisSkill: Skill = {
+  name: 'character-impact-analysis',
+  description: '分析角色设定变更对分镜的影响',
+  requiredContext: ['character_info', 'scene_description'],
+  promptTemplate: `你是一位专业的漫画剧本编导。分析角色设定变更对分镜的影响。
+
+## 角色变更信息
+角色: {character_name}
+变更字段: {changed_field}
+变更内容: {change_description}
+
+## 分镜内容
+{scene_content}
+
+## 分析要求
+请分析这个角色变更对该分镜的影响，输出JSON格式：
+- needsUpdate: boolean (是否需要更新)
+- affectedFields: string[] (受影响的字段，如["sceneDescription", "shotPrompt", "dialogue"])
+- priority: "high" | "medium" | "low" (更新优先级)
+- reason: string (影响原因)
+
+直接输出JSON，不要额外解释。`,
+  outputFormat: { type: 'json', maxLength: 300 },
+  maxTokens: 400,
+};
+
+/** 世界观变更影响分析技能 */
+export const WorldViewImpactAnalysisSkill: Skill = {
+  name: 'worldview-impact-analysis',
+  description: '分析世界观设定变更对分镜的影响',
+  requiredContext: ['scene_description', 'style'],
+  promptTemplate: `你是一位专业的漫画剧本编导。分析世界观设定变更对分镜的影响。
+
+## 世界观变更信息
+类型: {worldview_type}
+变更内容: {change_description}
+
+## 分镜内容
+{scene_content}
+
+## 分析要求
+请分析这个世界观变更对该分镜的影响，输出JSON格式：
+- needsUpdate: boolean (是否需要更新)
+- affectedFields: string[] (受影响的字段，如["sceneDescription", "shotPrompt"])
+- priority: "high" | "medium" | "low" (更新优先级)
+- reason: string (影响原因)
+- relevance: "direct" | "indirect" | "none" (与场景的关联程度)
+
+直接输出JSON，不要额外解释。`,
+  outputFormat: { type: 'json', maxLength: 300 },
+  maxTokens: 400,
+};
+
+// ==========================================
+// AI 客户端接口
+// ==========================================
+interface SimpleAIClient {
+  chat: (messages: ChatMessage[]) => Promise<{ content: string }>;
+}
+
+// ==========================================
+// AI 智能版本函数
+// ==========================================
+
+/**
+ * AI智能分析角色变更影响（带fallback）
+ */
+export async function analyzeCharacterImpactWithAI(
+  client: SimpleAIClient,
+  change: CharacterChange,
+  characterName: string,
+  changeDescription: string,
+  scenes: Scene[],
+  appearances: CharacterAppearance[]
+): Promise<UpdateImpact> {
+  try {
+    const affectedSceneIds = appearances
+      .filter(a => a.characterId === change.characterId)
+      .map(a => a.sceneId);
+
+    const candidateScenes = scenes.filter(
+      scene => 
+        affectedSceneIds.includes(scene.id) &&
+        scene.status !== 'pending' &&
+        scene.status !== 'needs_update'
+    );
+
+    const updatePlan: UpdateAction[] = [];
+    const affectedScenes: Scene[] = [];
+
+    // 为每个相关分镜进行AI分析
+    for (const scene of candidateScenes) {
+      const prompt = CharacterImpactAnalysisSkill.promptTemplate
+        .replace('{character_name}', characterName)
+        .replace('{changed_field}', change.field)
+        .replace('{change_description}', changeDescription)
+        .replace('{scene_content}', `概要: ${scene.summary}\n描述: ${scene.sceneDescription || '无'}`);
+
+      const response = await client.chat([{ role: 'user', content: prompt }]);
+      const analysis = JSON.parse(response.content);
+
+      if (analysis.needsUpdate) {
+        affectedScenes.push(scene);
+        for (const field of analysis.affectedFields) {
+          updatePlan.push({
+            sceneId: scene.id,
+            field: field as UpdateAction['field'],
+            reason: analysis.reason,
+            priority: analysis.priority,
+          });
+        }
+      }
+    }
+
+    return {
+      affectedScenes,
+      updatePlan,
+      estimatedTime: updatePlan.length * 30,
+    };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    notifyAIFallback('角色影响分析', err, '规则引擎');
+    console.warn('AI角色影响分析失败，回退到规则引擎:', error);
+    return analyzeCharacterImpact(change, scenes, appearances);
+  }
+}
+
+/**
+ * AI智能分析世界观变更影响（带fallback）
+ */
+export async function analyzeWorldViewImpactWithAI(
+  client: SimpleAIClient,
+  change: WorldViewChange,
+  changeDescription: string,
+  scenes: Scene[]
+): Promise<UpdateImpact> {
+  try {
+    const candidateScenes = scenes.filter(
+      scene => scene.status !== 'pending' && scene.status !== 'needs_update'
+    );
+
+    const updatePlan: UpdateAction[] = [];
+    const affectedScenes: Scene[] = [];
+
+    // 为每个分镜进行AI分析
+    for (const scene of candidateScenes) {
+      const prompt = WorldViewImpactAnalysisSkill.promptTemplate
+        .replace('{worldview_type}', change.type)
+        .replace('{change_description}', changeDescription)
+        .replace('{scene_content}', `概要: ${scene.summary}\n描述: ${scene.sceneDescription || '无'}`);
+
+      const response = await client.chat([{ role: 'user', content: prompt }]);
+      const analysis = JSON.parse(response.content);
+
+      // 只处理有直接或间接关联的场景
+      if (analysis.needsUpdate && analysis.relevance !== 'none') {
+        affectedScenes.push(scene);
+        for (const field of analysis.affectedFields) {
+          updatePlan.push({
+            sceneId: scene.id,
+            field: field as UpdateAction['field'],
+            reason: analysis.reason,
+            priority: analysis.priority,
+          });
+        }
+      }
+    }
+
+    return {
+      affectedScenes,
+      updatePlan,
+      estimatedTime: updatePlan.length * 30,
+    };
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    notifyAIFallback('世界观影响分析', err, '规则引擎');
+    console.warn('AI世界观影响分析失败，回退到规则引擎:', error);
+    return analyzeWorldViewImpact(change, scenes);
+  }
 }

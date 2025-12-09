@@ -139,23 +139,27 @@ export const DialogueSkill: Skill = {
 3. 旁白: 无角色的画外音/无声音叙述
 4. 心理: 角色的内心独白/思维活动
 
+## 情绪标注说明
+可用情绪: 激动、兴奋、开心、快乐、悲伤、难过、愤怒、生气、恐惧、害怕、平静、冷静、惊讶、紧张、温柔、坚定
+
 ## 输出格式要求
 每条台词占一行，格式如下:
-- 对白/独白/心理: [类型] 角色名: 台词内容
+- 对白/独白/心理: [类型|情绪] 角色名: 台词内容
 - 旁白: [旁白] 台词内容
 
 示例:
-[对白] 小明: 你好，今天天气真好！
-[对白] 小红: 是啊，适合出去走走。
+[对白|开心] 小明: 你好，今天天气真好！
+[对白|温柔] 小红: 是啊，适合出去走走。
 [旁白] 两人相视而笑。
-[心理] 小明: 她的笑容真美。
+[心理|激动] 小明: 她的笑容真美。
 
 ## 要求
 1. 台词要简洁有力，符合角色性格
 2. 符合场景氛围和情节发展
 3. 一个分镜通常只需1-5条台词
 4. 中文输出
-5. 直接输出台词，不要额外解释`,
+5. 直接输出台词，不要额外解释
+6. 每条台词必须标注情绪（旁白除外）`,
   outputFormat: { type: 'text', maxLength: 500 },
   maxTokens: 800,
 };
@@ -205,10 +209,12 @@ const DIALOGUE_TYPE_MAP: Record<string, DialogueType> = {
 /**
  * 解析AI生成的台词文本为结构化数据
  * 支持格式:
- * - [对白] 角色名: 台词内容
- * - [独白] 角色名: 台词内容
+ * - [对白|情绪] 角色名: 台词内容
+ * - [独白|情绪] 角色名: 台词内容
  * - [旁白] 台词内容
- * - [心理] 角色名: 台词内容
+ * - [心理|情绪] 角色名: 台词内容
+ * 也兼容旧格式（无情绪）:
+ * - [对白] 角色名: 台词内容
  */
 export function parseDialoguesFromText(text: string): DialogueLine[] {
   if (!text || !text.trim()) {
@@ -220,12 +226,12 @@ export function parseDialoguesFromText(text: string): DialogueLine[] {
   let order = 0;
 
   for (const line of lines) {
-    // 匹配格式: [类型] 角色名: 内容 或 [类型] 内容
-    const match = line.match(/^\[(对白|独白|旁白|心理)\]\s*(?:([^:：]+)[:：]\s*)?(.+)$/);
+    // 匹配格式: [类型|情绪] 角色名: 内容 或 [类型] 角色名: 内容 或 [类型] 内容
+    const match = line.match(/^\[(对白|独白|旁白|心理)(?:\|([^\]]+))?\]\s*(?:([^:：]+)[:：]\s*)?(.+)$/);
     
     if (match) {
       order++;
-      const [, typeLabel, characterName, content] = match;
+      const [, typeLabel, emotion, characterName, content] = match;
       const type = DIALOGUE_TYPE_MAP[typeLabel];
       
       const dialogue: DialogueLine = {
@@ -238,6 +244,11 @@ export function parseDialoguesFromText(text: string): DialogueLine[] {
       // 旁白通常没有角色名
       if (characterName && type !== 'narration') {
         dialogue.characterName = characterName.trim();
+      }
+
+      // 添加情绪标注
+      if (emotion && type !== 'narration') {
+        dialogue.emotion = emotion.trim();
       }
 
       dialogues.push(dialogue);

@@ -6,14 +6,23 @@
 // 2. 一键生成完整角色卡（外观/性格/背景）
 // 3. 定妆照提示词生成（MJ/SD/通用格式）
 // 4. 画风自动传递
+// 5. 级联更新影响分析
 // ==========================================
 
 import { useState, useEffect } from 'react';
 import { useCharacterStore } from '@/stores/characterStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { useStoryboardStore } from '@/stores/storyboardStore';
 import { AIFactory } from '@/lib/ai/factory';
-import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project } from '@/types';
+import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project, Character } from '@/types';
+import {
+  analyzeCharacterImpact,
+  CharacterChange,
+  CharacterAppearance,
+  generateUpdateSummary,
+  markScenesNeedUpdate,
+} from '@/lib/ai/cascadeUpdater';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,6 +35,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,6 +63,7 @@ import {
   Check,
   Camera,
   Wand2,
+  AlertTriangle,
 } from 'lucide-react';
 
 // AI生成状态类型
@@ -103,6 +123,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   }, [projectId, loadCharacters]);
   const { config } = useConfigStore();
   const { currentProject } = useProjectStore();
+  const { scenes, updateScene: updateSceneInStore } = useStoryboardStore();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -112,12 +133,22 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     personality: '',
     background: '',
     themeColor: '#6366f1',
+    primaryColor: '',
+    secondaryColor: '',
     portraitPrompts: undefined as PortraitPrompts | undefined,
   });
   const [generatingState, setGeneratingState] = useState<GeneratingState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
   const [dialogStep, setDialogStep] = useState<'basic' | 'portrait'>('basic');
+  
+  // 级联更新相关状态
+  const [cascadeDialogOpen, setCascadeDialogOpen] = useState(false);
+  const [cascadeImpactSummary, setCascadeImpactSummary] = useState('');
+  const [pendingCascadeUpdate, setPendingCascadeUpdate] = useState<{
+    characterId: string;
+    affectedSceneIds: string[];
+  } | null>(null);
   
   // 获取当前项目画风的完整描述（英文提示词）
   const getStyleDescription = () => {
@@ -135,11 +166,50 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     if (!formData.name.trim()) return;
 
     if (editingCharacter) {
+      // 获取原角色数据，用于比较变更
+      const originalCharacter = projectCharacters.find(c => c.id === editingCharacter);
+      
       updateCharacter(projectId, editingCharacter, {
         ...formData,
         briefDescription: formData.briefDescription,
         portraitPrompts: formData.portraitPrompts,
       });
+
+      // 分析级联影响
+      if (originalCharacter && scenes.length > 0) {
+        const changedFields: CharacterChange['field'][] = [];
+        if (originalCharacter.appearance !== formData.appearance) changedFields.push('appearance');
+        if (originalCharacter.personality !== formData.personality) changedFields.push('personality');
+        if (originalCharacter.name !== formData.name) changedFields.push('name');
+        if (originalCharacter.primaryColor !== formData.primaryColor) changedFields.push('primaryColor');
+        if (originalCharacter.secondaryColor !== formData.secondaryColor) changedFields.push('secondaryColor');
+
+        if (changedFields.length > 0) {
+          // 构建角色出场关系（简化版：假设角色在所有分镜中可能出现）
+          const appearances: CharacterAppearance[] = scenes.map(s => ({
+            sceneId: s.id,
+            characterId: editingCharacter,
+          }));
+
+          // 只分析第一个变更的字段（简化）
+          const change: CharacterChange = {
+            characterId: editingCharacter,
+            field: changedFields[0],
+          };
+
+          const impact = analyzeCharacterImpact(change, scenes, appearances);
+
+          if (impact.affectedScenes.length > 0) {
+            const summary = generateUpdateSummary(impact);
+            setCascadeImpactSummary(summary);
+            setPendingCascadeUpdate({
+              characterId: editingCharacter,
+              affectedSceneIds: impact.affectedScenes.map(s => s.id),
+            });
+            setCascadeDialogOpen(true);
+          }
+        }
+      }
     } else {
       addCharacter(projectId, {
         ...formData,
@@ -155,6 +225,27 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     setIsDialogOpen(false);
   };
 
+  // 确认级联更新
+  const handleConfirmCascadeUpdate = () => {
+    if (pendingCascadeUpdate) {
+      // 标记受影响的分镜为需要更新
+      const updatedScenes = markScenesNeedUpdate(scenes, pendingCascadeUpdate.affectedSceneIds);
+      updatedScenes.forEach(scene => {
+        if (pendingCascadeUpdate.affectedSceneIds.includes(scene.id)) {
+          updateSceneInStore(projectId, scene.id, { status: 'needs_update' });
+        }
+      });
+    }
+    setCascadeDialogOpen(false);
+    setPendingCascadeUpdate(null);
+  };
+
+  // 跳过级联更新
+  const handleSkipCascadeUpdate = () => {
+    setCascadeDialogOpen(false);
+    setPendingCascadeUpdate(null);
+  };
+
   const handleEdit = (characterId: string) => {
     const character = projectCharacters.find((c) => c.id === characterId);
     if (character) {
@@ -165,6 +256,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         personality: character.personality,
         background: character.background,
         themeColor: character.themeColor || '#6366f1',
+        primaryColor: character.primaryColor || '',
+        secondaryColor: character.secondaryColor || '',
         portraitPrompts: character.portraitPrompts,
       });
       setEditingCharacter(characterId);
@@ -187,6 +280,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       personality: '',
       background: '',
       themeColor: '#6366f1',
+      primaryColor: '',
+      secondaryColor: '',
       portraitPrompts: undefined,
     });
     setEditingCharacter(null);
@@ -500,28 +595,84 @@ ${styleDesc}
                     />
                   </div>
 
-                  {/* 主题色 */}
-                  <div className="space-y-2">
-                    <Label htmlFor="themeColor">主题色</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="themeColor"
-                        type="color"
-                        value={formData.themeColor}
-                        onChange={(e) =>
-                          setFormData({ ...formData, themeColor: e.target.value })
-                        }
-                        className="w-20"
-                      />
-                      <Input
-                        value={formData.themeColor}
-                        onChange={(e) =>
-                          setFormData({ ...formData, themeColor: e.target.value })
-                        }
-                        placeholder="#6366f1"
-                        className="flex-1"
-                      />
+                  {/* 角色色彩设置 */}
+                  <div className="space-y-4">
+                    <Label className="text-base font-medium">角色色彩</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* 主色 */}
+                      <div className="space-y-2">
+                        <Label htmlFor="primaryColor" className="text-sm">主色</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="primaryColor"
+                            type="color"
+                            value={formData.primaryColor || '#6366f1'}
+                            onChange={(e) =>
+                              setFormData({ ...formData, primaryColor: e.target.value })
+                            }
+                            className="w-12 h-9 p-1"
+                          />
+                          <Input
+                            value={formData.primaryColor}
+                            onChange={(e) =>
+                              setFormData({ ...formData, primaryColor: e.target.value })
+                            }
+                            placeholder="#6366f1"
+                            className="flex-1 font-mono text-sm"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">角色的主要色彩（服装/发色）</p>
+                      </div>
+                      {/* 辅色 */}
+                      <div className="space-y-2">
+                        <Label htmlFor="secondaryColor" className="text-sm">辅色</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="secondaryColor"
+                            type="color"
+                            value={formData.secondaryColor || '#a855f7'}
+                            onChange={(e) =>
+                              setFormData({ ...formData, secondaryColor: e.target.value })
+                            }
+                            className="w-12 h-9 p-1"
+                          />
+                          <Input
+                            value={formData.secondaryColor}
+                            onChange={(e) =>
+                              setFormData({ ...formData, secondaryColor: e.target.value })
+                            }
+                            placeholder="#a855f7"
+                            className="flex-1 font-mono text-sm"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">角色的辅助色彩（配饰/点缀）</p>
+                      </div>
                     </div>
+                    {/* 色彩预览 */}
+                    {(formData.primaryColor || formData.secondaryColor) && (
+                      <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md">
+                        <span className="text-xs text-muted-foreground">预览:</span>
+                        <div className="flex gap-1">
+                          {formData.primaryColor && (
+                            <div
+                              className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
+                              style={{ backgroundColor: formData.primaryColor }}
+                              title="主色"
+                            />
+                          )}
+                          {formData.secondaryColor && (
+                            <div
+                              className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
+                              style={{ backgroundColor: formData.secondaryColor }}
+                              title="辅色"
+                            />
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          色彩将传递给AI生成一致的角色外观
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -865,6 +1016,35 @@ ${styleDesc}
           ))}
         </div>
       )}
+
+      {/* 级联更新提示对话框 */}
+      <AlertDialog open={cascadeDialogOpen} onOpenChange={setCascadeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              角色修改影响分析
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>您修改了角色的关键信息，这可能会影响已生成的分镜内容。</p>
+              <div className="p-3 bg-muted rounded-md text-sm whitespace-pre-wrap">
+                {cascadeImpactSummary}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                选择“标记更新”将受影响的分镜标记为“需要更新”状态，您可以稍后在分镜细化页面重新生成。
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleSkipCascadeUpdate}>
+              跳过
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmCascadeUpdate}>
+              标记更新
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

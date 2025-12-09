@@ -157,8 +157,8 @@ function SortableSceneCard({ scene, index }: { scene: Scene; index: number }) {
           <p className="font-medium truncate">{scene.summary}</p>
           <div className="flex items-center gap-2 mt-1">
             <Badge
-              variant={scene.status === 'completed' ? 'default' : 'secondary'}
-              className="text-xs"
+              variant={scene.status === 'completed' ? 'default' : scene.status === 'needs_update' ? 'destructive' : 'secondary'}
+              className={`text-xs ${scene.status === 'needs_update' ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
             >
               {getStatusText(scene.status)}
             </Badge>

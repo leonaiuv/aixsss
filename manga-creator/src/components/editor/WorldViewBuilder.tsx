@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 import {
   Globe,
   Plus,
@@ -17,10 +18,16 @@ import {
   Edit2,
   Check,
   X,
-  Loader2
+  Loader2,
+  Settings2
 } from 'lucide-react';
 import { WorldViewElement } from '@/types';
 import { AIFactory } from '@/lib/ai/factory';
+import {
+  getInjectionSettings,
+  saveInjectionSettings,
+  WorldViewInjectionSettings
+} from '@/lib/ai/worldViewInjection';
 
 const ELEMENT_TYPES = [
   { value: 'era', label: '时代背景', icon: '🕐', desc: '故事发生的时代特征' },
@@ -44,9 +51,19 @@ export function WorldViewBuilder() {
     content: '',
   });
 
+  // 世界观注入设置状态
+  const [injectionSettings, setInjectionSettings] = useState<WorldViewInjectionSettings>({
+    enabled: true,
+    injectAtSceneList: true,
+    injectAtSceneDescription: true,
+  });
+
   useEffect(() => {
     if (currentProject) {
       loadElements(currentProject.id);
+      // 加载注入设置
+      const settings = getInjectionSettings(currentProject.id);
+      setInjectionSettings(settings);
     }
   }, [currentProject?.id, loadElements]);
 
@@ -161,6 +178,13 @@ export function WorldViewBuilder() {
     }
   };
 
+  // 更新注入设置
+  const handleInjectionSettingChange = (key: keyof WorldViewInjectionSettings, value: boolean) => {
+    const newSettings = { ...injectionSettings, [key]: value };
+    setInjectionSettings(newSettings);
+    saveInjectionSettings(currentProject.id, newSettings);
+  };
+
   return (
     <div className="space-y-6">
       <Card className="p-8">
@@ -180,9 +204,13 @@ export function WorldViewBuilder() {
         </div>
 
         <Tabs defaultValue="list" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="list">要素列表</TabsTrigger>
             <TabsTrigger value="edit">编辑/新增</TabsTrigger>
+            <TabsTrigger value="settings" className="gap-1">
+              <Settings2 className="h-3.5 w-3.5" />
+              注入设置
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="list" className="space-y-4 mt-4">
@@ -349,6 +377,94 @@ export function WorldViewBuilder() {
                 )}
               </div>
             </div>
+          </TabsContent>
+
+          {/* 注入设置 Tab */}
+          <TabsContent value="settings" className="space-y-4 mt-4">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Settings2 className="h-5 w-5 text-primary" />
+                世界观注入设置
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                控制世界观要素在AI生成过程中的注入时机
+              </p>
+              
+              <div className="space-y-6">
+                {/* 总开关 */}
+                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="injection-enabled" className="font-medium">启用世界观注入</Label>
+                    <p className="text-sm text-muted-foreground">
+                      开启后，世界观要素将自动注入到AI提示词中
+                    </p>
+                  </div>
+                  <Switch
+                    id="injection-enabled"
+                    checked={injectionSettings.enabled}
+                    onCheckedChange={(checked) => handleInjectionSettingChange('enabled', checked)}
+                  />
+                </div>
+
+                {/* 分镜列表生成时注入 */}
+                <div className={`flex items-center justify-between p-4 rounded-lg border ${
+                  injectionSettings.enabled ? '' : 'opacity-50'
+                }`}>
+                  <div className="space-y-0.5">
+                    <Label htmlFor="inject-scene-list" className="font-medium">分镜列表生成时注入</Label>
+                    <p className="text-sm text-muted-foreground">
+                      在生成分镜列表时考虑世界观设定
+                    </p>
+                  </div>
+                  <Switch
+                    id="inject-scene-list"
+                    checked={injectionSettings.injectAtSceneList}
+                    onCheckedChange={(checked) => handleInjectionSettingChange('injectAtSceneList', checked)}
+                    disabled={!injectionSettings.enabled}
+                  />
+                </div>
+
+                {/* 场景描述生成时注入 */}
+                <div className={`flex items-center justify-between p-4 rounded-lg border ${
+                  injectionSettings.enabled ? '' : 'opacity-50'
+                }`}>
+                  <div className="space-y-0.5">
+                    <Label htmlFor="inject-scene-desc" className="font-medium">场景描述生成时注入</Label>
+                    <p className="text-sm text-muted-foreground">
+                      在生成场景描述时考虑世界观设定
+                    </p>
+                  </div>
+                  <Switch
+                    id="inject-scene-desc"
+                    checked={injectionSettings.injectAtSceneDescription}
+                    onCheckedChange={(checked) => handleInjectionSettingChange('injectAtSceneDescription', checked)}
+                    disabled={!injectionSettings.enabled}
+                  />
+                </div>
+              </div>
+
+              {/* 状态指示 */}
+              <div className="mt-6 p-4 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-sm">
+                  <strong>当前状态：</strong>
+                  {!injectionSettings.enabled ? (
+                    <span className="text-muted-foreground"> 世界观注入已禁用</span>
+                  ) : (
+                    <span className="text-primary">
+                      {' '}将在
+                      {injectionSettings.injectAtSceneList && injectionSettings.injectAtSceneDescription
+                        ? ' 分镜列表生成 和 场景描述生成 '
+                        : injectionSettings.injectAtSceneList
+                        ? ' 分镜列表生成 '
+                        : injectionSettings.injectAtSceneDescription
+                        ? ' 场景描述生成 '
+                        : ' 无任何阶段 '}
+                      时注入世界观
+                    </span>
+                  )}
+                </p>
+              </div>
+            </Card>
           </TabsContent>
         </Tabs>
       </Card>
