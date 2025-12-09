@@ -34,6 +34,7 @@ describe('CascadeUpdater', () => {
       sceneDescription: '森林场景',
       actionDescription: '主角行走',
       shotPrompt: 'forest scene',
+      motionPrompt: 'character walks forward, camera follows',
       status: 'completed',
       notes: '',
     },
@@ -45,6 +46,7 @@ describe('CascadeUpdater', () => {
       sceneDescription: '城镇场景',
       actionDescription: '主角与老人对话',
       shotPrompt: 'town scene',
+      motionPrompt: 'characters talking, subtle gestures',
       status: 'completed',
       notes: '',
     },
@@ -56,6 +58,7 @@ describe('CascadeUpdater', () => {
       sceneDescription: '',
       actionDescription: '',
       shotPrompt: '',
+      motionPrompt: '',
       status: 'pending',
       notes: '',
     },
@@ -303,10 +306,13 @@ describe('CascadeUpdater', () => {
       expect(sceneUpdated.status).toBe('scene_confirmed');
       
       const actionUpdated = clearUpdateFlag(scene, 'actionDescription');
-      expect(actionUpdated.status).toBe('action_confirmed');
+      expect(actionUpdated.status).toBe('keyframe_confirmed');
       
-      const promptUpdated = clearUpdateFlag(scene, 'shotPrompt');
-      expect(promptUpdated.status).toBe('completed');
+      const keyframeUpdated = clearUpdateFlag(scene, 'shotPrompt');
+      expect(keyframeUpdated.status).toBe('keyframe_confirmed');
+      
+      const motionUpdated = clearUpdateFlag(scene, 'motionPrompt');
+      expect(motionUpdated.status).toBe('completed');
     });
   });
 

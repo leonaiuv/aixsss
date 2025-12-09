@@ -46,6 +46,7 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
       id: `scene_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       order: scenes.length + 1,
       status: 'pending' as SceneStatus,
+      motionPrompt: sceneData.motionPrompt || '',
     };
     
     saveScene(projectId, newScene);

@@ -266,8 +266,9 @@ export function clearUpdateFlag(scene: Scene, updatedField: string): Scene {
   // 根据更新的字段决定新状态
   const fieldStatusMap: Record<string, SceneStatus> = {
     sceneDescription: 'scene_confirmed',
-    actionDescription: 'action_confirmed',
-    shotPrompt: 'completed',
+    actionDescription: 'keyframe_confirmed', // 向后兼容，已废弃
+    shotPrompt: 'keyframe_confirmed',
+    motionPrompt: 'completed',
   };
   
   return {

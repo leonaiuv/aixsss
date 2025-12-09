@@ -8,8 +8,10 @@
 export type AICallType = 
   | 'scene_list_generation'      // 分镜列表生成
   | 'scene_description'          // 场景描述生成
-  | 'action_description'         // 动作描述生成
-  | 'shot_prompt'                // 镜头提示词生成
+  | 'action_description'         // 动作描述生成（已废弃，保留兼容）
+  | 'shot_prompt'                // 镜头提示词生成（已废弃，保留兼容）
+  | 'keyframe_prompt'            // 关键帧提示词生成
+  | 'motion_prompt'              // 时空提示词生成
   | 'custom';                    // 自定义调用
 
 // 上下文数据
@@ -113,6 +115,8 @@ function formatLogOutput(entry: AICallLogEntry): void {
     scene_description: '🎬 场景描述生成',
     action_description: '🏃 动作描述生成',
     shot_prompt: '🎯 镜头提示词生成',
+    keyframe_prompt: '🖼️ 关键帧提示词生成',
+    motion_prompt: '🎬 时空提示词生成',
     custom: '⚡ 自定义调用',
   };
 

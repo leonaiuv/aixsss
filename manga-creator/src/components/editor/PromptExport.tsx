@@ -66,14 +66,22 @@ export function PromptExport() {
         md += `${scene.sceneDescription}\n\n`;
       }
 
-      if (scene.actionDescription) {
-        md += `**动作描述**:\n\n`;
-        md += `${scene.actionDescription}\n\n`;
+      if (scene.shotPrompt) {
+        md += `**关键帧提示词**（给绘图AI）:\n\n`;
+        md += `\`\`\`
+${scene.shotPrompt}
+\`\`\`
+
+`;
       }
 
-      if (scene.shotPrompt) {
-        md += `**AI绘画提示词**:\n\n`;
-        md += `\`\`\`\n${scene.shotPrompt}\n\`\`\`\n\n`;
+      if (scene.motionPrompt) {
+        md += `**时空提示词**（给视频AI）:\n\n`;
+        md += `\`\`\`
+${scene.motionPrompt}
+\`\`\`
+
+`;
       }
 
       if (scene.notes) {
@@ -102,8 +110,8 @@ export function PromptExport() {
         order: scene.order,
         summary: scene.summary,
         sceneDescription: scene.sceneDescription,
-        actionDescription: scene.actionDescription,
-        shotPrompt: scene.shotPrompt,
+        keyframePrompt: scene.shotPrompt,
+        motionPrompt: scene.motionPrompt,
         notes: scene.notes,
         status: scene.status,
       })),
@@ -117,9 +125,9 @@ export function PromptExport() {
     return JSON.stringify(data, null, 2);
   };
 
-  // 仅导出提示词
-  const generatePromptsOnly = () => {
-    let content = `# ${currentProject.title} - AI绘画提示词\n\n`;
+  // 仅导出关键帧提示词
+  const generateKeyframePromptsOnly = () => {
+    let content = `# ${currentProject.title} - 关键帧提示词（绘图AI用）\n\n`;
     content += `画风: ${currentProject.style}\n`;
     content += `主角: ${currentProject.protagonist}\n\n`;
     content += `---\n\n`;
@@ -128,6 +136,22 @@ export function PromptExport() {
       if (scene.shotPrompt) {
         content += `## 分镜 ${index + 1}\n\n`;
         content += `${scene.shotPrompt}\n\n`;
+        content += `---\n\n`;
+      }
+    });
+
+    return content;
+  };
+
+  // 仅导出时空提示词
+  const generateMotionPromptsOnly = () => {
+    let content = `# ${currentProject.title} - 时空提示词（视频AI用）\n\n`;
+    content += `---\n\n`;
+
+    scenes.forEach((scene, index) => {
+      if (scene.motionPrompt) {
+        content += `## 分镜 ${index + 1}\n\n`;
+        content += `${scene.motionPrompt}\n\n`;
         content += `---\n\n`;
       }
     });
@@ -260,11 +284,20 @@ export function PromptExport() {
 
           <Button
             variant="outline"
-            onClick={() => handleDownload(generatePromptsOnly(), `${currentProject.title}_prompts.txt`)}
+            onClick={() => handleDownload(generateKeyframePromptsOnly(), `${currentProject.title}_keyframe_prompts.txt`)}
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            <span>仅导出提示词</span>
+            <span>导出关键帧提示词</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => handleDownload(generateMotionPromptsOnly(), `${currentProject.title}_motion_prompts.txt`)}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            <span>导出时空提示词</span>
           </Button>
         </div>
 
@@ -288,7 +321,8 @@ export function PromptExport() {
         <ul className="space-y-2 text-sm text-muted-foreground">
           <li>• <strong>Markdown</strong>: 适合人类阅读,包含完整的项目信息和分镜细节</li>
           <li>• <strong>JSON</strong>: 适合程序处理,可导入其他工具或备份数据</li>
-          <li>• <strong>仅提示词</strong>: 纯文本格式,直接用于AI绘画工具(MidJourney/Stable Diffusion等)</li>
+          <li>• <strong>关键帧提示词</strong>: 纯文本格式,用于绘图AI(SD/MJ等)生成静态关键帧</li>
+          <li>• <strong>时空提示词</strong>: 纯文本格式,用于视频AI生成动态视频</li>
           <li>• <strong>剪贴板复制</strong>: 快速分享或粘贴到其他应用</li>
         </ul>
       </Card>
@@ -316,11 +350,11 @@ export function PromptExport() {
                     <span className={scene.sceneDescription ? 'text-green-600' : 'text-muted-foreground'}>
                       场景{scene.sceneDescription ? '✓' : '○'}
                     </span>
-                    <span className={scene.actionDescription ? 'text-green-600' : 'text-muted-foreground'}>
-                      动作{scene.actionDescription ? '✓' : '○'}
-                    </span>
                     <span className={scene.shotPrompt ? 'text-green-600' : 'text-muted-foreground'}>
-                      提示词{scene.shotPrompt ? '✓' : '○'}
+                      关键帧{scene.shotPrompt ? '✓' : '○'}
+                    </span>
+                    <span className={scene.motionPrompt ? 'text-green-600' : 'text-muted-foreground'}>
+                      时空{scene.motionPrompt ? '✓' : '○'}
                     </span>
                   </div>
                 </div>

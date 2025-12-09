@@ -3,7 +3,8 @@ import {
   SceneListSkill,
   SceneDescriptionSkill,
   ActionDescriptionSkill,
-  PromptGeneratorSkill,
+  KeyframePromptSkill,
+  MotionPromptSkill,
   SkillRegistry,
   getSkillForTask,
   getSkillByName,
@@ -72,9 +73,9 @@ describe('技能定义', () => {
   });
 
   describe('ActionDescriptionSkill', () => {
-    it('应有正确的名称和描述', () => {
+    it('应有正确的名称（已废弃，保留兼容）', () => {
       expect(ActionDescriptionSkill.name).toBe('action-description');
-      expect(ActionDescriptionSkill.description).toContain('动作描述');
+      expect(ActionDescriptionSkill.description).toContain('废弃');
     });
 
     it('应有正确的必需上下文', () => {
@@ -91,43 +92,85 @@ describe('技能定义', () => {
     it('应有合理的 maxTokens', () => {
       expect(ActionDescriptionSkill.maxTokens).toBe(400);
     });
-
-    it('promptTemplate 应包含必要的占位符', () => {
-      expect(ActionDescriptionSkill.promptTemplate).toContain('{scene_description}');
-      expect(ActionDescriptionSkill.promptTemplate).toContain('{protagonist}');
-      expect(ActionDescriptionSkill.promptTemplate).toContain('{current_scene_summary}');
-    });
   });
 
-  describe('PromptGeneratorSkill', () => {
+  describe('KeyframePromptSkill', () => {
     it('应有正确的名称和描述', () => {
-      expect(PromptGeneratorSkill.name).toBe('prompt-generator');
-      expect(PromptGeneratorSkill.description).toContain('提示词');
+      expect(KeyframePromptSkill.name).toBe('keyframe-prompt');
+      expect(KeyframePromptSkill.description).toContain('静态');
+      expect(KeyframePromptSkill.description).toContain('关键帧');
     });
 
     it('应有正确的必需上下文', () => {
-      expect(PromptGeneratorSkill.requiredContext).toContain('project_essence');
-      expect(PromptGeneratorSkill.requiredContext).toContain('confirmed_content');
+      expect(KeyframePromptSkill.requiredContext).toContain('project_essence');
+      expect(KeyframePromptSkill.requiredContext).toContain('confirmed_content');
     });
 
     it('应有正确的输出格式', () => {
-      expect(PromptGeneratorSkill.outputFormat.type).toBe('text');
-      expect(PromptGeneratorSkill.outputFormat.maxLength).toBe(300);
+      expect(KeyframePromptSkill.outputFormat.type).toBe('text');
+      expect(KeyframePromptSkill.outputFormat.maxLength).toBe(300);
     });
 
     it('应有合理的 maxTokens', () => {
-      expect(PromptGeneratorSkill.maxTokens).toBe(600);
+      expect(KeyframePromptSkill.maxTokens).toBe(500);
     });
 
     it('promptTemplate 应包含必要的占位符', () => {
-      expect(PromptGeneratorSkill.promptTemplate).toContain('{scene_description}');
-      expect(PromptGeneratorSkill.promptTemplate).toContain('{action_description}');
-      expect(PromptGeneratorSkill.promptTemplate).toContain('{style}');
-      expect(PromptGeneratorSkill.promptTemplate).toContain('{protagonist}');
+      expect(KeyframePromptSkill.promptTemplate).toContain('{scene_description}');
+      expect(KeyframePromptSkill.promptTemplate).toContain('{style}');
+      expect(KeyframePromptSkill.promptTemplate).toContain('{protagonist}');
     });
 
     it('promptTemplate 应要求英文输出', () => {
-      expect(PromptGeneratorSkill.promptTemplate).toContain('英文输出');
+      expect(KeyframePromptSkill.promptTemplate).toContain('英文输出');
+    });
+
+    it('promptTemplate 应禁止动态词汇', () => {
+      expect(KeyframePromptSkill.promptTemplate).toContain('禁止动态词汇');
+    });
+
+    it('promptTemplate 应要求静态画面描述', () => {
+      expect(KeyframePromptSkill.promptTemplate).toContain('静态画面');
+    });
+  });
+
+  describe('MotionPromptSkill', () => {
+    it('应有正确的名称和描述', () => {
+      expect(MotionPromptSkill.name).toBe('motion-prompt');
+      expect(MotionPromptSkill.description).toContain('时空提示词');
+    });
+
+    it('应有正确的必需上下文', () => {
+      expect(MotionPromptSkill.requiredContext).toContain('project_essence');
+      expect(MotionPromptSkill.requiredContext).toContain('confirmed_content');
+    });
+
+    it('应有正确的输出格式（简短）', () => {
+      expect(MotionPromptSkill.outputFormat.type).toBe('text');
+      expect(MotionPromptSkill.outputFormat.maxLength).toBe(100);
+    });
+
+    it('应有较小的 maxTokens（保持简短）', () => {
+      expect(MotionPromptSkill.maxTokens).toBe(200);
+    });
+
+    it('promptTemplate 应包含必要的占位符', () => {
+      expect(MotionPromptSkill.promptTemplate).toContain('{scene_description}');
+    });
+
+    it('promptTemplate 应要求极简', () => {
+      expect(MotionPromptSkill.promptTemplate).toContain('极简');
+      expect(MotionPromptSkill.promptTemplate).toContain('15-25');
+    });
+
+    it('promptTemplate 应包含三类元素要求', () => {
+      expect(MotionPromptSkill.promptTemplate).toContain('动作');
+      expect(MotionPromptSkill.promptTemplate).toContain('镜头');
+      expect(MotionPromptSkill.promptTemplate).toContain('场面变化');
+    });
+
+    it('promptTemplate 应包含示例输出', () => {
+      expect(MotionPromptSkill.promptTemplate).toContain('示例输出');
     });
   });
 });
@@ -138,18 +181,20 @@ describe('技能定义', () => {
 
 describe('SkillRegistry', () => {
   it('应包含所有预定义技能', () => {
-    expect(SkillRegistry.size).toBe(4);
+    expect(SkillRegistry.size).toBe(5);
     expect(SkillRegistry.has('scene-list')).toBe(true);
     expect(SkillRegistry.has('scene-description')).toBe(true);
     expect(SkillRegistry.has('action-description')).toBe(true);
-    expect(SkillRegistry.has('prompt-generator')).toBe(true);
+    expect(SkillRegistry.has('keyframe-prompt')).toBe(true);
+    expect(SkillRegistry.has('motion-prompt')).toBe(true);
   });
 
   it('应返回正确的技能实例', () => {
     expect(SkillRegistry.get('scene-list')).toBe(SceneListSkill);
     expect(SkillRegistry.get('scene-description')).toBe(SceneDescriptionSkill);
     expect(SkillRegistry.get('action-description')).toBe(ActionDescriptionSkill);
-    expect(SkillRegistry.get('prompt-generator')).toBe(PromptGeneratorSkill);
+    expect(SkillRegistry.get('keyframe-prompt')).toBe(KeyframePromptSkill);
+    expect(SkillRegistry.get('motion-prompt')).toBe(MotionPromptSkill);
   });
 
   it('未注册的技能应返回 undefined', () => {
@@ -178,7 +223,8 @@ describe('getSkillForTask', () => {
     expect(getSkillForTask('scene-list')).toBe(SceneListSkill);
     expect(getSkillForTask('scene-description')).toBe(SceneDescriptionSkill);
     expect(getSkillForTask('action-description')).toBe(ActionDescriptionSkill);
-    expect(getSkillForTask('prompt-generator')).toBe(PromptGeneratorSkill);
+    expect(getSkillForTask('keyframe-prompt')).toBe(KeyframePromptSkill);
+    expect(getSkillForTask('motion-prompt')).toBe(MotionPromptSkill);
   });
 
   it('未知任务类型应返回 null', () => {
@@ -201,14 +247,16 @@ describe('getSkillByName', () => {
   it('应根据技能名称映射返回正确的技能', () => {
     expect(getSkillByName('generate_scene_desc')).toBe(SceneDescriptionSkill);
     expect(getSkillByName('generate_action_desc')).toBe(ActionDescriptionSkill);
-    expect(getSkillByName('generate_shot_prompt')).toBe(PromptGeneratorSkill);
+    expect(getSkillByName('generate_keyframe_prompt')).toBe(KeyframePromptSkill);
+    expect(getSkillByName('generate_motion_prompt')).toBe(MotionPromptSkill);
     expect(getSkillByName('generate_scene_list')).toBe(SceneListSkill);
   });
 
   it('应支持直接使用注册表键名', () => {
     expect(getSkillByName('scene-description')).toBe(SceneDescriptionSkill);
     expect(getSkillByName('action-description')).toBe(ActionDescriptionSkill);
-    expect(getSkillByName('prompt-generator')).toBe(PromptGeneratorSkill);
+    expect(getSkillByName('keyframe-prompt')).toBe(KeyframePromptSkill);
+    expect(getSkillByName('motion-prompt')).toBe(MotionPromptSkill);
     expect(getSkillByName('scene-list')).toBe(SceneListSkill);
   });
 
@@ -220,8 +268,9 @@ describe('getSkillByName', () => {
 
   it('应正确处理大小写敏感', () => {
     expect(getSkillByName('Generate_Scene_Desc')).toBeNull();
-    expect(getSkillByName('GENERATE_SCENE_DESC')).toBeNull();
+    expect(getSkillByName('GENERATE_KEYFRAME_PROMPT')).toBeNull();
     expect(getSkillByName('generate_scene_desc')).not.toBeNull();
+    expect(getSkillByName('generate_keyframe_prompt')).not.toBeNull();
   });
 });
 
@@ -286,21 +335,25 @@ describe('模板占位符一致性', () => {
   });
 
   it('其他技能使用 {} 格式占位符', () => {
-    const skills = [SceneDescriptionSkill, ActionDescriptionSkill, PromptGeneratorSkill];
+    const skills = [SceneDescriptionSkill, KeyframePromptSkill, MotionPromptSkill];
     skills.forEach((skill) => {
       // 验证使用 {} 格式
       expect(skill.promptTemplate).toMatch(/\{[^{].*[^}]\}/);
     });
   });
 
-  it('所有模板应包含角色定义', () => {
+  it('所有模板应包含角色定义（废弃技能除外）', () => {
     SkillRegistry.forEach((skill) => {
+      // 废弃的 ActionDescriptionSkill 使用简化模板，跳过检查
+      if (skill.name === 'action-description') return;
       expect(skill.promptTemplate).toContain('你是');
     });
   });
 
-  it('所有模板应包含输出要求', () => {
+  it('所有模板应包含输出要求（废弃技能除外）', () => {
     SkillRegistry.forEach((skill) => {
+      // 废弃的 ActionDescriptionSkill 使用简化模板，跳过检查
+      if (skill.name === 'action-description') return;
       const hasOutputRequirement =
         skill.promptTemplate.includes('输出') ||
         skill.promptTemplate.includes('格式') ||

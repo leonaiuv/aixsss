@@ -142,8 +142,8 @@ export function SceneRefinement() {
     }
   };
 
-  // 生成动作描述
-  const generateActionDescription = async () => {
+  // 生成关键帧提示词
+  const generateKeyframePrompt = async () => {
     // 从 store 获取最新的场景数据，避免闭包问题
     const { scenes: latestScenes } = useStoryboardStore.getState();
     const latestScene = latestScenes.find(s => s.id === currentScene?.id);
@@ -151,133 +151,35 @@ export function SceneRefinement() {
     if (!config || !latestScene || !latestScene.sceneDescription) return;
 
     setIsGenerating(true);
-    setGeneratingStep('action_description');
+    setGeneratingStep('keyframe_prompt');
     setError('');
 
     try {
       const client = AIFactory.createClient(config);
-      const skill = getSkillByName('generate_action_desc');
+      const skill = getSkillByName('generate_keyframe_prompt');
 
       if (!skill) {
         throw new Error('技能配置未找到');
       }
 
-      const context = {
-        projectEssence: {
-          style: currentProject.style,
-          protagonistCore: currentProject.protagonist,
-          storyCore: currentProject.summary,
-        },
-        currentScene: latestScene,
-        confirmedContent: latestScene.sceneDescription,
-      };
-
       const prompt = skill.promptTemplate
-        .replace('{protagonist}', context.projectEssence.protagonistCore)
         .replace('{scene_description}', latestScene.sceneDescription)
-        .replace('{current_scene_summary}', latestScene.summary);
+        .replace('{style}', currentProject.style)
+        .replace('{protagonist}', currentProject.protagonist);
 
       // 记录AI调用日志
-      const logId = logAICall('action_description', {
+      const logId = logAICall('keyframe_prompt', {
         skillName: skill.name,
         promptTemplate: skill.promptTemplate,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
         context: {
           projectId: currentProject.id,
-          style: context.projectEssence.style,
-          protagonist: context.projectEssence.protagonistCore,
-          summary: context.projectEssence.storyCore,
-          sceneId: latestScene.id,
-          sceneOrder: currentSceneIndex + 1,
-          sceneSummary: latestScene.summary,
-          sceneDescription: latestScene.sceneDescription,
-        },
-        config: {
-          provider: config.provider,
-          model: config.model,
-          maxTokens: skill.maxTokens,
-        },
-      });
-
-      const response = await client.chat([
-        { role: 'user', content: prompt }
-      ]);
-
-      // 更新日志响应
-      updateLogWithResponse(logId, {
-        content: response.content,
-        tokenUsage: response.tokenUsage,
-      });
-
-      updateScene(currentProject.id, latestScene.id, {
-        actionDescription: response.content.trim(),
-        status: 'action_confirmed',
-      });
-
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : '生成失败';
-      setError(errorMsg);
-      console.error('生成动作描述失败:', err);
-      updateLogWithError('action_description_error', errorMsg);
-    } finally {
-      setIsGenerating(false);
-      setGeneratingStep(null);
-    }
-  };
-
-  // 生成镜头提示词
-  const generateShotPrompt = async () => {
-    // 从 store 获取最新的场景数据，避免闭包问题
-    const { scenes: latestScenes } = useStoryboardStore.getState();
-    const latestScene = latestScenes.find(s => s.id === currentScene?.id);
-    
-    if (!config || !latestScene || !latestScene.actionDescription) return;
-
-    setIsGenerating(true);
-    setGeneratingStep('shot_prompt');
-    setError('');
-
-    try {
-      const client = AIFactory.createClient(config);
-      const skill = getSkillByName('generate_shot_prompt');
-
-      if (!skill) {
-        throw new Error('技能配置未找到');
-      }
-
-      const context = {
-        projectEssence: {
           style: currentProject.style,
-          protagonistCore: currentProject.protagonist,
-          storyCore: currentProject.summary,
-        },
-        currentScene: latestScene,
-        confirmedContent: `场景:${latestScene.sceneDescription}\n动作:${latestScene.actionDescription}`,
-      };
-
-      const prompt = skill.promptTemplate
-        .replace('{style}', context.projectEssence.style)
-        .replace('{protagonist}', context.projectEssence.protagonistCore)
-        .replace('{scene_description}', latestScene.sceneDescription)
-        .replace('{action_description}', latestScene.actionDescription);
-
-      // 记录AI调用日志
-      const logId = logAICall('shot_prompt', {
-        skillName: skill.name,
-        promptTemplate: skill.promptTemplate,
-        filledPrompt: prompt,
-        messages: [{ role: 'user', content: prompt }],
-        context: {
-          projectId: currentProject.id,
-          style: context.projectEssence.style,
-          protagonist: context.projectEssence.protagonistCore,
-          summary: context.projectEssence.storyCore,
+          protagonist: currentProject.protagonist,
           sceneId: latestScene.id,
           sceneOrder: currentSceneIndex + 1,
-          sceneSummary: latestScene.summary,
           sceneDescription: latestScene.sceneDescription,
-          actionDescription: latestScene.actionDescription,
         },
         config: {
           provider: config.provider,
@@ -298,6 +200,74 @@ export function SceneRefinement() {
 
       updateScene(currentProject.id, latestScene.id, {
         shotPrompt: response.content.trim(),
+        status: 'keyframe_confirmed',
+      });
+
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : '生成失败';
+      setError(errorMsg);
+      console.error('生成关键帧提示词失败:', err);
+      updateLogWithError('keyframe_prompt_error', errorMsg);
+    } finally {
+      setIsGenerating(false);
+      setGeneratingStep(null);
+    }
+  };
+
+  // 生成时空提示词
+  const generateMotionPrompt = async () => {
+    // 从 store 获取最新的场景数据，避免闭包问题
+    const { scenes: latestScenes } = useStoryboardStore.getState();
+    const latestScene = latestScenes.find(s => s.id === currentScene?.id);
+    
+    if (!config || !latestScene || !latestScene.shotPrompt) return;
+
+    setIsGenerating(true);
+    setGeneratingStep('motion_prompt');
+    setError('');
+
+    try {
+      const client = AIFactory.createClient(config);
+      const skill = getSkillByName('generate_motion_prompt');
+
+      if (!skill) {
+        throw new Error('技能配置未找到');
+      }
+
+      const prompt = skill.promptTemplate
+        .replace('{scene_description}', latestScene.sceneDescription);
+
+      // 记录AI调用日志
+      const logId = logAICall('motion_prompt', {
+        skillName: skill.name,
+        promptTemplate: skill.promptTemplate,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId: currentProject.id,
+          sceneId: latestScene.id,
+          sceneOrder: currentSceneIndex + 1,
+          sceneDescription: latestScene.sceneDescription,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          maxTokens: skill.maxTokens,
+        },
+      });
+
+      const response = await client.chat([
+        { role: 'user', content: prompt }
+      ]);
+
+      // 更新日志响应
+      updateLogWithResponse(logId, {
+        content: response.content,
+        tokenUsage: response.tokenUsage,
+      });
+
+      updateScene(currentProject.id, latestScene.id, {
+        motionPrompt: response.content.trim(),
         status: 'completed',
       });
 
@@ -312,8 +282,8 @@ export function SceneRefinement() {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
-      console.error('生成镜头提示词失败:', err);
-      updateLogWithError('shot_prompt_error', errorMsg);
+      console.error('生成时空提示词失败:', err);
+      updateLogWithError('motion_prompt_error', errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);
@@ -339,7 +309,7 @@ export function SceneRefinement() {
     }
   };
 
-  // 一键生成全部 - 修复版本
+  // 一键生成全部 - 优化版本
   const generateAll = async () => {
     // 防止重复触发
     if (isBatchGenerating || isGenerating) {
@@ -354,12 +324,10 @@ export function SceneRefinement() {
       if (!currentScene.sceneDescription) {
         setGeneratingStep('scene_description');
         await generateSceneDescription();
-        
-        // 添加延迟确保状态更新
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      // 重新获取最新的场景数据
+      // 获取最新场景数据
       const { scenes: updatedScenes1 } = useStoryboardStore.getState();
       const latestScene1 = updatedScenes1.find(s => s.id === currentScene.id);
       
@@ -367,29 +335,25 @@ export function SceneRefinement() {
         throw new Error('场景描述生成失败');
       }
 
-      // 第二阶段：生成动作描述
-      if (!latestScene1.actionDescription) {
-        setGeneratingStep('action_description');
-        await generateActionDescription();
-        
-        // 添加延迟确保状态更新
+      // 第二阶段：生成关键帧提示词
+      if (!latestScene1.shotPrompt) {
+        setGeneratingStep('keyframe_prompt');
+        await generateKeyframePrompt();
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      // 再次获取最新的场景数据
+      // 获取最新场景数据
       const { scenes: updatedScenes2 } = useStoryboardStore.getState();
       const latestScene2 = updatedScenes2.find(s => s.id === currentScene.id);
       
-      if (!latestScene2?.actionDescription) {
-        throw new Error('动作描述生成失败');
+      if (!latestScene2?.shotPrompt) {
+        throw new Error('关键帧提示词生成失败');
       }
 
-      // 第三阶段：生成镜头提示词
-      if (!latestScene2.shotPrompt) {
-        setGeneratingStep('shot_prompt');
-        await generateShotPrompt();
-        
-        // 添加延迟确保状态更新
+      // 第三阶段：生成时空提示词
+      if (!latestScene2.motionPrompt) {
+        setGeneratingStep('motion_prompt');
+        await generateMotionPrompt();
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
@@ -405,8 +369,8 @@ export function SceneRefinement() {
   };
 
   const canGenerateScene = !currentScene.sceneDescription;
-  const canGenerateAction = currentScene.sceneDescription && !currentScene.actionDescription;
-  const canGeneratePrompt = currentScene.actionDescription && !currentScene.shotPrompt;
+  const canGenerateKeyframe = currentScene.sceneDescription && !currentScene.shotPrompt;
+  const canGenerateMotion = currentScene.shotPrompt && !currentScene.motionPrompt;
   const isCompleted = currentScene.status === 'completed';
 
   // 应用模板
@@ -601,41 +565,42 @@ export function SceneRefinement() {
             </AccordionContent>
           </AccordionItem>
 
-          {/* 阶段2: 动作描述 */}
-          <AccordionItem value="action" className="border rounded-lg px-4">
+          {/* 阶段2: 关键帧提示词 */}
+          <AccordionItem value="keyframe" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  currentScene.actionDescription ? 'bg-green-500/10 text-green-600' : 'bg-muted'
+                  currentScene.shotPrompt ? 'bg-green-500/10 text-green-600' : 'bg-muted'
                 }`}>
-                  {currentScene.actionDescription ? (
+                  {currentScene.shotPrompt ? (
                     <Check className="h-4 w-4" />
                   ) : (
                     <span className="font-semibold text-sm">2</span>
                   )}
                 </div>
                 <div className="text-left">
-                  <h4 className="font-semibold">动作描述生成</h4>
+                  <h4 className="font-semibold">关键帧提示词</h4>
                   <p className="text-xs text-muted-foreground">
-                    基于场景描述,生成主角的动作、表情、肢体语言
+                    生成静态图片描述，用于绘图AI生成关键帧
                   </p>
                 </div>
               </div>
             </AccordionTrigger>
             <AccordionContent className="pt-4">
-              {currentScene.actionDescription ? (
+              {currentScene.shotPrompt ? (
                 <div className="space-y-3">
                   <Textarea
-                    value={currentScene.actionDescription}
+                    value={currentScene.shotPrompt}
                     onChange={(e) => updateScene(currentProject.id, currentScene.id, {
-                      actionDescription: e.target.value
+                      shotPrompt: e.target.value
                     })}
-                    className="min-h-[120px] resize-none"
+                    className="min-h-[150px] resize-none font-mono text-sm"
+                    placeholder="静态关键帧描述..."
                   />
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={generateActionDescription}
+                    onClick={generateKeyframePrompt}
                     disabled={isGenerating}
                     className="gap-2"
                   >
@@ -646,14 +611,14 @@ export function SceneRefinement() {
               ) : (
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">
-                    {canGenerateAction ? '准备就绪,可以生成动作描述' : '请先完成场景描述'}
+                    {canGenerateKeyframe ? '准备就绪，可以生成关键帧提示词' : '请先完成场景描述'}
                   </p>
                   <Button
-                    onClick={generateActionDescription}
-                    disabled={!canGenerateAction || isGenerating}
+                    onClick={generateKeyframePrompt}
+                    disabled={!canGenerateKeyframe || isGenerating}
                     className="gap-2"
                   >
-                    {isGenerating && generatingStep === 'action_description' ? (
+                    {isGenerating && generatingStep === 'keyframe_prompt' ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>生成中...</span>
@@ -670,41 +635,45 @@ export function SceneRefinement() {
             </AccordionContent>
           </AccordionItem>
 
-          {/* 阶段3: 镜头提示词 */}
-          <AccordionItem value="prompt" className="border rounded-lg px-4">
+          {/* 阶段3: 时空提示词 */}
+          <AccordionItem value="motion" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  currentScene.shotPrompt ? 'bg-green-500/10 text-green-600' : 'bg-muted'
+                  currentScene.motionPrompt ? 'bg-green-500/10 text-green-600' : 'bg-muted'
                 }`}>
-                  {currentScene.shotPrompt ? (
+                  {currentScene.motionPrompt ? (
                     <Check className="h-4 w-4" />
                   ) : (
                     <span className="font-semibold text-sm">3</span>
                   )}
                 </div>
                 <div className="text-left">
-                  <h4 className="font-semibold">镜头提示词生成</h4>
+                  <h4 className="font-semibold">时空提示词</h4>
                   <p className="text-xs text-muted-foreground">
-                    整合所有信息,生成最终的AI绘画提示词
+                    生成动作/镜头/变化描述，用于视频AI
                   </p>
                 </div>
               </div>
             </AccordionTrigger>
             <AccordionContent className="pt-4">
-              {currentScene.shotPrompt ? (
+              {currentScene.motionPrompt ? (
                 <div className="space-y-3">
                   <Textarea
-                    value={currentScene.shotPrompt}
+                    value={currentScene.motionPrompt}
                     onChange={(e) => updateScene(currentProject.id, currentScene.id, {
-                      shotPrompt: e.target.value
+                      motionPrompt: e.target.value
                     })}
-                    className="min-h-[150px] resize-none font-mono text-sm"
+                    className="min-h-[100px] resize-none font-mono text-sm"
+                    placeholder="时空提示词..."
                   />
+                  <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                    💡 时空提示词应保持简短(15-25词)，包含动作、镜头运动、场面变化
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={generateShotPrompt}
+                    onClick={generateMotionPrompt}
                     disabled={isGenerating}
                     className="gap-2"
                   >
@@ -715,14 +684,14 @@ export function SceneRefinement() {
               ) : (
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">
-                    {canGeneratePrompt ? '准备就绪,可以生成最终提示词' : '请先完成动作描述'}
+                    {canGenerateMotion ? '准备就绪，可以生成时空提示词' : '请先完成关键帧提示词'}
                   </p>
                   <Button
-                    onClick={generateShotPrompt}
-                    disabled={!canGeneratePrompt || isGenerating}
+                    onClick={generateMotionPrompt}
+                    disabled={!canGenerateMotion || isGenerating}
                     className="gap-2"
                   >
-                    {isGenerating && generatingStep === 'shot_prompt' ? (
+                    {isGenerating && generatingStep === 'motion_prompt' ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>生成中...</span>
@@ -796,9 +765,9 @@ export function SceneRefinement() {
           <span>细化建议</span>
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
-          <li>• <strong>渐进式生成</strong>: 按顺序完成三个阶段,每步都可手动编辑优化</li>
-          <li>• <strong>上下文保持</strong>: AI会自动参考前面分镜,保持连贯性</li>
-          <li>• <strong>提示词质量</strong>: 最终提示词融合了风格、角色、场景、动作的全部信息</li>
+          <li>• <strong>渐进式生成</strong>: 按顺序完成三个阶段，每步都可手动编辑优化</li>
+          <li>• <strong>关键帧提示词</strong>: 专注静态画面描述，适用于SD/MJ等绘图工具</li>
+          <li>• <strong>时空提示词</strong>: 简短的动态描述，用于视频生成AI</li>
           <li>• <strong>批量处理</strong>: 完成所有分镜后可在导出页面统一查看和管理</li>
         </ul>
       </Card>

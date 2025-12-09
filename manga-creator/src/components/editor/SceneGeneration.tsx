@@ -164,6 +164,7 @@ ${currentProject.summary}
         sceneDescription: '',
         actionDescription: '',
         shotPrompt: '',
+        motionPrompt: '',
         status: 'pending',
         notes: '',
       }));
@@ -201,6 +202,7 @@ ${currentProject.summary}
       sceneDescription: '',
       actionDescription: '',
       shotPrompt: '',
+      motionPrompt: '',
       notes: '',
       status: 'pending',
     });

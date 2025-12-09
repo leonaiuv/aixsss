@@ -19,17 +19,17 @@ export type WorkflowState =
 // 分镜处理步骤
 export type SceneStep = 
   | 'scene_description'
-  | 'action_description'
-  | 'shot_prompt';
+  | 'keyframe_prompt'
+  | 'motion_prompt';
 
 // 分镜状态
 export type SceneStatus = 
   | 'pending'
   | 'scene_generating'
   | 'scene_confirmed'
-  | 'action_generating'
-  | 'action_confirmed'
-  | 'prompt_generating'
+  | 'keyframe_generating'
+  | 'keyframe_confirmed'
+  | 'motion_generating'
   | 'completed'
   | 'needs_update';
 
@@ -70,8 +70,12 @@ export interface Scene {
   order: number;
   summary: string;
   sceneDescription: string;
+  /** @deprecated 保留用于向后兼容 */
   actionDescription: string;
+  /** 关键帧提示词 - 静态图片描述，用于绘图AI */
   shotPrompt: string;
+  /** 时空提示词 - 动作/镜头/变化，用于视频AI */
+  motionPrompt: string;
   contextSummary?: SceneContextSummary;
   status: SceneStatus;
   notes: string;
@@ -121,8 +125,8 @@ export type ContextType =
 export type TaskType = 
   | 'generate_scene_list'
   | 'generate_scene_desc'
-  | 'generate_action_desc'
-  | 'generate_shot_prompt'
+  | 'generate_keyframe_prompt'
+  | 'generate_motion_prompt'
   | 'regenerate';
 
 // 生成任务

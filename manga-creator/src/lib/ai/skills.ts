@@ -51,41 +51,22 @@ export const SceneDescriptionSkill: Skill = {
 
 export const ActionDescriptionSkill: Skill = {
   name: 'action-description',
-  description: '为单个分镜生成角色动作描述',
+  description: '【已废弃】保留用于向后兼容',
   requiredContext: ['project_essence', 'current_scene_summary', 'confirmed_content'],
-  promptTemplate: `你是一位专业的电影分镜师。请为以下场景生成角色动作描述。
-
-## 场景描述
-{scene_description}
-
-## 主角设定
-{protagonist}
-
-## 分镜概要
-{current_scene_summary}
-
-## 输出要求
-请描述角色在这个场景中的:
-1. 主要动作和姿态
-2. 表情和情绪
-3. 与环境的互动
-
-直接输出动作描述,150字以内。`,
+  promptTemplate: `请描述角色的动作。`,
   outputFormat: { type: 'text', maxLength: 150 },
   maxTokens: 400,
 };
 
-export const PromptGeneratorSkill: Skill = {
-  name: 'prompt-generator',
-  description: '生成AI图像生成提示词',
+// 关键帧提示词技能 - 专注静态图片描述
+export const KeyframePromptSkill: Skill = {
+  name: 'keyframe-prompt',
+  description: '生成静态关键帧图片描述，用于绘图AI',
   requiredContext: ['project_essence', 'confirmed_content'],
-  promptTemplate: `你是一位专业的AIGC提示词专家。根据以下场景和动作描述,生成一段高质量的图像生成提示词。
+  promptTemplate: `你是一位专业AI绘图提示词专家。根据以下场景信息，生成一段高质量的「静态关键帧」描述。
 
-## 场景描述
+## 场景信息
 {scene_description}
-
-## 动作描述
-{action_description}
 
 ## 视觉风格
 {style}
@@ -94,14 +75,45 @@ export const PromptGeneratorSkill: Skill = {
 {protagonist}
 
 ## 要求
-1. 提示词需包含:主角特征、动作姿态、场景环境、构图、镜头类型、灯光、色彩基调、画质关键词
-2. 格式紧凑,适用于Stable Diffusion或Midjourney
-3. 使用英文输出
-4. 末尾添加常用参数如 --ar 16:9
+1. 专注于「静态画面」描述，如同单幅照片/绘画
+2. 内容包含: 人物姿态、表情、场景环境、光线氛围、构图角度
+3. 禁止动态词汇: 不要使用walking/running/moving等动作词
+4. 使用静态表述: standing/sitting/leaning/holding等姿态词
+5. 英文输出，简洁精准，逗号分隔
+6. 末尾添加画质词: masterpiece, best quality, highly detailed
+7. 添加参数: --ar 16:9
 
-直接输出提示词,不要额外解释。`,
+直接输出提示词，不要额外解释。`,
   outputFormat: { type: 'text', maxLength: 300 },
-  maxTokens: 600,
+  maxTokens: 500,
+};
+
+// 时空提示词技能 - 动作/镜头/变化，给视频AI
+export const MotionPromptSkill: Skill = {
+  name: 'motion-prompt',
+  description: '生成时空提示词，包含动作、镜头控制、场面变化',
+  requiredContext: ['project_essence', 'confirmed_content'],
+  promptTemplate: `你是一位视频生成AI提示词专家。根据场景信息，生成用于视频生成的「时空提示词」。
+
+## 场景信息
+{scene_description}
+
+## 要求
+1. 描述「动态变化」，用于将静态关键帧转化为视频
+2. 包含三类元素:
+   - 动作: 简单动词(walks, turns, smiles, reaches)
+   - 镜头: pan left/right, zoom in/out, tracking shot, dolly
+   - 场面变化: light changes, wind blows, leaves falling
+3. 「极简」: 总词数控制在15-25词以内
+4. 英文输出，逗号分隔
+5. 避免过度描述，保持可控性
+
+示例输出:
+character slowly turns head, gentle smile, camera zooms in, soft light shifts
+
+直接输出时空提示词，不要额外解释。`,
+  outputFormat: { type: 'text', maxLength: 100 },
+  maxTokens: 200,
 };
 
 // 技能注册表
@@ -109,7 +121,8 @@ export const SkillRegistry = new Map<string, Skill>([
   ['scene-list', SceneListSkill],
   ['scene-description', SceneDescriptionSkill],
   ['action-description', ActionDescriptionSkill],
-  ['prompt-generator', PromptGeneratorSkill],
+  ['keyframe-prompt', KeyframePromptSkill],
+  ['motion-prompt', MotionPromptSkill],
 ]);
 
 // 根据任务类型获取技能
@@ -122,7 +135,8 @@ export function getSkillByName(skillName: string): Skill | null {
   const nameMap: Record<string, string> = {
     'generate_scene_desc': 'scene-description',
     'generate_action_desc': 'action-description',
-    'generate_shot_prompt': 'prompt-generator',
+    'generate_keyframe_prompt': 'keyframe-prompt',
+    'generate_motion_prompt': 'motion-prompt',
     'generate_scene_list': 'scene-list',
   };
   

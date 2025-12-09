@@ -32,10 +32,11 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     id: 'scene-1',
     projectId: 'test-project-1',
     order: 1,
-    summary: '主角走进废墟',
+    summary: '主角走进废壟',
     sceneDescription: '',
     actionDescription: '',
     shotPrompt: '',
+    motionPrompt: '',
     status: 'pending' as const,
     notes: '',
   };
@@ -137,15 +138,15 @@ describe('SceneRefinement - 一键生成全部功能', () => {
           promptTemplate: 'Generate scene: {style} {protagonist} {current_scene_summary} {prev_scene_summary}',
           maxTokens: 500,
         },
-        'generate_action_desc': {
-          name: 'action-description',
-          promptTemplate: 'Generate action: {protagonist} {scene_description} {current_scene_summary}',
-          maxTokens: 400,
+        'generate_keyframe_prompt': {
+          name: 'keyframe-prompt',
+          promptTemplate: 'Generate keyframe: {style} {protagonist} {scene_description}',
+          maxTokens: 500,
         },
-        'generate_shot_prompt': {
-          name: 'prompt-generator',
-          promptTemplate: 'Generate prompt: {style} {protagonist} {scene_description} {action_description}',
-          maxTokens: 600,
+        'generate_motion_prompt': {
+          name: 'motion-prompt',
+          promptTemplate: 'Generate motion: {scene_description}',
+          maxTokens: 200,
         },
       };
       return skillMap[skillName] || null;
@@ -165,14 +166,14 @@ describe('SceneRefinement - 一键生成全部功能', () => {
         return { content: '废墟场景，昏暗的光线' };
       })
       .mockImplementationOnce(async () => {
-        scenesState[0].actionDescription = '机械战士缓步前行';
-        scenesState[0].status = 'action_confirmed';
-        return { content: '机械战士缓步前行' };
+        scenesState[0].shotPrompt = 'A cyberpunk warrior standing in ruins, masterpiece, --ar 16:9';
+        scenesState[0].status = 'keyframe_confirmed';
+        return { content: 'A cyberpunk warrior standing in ruins, masterpiece, --ar 16:9' };
       })
       .mockImplementationOnce(async () => {
-        scenesState[0].shotPrompt = 'A cyberpunk warrior walking in ruins, --ar 16:9';
+        scenesState[0].motionPrompt = 'character slowly turns head, camera zooms in';
         scenesState[0].status = 'completed';
-        return { content: 'A cyberpunk warrior walking in ruins, --ar 16:9' };
+        return { content: 'character slowly turns head, camera zooms in' };
       });
 
     render(<SceneRefinement />);
@@ -201,15 +202,15 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       status: 'scene_confirmed',
     });
 
-    // 验证第二次调用（动作描述）
+    // 验证第二次调用（关键帧提示词）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(2, 'test-project-1', 'scene-1', {
-      actionDescription: '机械战士缓步前行',
-      status: 'action_confirmed',
+      shotPrompt: 'A cyberpunk warrior standing in ruins, masterpiece, --ar 16:9',
+      status: 'keyframe_confirmed',
     });
 
-    // 验证第三次调用（镜头提示词）
+    // 验证第三次调用（时空提示词）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(3, 'test-project-1', 'scene-1', {
-      shotPrompt: 'A cyberpunk warrior walking in ruins, --ar 16:9',
+      motionPrompt: 'character slowly turns head, camera zooms in',
       status: 'completed',
     });
   }, 15000);
@@ -222,9 +223,9 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       if (callCount === 1) {
         scenesState[0].sceneDescription = 'test1';
       } else if (callCount === 2) {
-        scenesState[0].actionDescription = 'test2';
+        scenesState[0].shotPrompt = 'test2';
       } else if (callCount === 3) {
-        scenesState[0].shotPrompt = 'test3';
+        scenesState[0].motionPrompt = 'test3';
       }
       await new Promise(resolve => setTimeout(resolve, 100));
       return { content: `test${callCount}` };
@@ -304,8 +305,9 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     scenesState = [{
       ...mockScene,
       sceneDescription: '已有场景描述',
-      actionDescription: '已有动作描述',
-      shotPrompt: '已有提示词',
+      actionDescription: '',
+      shotPrompt: '已有关键帧提示词',
+      motionPrompt: '已有时空提示词',
       status: 'completed' as const,
     }];
 
@@ -324,9 +326,9 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       if (callCount === 1) {
         scenesState[0].sceneDescription = `阶段${callCount}的内容`;
       } else if (callCount === 2) {
-        scenesState[0].actionDescription = `阶段${callCount}的内容`;
-      } else if (callCount === 3) {
         scenesState[0].shotPrompt = `阶段${callCount}的内容`;
+      } else if (callCount === 3) {
+        scenesState[0].motionPrompt = `阶段${callCount}的内容`;
       }
       return { content: `阶段${callCount}的内容` };
     });

@@ -48,6 +48,7 @@ describe('storyboardStore', () => {
           sceneDescription: 'Desc 1',
           actionDescription: 'Action 1',
           shotPrompt: 'Prompt 1',
+          motionPrompt: 'Motion 1',
           status: 'pending',
           notes: '',
         },
@@ -79,6 +80,7 @@ describe('storyboardStore', () => {
           sceneDescription: '',
           actionDescription: '',
           shotPrompt: '',
+          motionPrompt: '',
           status: 'pending',
           notes: '',
         },
@@ -90,6 +92,7 @@ describe('storyboardStore', () => {
           sceneDescription: '',
           actionDescription: '',
           shotPrompt: '',
+          motionPrompt: '',
           status: 'pending',
           notes: '',
         },
@@ -120,6 +123,7 @@ describe('storyboardStore', () => {
         sceneDescription: '',
         actionDescription: '',
         shotPrompt: '',
+        motionPrompt: '',
         status: 'pending' as const,
         notes: '',
       };
@@ -140,6 +144,7 @@ describe('storyboardStore', () => {
         sceneDescription: '',
         actionDescription: '',
         shotPrompt: '',
+        motionPrompt: '',
         status: 'pending',
         notes: '',
       };
@@ -153,6 +158,7 @@ describe('storyboardStore', () => {
         sceneDescription: '',
         actionDescription: '',
         shotPrompt: '',
+        motionPrompt: '',
         status: 'pending',
         notes: '',
       });
@@ -169,6 +175,7 @@ describe('storyboardStore', () => {
         sceneDescription: '',
         actionDescription: '',
         shotPrompt: '',
+        motionPrompt: '',
         status: 'pending',
         notes: '',
       });
@@ -185,6 +192,7 @@ describe('storyboardStore', () => {
         sceneDescription: '',
         actionDescription: '',
         shotPrompt: '',
+        motionPrompt: '',
         status: 'completed',
         notes: '',
       });
@@ -202,6 +210,7 @@ describe('storyboardStore', () => {
       sceneDescription: '',
       actionDescription: '',
       shotPrompt: '',
+      motionPrompt: '',
       status: 'pending',
       notes: '',
     };
@@ -251,6 +260,7 @@ describe('storyboardStore', () => {
         sceneDescription: '',
         actionDescription: '',
         shotPrompt: '',
+        motionPrompt: '',
         status: 'pending',
         notes: '',
       },
@@ -262,6 +272,7 @@ describe('storyboardStore', () => {
         sceneDescription: '',
         actionDescription: '',
         shotPrompt: '',
+        motionPrompt: '',
         status: 'pending',
         notes: '',
       },
@@ -296,9 +307,9 @@ describe('storyboardStore', () => {
 
   describe('reorderScenes', () => {
     const scenes: Scene[] = [
-      { id: 'scene_1', projectId: 'proj_1', order: 1, summary: 'Scene 1', sceneDescription: '', actionDescription: '', shotPrompt: '', status: 'pending', notes: '' },
-      { id: 'scene_2', projectId: 'proj_1', order: 2, summary: 'Scene 2', sceneDescription: '', actionDescription: '', shotPrompt: '', status: 'pending', notes: '' },
-      { id: 'scene_3', projectId: 'proj_1', order: 3, summary: 'Scene 3', sceneDescription: '', actionDescription: '', shotPrompt: '', status: 'pending', notes: '' },
+      { id: 'scene_1', projectId: 'proj_1', order: 1, summary: 'Scene 1', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
+      { id: 'scene_2', projectId: 'proj_1', order: 2, summary: 'Scene 2', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
+      { id: 'scene_3', projectId: 'proj_1', order: 3, summary: 'Scene 3', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
     ];
 
     beforeEach(() => {
