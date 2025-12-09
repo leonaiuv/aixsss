@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
 import { getSkillByName } from '@/lib/ai/skills';
-import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
+import { logAICall, updateLogWithResponse, updateLogWithError, updateLogProgress } from '@/lib/ai/debugLogger';
 import { SceneStep, migrateOldStyleToConfig, Project } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
 
@@ -132,10 +132,14 @@ export function SceneRefinement() {
           maxTokens: skill.maxTokens,
         },
       });
+      
+      updateLogProgress(logId, 30, '正在生成场景描述...');
 
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
+      
+      updateLogProgress(logId, 80, '正在保存结果...');
 
       // 更新日志响应
       updateLogWithResponse(logId, {
@@ -206,10 +210,14 @@ export function SceneRefinement() {
           maxTokens: skill.maxTokens,
         },
       });
+      
+      updateLogProgress(logId, 30, '正在生成关键帧提示词...');
 
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
+      
+      updateLogProgress(logId, 80, '正在保存关键帧...');
 
       // 更新日志响应
       updateLogWithResponse(logId, {
@@ -274,10 +282,14 @@ export function SceneRefinement() {
           maxTokens: skill.maxTokens,
         },
       });
+      
+      updateLogProgress(logId, 30, '正在生成时空提示词...');
 
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
+      
+      updateLogProgress(logId, 80, '正在保存结果...');
 
       // 更新日志响应
       updateLogWithResponse(logId, {

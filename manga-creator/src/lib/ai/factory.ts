@@ -3,6 +3,7 @@ import { ProviderType, UserConfig, ChatMessage, AIResponse } from '@/types';
 import { DeepSeekProvider } from './providers/deepseek';
 import { OpenAICompatibleProvider } from './providers/openai';
 import { GeminiProvider } from './providers/gemini';
+import { KimiProvider } from './providers/kimi';
 
 // 工厂函数 - 根据供应商类型创建适配器
 export function createAIProvider(provider: ProviderType): AIProvider {
@@ -10,6 +11,7 @@ export function createAIProvider(provider: ProviderType): AIProvider {
     case 'deepseek':
       return new DeepSeekProvider();
     case 'kimi':
+      return new KimiProvider();
     case 'openai-compatible':
       return new OpenAICompatibleProvider();
     case 'gemini':

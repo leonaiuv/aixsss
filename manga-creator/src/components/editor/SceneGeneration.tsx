@@ -19,7 +19,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
-import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
+import { logAICall, updateLogWithResponse, updateLogWithError, updateLogProgress } from '@/lib/ai/debugLogger';
 import { Scene, migrateOldStyleToConfig } from '@/types';
 
 /**
@@ -147,12 +147,16 @@ ${currentProject.summary}
       });
 
       setGenerationProgress(20);
+      
+      // 更新进度
+      updateLogProgress(logId, 30, '正在调用AI...');
 
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
 
       setGenerationProgress(60);
+      updateLogProgress(logId, 70, '正在解析响应...');
 
       // 更新日志响应
       updateLogWithResponse(logId, {

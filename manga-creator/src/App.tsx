@@ -8,10 +8,14 @@ import { Editor } from './components/Editor';
 import { ConfigDialog } from './components/ConfigDialog';
 import { ThemeToggle } from './components/ThemeToggle';
 import { Toaster } from './components/ui/toaster';
-import { Settings, Search } from 'lucide-react';
+import { DevPanel, DevPanelTrigger } from './components/DevPanel';
+import { AIProgressToast } from './components/AIProgressToast';
+import { initProgressBridge } from './lib/ai/progressBridge';
+import { Settings, Search, Terminal } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent } from './components/ui/dialog';
 import { ProjectSearch } from './components/editor/ProjectSearch';
+import { useAIProgressStore } from './stores/aiProgressStore';
 
 function App() {
   const [currentView, setCurrentView] = useState<'list' | 'editor'>('list');
@@ -20,6 +24,7 @@ function App() {
   const { loadProjects, currentProject, projects, setCurrentProject } = useProjectStore();
   const { loadConfig } = useConfigStore();
   const { initTheme } = useThemeStore();
+  const { togglePanel, isPanelVisible } = useAIProgressStore();
   const [filteredProjects, setFilteredProjects] = useState(projects);
 
   useEffect(() => {
@@ -27,6 +32,13 @@ function App() {
     loadProjects();
     loadConfig();
     initTheme();
+    
+    // 初始化AI进度桥接器
+    const cleanupBridge = initProgressBridge();
+    
+    return () => {
+      cleanupBridge();
+    };
   }, [loadProjects, loadConfig, initTheme]);
 
   // 全局搜索快捷键 Ctrl+K
@@ -78,6 +90,15 @@ function App() {
               title="搜索 (Ctrl+K)"
             >
               <Search className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={togglePanel}
+              title="开发者面板"
+              className={isPanelVisible ? 'bg-muted' : ''}
+            >
+              <Terminal className="h-5 w-5" />
             </Button>
             <ThemeToggle />
             <Button 
@@ -134,6 +155,13 @@ function App() {
 
       {/* Toast通知 */}
       <Toaster />
+      
+      {/* AI进度提醒 */}
+      <AIProgressToast />
+      
+      {/* 开发者面板 */}
+      <DevPanel />
+      <DevPanelTrigger />
     </div>
   );
 }

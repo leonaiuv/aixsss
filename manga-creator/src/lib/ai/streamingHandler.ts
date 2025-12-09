@@ -137,22 +137,45 @@ export async function streamChatKimi(
   const { onChunk, onError, onComplete, signal } = options;
   
   try {
+    const model = config.model || 'moonshot-v1-8k';
+    const isThinkingModel = model.includes('thinking');
+    
+    // kimi-k2-thinking 模型必须设置 temperature=1.0 和 max_tokens>=16000
+    const requestBody = {
+      model,
+      messages,
+      stream: true,
+      temperature: isThinkingModel ? 1.0 : 0.6,
+      max_tokens: isThinkingModel ? 16000 : 4096,
+    };
+    
+    console.log('Kimi API Request:', {
+      url: 'https://api.moonshot.cn/v1/chat/completions',
+      model: requestBody.model,
+      messageCount: messages.length,
+      temperature: requestBody.temperature,
+      max_tokens: requestBody.max_tokens,
+      isThinkingModel,
+    });
+    
     const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify({
-        model: config.model || 'moonshot-v1-8k',
-        messages,
-        stream: true,
-      }),
+      body: JSON.stringify(requestBody),
       signal,
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Kimi API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText,
+      });
+      throw new Error(`Kimi API错误 (${response.status}): ${errorText}`);
     }
     
     const reader = response.body?.getReader();
@@ -186,13 +209,16 @@ export async function streamChatKimi(
           try {
             const jsonStr = trimmedLine.slice(6);
             const data = JSON.parse(jsonStr);
-            const content = data.choices?.[0]?.delta?.content;
+            const delta = data.choices?.[0]?.delta;
+            
+            // Kimi K2 Thinking 模型: 只显示 content (推理结果)，不显示 reasoning_content (推理过程)
+            const content = delta?.content;
             
             if (content) {
               onChunk(content, false);
             }
           } catch (e) {
-            console.warn('Failed to parse SSE data:', e);
+            console.warn('Failed to parse Kimi SSE data:', e);
           }
         }
       }
