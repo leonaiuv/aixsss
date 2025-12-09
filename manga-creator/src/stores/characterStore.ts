@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Character } from '@/types';
+import { Character, PortraitPrompts } from '@/types';
 
 interface CharacterStore {
   characters: Character[];
@@ -13,6 +13,8 @@ interface CharacterStore {
   deleteCharacter: (projectId: string, characterId: string) => void;
   setCurrentCharacter: (characterId: string | null) => void;
   recordAppearance: (projectId: string, characterId: string, sceneId: string, role: 'main' | 'supporting' | 'background', notes?: string) => void;
+  updatePortraitPrompts: (projectId: string, characterId: string, prompts: PortraitPrompts) => void;
+  getCharactersByProject: (projectId: string) => Character[];
 }
 
 export const useCharacterStore = create<CharacterStore>((set, get) => ({
@@ -96,6 +98,22 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     
     set({ characters: updated });
     saveCharacters(projectId, updated);
+  },
+  
+  updatePortraitPrompts: (projectId: string, characterId: string, prompts: PortraitPrompts) => {
+    const characters = get().characters;
+    const updated = characters.map(char =>
+      char.id === characterId
+        ? { ...char, portraitPrompts: prompts, updatedAt: new Date().toISOString() }
+        : char
+    );
+    
+    set({ characters: updated });
+    saveCharacters(projectId, updated);
+  },
+  
+  getCharactersByProject: (projectId: string) => {
+    return get().characters.filter(char => char.projectId === projectId);
   },
 }));
 

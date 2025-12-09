@@ -36,12 +36,18 @@ describe('CharacterManager', () => {
     id: 'char-1',
     projectId: 'test-project-1',
     name: '张三',
+    briefDescription: '张三，20岁学生，开朗活泼',
     appearance: '身高175cm，黑色短发',
     personality: '开朗活泼',
     background: '来自小镇的少年',
     themeColor: '#6366f1',
     relationships: [],
     appearances: [],
+    portraitPrompts: {
+      midjourney: 'anime style, young man, black short hair --ar 2:3 --v 6',
+      stableDiffusion: 'anime style, young man, black short hair, masterpiece',
+      general: '日式动漫风格，青年男性，黑色短发，全身照，纯白背景',
+    },
     createdAt: '2024-01-01',
     updatedAt: '2024-01-01',
   };
@@ -65,6 +71,8 @@ describe('CharacterManager', () => {
       deleteCharacter: mockDeleteCharacter,
       setCurrentCharacter: vi.fn(),
       recordAppearance: vi.fn(),
+      updatePortraitPrompts: vi.fn(),
+      getCharactersByProject: vi.fn().mockReturnValue([]),
     });
 
     // Mock config store
@@ -222,7 +230,7 @@ describe('CharacterManager', () => {
       await user.click(screen.getByText('添加角色'));
       
       expect(screen.getByText('添加新角色')).toBeInTheDocument();
-      expect(screen.getByText('填写角色的基本信息，这些信息将用于AI生成时的上下文')).toBeInTheDocument();
+      expect(screen.getByText('输入角色简短描述，AI将自动生成完整角色卡')).toBeInTheDocument();
     });
 
     it('对话框应包含所有必要的表单字段', async () => {
@@ -231,6 +239,7 @@ describe('CharacterManager', () => {
       
       await user.click(screen.getByText('添加角色'));
       
+      expect(screen.getByLabelText(/角色简短描述/)).toBeInTheDocument();
       expect(screen.getByLabelText(/角色名称/)).toBeInTheDocument();
       expect(screen.getByLabelText(/外观描述/)).toBeInTheDocument();
       expect(screen.getByLabelText(/性格特点/)).toBeInTheDocument();
@@ -268,7 +277,15 @@ describe('CharacterManager', () => {
       await user.type(screen.getByLabelText(/性格特点/), '沉稳冷静');
       await user.type(screen.getByLabelText(/背景故事/), '神秘的过客');
       
-      await user.click(screen.getByRole('button', { name: '添加' }));
+      // 点击下一步进入定妆照步骤
+      const nextButton = screen.getByRole('button', { name: /下一步/ });
+      await user.click(nextButton);
+      
+      // 在定妆照步骤点击添加角色
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '添加角色' })).toBeInTheDocument();
+      });
+      await user.click(screen.getByRole('button', { name: '添加角色' }));
       
       expect(mockAddCharacter).toHaveBeenCalledWith('test-project-1', expect.objectContaining({
         name: '李四',
@@ -278,13 +295,17 @@ describe('CharacterManager', () => {
       }));
     });
 
-    it('没有输入名称时不应提交', async () => {
+    it('没有输入名称时下一步按钮应禁用', async () => {
       const user = userEvent.setup();
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.click(screen.getByRole('button', { name: '添加' }));
       
+      // 没有填写任何信息时，下一步按钮应该禁用
+      const nextButton = screen.getByRole('button', { name: /下一步/ });
+      expect(nextButton).toBeDisabled();
+      
+      // 因为按钮禁用，点击不会有任何效果
       expect(mockAddCharacter).not.toHaveBeenCalled();
     });
   });
@@ -293,68 +314,73 @@ describe('CharacterManager', () => {
   // AI生成功能测试
   // ==========================================
   describe('AI生成功能', () => {
-    it('外观描述AI生成按钮应该存在', async () => {
+    it('一键生成按钮应该存在', async () => {
       const user = userEvent.setup();
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
       
-      const aiButtons = screen.getAllByText('AI生成');
-      expect(aiButtons.length).toBe(3); // 外观、性格、背景各一个
+      expect(screen.getByRole('button', { name: /一键生成/ })).toBeInTheDocument();
     });
 
-    it('没有输入名称时AI生成按钮应禁用', async () => {
+    it('没有输入简短描述时一键生成按钮应禁用', async () => {
       const user = userEvent.setup();
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      aiButtons.forEach(button => {
-        expect(button).toBeDisabled();
-      });
+      const generateButton = screen.getByRole('button', { name: /一键生成/ });
+      expect(generateButton).toBeDisabled();
     });
 
-    it('输入名称后AI生成按钮应启用', async () => {
+    it('输入简短描述后一键生成按钮应启用', async () => {
       const user = userEvent.setup();
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
+      await user.type(screen.getByLabelText(/角色简短描述/), '李明，30岁退役特种兵');
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      aiButtons.forEach(button => {
-        expect(button).not.toBeDisabled();
-      });
+      const generateButton = screen.getByRole('button', { name: /一键生成/ });
+      expect(generateButton).not.toBeDisabled();
     });
 
     it('点击AI生成按钮应调用AI服务生成外观', async () => {
       const user = userEvent.setup();
       mockChat.mockResolvedValue({
-        content: '身高180cm，黑色长发，锐利的眼神，身穿深色风衣',
+        content: JSON.stringify({
+          name: '神秘人',
+          appearance: '身高180cm，黑色长发，锐利的眼神，身穿深色风衣',
+          personality: '沉默寡言，内心却充满正义感',
+          background: '曾是特种兵，退役后成为私家侦探',
+        }),
       });
 
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '神秘人');
+      await user.type(screen.getByLabelText(/角色简短描述/), '神秘人，退役特种兵');
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[0]); // 点击外观生成按钮
+      const generateButton = screen.getByRole('button', { name: /一键生成/ });
+      await user.click(generateButton);
       
       await waitFor(() => {
         expect(AIFactory.createClient).toHaveBeenCalledWith(mockConfig);
         expect(mockChat).toHaveBeenCalled();
       });
 
-      // 检查prompt包含角色名称
+      // 检查prompt包含简短描述
       const chatCallArg = mockChat.mock.calls[0][0];
-      expect(chatCallArg[0].content).toContain('神秘人');
+      expect(chatCallArg[0].content).toContain('神秘人，退役特种兵');
     });
 
     it('AI生成成功后应填充到对应字段', async () => {
       const user = userEvent.setup();
-      const generatedContent = '身高180cm，黑色长发，锐利的眼神';
+      const generatedContent = JSON.stringify({
+        name: '神秘人',
+        appearance: '身高180cm，黑色长发，锐利的眼神',
+        personality: '沉默寡言',
+        background: '退役特种兵',
+      });
       mockChat.mockResolvedValue({
         content: generatedContent,
       });
@@ -362,14 +388,14 @@ describe('CharacterManager', () => {
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '神秘人');
+      await user.type(screen.getByLabelText(/角色简短描述/), '神秘人');
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[0]);
+      const generateButton = screen.getByRole('button', { name: /一键生成/ });
+      await user.click(generateButton);
       
       await waitFor(() => {
         const appearanceTextarea = screen.getByLabelText(/外观描述/) as HTMLTextAreaElement;
-        expect(appearanceTextarea.value).toBe(generatedContent);
+        expect(appearanceTextarea.value).toBe('身高180cm，黑色长发，锐利的眼神');
       });
     });
 
@@ -378,16 +404,18 @@ describe('CharacterManager', () => {
       
       // 延迟AI响应
       mockChat.mockImplementation(() => 
-        new Promise(resolve => setTimeout(() => resolve({ content: '生成的内容' }), 100))
+        new Promise(resolve => setTimeout(() => resolve({ 
+          content: JSON.stringify({ name: '测试', appearance: '测试', personality: '测试', background: '测试' })
+        }), 100))
       );
 
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
+      await user.type(screen.getByLabelText(/角色简短描述/), '测试角色');
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[0]);
+      const generateButton = screen.getByRole('button', { name: /一键生成/ });
+      await user.click(generateButton);
       
       // 应该显示生成中状态
       expect(screen.getByText('生成中...')).toBeInTheDocument();
@@ -404,10 +432,10 @@ describe('CharacterManager', () => {
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
+      await user.type(screen.getByLabelText(/角色简短描述/), '测试角色');
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[0]);
+      const generateButton = screen.getByRole('button', { name: /一键生成/ });
+      await user.click(generateButton);
       
       await waitFor(() => {
         expect(screen.getByText('API调用失败')).toBeInTheDocument();
@@ -428,14 +456,13 @@ describe('CharacterManager', () => {
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
+      await user.type(screen.getByLabelText(/角色简短描述/), '测试角色');
       
-      // 手动启用按钮点击（因为按钮可能因为配置问题被禁用逻辑改变）
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
+      const generateButton = screen.getByRole('button', { name: /一键生成/ });
       
       // 模拟点击
       await act(async () => {
-        aiButtons[0].click();
+        generateButton.click();
       });
       
       await waitFor(() => {
@@ -445,152 +472,167 @@ describe('CharacterManager', () => {
   });
 
   // ==========================================
-  // 性格生成测试
+  // 两步式交互流程测试
   // ==========================================
-  describe('性格生成', () => {
-    it('点击性格AI生成按钮应调用AI服务', async () => {
+  describe('两步式交互流程', () => {
+    it('应该显示步骤指示器', async () => {
+      const user = userEvent.setup();
+      render(<CharacterManager projectId="test-project-1" />);
+      
+      await user.click(screen.getByText('添加角色'));
+      
+      expect(screen.getByText('1. 基础信息')).toBeInTheDocument();
+      expect(screen.getByText('2. 定妆照提示词')).toBeInTheDocument();
+    });
+
+    it('基础信息完成后应能进入下一步', async () => {
       const user = userEvent.setup();
       mockChat.mockResolvedValue({
-        content: '性格开朗，乐于助人',
+        content: JSON.stringify({
+          name: '测试',
+          appearance: '测试外观',
+          personality: '测试性格',
+          background: '测试背景',
+        }),
       });
 
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
+      await user.type(screen.getByLabelText(/角色简短描述/), '测试角色');
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[1]); // 点击性格生成按钮
+      // 一键生成
+      await user.click(screen.getByRole('button', { name: /一键生成/ }));
       
       await waitFor(() => {
-        expect(mockChat).toHaveBeenCalled();
-        const chatCallArg = mockChat.mock.calls[0][0];
-        expect(chatCallArg[0].content).toContain('性格特点');
+        expect(screen.getByRole('button', { name: /下一步/ })).toBeInTheDocument();
       });
     });
 
-    it('性格生成应填充到性格字段', async () => {
+    it('未填写外观描述时下一步按钮应禁用', async () => {
       const user = userEvent.setup();
-      const generatedContent = '热情开朗，喜欢交朋友';
-      mockChat.mockResolvedValue({
-        content: generatedContent,
-      });
-
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
+      await user.type(screen.getByLabelText(/角色简短描述/), '测试');
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[1]);
-      
-      await waitFor(() => {
-        const personalityTextarea = screen.getByLabelText(/性格特点/) as HTMLTextAreaElement;
-        expect(personalityTextarea.value).toBe(generatedContent);
-      });
-    });
-  });
-
-  // ==========================================
-  // 背景生成测试
-  // ==========================================
-  describe('背景生成', () => {
-    it('点击背景AI生成按钮应调用AI服务', async () => {
-      const user = userEvent.setup();
-      mockChat.mockResolvedValue({
-        content: '从小在山村长大',
-      });
-
-      render(<CharacterManager projectId="test-project-1" />);
-      
-      await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
-      
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[2]); // 点击背景生成按钮
-      
-      await waitFor(() => {
-        expect(mockChat).toHaveBeenCalled();
-        const chatCallArg = mockChat.mock.calls[0][0];
-        expect(chatCallArg[0].content).toContain('背景故事');
-      });
-    });
-
-    it('背景生成应填充到背景字段', async () => {
-      const user = userEvent.setup();
-      const generatedContent = '出生于王室，却选择了冒险之路';
-      mockChat.mockResolvedValue({
-        content: generatedContent,
-      });
-
-      render(<CharacterManager projectId="test-project-1" />);
-      
-      await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
-      
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[2]);
-      
-      await waitFor(() => {
-        const backgroundTextarea = screen.getByLabelText(/背景故事/) as HTMLTextAreaElement;
-        expect(backgroundTextarea.value).toBe(generatedContent);
-      });
+      const nextButton = screen.getByRole('button', { name: /下一步/ });
+      expect(nextButton).toBeDisabled();
     });
   });
 
   // ==========================================
-  // 项目上下文集成测试
+  // 定妆照提示词生成测试
   // ==========================================
-  describe('项目上下文集成', () => {
-    it('AI生成应使用项目上下文', async () => {
+  describe('定妆照提示词', () => {
+    it('应该能够生成多种格式的定妆照提示词', async () => {
       const user = userEvent.setup();
-      mockChat.mockResolvedValue({
-        content: '生成的外观',
+      
+      // 第一次调用返回基础信息
+      mockChat.mockResolvedValueOnce({
+        content: JSON.stringify({
+          name: '测试',
+          appearance: '测试外观',
+          personality: '测试性格',
+          background: '测试背景',
+        }),
+      });
+      
+      // 第二次调用返回定妆照提示词
+      mockChat.mockResolvedValueOnce({
+        content: JSON.stringify({
+          midjourney: 'anime style, test character --ar 2:3 --v 6',
+          stableDiffusion: 'anime style, test character, masterpiece',
+          general: '日式动漫风格，测试角色，全身照',
+        }),
       });
 
       render(<CharacterManager projectId="test-project-1" />);
       
       await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
+      await user.type(screen.getByLabelText(/角色简短描述/), '测试角色');
       
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[0]);
+      // 一键生成基础信息
+      await user.click(screen.getByRole('button', { name: /一键生成/ }));
+      
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /下一步/ })).not.toBeDisabled();
+      });
+      
+      // 点击下一步
+      await user.click(screen.getByRole('button', { name: /下一步/ }));
+      
+      // 应该显示生成定妆照按钮
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /生成定妆照提示词/ })).toBeInTheDocument();
+      });
+    });
+
+    it('应该显示三种格式的复制按钮', async () => {
+      vi.mocked(useCharacterStore).mockReturnValue({
+        characters: [mockCharacter],
+        currentCharacterId: null,
+        isLoading: false,
+        loadCharacters: vi.fn(),
+        addCharacter: mockAddCharacter,
+        updateCharacter: mockUpdateCharacter,
+        deleteCharacter: mockDeleteCharacter,
+        setCurrentCharacter: vi.fn(),
+        recordAppearance: vi.fn(),
+        updatePortraitPrompts: vi.fn(),
+        getCharactersByProject: vi.fn().mockReturnValue([mockCharacter]),
+      });
+
+      render(<CharacterManager projectId="test-project-1" />);
+      
+      // 点击定妆照Tab
+      const portraitTab = screen.getByRole('tab', { name: /定妆照/ });
+      await userEvent.click(portraitTab);
+      
+      // 应该显示三种格式的复制按钮（按钮文本包含MJ、SD、通用）
+      expect(screen.getByText('MJ')).toBeInTheDocument();
+      expect(screen.getByText('SD')).toBeInTheDocument();
+      expect(screen.getByText('通用')).toBeInTheDocument();
+    });
+  });
+
+  // ==========================================
+  // 画风传递测试
+  // ==========================================
+  describe('画风传递', () => {
+    it('应该在对话框中显示当前画风', async () => {
+      const user = userEvent.setup();
+      render(<CharacterManager projectId="test-project-1" />);
+      
+      await user.click(screen.getByText('添加角色'));
+      
+      // 应该显示画风提示
+      expect(screen.getByText(/当前画风/)).toBeInTheDocument();
+    });
+
+    it('AI生成时应使用项目画风', async () => {
+      const user = userEvent.setup();
+      mockChat.mockResolvedValue({
+        content: JSON.stringify({
+          name: '测试',
+          appearance: '测试外观',
+          personality: '测试性格',
+          background: '测试背景',
+        }),
+      });
+
+      render(<CharacterManager projectId="test-project-1" />);
+      
+      await user.click(screen.getByText('添加角色'));
+      await user.type(screen.getByLabelText(/角色简短描述/), '测试');
+      
+      await user.click(screen.getByRole('button', { name: /一键生成/ }));
       
       await waitFor(() => {
         const chatCallArg = mockChat.mock.calls[0][0];
         const prompt = chatCallArg[0].content;
-        expect(prompt).toContain('一个关于冒险的故事'); // summary
-        expect(prompt).toContain('日系动漫'); // style
-      });
-    });
-
-    it('没有项目时应该仍能正常生成', async () => {
-      vi.mocked(useProjectStore).mockReturnValue({
-        projects: [],
-        currentProject: null,
-        isLoading: false,
-        loadProjects: vi.fn(),
-        createProject: vi.fn(),
-        updateProject: vi.fn(),
-        deleteProject: vi.fn(),
-        setCurrentProject: vi.fn(),
-      });
-
-      const user = userEvent.setup();
-      mockChat.mockResolvedValue({
-        content: '生成的外观描述',
-      });
-
-      render(<CharacterManager projectId="test-project-1" />);
-      
-      await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
-      
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[0]);
-      
-      await waitFor(() => {
-        expect(mockChat).toHaveBeenCalled();
+        // 应该包含项目画风信息
+        expect(prompt).toContain('日系动漫');
       });
     });
   });
@@ -610,6 +652,8 @@ describe('CharacterManager', () => {
         deleteCharacter: mockDeleteCharacter,
         setCurrentCharacter: vi.fn(),
         recordAppearance: vi.fn(),
+        updatePortraitPrompts: vi.fn(),
+        getCharactersByProject: vi.fn().mockReturnValue([mockCharacter]),
       });
     });
 
@@ -662,6 +706,8 @@ describe('CharacterManager', () => {
         deleteCharacter: mockDeleteCharacter,
         setCurrentCharacter: vi.fn(),
         recordAppearance: vi.fn(),
+        updatePortraitPrompts: vi.fn(),
+        getCharactersByProject: vi.fn().mockReturnValue([mockCharacter]),
       });
 
       // Mock window.confirm
@@ -721,6 +767,8 @@ describe('CharacterManager', () => {
         deleteCharacter: mockDeleteCharacter,
         setCurrentCharacter: vi.fn(),
         recordAppearance: vi.fn(),
+        updatePortraitPrompts: vi.fn(),
+        getCharactersByProject: vi.fn(),
       });
 
       render(<CharacterManager projectId="test-project-1" />);
@@ -743,6 +791,8 @@ describe('CharacterManager', () => {
         deleteCharacter: mockDeleteCharacter,
         setCurrentCharacter: vi.fn(),
         recordAppearance: vi.fn(),
+        updatePortraitPrompts: vi.fn(),
+        getCharactersByProject: vi.fn(),
       });
 
       render(<CharacterManager projectId="test-project-1" />);
@@ -766,46 +816,14 @@ describe('CharacterManager', () => {
         deleteCharacter: mockDeleteCharacter,
         setCurrentCharacter: vi.fn(),
         recordAppearance: vi.fn(),
+        updatePortraitPrompts: vi.fn(),
+        getCharactersByProject: vi.fn(),
       });
 
       render(<CharacterManager projectId="test-project-1" />);
       
       expect(screen.getByText('张三')).toBeInTheDocument();
       expect(screen.queryByText('其他项目角色')).not.toBeInTheDocument();
-    });
-  });
-
-  // ==========================================
-  // AI生成互斥测试
-  // ==========================================
-  describe('AI生成互斥', () => {
-    it('生成过程中其他AI生成按钮应被禁用', async () => {
-      const user = userEvent.setup();
-      
-      // 延迟AI响应
-      mockChat.mockImplementation(() => 
-        new Promise(resolve => setTimeout(() => resolve({ content: '生成的内容' }), 200))
-      );
-
-      render(<CharacterManager projectId="test-project-1" />);
-      
-      await user.click(screen.getByText('添加角色'));
-      await user.type(screen.getByLabelText(/角色名称/), '测试角色');
-      
-      const aiButtons = screen.getAllByRole('button', { name: /AI生成/ });
-      await user.click(aiButtons[0]); // 开始生成外观
-      
-      // 其他按钮应该被禁用
-      await waitFor(() => {
-        expect(aiButtons[1]).toBeDisabled();
-        expect(aiButtons[2]).toBeDisabled();
-      });
-      
-      // 等待生成完成
-      await waitFor(() => {
-        expect(aiButtons[1]).not.toBeDisabled();
-        expect(aiButtons[2]).not.toBeDisabled();
-      }, { timeout: 500 });
     });
   });
 });

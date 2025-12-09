@@ -213,15 +213,31 @@ export interface WorldViewElement {
   updatedAt: string;
 }
 
+// 角色定妆照提示词（多格式）
+export interface PortraitPrompts {
+  /** Midjourney 格式 */
+  midjourney: string;
+  /** Stable Diffusion 格式 */
+  stableDiffusion: string;
+  /** 通用格式 */
+  general: string;
+}
+
 // 角色实体
 export interface Character {
   id: string;
   projectId: string;
   name: string;
+  /** 用户输入的简短描述，用于AI生成完整角色卡 */
+  briefDescription?: string;
   avatar?: string;
   appearance: string;
   personality: string;
   background: string;
+  /** 角色定妆照提示词（多格式） */
+  portraitPrompts?: PortraitPrompts;
+  /** 角色专属画风（可选，覆盖项目画风） */
+  customStyle?: string;
   relationships: CharacterRelationship[];
   appearances: SceneAppearance[];
   themeColor?: string;
