@@ -4,6 +4,7 @@ import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useCharacterStore } from '@/stores/characterStore';
 import { useWorldViewStore } from '@/stores/worldViewStore';
+import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -55,6 +56,12 @@ export function SceneRefinement() {
   const { config } = useConfigStore();
   const { characters } = useCharacterStore();
   const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
+  const { 
+    isBatchGenerating: isGlobalBatchGenerating, 
+    batchGeneratingSource,
+    startBatchGenerating,
+    stopBatchGenerating 
+  } = useAIProgressStore();
 
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -464,18 +471,34 @@ export function SceneRefinement() {
   };
 
   // 一键生成全部 - 优化版本
-  const generateAll = async () => {
-    // 防止重复触发
-    if (isBatchGenerating || isGenerating) {
+  const generateAll = async (forceRegenerate = false) => {
+    // 防止重复触发或被外部批量操作阻止
+    if (isBatchGenerating || isGenerating || isExternallyBlocked) {
       return;
     }
 
     setIsBatchGenerating(true);
+    startBatchGenerating('scene_refinement');
     setError('');
 
     try {
+      // 如果是强制重新生成，先重置场景状态
+      if (forceRegenerate && currentProject) {
+        updateScene(currentProject.id, currentScene.id, {
+          sceneDescription: '',
+          shotPrompt: '',
+          motionPrompt: '',
+          dialogues: [],
+          status: 'pending',
+        });
+        // 等待状态更新
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
       // 第一阶段：生成场景描述
-      if (!currentScene.sceneDescription) {
+      const { scenes: currentScenes } = useStoryboardStore.getState();
+      const scene0 = currentScenes.find(s => s.id === currentScene.id);
+      if (!scene0?.sceneDescription) {
         setGeneratingStep('scene_description');
         await generateSceneDescription();
         await new Promise(resolve => setTimeout(resolve, 50));
@@ -532,6 +555,7 @@ export function SceneRefinement() {
       console.error('一键生成全部失败:', err);
     } finally {
       setIsBatchGenerating(false);
+      stopBatchGenerating();
       setIsGenerating(false);
       setGeneratingStep(null);
     }
@@ -543,6 +567,10 @@ export function SceneRefinement() {
   const canGenerateDialogue = currentScene.motionPrompt && (!currentScene.dialogues || currentScene.dialogues.length === 0);
   const hasDialogues = currentScene.dialogues && currentScene.dialogues.length > 0;
   const isCompleted = currentScene.status === 'completed' && hasDialogues;
+  
+  // 检查是否被外部批量操作禁用（如批量操作面板正在生成）
+  const isExternallyBlocked = isGlobalBatchGenerating && batchGeneratingSource === 'batch_panel';
+  const externalBlockMessage = isExternallyBlocked ? '批量操作正在进行中，请等待完成' : '';
 
   // 应用模板
   const handleApplyTemplate = (template: string, variables: Record<string, string>) => {
@@ -609,9 +637,13 @@ export function SceneRefinement() {
               onClick={() => setCharacterDialogOpen(true)}
               disabled={projectCharacters.length === 0}
               className="gap-2"
+              title={projectCharacters.length === 0 ? '请先在基础设定中添加角色' : '引用已创建的角色信息'}
             >
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">引用角色</span>
+              {projectCharacters.length === 0 && (
+                <span className="text-xs text-muted-foreground">(无角色)</span>
+              )}
             </Button>
             <Button
               variant="outline"
@@ -714,11 +746,16 @@ export function SceneRefinement() {
                     variant="outline"
                     size="sm"
                     onClick={generateSceneDescription}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isExternallyBlocked}
                     className="gap-2"
+                    title={isExternallyBlocked ? externalBlockMessage : ''}
                   >
-                    <RotateCw className="h-4 w-4" />
-                    <span>重新生成</span>
+                    {isExternallyBlocked ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCw className="h-4 w-4" />
+                    )}
+                    <span>{isExternallyBlocked ? '批量操作中' : '重新生成'}</span>
                   </Button>
                 </div>
               ) : (
@@ -726,13 +763,19 @@ export function SceneRefinement() {
                   <p className="text-sm text-muted-foreground">点击生成按钮开始创建场景描述</p>
                   <Button
                     onClick={generateSceneDescription}
-                    disabled={!canGenerateScene || isGenerating}
+                    disabled={!canGenerateScene || isGenerating || isExternallyBlocked}
                     className="gap-2"
+                    title={isExternallyBlocked ? externalBlockMessage : ''}
                   >
                     {isGenerating && generatingStep === 'scene_description' ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>生成中...</span>
+                      </>
+                    ) : isExternallyBlocked ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>批量操作中</span>
                       </>
                     ) : (
                       <>
@@ -782,11 +825,16 @@ export function SceneRefinement() {
                     variant="outline"
                     size="sm"
                     onClick={generateKeyframePrompt}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isExternallyBlocked}
                     className="gap-2"
+                    title={isExternallyBlocked ? externalBlockMessage : ''}
                   >
-                    <RotateCw className="h-4 w-4" />
-                    <span>重新生成</span>
+                    {isExternallyBlocked ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCw className="h-4 w-4" />
+                    )}
+                    <span>{isExternallyBlocked ? '批量操作中' : '重新生成'}</span>
                   </Button>
                 </div>
               ) : (
@@ -796,13 +844,19 @@ export function SceneRefinement() {
                   </p>
                   <Button
                     onClick={generateKeyframePrompt}
-                    disabled={!canGenerateKeyframe || isGenerating}
+                    disabled={!canGenerateKeyframe || isGenerating || isExternallyBlocked}
                     className="gap-2"
+                    title={isExternallyBlocked ? externalBlockMessage : ''}
                   >
                     {isGenerating && generatingStep === 'keyframe_prompt' ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>生成中...</span>
+                      </>
+                    ) : isExternallyBlocked ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>批量操作中</span>
                       </>
                     ) : (
                       <>
@@ -855,11 +909,16 @@ export function SceneRefinement() {
                     variant="outline"
                     size="sm"
                     onClick={generateMotionPrompt}
-                    disabled={isGenerating}
+                    disabled={isGenerating || isExternallyBlocked}
                     className="gap-2"
+                    title={isExternallyBlocked ? externalBlockMessage : ''}
                   >
-                    <RotateCw className="h-4 w-4" />
-                    <span>重新生成</span>
+                    {isExternallyBlocked ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RotateCw className="h-4 w-4" />
+                    )}
+                    <span>{isExternallyBlocked ? '批量操作中' : '重新生成'}</span>
                   </Button>
                 </div>
               ) : (
@@ -869,13 +928,19 @@ export function SceneRefinement() {
                   </p>
                   <Button
                     onClick={generateMotionPrompt}
-                    disabled={!canGenerateMotion || isGenerating}
+                    disabled={!canGenerateMotion || isGenerating || isExternallyBlocked}
                     className="gap-2"
+                    title={isExternallyBlocked ? externalBlockMessage : ''}
                   >
                     {isGenerating && generatingStep === 'motion_prompt' ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>生成中...</span>
+                      </>
+                    ) : isExternallyBlocked ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>批量操作中</span>
                       </>
                     ) : (
                       <>
@@ -988,11 +1053,16 @@ export function SceneRefinement() {
                       variant="outline"
                       size="sm"
                       onClick={generateDialogue}
-                      disabled={isGenerating}
+                      disabled={isGenerating || isExternallyBlocked}
                       className="gap-2"
+                      title={isExternallyBlocked ? externalBlockMessage : ''}
                     >
-                      <RotateCw className="h-4 w-4" />
-                      <span>重新生成</span>
+                      {isExternallyBlocked ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RotateCw className="h-4 w-4" />
+                      )}
+                      <span>{isExternallyBlocked ? '批量操作中' : '重新生成'}</span>
                     </Button>
                   </div>
                   
@@ -1007,13 +1077,19 @@ export function SceneRefinement() {
                   </p>
                   <Button
                     onClick={generateDialogue}
-                    disabled={!canGenerateDialogue || isGenerating}
+                    disabled={!canGenerateDialogue || isGenerating || isExternallyBlocked}
                     className="gap-2"
+                    title={isExternallyBlocked ? externalBlockMessage : ''}
                   >
                     {isGenerating && generatingStep === 'dialogue' ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>生成中...</span>
+                      </>
+                    ) : isExternallyBlocked ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>批量操作中</span>
                       </>
                     ) : (
                       <>
@@ -1101,24 +1177,48 @@ export function SceneRefinement() {
 
         {/* 底部操作栏 */}
         <div className="flex items-center justify-between mt-6 pt-6 border-t">
-          <Button
-            variant="outline"
-            onClick={generateAll}
-            disabled={isGenerating || isBatchGenerating || isCompleted}
-            className="gap-2"
-          >
-            {isBatchGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>批量生成中...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                <span>一键生成全部</span>
-              </>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => generateAll(false)}
+              disabled={isGenerating || isBatchGenerating || isCompleted || isExternallyBlocked}
+              className="gap-2"
+              title={isExternallyBlocked ? externalBlockMessage : ''}
+            >
+              {isBatchGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>批量生成中...</span>
+                </>
+              ) : isExternallyBlocked ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>批量操作中...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  <span>一键生成全部</span>
+                </>
+              )}
+            </Button>
+            {isCompleted && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (confirm('确定要重新生成当前分镜的所有内容吗？这将覆盖现有内容。')) {
+                    generateAll(true);
+                  }
+                }}
+                disabled={isGenerating || isBatchGenerating || isExternallyBlocked}
+                className="gap-2"
+                title={isExternallyBlocked ? externalBlockMessage : '重新生成当前分镜的所有内容'}
+              >
+                <RotateCw className="h-4 w-4" />
+                <span>重新生成全部</span>
+              </Button>
             )}
-          </Button>
+          </div>
 
           <div className="flex gap-2">
             {currentSceneIndex === scenes.length - 1 && isCompleted ? (

@@ -381,6 +381,386 @@ describe('DevPanel', () => {
     });
   });
 
+  describe('batch tab', () => {
+    beforeEach(() => {
+      useAIProgressStore.getState().showPanel();
+    });
+
+    it('应该显示批量选项卡', () => {
+      render(<DevPanel />);
+      
+      expect(screen.getByRole('tab', { name: /批量/ })).toBeInTheDocument();
+    });
+
+    it('应该能够切换到批量选项卡', async () => {
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      const batchTab = screen.getByRole('tab', { name: /批量/ });
+      await user.click(batchTab);
+      
+      expect(batchTab).toHaveAttribute('data-state', 'active');
+    });
+
+    it('应该显示全局批量状态', async () => {
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('全局批量状态')).toBeInTheDocument();
+    });
+
+    it('应该显示空闲状态当没有批量操作时', async () => {
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getAllByText('空闲').length).toBeGreaterThan(0);
+    });
+
+    it('应该在批量生成中显示正在进行标记', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        isBatchGenerating: true,
+        batchGeneratingSource: 'batch_panel',
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('批量生成中')).toBeInTheDocument();
+    });
+
+    it('应该显示批量操作来源', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        isBatchGenerating: true,
+        batchGeneratingSource: 'batch_panel',
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('批量操作面板')).toBeInTheDocument();
+    });
+
+    it('应该显示批量操作详情', async () => {
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('批量操作详情')).toBeInTheDocument();
+    });
+
+    it('应该显示操作类型', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(),
+          isProcessing: true,
+          isPaused: false,
+          progress: 50,
+          currentScene: 2,
+          totalScenes: 4,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: [],
+          failedScenes: [],
+          currentSceneId: null,
+          statusMessage: '',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('操作类型')).toBeInTheDocument();
+      expect(screen.getByText('批量生成')).toBeInTheDocument();
+    });
+
+    it('应该显示进度信息', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(['s1', 's2', 's3']),
+          isProcessing: true,
+          isPaused: false,
+          progress: 66,
+          currentScene: 2,
+          totalScenes: 3,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: ['s1', 's2'],
+          failedScenes: [],
+          currentSceneId: 's3',
+          statusMessage: '正在处理...',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      // 使用 getAllByText 获取所有匹配的元素，检查至少有一个
+      expect(screen.getAllByText('进度').length).toBeGreaterThan(0);
+      expect(screen.getByText('2 / 3')).toBeInTheDocument();
+    });
+
+    it('应该显示分镜统计', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(['s1', 's2', 's3']),
+          isProcessing: false,
+          isPaused: false,
+          progress: 100,
+          currentScene: 3,
+          totalScenes: 3,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: ['s1', 's2'],
+          failedScenes: ['s3'],
+          currentSceneId: null,
+          statusMessage: '完成',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('选中')).toBeInTheDocument();
+      // 使用 getAllByText 获取所有匹配的元素
+      expect(screen.getAllByText('已完成').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('失败').length).toBeGreaterThan(0);
+    });
+
+    it('应该显示完成的分镜列表', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(['s1', 's2']),
+          isProcessing: false,
+          isPaused: false,
+          progress: 100,
+          currentScene: 2,
+          totalScenes: 2,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: ['scene-001', 'scene-002'],
+          failedScenes: [],
+          currentSceneId: null,
+          statusMessage: '完成',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('已完成分镜')).toBeInTheDocument();
+    });
+
+    it('应该显示失败的分镜列表', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(['s1', 's2']),
+          isProcessing: false,
+          isPaused: false,
+          progress: 100,
+          currentScene: 2,
+          totalScenes: 2,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: [],
+          failedScenes: ['scene-001', 'scene-002'],
+          currentSceneId: null,
+          statusMessage: '完成',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('失败分镜')).toBeInTheDocument();
+    });
+
+    it('应该显示清除按钮当有完成或失败分镜时', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(),
+          isProcessing: false,
+          isPaused: false,
+          progress: 100,
+          currentScene: 1,
+          totalScenes: 1,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: ['scene-001'],
+          failedScenes: [],
+          currentSceneId: null,
+          statusMessage: '完成',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('清除批量操作记录')).toBeInTheDocument();
+    });
+
+    it('应该能够清除批量操作记录', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(),
+          isProcessing: false,
+          isPaused: false,
+          progress: 100,
+          currentScene: 1,
+          totalScenes: 1,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: ['scene-001'],
+          failedScenes: [],
+          currentSceneId: null,
+          statusMessage: '完成',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      await user.click(screen.getByText('清除批量操作记录'));
+      
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.completedScenes).toEqual([]);
+      expect(batchOperations.failedScenes).toEqual([]);
+    });
+
+    it('应该显示当前处理的分镜ID', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(['s1', 's2']),
+          isProcessing: true,
+          isPaused: false,
+          progress: 50,
+          currentScene: 1,
+          totalScenes: 2,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: [],
+          failedScenes: [],
+          currentSceneId: 'scene-12345678',
+          statusMessage: '处理中',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('当前处理')).toBeInTheDocument();
+    });
+
+    it('应该显示暂停状态', async () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        batchOperations: {
+          selectedScenes: new Set(['s1', 's2']),
+          isProcessing: true,
+          isPaused: true,
+          progress: 50,
+          currentScene: 1,
+          totalScenes: 2,
+          operationType: 'generate',
+          startTime: Date.now(),
+          completedScenes: [],
+          failedScenes: [],
+          currentSceneId: 's1',
+          statusMessage: '',
+        },
+      });
+      
+      const user = userEvent.setup();
+      render(<DevPanel />);
+      
+      await user.click(screen.getByRole('tab', { name: /批量/ }));
+      
+      expect(screen.getByText('已暂停')).toBeInTheDocument();
+    });
+
+    it('应该在批量操作进行中时显示进行中标记', () => {
+      useAIProgressStore.setState({ 
+        isPanelVisible: true,
+        isBatchGenerating: true,
+      });
+      
+      render(<DevPanel />);
+      
+      const batchTab = screen.getByRole('tab', { name: /批量/ });
+      expect(batchTab.textContent).toContain('进行中');
+    });
+
+    it('应该显示不同的操作类型标签', async () => {
+      const operationTypes = [
+        { type: 'generate', label: '批量生成' },
+        { type: 'edit', label: '批量编辑' },
+        { type: 'export', label: '批量导出' },
+        { type: 'delete', label: '批量删除' },
+      ];
+
+      for (const op of operationTypes) {
+        useAIProgressStore.setState({ 
+          isPanelVisible: true,
+          batchOperations: {
+            selectedScenes: new Set(),
+            isProcessing: true,
+            isPaused: false,
+            progress: 0,
+            currentScene: 0,
+            totalScenes: 0,
+            operationType: op.type as any,
+            startTime: null,
+            completedScenes: [],
+            failedScenes: [],
+            currentSceneId: null,
+            statusMessage: '',
+          },
+        });
+        
+        const user = userEvent.setup();
+        const { unmount } = render(<DevPanel />);
+        
+        await user.click(screen.getByRole('tab', { name: /批量/ }));
+        
+        expect(screen.getByText(op.label)).toBeInTheDocument();
+        unmount();
+      }
+    });
+  });
+
   describe('status bar', () => {
     beforeEach(() => {
       useAIProgressStore.getState().showPanel();

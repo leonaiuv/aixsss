@@ -46,6 +46,10 @@ import {
   Terminal,
   Copy,
   Settings,
+  Layers,
+  Pause,
+  Play,
+  Square,
 } from 'lucide-react';
 
 export function DevPanel() {
@@ -54,11 +58,15 @@ export function DevPanel() {
     isPanelVisible, 
     isPanelMinimized,
     stats,
+    isBatchGenerating,
+    batchGeneratingSource,
+    batchOperations,
     hidePanel,
     minimizePanel,
     expandPanel,
     clearCompletedTasks,
     refreshStats,
+    resetBatchOperations,
   } = useAIProgressStore();
   
   const [activeTab, setActiveTab] = useState('progress');
@@ -204,6 +212,15 @@ export function DevPanel() {
             <TabsTrigger value="optimize" className="text-xs data-[state=active]:bg-background h-7 px-2">
               <Lightbulb className="h-3 w-3 mr-1" />
               优化
+            </TabsTrigger>
+            <TabsTrigger value="batch" className="text-xs data-[state=active]:bg-background h-7 px-2">
+              <Layers className="h-3 w-3 mr-1" />
+              批量
+              {isBatchGenerating && (
+                <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px] bg-blue-500/20 text-blue-600">
+                  进行中
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
           
@@ -386,6 +403,193 @@ export function DevPanel() {
                     <p className="text-sm">{suggestion}</p>
                   </div>
                 ))}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+          
+          {/* 批量操作状态面板 */}
+          <TabsContent value="batch" className="m-0">
+            <ScrollArea className="h-[350px]">
+              <div className="p-3 space-y-4">
+                {/* 全局批量状态 */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-muted-foreground">全局批量状态</h4>
+                  <div className="p-3 rounded-lg border bg-card">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {isBatchGenerating ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                            <span className="text-sm font-medium text-blue-600">批量生成中</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            <span className="text-sm text-muted-foreground">空闲</span>
+                          </>
+                        )}
+                      </div>
+                      {batchGeneratingSource && (
+                        <Badge variant="outline" className="text-xs">
+                          {batchGeneratingSource === 'batch_panel' ? '批量操作面板' : '分镜细化'}
+                        </Badge>
+                      )}
+                    </div>
+                    {isBatchGenerating && (
+                      <div className="text-xs text-muted-foreground">
+                        其他生成按钮已禁用，防止交叉生成
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                {/* 批量操作详情 */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-muted-foreground">批量操作详情</h4>
+                  
+                  {/* 操作类型和状态 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2 rounded bg-muted/50">
+                      <div className="text-xs text-muted-foreground">操作类型</div>
+                      <div className="text-sm font-medium">
+                        {batchOperations.operationType 
+                          ? {
+                              generate: '批量生成',
+                              edit: '批量编辑',
+                              export: '批量导出',
+                              delete: '批量删除',
+                            }[batchOperations.operationType]
+                          : '无'
+                        }
+                      </div>
+                    </div>
+                    <div className="p-2 rounded bg-muted/50">
+                      <div className="text-xs text-muted-foreground">处理状态</div>
+                      <div className="flex items-center gap-1">
+                        {batchOperations.isProcessing ? (
+                          batchOperations.isPaused ? (
+                            <>
+                              <Pause className="h-3 w-3 text-yellow-500" />
+                              <span className="text-sm font-medium text-yellow-600">已暂停</span>
+                            </>
+                          ) : (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                              <span className="text-sm font-medium text-blue-600">处理中</span>
+                            </>
+                          )
+                        ) : (
+                          <span className="text-sm text-muted-foreground">空闲</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 进度信息 */}
+                  <div className="p-3 rounded-lg border">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-muted-foreground">进度</span>
+                      <span className="text-xs font-medium">
+                        {batchOperations.currentScene} / {batchOperations.totalScenes}
+                      </span>
+                    </div>
+                    <Progress value={batchOperations.progress} className="h-2 mb-2" />
+                    {batchOperations.statusMessage && (
+                      <div className="text-xs text-muted-foreground">
+                        {batchOperations.statusMessage}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 分镜统计 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-2 rounded bg-muted/50 text-center">
+                      <div className="text-lg font-bold">{batchOperations.selectedScenes.size}</div>
+                      <div className="text-xs text-muted-foreground">选中</div>
+                    </div>
+                    <div className="p-2 rounded bg-green-500/10 text-center">
+                      <div className="text-lg font-bold text-green-600">
+                        {batchOperations.completedScenes.length}
+                      </div>
+                      <div className="text-xs text-muted-foreground">已完成</div>
+                    </div>
+                    <div className="p-2 rounded bg-red-500/10 text-center">
+                      <div className="text-lg font-bold text-red-600">
+                        {batchOperations.failedScenes.length}
+                      </div>
+                      <div className="text-xs text-muted-foreground">失败</div>
+                    </div>
+                  </div>
+                  
+                  {/* 当前处理分镜 */}
+                  {batchOperations.currentSceneId && (
+                    <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
+                      <div className="text-xs text-muted-foreground mb-1">当前处理</div>
+                      <div className="text-sm font-medium text-blue-600">
+                        分镜 ID: {batchOperations.currentSceneId.slice(0, 8)}...
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 时间信息 */}
+                  {batchOperations.startTime && (
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>开始时间</span>
+                      <span>{new Date(batchOperations.startTime).toLocaleTimeString('zh-CN')}</span>
+                    </div>
+                  )}
+                  
+                  {/* 已完成分镜列表 */}
+                  {batchOperations.completedScenes.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">已完成分镜</div>
+                      <div className="flex flex-wrap gap-1">
+                        {batchOperations.completedScenes.slice(-10).map((id, i) => (
+                          <Badge key={id} variant="secondary" className="text-[10px]">
+                            {id.slice(0, 6)}
+                          </Badge>
+                        ))}
+                        {batchOperations.completedScenes.length > 10 && (
+                          <Badge variant="outline" className="text-[10px]">
+                            +{batchOperations.completedScenes.length - 10} 更多
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* 失败分镜列表 */}
+                  {batchOperations.failedScenes.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-red-500">失败分镜</div>
+                      <div className="flex flex-wrap gap-1">
+                        {batchOperations.failedScenes.map((id, i) => (
+                          <Badge key={id} variant="destructive" className="text-[10px]">
+                            {id.slice(0, 6)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* 操作按钮 */}
+                {(batchOperations.completedScenes.length > 0 || batchOperations.failedScenes.length > 0) && (
+                  <>
+                    <Separator />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs"
+                      onClick={resetBatchOperations}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      清除批量操作记录
+                    </Button>
+                  </>
+                )}
               </div>
             </ScrollArea>
           </TabsContent>

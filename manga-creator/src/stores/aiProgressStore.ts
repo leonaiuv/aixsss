@@ -17,6 +17,25 @@ export type AITaskStatus =
   | 'error'       // 失败
   | 'cancelled';  // 已取消
 
+// 批量操作类型
+export type BatchOperationType = 'generate' | 'edit' | 'export' | 'delete' | null;
+
+// 批量操作状态接口
+export interface BatchOperationsState {
+  selectedScenes: Set<string>;
+  isProcessing: boolean;
+  isPaused: boolean;
+  progress: number;
+  currentScene: number;
+  totalScenes: number;
+  operationType: BatchOperationType;
+  startTime: number | null;
+  completedScenes: string[];
+  failedScenes: string[];
+  currentSceneId: string | null;
+  statusMessage: string;
+}
+
 // AI任务优先级
 export type AITaskPriority = 'low' | 'normal' | 'high';
 
@@ -101,6 +120,13 @@ interface AIProgressState {
   // 队列状态
   isQueuePaused: boolean;
   
+  // 全局批量生成状态（用于防止交叉生成）
+  isBatchGenerating: boolean;
+  batchGeneratingSource: 'batch_panel' | 'scene_refinement' | null;
+  
+  // 完整的批量操作状态
+  batchOperations: BatchOperationsState;
+  
   // 面板可见性
   isPanelVisible: boolean;
   isPanelMinimized: boolean;
@@ -136,6 +162,17 @@ interface AIProgressActions {
   // 队列控制
   pauseQueue: () => void;
   resumeQueue: () => void;
+  
+  // 批量生成状态控制
+  startBatchGenerating: (source: 'batch_panel' | 'scene_refinement') => void;
+  stopBatchGenerating: () => void;
+  
+  // 批量操作详细状态控制
+  updateBatchOperations: (updates: Partial<BatchOperationsState>) => void;
+  resetBatchOperations: () => void;
+  setBatchSelectedScenes: (sceneIds: string[]) => void;
+  addBatchCompletedScene: (sceneId: string) => void;
+  addBatchFailedScene: (sceneId: string) => void;
   
   // 面板控制
   togglePanel: () => void;
@@ -203,6 +240,22 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
   tasks: [],
   activeTaskId: null,
   isQueuePaused: false,
+  isBatchGenerating: false,
+  batchGeneratingSource: null,
+  batchOperations: {
+    selectedScenes: new Set(),
+    isProcessing: false,
+    isPaused: false,
+    progress: 0,
+    currentScene: 0,
+    totalScenes: 0,
+    operationType: null,
+    startTime: null,
+    completedScenes: [],
+    failedScenes: [],
+    currentSceneId: null,
+    statusMessage: '',
+  },
   isPanelVisible: false,
   isPanelMinimized: false,
   filter: {},
@@ -405,6 +458,62 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
   // 恢复队列
   resumeQueue: () => set({ isQueuePaused: false }),
   
+  // 开始批量生成
+  startBatchGenerating: (source) => set({ isBatchGenerating: true, batchGeneratingSource: source }),
+  
+  // 停止批量生成
+  stopBatchGenerating: () => set({ isBatchGenerating: false, batchGeneratingSource: null }),
+  
+  // 更新批量操作状态
+  updateBatchOperations: (updates) => set((state) => ({
+    batchOperations: { ...state.batchOperations, ...updates }
+  })),
+  
+  // 重置批量操作状态
+  resetBatchOperations: () => set((state) => ({
+    batchOperations: {
+      selectedScenes: new Set(),
+      isProcessing: false,
+      isPaused: false,
+      progress: 0,
+      currentScene: 0,
+      totalScenes: 0,
+      operationType: null,
+      startTime: null,
+      completedScenes: [],
+      failedScenes: [],
+      currentSceneId: null,
+      statusMessage: '',
+    }
+  })),
+  
+  // 设置选中的分镜
+  setBatchSelectedScenes: (sceneIds) => set((state) => ({
+    batchOperations: { 
+      ...state.batchOperations, 
+      selectedScenes: new Set(sceneIds),
+      totalScenes: sceneIds.length,
+    }
+  })),
+  
+  // 添加完成的分镜
+  addBatchCompletedScene: (sceneId) => set((state) => ({
+    batchOperations: {
+      ...state.batchOperations,
+      completedScenes: [...state.batchOperations.completedScenes, sceneId],
+      currentScene: state.batchOperations.completedScenes.length + 1,
+      progress: Math.round(((state.batchOperations.completedScenes.length + 1) / state.batchOperations.totalScenes) * 100),
+    }
+  })),
+  
+  // 添加失败的分镜
+  addBatchFailedScene: (sceneId) => set((state) => ({
+    batchOperations: {
+      ...state.batchOperations,
+      failedScenes: [...state.batchOperations.failedScenes, sceneId],
+    }
+  })),
+  
   // 切换面板
   togglePanel: () => set((state) => ({ isPanelVisible: !state.isPanelVisible })),
   
@@ -505,6 +614,8 @@ export function getTaskTypeLabel(type: AICallType): string {
     keyframe_prompt: '关键帧提示词',
     motion_prompt: '时空提示词',
     dialogue: '台词生成',
+    character_basic_info: '角色信息生成',
+    character_portrait: '角色定妆照生成',
     custom: '自定义调用',
   };
   return labels[type] || type;

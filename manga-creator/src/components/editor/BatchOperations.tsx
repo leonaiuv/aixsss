@@ -8,7 +8,6 @@
 // 4. 批量删除
 // ==========================================
 
-import { useState } from 'react';
 import { Scene } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -39,7 +38,9 @@ import {
   Download,
   Trash2,
   Edit2,
+  Loader2,
 } from 'lucide-react';
+import { useAIProgressStore } from '@/stores/aiProgressStore';
 
 interface BatchOperationsProps {
   scenes: Scene[];
@@ -56,14 +57,14 @@ export function BatchOperations({
   onBatchExport,
   onBatchDelete,
 }: BatchOperationsProps) {
-  const [selectedScenes, setSelectedScenes] = useState<Set<string>>(new Set());
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentScene, setCurrentScene] = useState(0);
-  const [operationType, setOperationType] = useState<
-    'generate' | 'edit' | 'export' | 'delete' | null
-  >(null);
+  // 使用全局状态
+  const { 
+    batchOperations,
+    updateBatchOperations,
+    isBatchGenerating,
+  } = useAIProgressStore();
+  
+  const { selectedScenes, isProcessing, isPaused, progress, currentScene, operationType } = batchOperations;
 
   const toggleScene = (sceneId: string) => {
     const newSelected = new Set(selectedScenes);
@@ -72,54 +73,40 @@ export function BatchOperations({
     } else {
       newSelected.add(sceneId);
     }
-    setSelectedScenes(newSelected);
+    updateBatchOperations({ 
+      selectedScenes: newSelected,
+      totalScenes: newSelected.size,
+    });
   };
 
   const toggleAll = () => {
     if (selectedScenes.size === scenes.length) {
-      setSelectedScenes(new Set());
+      updateBatchOperations({ 
+        selectedScenes: new Set(),
+        totalScenes: 0,
+      });
     } else {
-      setSelectedScenes(new Set(scenes.map((s) => s.id)));
+      updateBatchOperations({ 
+        selectedScenes: new Set(scenes.map((s) => s.id)),
+        totalScenes: scenes.length,
+      });
     }
   };
 
   const handleBatchGenerate = async () => {
     if (selectedScenes.size === 0) return;
-
-    setIsProcessing(true);
-    setOperationType('generate');
-    setProgress(0);
-    setCurrentScene(0);
-
+    // 直接调用外部函数，状态由 Editor.tsx 管理
     const sceneIds = Array.from(selectedScenes);
-    const total = sceneIds.length;
-
-    for (let i = 0; i < total; i++) {
-      if (isPaused) {
-        await new Promise((resolve) => {
-          const checkPause = setInterval(() => {
-            if (!isPaused) {
-              clearInterval(checkPause);
-              resolve(true);
-            }
-          }, 500);
-        });
-      }
-
-      setCurrentScene(i + 1);
-      await onBatchGenerate([sceneIds[i]], {});
-      setProgress(((i + 1) / total) * 100);
-    }
-
-    setIsProcessing(false);
-    setOperationType(null);
-    setSelectedScenes(new Set());
+    await onBatchGenerate(sceneIds, {});
   };
 
   const handleBatchExport = (format: string) => {
     if (selectedScenes.size === 0) return;
     onBatchExport(Array.from(selectedScenes), format);
-    setSelectedScenes(new Set());
+    updateBatchOperations({ 
+      selectedScenes: new Set(),
+      totalScenes: 0,
+    });
   };
 
   const handleBatchDelete = () => {
@@ -128,8 +115,15 @@ export function BatchOperations({
       confirm(`确定要删除选中的 ${selectedScenes.size} 个分镜吗？此操作不可撤销。`)
     ) {
       onBatchDelete(Array.from(selectedScenes));
-      setSelectedScenes(new Set());
+      updateBatchOperations({ 
+        selectedScenes: new Set(),
+        totalScenes: 0,
+      });
     }
+  };
+
+  const handlePauseToggle = () => {
+    updateBatchOperations({ isPaused: !isPaused });
   };
 
   return (
@@ -159,10 +153,19 @@ export function BatchOperations({
       <div className="flex flex-wrap gap-2">
         <Button
           onClick={handleBatchGenerate}
-          disabled={selectedScenes.size === 0 || isProcessing}
+          disabled={selectedScenes.size === 0 || isProcessing || isBatchGenerating}
         >
-          <Play className="h-4 w-4 mr-2" />
-          批量生成
+          {isProcessing || isBatchGenerating ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              生成中...
+            </>
+          ) : (
+            <>
+              <Play className="h-4 w-4 mr-2" />
+              批量生成
+            </>
+          )}
         </Button>
 
         <Dialog>
@@ -209,7 +212,7 @@ export function BatchOperations({
         {isProcessing && (
           <Button
             variant="outline"
-            onClick={() => setIsPaused(!isPaused)}
+            onClick={handlePauseToggle}
           >
             {isPaused ? (
               <>
@@ -227,17 +230,20 @@ export function BatchOperations({
       </div>
 
       {/* 进度条 */}
-      {isProcessing && (
+      {(isProcessing || isBatchGenerating) && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span>
-              正在处理 {currentScene} / {selectedScenes.size}
+              正在处理 {currentScene} / {batchOperations.totalScenes || selectedScenes.size}
             </span>
             <span>{Math.round(progress)}%</span>
           </div>
           <Progress value={progress} />
+          {batchOperations.statusMessage && (
+            <p className="text-sm text-muted-foreground">{batchOperations.statusMessage}</p>
+          )}
           {isPaused && (
-            <p className="text-sm text-muted-foreground">已暂停，点击继续按钮恢复</p>
+            <p className="text-sm text-yellow-600">已暂停，点击继续按钮恢复</p>
           )}
         </div>
       )}

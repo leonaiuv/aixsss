@@ -9,12 +9,14 @@
 // 5. 级联更新影响分析
 // ==========================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useCharacterStore } from '@/stores/characterStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
+import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { AIFactory } from '@/lib/ai/factory';
+import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
 import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project, Character } from '@/types';
 import {
   analyzeCharacterImpact,
@@ -68,6 +70,26 @@ import {
 
 // AI生成状态类型
 type GeneratingState = 'idle' | 'generating_basic' | 'generating_portrait';
+
+// 角色生成任务接口
+interface CharacterGenerationTask {
+  characterId?: string;  // 编辑时的角色ID
+  briefDescription: string;
+  taskId?: string;  // aiProgressStore 中的任务ID
+  status: GeneratingState;
+  error?: string;
+}
+
+// 批量生成状态接口
+interface BatchGenerationState {
+  isProcessing: boolean;
+  isPaused: boolean;
+  currentIndex: number;
+  totalCount: number;
+  completedIds: string[];
+  failedIds: string[];
+  queue: Array<{ characterId: string; briefDescription: string }>;
+}
 
 /**
  * 获取当前项目的完整画风提示词
@@ -124,6 +146,16 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const { config } = useConfigStore();
   const { currentProject } = useProjectStore();
   const { scenes, updateScene: updateSceneInStore } = useStoryboardStore();
+  
+  // AI进度追踪 Store
+  const { 
+    addTask, 
+    updateProgress, 
+    completeTask, 
+    failTask,
+    showPanel,
+  } = useAIProgressStore();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -141,6 +173,20 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const [error, setError] = useState<string | null>(null);
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
   const [dialogStep, setDialogStep] = useState<'basic' | 'portrait'>('basic');
+  
+  // 批量生成状态
+  const [batchGeneration, setBatchGeneration] = useState<BatchGenerationState>({
+    isProcessing: false,
+    isPaused: false,
+    currentIndex: 0,
+    totalCount: 0,
+    completedIds: [],
+    failedIds: [],
+    queue: [],
+  });
+  
+  // 当前生成任务ID（用于追踪和取消）
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   
   // 级联更新相关状态
   const [cascadeDialogOpen, setCascadeDialogOpen] = useState(false);
@@ -301,7 +347,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     }
   };
 
-  // 一键生成基础信息（外观+性格+背景）
+  // 一键生成基础信息（外观+性格+背景）- 集成进度追踪
   const handleGenerateBasicInfo = async () => {
     if (!config) {
       setError('请先配置AI服务');
@@ -314,6 +360,20 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
     setGeneratingState('generating_basic');
     setError(null);
+    
+    // 创建AI任务并显示开发者面板
+    const taskId = addTask({
+      type: 'character_basic_info',
+      title: `生成角色信息: ${formData.briefDescription.slice(0, 20)}...`,
+      description: `根据简短描述生成完整角色卡（外观/性格/背景）`,
+      status: 'running',
+      priority: 'normal',
+      progress: 0,
+      projectId,
+      maxRetries: 3,
+    });
+    setCurrentTaskId(taskId);
+    showPanel();
 
     try {
       const client = AIFactory.createClient(config);
@@ -336,9 +396,29 @@ ${projectContext}
   "background": "背景故事（150-250字，包含出身、成长、关键事件、动机目标）"
 }`;
 
+      // 记录日志
+      const logId = logAICall('character_basic_info', {
+        promptTemplate: prompt,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId,
+          briefDescription: formData.briefDescription,
+          style: styleDesc,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+        },
+      });
+      
+      updateProgress(taskId, 30, '正在调用AI生成...');
+
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
+      
+      updateProgress(taskId, 80, '正在解析响应...');
 
       // 解析JSON响应
       const jsonMatch = response.content.match(/\{[\s\S]*\}/);
@@ -351,18 +431,28 @@ ${projectContext}
           personality: parsed.personality || '',
           background: parsed.background || '',
         }));
+        
+        // 更新日志和任务状态
+        updateLogWithResponse(logId, { content: response.content });
+        completeTask(taskId, { content: response.content });
       } else {
         throw new Error('AI返回格式错误，请重试');
       }
     } catch (err) {
       console.error('生成角色信息失败:', err);
-      setError(err instanceof Error ? err.message : '生成角色信息失败，请重试');
+      const errorMsg = err instanceof Error ? err.message : '生成角色信息失败，请重试';
+      setError(errorMsg);
+      failTask(taskId, {
+        message: errorMsg,
+        retryable: true,
+      });
     } finally {
       setGeneratingState('idle');
+      setCurrentTaskId(null);
     }
   };
 
-  // 生成定妆照提示词（多格式）
+  // 生成定妆照提示词（多格式）- 集成进度追踪
   const handleGeneratePortraitPrompts = async () => {
     if (!config) {
       setError('请先配置AI服务');
@@ -375,6 +465,20 @@ ${projectContext}
 
     setGeneratingState('generating_portrait');
     setError(null);
+    
+    // 创建AI任务并显示开发者面板
+    const taskId = addTask({
+      type: 'character_portrait',
+      title: `生成定妆照: ${formData.name || '未命名角色'}`,
+      description: `为角色生成MJ/SD/通用格式的定妆照提示词`,
+      status: 'running',
+      priority: 'normal',
+      progress: 0,
+      projectId,
+      maxRetries: 3,
+    });
+    setCurrentTaskId(taskId);
+    showPanel();
 
     try {
       const client = AIFactory.createClient(config);
@@ -402,9 +506,30 @@ ${styleDesc}
   "general": "通用中文描述（可用于其他AI绘图工具，包含画风、完整角色描述、全身照、纯白背景）"
 }`;
 
+      // 记录日志
+      const logId = logAICall('character_portrait', {
+        promptTemplate: prompt,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId,
+          characterName: formData.name,
+          appearance: formData.appearance,
+          style: styleDesc,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+        },
+      });
+      
+      updateProgress(taskId, 30, '正在调用AI生成提示词...');
+
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
+      
+      updateProgress(taskId, 80, '正在解析响应...');
 
       // 解析JSON响应
       const jsonMatch = response.content.match(/\{[\s\S]*\}/);
@@ -419,16 +544,171 @@ ${styleDesc}
           },
         }));
         setDialogStep('portrait');
+        
+        // 更新日志和任务状态
+        updateLogWithResponse(logId, { content: response.content });
+        completeTask(taskId, { content: response.content });
       } else {
         throw new Error('AI返回格式错误，请重试');
       }
     } catch (err) {
       console.error('生成定妆照提示词失败:', err);
-      setError(err instanceof Error ? err.message : '生成定妆照提示词失败，请重试');
+      const errorMsg = err instanceof Error ? err.message : '生成定妆照提示词失败，请重试';
+      setError(errorMsg);
+      failTask(taskId, {
+        message: errorMsg,
+        retryable: true,
+      });
     } finally {
       setGeneratingState('idle');
+      setCurrentTaskId(null);
     }
   };
+
+  // 批量生成多个角色的定妆照提示词
+  const handleBatchGeneratePortraits = useCallback(async (characterIds: string[]) => {
+    if (!config) {
+      setError('请先配置AI服务');
+      return;
+    }
+    
+    const charactersToProcess = projectCharacters.filter(
+      c => characterIds.includes(c.id) && c.appearance && !c.portraitPrompts
+    );
+    
+    if (charactersToProcess.length === 0) {
+      setError('没有需要生成定妆照的角色');
+      return;
+    }
+    
+    setBatchGeneration({
+      isProcessing: true,
+      isPaused: false,
+      currentIndex: 0,
+      totalCount: charactersToProcess.length,
+      completedIds: [],
+      failedIds: [],
+      queue: charactersToProcess.map(c => ({
+        characterId: c.id,
+        briefDescription: c.briefDescription || c.name,
+      })),
+    });
+    showPanel();
+    
+    const client = AIFactory.createClient(config);
+    const styleDesc = getStyleDescription();
+    
+    for (let i = 0; i < charactersToProcess.length; i++) {
+      const character = charactersToProcess[i];
+      
+      setBatchGeneration(prev => ({
+        ...prev,
+        currentIndex: i + 1,
+      }));
+      
+      const taskId = addTask({
+        type: 'character_portrait',
+        title: `批量生成定妆照 [${i + 1}/${charactersToProcess.length}]: ${character.name}`,
+        description: `为角色 ${character.name} 生成定妆照提示词`,
+        status: 'running',
+        priority: 'normal',
+        progress: 0,
+        projectId,
+        maxRetries: 2,
+      });
+      
+      try {
+        const prompt = `你是一位专业的AI绘图提示词专家。请根据以下角色信息，生成「角色定妆照」提示词。
+
+## 角色信息
+名称：${character.name}
+外观：${character.appearance}
+性格：${character.personality || '未设定'}
+
+## 画风要求
+${styleDesc}
+
+## 定妆照要求
+- 全身照，纯白背景
+- 突出角色外观特征、服装细节、表情神态
+
+请按以下JSON格式输出（不要有任何其他内容）：
+{
+  "midjourney": "Midjourney格式提示词 --ar 2:3 --v 6",
+  "stableDiffusion": "Stable Diffusion格式提示词",
+  "general": "通用中文描述"
+}`;
+        
+        const logId = logAICall('character_portrait', {
+          promptTemplate: prompt,
+          filledPrompt: prompt,
+          messages: [{ role: 'user', content: prompt }],
+          context: { projectId, characterName: character.name },
+          config: { provider: config.provider, model: config.model },
+        });
+        
+        updateProgress(taskId, 30, '正在调用AI...');
+        
+        const response = await client.chat([{ role: 'user', content: prompt }]);
+        
+        updateProgress(taskId, 80, '正在解析...');
+        
+        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const prompts: PortraitPrompts = {
+            midjourney: parsed.midjourney || '',
+            stableDiffusion: parsed.stableDiffusion || '',
+            general: parsed.general || '',
+          };
+          
+          updateCharacter(projectId, character.id, { portraitPrompts: prompts });
+          updateLogWithResponse(logId, { content: response.content });
+          completeTask(taskId, { content: response.content });
+          
+          setBatchGeneration(prev => ({
+            ...prev,
+            completedIds: [...prev.completedIds, character.id],
+          }));
+        } else {
+          throw new Error('AI返回格式错误');
+        }
+      } catch (err) {
+        console.error(`批量生成失败 [${character.name}]:`, err);
+        failTask(taskId, {
+          message: err instanceof Error ? err.message : '生成失败',
+          retryable: true,
+        });
+        setBatchGeneration(prev => ({
+          ...prev,
+          failedIds: [...prev.failedIds, character.id],
+        }));
+      }
+      
+      // 批量操作间添加短暂延迟，避免请求过快
+      if (i < charactersToProcess.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    setBatchGeneration(prev => ({
+      ...prev,
+      isProcessing: false,
+    }));
+  }, [config, projectCharacters, projectId, addTask, updateProgress, completeTask, failTask, updateCharacter, showPanel]);
+
+  // 为所有缺少定妆照的角色批量生成
+  const handleBatchGenerateAllMissingPortraits = useCallback(() => {
+    const missingPortraitIds = projectCharacters
+      .filter(c => c.appearance && !c.portraitPrompts)
+      .map(c => c.id);
+    
+    if (missingPortraitIds.length > 0) {
+      handleBatchGeneratePortraits(missingPortraitIds);
+    } else {
+      setError('所有角色都已有定妆照提示词');
+    }
+  }, [projectCharacters, handleBatchGeneratePortraits]);
 
   return (
     <div className="space-y-6">
@@ -453,6 +733,28 @@ ${styleDesc}
               添加角色
             </Button>
           </DialogTrigger>
+          
+          {/* 批量生成定妆照按钮 */}
+          {projectCharacters.filter(c => c.appearance && !c.portraitPrompts).length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleBatchGenerateAllMissingPortraits}
+              disabled={batchGeneration.isProcessing || !config}
+              className="ml-2"
+            >
+              {batchGeneration.isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  批量生成中 ({batchGeneration.currentIndex}/{batchGeneration.totalCount})
+                </>
+              ) : (
+                <>
+                  <Camera className="h-4 w-4 mr-2" />
+                  批量生成定妆照 ({projectCharacters.filter(c => c.appearance && !c.portraitPrompts).length})
+                </>
+              )}
+            </Button>
+          )}
           <DialogContent className="max-w-2xl max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>

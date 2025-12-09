@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
+import { useConfigStore } from '@/stores/configStore';
+import { useCharacterStore } from '@/stores/characterStore';
+import { useWorldViewStore } from '@/stores/worldViewStore';
+import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -13,6 +17,12 @@ import { VersionHistory } from './editor/VersionHistory';
 import { StatisticsPanel } from './editor/StatisticsPanel';
 import { DataExporter } from './editor/DataExporter';
 import { BatchOperations } from './editor/BatchOperations';
+import { AIFactory } from '@/lib/ai/factory';
+import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
+import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
+import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
+import { migrateOldStyleToConfig } from '@/types';
+import { useToast } from '@/hooks/use-toast';
 
 type EditorStep = 'basic' | 'generation' | 'refinement' | 'export';
 type ActiveDialog = 'none' | 'version' | 'statistics' | 'export' | 'batch';
@@ -20,6 +30,20 @@ type ActiveDialog = 'none' | 'version' | 'statistics' | 'export' | 'batch';
 export function Editor() {
   const { currentProject, updateProject } = useProjectStore();
   const { scenes, updateScene, deleteScene } = useStoryboardStore();
+  const { config } = useConfigStore();
+  const { characters } = useCharacterStore();
+  const { elements: worldViewElements } = useWorldViewStore();
+  const { 
+    startBatchGenerating, 
+    stopBatchGenerating,
+    batchOperations,
+    updateBatchOperations,
+    resetBatchOperations,
+    setBatchSelectedScenes,
+    addBatchCompletedScene,
+    addBatchFailedScene,
+  } = useAIProgressStore();
+  const { toast } = useToast();
   const [activeStep, setActiveStep] = useState<EditorStep>('basic');
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>('none');
 
@@ -68,6 +92,21 @@ export function Editor() {
     );
   }
 
+  // 获取项目的完整画风提示词
+  const getStyleFullPrompt = (project: typeof currentProject): string => {
+    if (!project) return '';
+    if (project.artStyleConfig?.fullPrompt) {
+      return project.artStyleConfig.fullPrompt;
+    }
+    if (project.style) {
+      return migrateOldStyleToConfig(project.style).fullPrompt;
+    }
+    return '';
+  };
+
+  // 获取项目角色
+  const projectCharacters = characters.filter(c => c.projectId === currentProject?.id);
+
   // 版本恢复处理
   const handleVersionRestore = (snapshot: Partial<typeof currentProject>) => {
     if (snapshot && currentProject) {
@@ -75,10 +114,185 @@ export function Editor() {
     }
   };
 
-  // 批量操作处理
+  // 批量操作处理 - 实现真正的批量生成逻辑
   const handleBatchGenerate = async (sceneIds: string[]) => {
-    // TODO: 实现批量生成逻辑
-    console.log('Batch generate:', sceneIds);
+    if (!config) {
+      toast({
+        title: '配置缺失',
+        description: '请先配置AI服务',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!currentProject) return;
+
+    // 设置全局批量生成状态，防止交叉生成
+    startBatchGenerating('batch_panel');
+    
+    // 初始化批量操作状态
+    setBatchSelectedScenes(sceneIds);
+    updateBatchOperations({
+      isProcessing: true,
+      isPaused: false,
+      progress: 0,
+      currentScene: 0,
+      operationType: 'generate',
+      startTime: Date.now(),
+      completedScenes: [],
+      failedScenes: [],
+      currentSceneId: null,
+      statusMessage: '准备开始批量生成...',
+    });
+
+    toast({
+      title: '开始批量生成',
+      description: `正在生成 ${sceneIds.length} 个分镜...`,
+    });
+
+    const client = AIFactory.createClient(config);
+    const styleFullPrompt = getStyleFullPrompt(currentProject);
+    const injectionSettings = getInjectionSettings(currentProject.id);
+    const shouldInjectWorldView = shouldInjectAtSceneDescription(injectionSettings);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < sceneIds.length; i++) {
+      const sceneId = sceneIds[i];
+      const scene = scenes.find(s => s.id === sceneId);
+      if (!scene) continue;
+
+      // 更新当前处理的分镜信息
+      updateBatchOperations({
+        currentSceneId: sceneId,
+        statusMessage: `正在处理分镜 ${i + 1}/${sceneIds.length}...`,
+      });
+
+      try {
+        // 生成场景描述
+        if (!scene.sceneDescription) {
+          const sceneSkill = getSkillByName('generate_scene_desc');
+          if (sceneSkill) {
+            const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+            const prevScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
+            
+            const prompt = fillPromptTemplate(sceneSkill.promptTemplate, {
+              artStyle: currentProject.artStyleConfig,
+              characters: projectCharacters,
+              worldViewElements: shouldInjectWorldView ? worldViewElements : [],
+              protagonist: currentProject.protagonist,
+              sceneSummary: scene.summary,
+              prevSceneSummary: prevScene?.summary,
+              summary: currentProject.summary,
+            });
+
+            const response = await client.chat([{ role: 'user', content: prompt }]);
+            updateScene(currentProject.id, sceneId, {
+              sceneDescription: response.content.trim(),
+              status: 'scene_confirmed',
+            });
+          }
+        }
+
+        // 获取更新后的场景数据
+        const { scenes: updatedScenes1 } = useStoryboardStore.getState();
+        const latestScene1 = updatedScenes1.find(s => s.id === sceneId);
+
+        // 生成关键帧提示词
+        if (latestScene1?.sceneDescription && !latestScene1.shotPrompt) {
+          const keyframeSkill = getSkillByName('generate_keyframe_prompt');
+          if (keyframeSkill) {
+            const prompt = fillPromptTemplate(keyframeSkill.promptTemplate, {
+              artStyle: currentProject.artStyleConfig,
+              characters: projectCharacters,
+              worldViewElements: shouldInjectWorldView ? worldViewElements : [],
+              sceneDescription: latestScene1.sceneDescription,
+            });
+
+            const response = await client.chat([{ role: 'user', content: prompt }]);
+            updateScene(currentProject.id, sceneId, {
+              shotPrompt: response.content.trim(),
+              status: 'keyframe_confirmed',
+            });
+          }
+        }
+
+        // 获取更新后的场景数据
+        const { scenes: updatedScenes2 } = useStoryboardStore.getState();
+        const latestScene2 = updatedScenes2.find(s => s.id === sceneId);
+
+        // 生成时空提示词
+        if (latestScene2?.shotPrompt && !latestScene2.motionPrompt) {
+          const motionSkill = getSkillByName('generate_motion_prompt');
+          if (motionSkill) {
+            const prompt = fillPromptTemplate(motionSkill.promptTemplate, {
+              artStyle: currentProject.artStyleConfig,
+              characters: projectCharacters,
+              worldViewElements,
+              sceneDescription: latestScene2.sceneDescription,
+            });
+
+            const response = await client.chat([{ role: 'user', content: prompt }]);
+            updateScene(currentProject.id, sceneId, {
+              motionPrompt: response.content.trim(),
+              status: 'motion_generating',
+            });
+          }
+        }
+
+        // 获取更新后的场景数据
+        const { scenes: updatedScenes3 } = useStoryboardStore.getState();
+        const latestScene3 = updatedScenes3.find(s => s.id === sceneId);
+
+        // 生成台词
+        if (latestScene3?.motionPrompt && (!latestScene3.dialogues || latestScene3.dialogues.length === 0)) {
+          const dialogueSkill = getSkillByName('generate_dialogue');
+          if (dialogueSkill) {
+            const characterContext = buildCharacterContext(projectCharacters);
+            const prompt = fillPromptTemplate(dialogueSkill.promptTemplate, {
+              artStyle: currentProject.artStyleConfig,
+              characters: projectCharacters,
+              worldViewElements,
+              sceneDescription: latestScene3.sceneDescription || '',
+              sceneSummary: scene.summary,
+            });
+
+            const response = await client.chat([{ role: 'user', content: prompt }]);
+            const dialogues = parseDialoguesFromText(response.content);
+            
+            updateScene(currentProject.id, sceneId, {
+              dialogues,
+              status: 'completed',
+            });
+          }
+        }
+
+        successCount++;
+        addBatchCompletedScene(sceneId);
+      } catch (err) {
+        console.error(`生成分镜 ${sceneId} 失败:`, err);
+        failCount++;
+        addBatchFailedScene(sceneId);
+      }
+    }
+
+    // 清除全局批量生成状态
+    stopBatchGenerating();
+    
+    // 更新批量操作完成状态
+    updateBatchOperations({
+      isProcessing: false,
+      currentSceneId: null,
+      statusMessage: `完成！成功 ${successCount} 个，失败 ${failCount} 个`,
+      progress: 100,
+    });
+
+    toast({
+      title: '批量生成完成',
+      description: `成功: ${successCount}, 失败: ${failCount}`,
+      variant: failCount > 0 ? 'destructive' : 'default',
+    });
   };
 
   const handleBatchEdit = (sceneIds: string[], updates: Partial<typeof scenes[0]>) => {
@@ -88,8 +302,75 @@ export function Editor() {
   };
 
   const handleBatchExport = (sceneIds: string[], format: string) => {
-    // TODO: 实现批量导出逻辑
-    console.log('Batch export:', sceneIds, format);
+    const selectedScenes = scenes.filter(s => sceneIds.includes(s.id));
+    if (selectedScenes.length === 0) return;
+
+    let content = '';
+    const filename = `batch_export_${Date.now()}`;
+
+    if (format === 'markdown') {
+      content = selectedScenes.map((scene, index) => {
+        const dialoguesText = scene.dialogues?.map(d => `- **${d.characterName || '旁白'}**: ${d.content}`).join('\n') || '(未生成)';
+        return `## 分镜 ${index + 1}: ${scene.summary}\n\n` +
+          `### 场景描述\n${scene.sceneDescription || '(未生成)'}\n\n` +
+          `### 关键帧提示词
+\`\`\`
+${scene.shotPrompt || '(未生成)'}
+\`\`\`
+
+` +
+          `### 时空提示词
+\`\`\`
+${scene.motionPrompt || '(未生成)'}
+\`\`\`
+
+` +
+          `### 台词
+${dialoguesText}
+
+---
+`;
+      }).join('\n');
+
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === 'json') {
+      content = JSON.stringify(selectedScenes, null, 2);
+      const blob = new Blob([content], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === 'txt') {
+      content = selectedScenes.map((scene, index) => {
+        const dialoguesText = scene.dialogues?.map(d => `${d.characterName || '旁白'}: ${d.content}`).join('; ') || '(未生成)';
+        return `[分镜 ${index + 1}] ${scene.summary}\n` +
+          `场景: ${scene.sceneDescription || '(未生成)'}\n` +
+          `关键帧: ${scene.shotPrompt || '(未生成)'}\n` +
+          `时空: ${scene.motionPrompt || '(未生成)'}\n` +
+          `台词: ${dialoguesText}\n\n`;
+      }).join('');
+
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    toast({
+      title: '导出成功',
+      description: `已导出 ${selectedScenes.length} 个分镜`,
+    });
   };
 
   const handleBatchDelete = (sceneIds: string[]) => {

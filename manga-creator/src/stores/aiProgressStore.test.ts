@@ -758,6 +758,380 @@ describe('aiProgressStore', () => {
   });
 });
 
+describe('批量操作状态管理', () => {
+  beforeEach(() => {
+    useAIProgressStore.setState({
+      tasks: [],
+      activeTaskId: null,
+      isQueuePaused: false,
+      isBatchGenerating: false,
+      batchGeneratingSource: null,
+      batchOperations: {
+        selectedScenes: new Set(),
+        isProcessing: false,
+        isPaused: false,
+        progress: 0,
+        currentScene: 0,
+        totalScenes: 0,
+        operationType: null,
+        startTime: null,
+        completedScenes: [],
+        failedScenes: [],
+        currentSceneId: null,
+        statusMessage: '',
+      },
+      isPanelVisible: false,
+      isPanelMinimized: false,
+      filter: {},
+      stats: {
+        totalCalls: 0,
+        successCount: 0,
+        errorCount: 0,
+        avgResponseTime: 0,
+        totalTokensUsed: 0,
+        costEstimate: 0,
+      },
+      listeners: new Map(),
+    });
+  });
+
+  describe('startBatchGenerating', () => {
+    it('应该设置全局批量生成状态', () => {
+      const { startBatchGenerating } = useAIProgressStore.getState();
+      
+      startBatchGenerating('batch_panel');
+      
+      expect(useAIProgressStore.getState().isBatchGenerating).toBe(true);
+      expect(useAIProgressStore.getState().batchGeneratingSource).toBe('batch_panel');
+    });
+
+    it('应该支持不同的来源', () => {
+      const { startBatchGenerating } = useAIProgressStore.getState();
+      
+      startBatchGenerating('scene_refinement');
+      
+      expect(useAIProgressStore.getState().batchGeneratingSource).toBe('scene_refinement');
+    });
+  });
+
+  describe('stopBatchGenerating', () => {
+    it('应该清除全局批量生成状态', () => {
+      const { startBatchGenerating, stopBatchGenerating } = useAIProgressStore.getState();
+      
+      startBatchGenerating('batch_panel');
+      stopBatchGenerating();
+      
+      expect(useAIProgressStore.getState().isBatchGenerating).toBe(false);
+      expect(useAIProgressStore.getState().batchGeneratingSource).toBeNull();
+    });
+  });
+
+  describe('updateBatchOperations', () => {
+    it('应该更新批量操作状态', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({
+        isProcessing: true,
+        progress: 50,
+        currentScene: 3,
+        totalScenes: 6,
+        operationType: 'generate',
+        statusMessage: '正在处理...',
+      });
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.isProcessing).toBe(true);
+      expect(batchOperations.progress).toBe(50);
+      expect(batchOperations.currentScene).toBe(3);
+      expect(batchOperations.totalScenes).toBe(6);
+      expect(batchOperations.operationType).toBe('generate');
+      expect(batchOperations.statusMessage).toBe('正在处理...');
+    });
+
+    it('应该部分更新状态而不影响其他字段', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({ progress: 25 });
+      updateBatchOperations({ currentScene: 1 });
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.progress).toBe(25);
+      expect(batchOperations.currentScene).toBe(1);
+    });
+
+    it('应该能够设置开始时间', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      const now = Date.now();
+      
+      updateBatchOperations({ startTime: now });
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.startTime).toBe(now);
+    });
+
+    it('应该能够设置当前处理的分镜ID', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({ currentSceneId: 'scene-123' });
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.currentSceneId).toBe('scene-123');
+    });
+  });
+
+  describe('resetBatchOperations', () => {
+    it('应该重置所有批量操作状态', () => {
+      const { updateBatchOperations, resetBatchOperations } = useAIProgressStore.getState();
+      
+      // 先设置一些状态
+      updateBatchOperations({
+        isProcessing: true,
+        isPaused: true,
+        progress: 75,
+        currentScene: 5,
+        totalScenes: 10,
+        operationType: 'generate',
+        startTime: Date.now(),
+        completedScenes: ['scene-1', 'scene-2'],
+        failedScenes: ['scene-3'],
+        currentSceneId: 'scene-4',
+        statusMessage: '测试消息',
+      });
+
+      resetBatchOperations();
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.isProcessing).toBe(false);
+      expect(batchOperations.isPaused).toBe(false);
+      expect(batchOperations.progress).toBe(0);
+      expect(batchOperations.currentScene).toBe(0);
+      expect(batchOperations.totalScenes).toBe(0);
+      expect(batchOperations.operationType).toBeNull();
+      expect(batchOperations.startTime).toBeNull();
+      expect(batchOperations.completedScenes).toEqual([]);
+      expect(batchOperations.failedScenes).toEqual([]);
+      expect(batchOperations.currentSceneId).toBeNull();
+      expect(batchOperations.statusMessage).toBe('');
+    });
+
+    it('应该清空选中的分镜', () => {
+      const { setBatchSelectedScenes, resetBatchOperations } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
+      expect(useAIProgressStore.getState().batchOperations.selectedScenes.size).toBe(3);
+
+      resetBatchOperations();
+      expect(useAIProgressStore.getState().batchOperations.selectedScenes.size).toBe(0);
+    });
+  });
+
+  describe('setBatchSelectedScenes', () => {
+    it('应该设置选中的分镜列表', () => {
+      const { setBatchSelectedScenes } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.selectedScenes.size).toBe(3);
+      expect(batchOperations.selectedScenes.has('scene-1')).toBe(true);
+      expect(batchOperations.selectedScenes.has('scene-2')).toBe(true);
+      expect(batchOperations.selectedScenes.has('scene-3')).toBe(true);
+    });
+
+    it('应该同时更新totalScenes', () => {
+      const { setBatchSelectedScenes } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes(['scene-1', 'scene-2']);
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.totalScenes).toBe(2);
+    });
+
+    it('应该处理空数组', () => {
+      const { setBatchSelectedScenes } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes([]);
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.selectedScenes.size).toBe(0);
+      expect(batchOperations.totalScenes).toBe(0);
+    });
+
+    it('应该处理重复的ID', () => {
+      const { setBatchSelectedScenes } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes(['scene-1', 'scene-1', 'scene-2']);
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.selectedScenes.size).toBe(2); // Set自动去重
+    });
+  });
+
+  describe('addBatchCompletedScene', () => {
+    it('应该添加完成的分镜', () => {
+      const { setBatchSelectedScenes, addBatchCompletedScene } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
+      addBatchCompletedScene('scene-1');
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.completedScenes).toContain('scene-1');
+      expect(batchOperations.completedScenes.length).toBe(1);
+    });
+
+    it('应该更新当前分镜索引', () => {
+      const { setBatchSelectedScenes, addBatchCompletedScene } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
+      addBatchCompletedScene('scene-1');
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.currentScene).toBe(1);
+    });
+
+    it('应该更新进度', () => {
+      const { setBatchSelectedScenes, addBatchCompletedScene } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
+      addBatchCompletedScene('scene-1');
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.progress).toBe(33); // 1/3 ≈ 33%
+    });
+
+    it('应该累加多个完成的分镜', () => {
+      const { setBatchSelectedScenes, addBatchCompletedScene } = useAIProgressStore.getState();
+      
+      setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3', 'scene-4']);
+      addBatchCompletedScene('scene-1');
+      addBatchCompletedScene('scene-2');
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.completedScenes.length).toBe(2);
+      expect(batchOperations.currentScene).toBe(2);
+      expect(batchOperations.progress).toBe(50); // 2/4 = 50%
+    });
+  });
+
+  describe('addBatchFailedScene', () => {
+    it('应该添加失败的分镜', () => {
+      const { addBatchFailedScene } = useAIProgressStore.getState();
+      
+      addBatchFailedScene('scene-1');
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.failedScenes).toContain('scene-1');
+      expect(batchOperations.failedScenes.length).toBe(1);
+    });
+
+    it('应该累加多个失败的分镜', () => {
+      const { addBatchFailedScene } = useAIProgressStore.getState();
+      
+      addBatchFailedScene('scene-1');
+      addBatchFailedScene('scene-2');
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.failedScenes.length).toBe(2);
+    });
+
+    it('不应该影响completedScenes', () => {
+      const { addBatchCompletedScene, addBatchFailedScene } = useAIProgressStore.getState();
+      
+      addBatchCompletedScene('scene-1');
+      addBatchFailedScene('scene-2');
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.completedScenes.length).toBe(1);
+      expect(batchOperations.failedScenes.length).toBe(1);
+    });
+  });
+
+  describe('批量操作与暂停', () => {
+    it('应该能够暂停批量操作', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({ isProcessing: true, isPaused: false });
+      updateBatchOperations({ isPaused: true });
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.isPaused).toBe(true);
+    });
+
+    it('应该能够继续批量操作', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({ isProcessing: true, isPaused: true });
+      updateBatchOperations({ isPaused: false });
+
+      const { batchOperations } = useAIProgressStore.getState();
+      expect(batchOperations.isPaused).toBe(false);
+    });
+  });
+
+  describe('批量操作类型', () => {
+    it('应该支持generate类型', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({ operationType: 'generate' });
+
+      expect(useAIProgressStore.getState().batchOperations.operationType).toBe('generate');
+    });
+
+    it('应该支持edit类型', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({ operationType: 'edit' });
+
+      expect(useAIProgressStore.getState().batchOperations.operationType).toBe('edit');
+    });
+
+    it('应该支持export类型', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({ operationType: 'export' });
+
+      expect(useAIProgressStore.getState().batchOperations.operationType).toBe('export');
+    });
+
+    it('应该支持delete类型', () => {
+      const { updateBatchOperations } = useAIProgressStore.getState();
+      
+      updateBatchOperations({ operationType: 'delete' });
+
+      expect(useAIProgressStore.getState().batchOperations.operationType).toBe('delete');
+    });
+  });
+
+  describe('交叉生成防护', () => {
+    it('应该通过isBatchGenerating防止交叉生成', () => {
+      const { startBatchGenerating, stopBatchGenerating } = useAIProgressStore.getState();
+      
+      // 模拟批量操作面板开始生成
+      startBatchGenerating('batch_panel');
+      
+      expect(useAIProgressStore.getState().isBatchGenerating).toBe(true);
+      expect(useAIProgressStore.getState().batchGeneratingSource).toBe('batch_panel');
+
+      // 其他组件应该检查isBatchGenerating来禁用生成按钮
+      // 在stopBatchGenerating之前，其他生成应该被阻止
+
+      stopBatchGenerating();
+      expect(useAIProgressStore.getState().isBatchGenerating).toBe(false);
+    });
+
+    it('应该区分不同的生成来源', () => {
+      const { startBatchGenerating } = useAIProgressStore.getState();
+      
+      startBatchGenerating('scene_refinement');
+      
+      // 可以检查来源来决定是否阻止
+      const state = useAIProgressStore.getState();
+      expect(state.batchGeneratingSource).toBe('scene_refinement');
+      expect(state.isBatchGenerating).toBe(true);
+    });
+  });
+});
+
 describe('helper functions', () => {
   describe('getTaskTypeLabel', () => {
     it('should return correct labels for all types', () => {

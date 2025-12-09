@@ -244,7 +244,7 @@ describe('CharacterManager', () => {
       expect(screen.getByLabelText(/外观描述/)).toBeInTheDocument();
       expect(screen.getByLabelText(/性格特点/)).toBeInTheDocument();
       expect(screen.getByLabelText(/背景故事/)).toBeInTheDocument();
-      expect(screen.getByLabelText(/主题色/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/主色/)).toBeInTheDocument();
     });
 
     it('取消按钮应关闭对话框', async () => {
