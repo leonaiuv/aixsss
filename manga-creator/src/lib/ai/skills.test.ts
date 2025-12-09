@@ -39,7 +39,7 @@ describe('技能定义', () => {
     it('promptTemplate 应包含必要的占位符', () => {
       expect(SceneListSkill.promptTemplate).toContain('{{sceneCount}}');
       expect(SceneListSkill.promptTemplate).toContain('{{summary}}');
-      expect(SceneListSkill.promptTemplate).toContain('{{style}}');
+      expect(SceneListSkill.promptTemplate).toContain('{{styleFullPrompt}}');
     });
   });
 

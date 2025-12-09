@@ -18,7 +18,7 @@ describe('CharacterManager', () => {
     id: 'test-project-1',
     title: '测试项目',
     summary: '一个关于冒险的故事',
-    style: '日系动漫',
+    style: 'anime',  // 使用旧版预设值，会被迁移为 anime_cel
     protagonist: '勇敢的少年',
     workflowState: 'IDLE' as const,
     currentSceneOrder: 1,
@@ -631,8 +631,8 @@ describe('CharacterManager', () => {
       await waitFor(() => {
         const chatCallArg = mockChat.mock.calls[0][0];
         const prompt = chatCallArg[0].content;
-        // 应该包含项目画风信息
-        expect(prompt).toContain('日系动漫');
+        // 应该包含项目画风信息（迁移后为英文提示词）
+        expect(prompt).toContain('anime style');
       });
     });
   });

@@ -1,6 +1,20 @@
 import { create } from 'zustand';
-import { Project } from '@/types';
+import { Project, migrateOldStyleToConfig } from '@/types';
 import { getProjects, saveProject, deleteProject as deleteProjectStorage, getProject } from '@/lib/storage';
+
+/**
+ * 迁移旧版项目到新版画风配置
+ * 如果项目没有 artStyleConfig，则从 style 字段迁移
+ */
+function migrateProjectStyle(project: Project): Project {
+  if (!project.artStyleConfig && project.style) {
+    return {
+      ...project,
+      artStyleConfig: migrateOldStyleToConfig(project.style),
+    };
+  }
+  return project;
+}
 
 interface ProjectStore {
   projects: Project[];
@@ -25,7 +39,15 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ isLoading: true });
     try {
       const projects = getProjects();
-      set({ projects, isLoading: false });
+      // 迁移旧版项目
+      const migratedProjects = projects.map(migrateProjectStyle);
+      // 保存迁移后的项目
+      migratedProjects.forEach(p => {
+        if (p !== projects.find(op => op.id === p.id)) {
+          saveProject(p);
+        }
+      });
+      set({ projects: migratedProjects, isLoading: false });
     } catch (error) {
       console.error('Failed to load projects:', error);
       set({ isLoading: false });
@@ -33,8 +55,15 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
   
   loadProject: (projectId: string) => {
-    const project = getProject(projectId);
+    let project = getProject(projectId);
     if (project) {
+      // 迁移旧版项目
+      project = migrateProjectStyle(project);
+      // 如果发生了迁移，保存更新
+      const originalProject = getProject(projectId);
+      if (project.artStyleConfig && !originalProject?.artStyleConfig) {
+        saveProject(project);
+      }
       set({ currentProject: project });
     }
   },

@@ -11,7 +11,7 @@ export const SceneListSkill: Skill = {
   promptTemplate: `你是一位专业的电影分镜师。请根据以下故事梗概,将其拆解为{{sceneCount}}个关键分镜。
 
 故事梗概:{{summary}}
-视觉风格:{{style}}
+视觉风格:{{styleFullPrompt}}
 
 请为每个分镜提供一个简短的概要描述(10-20字),格式如下:
 1. [分镜概要]
@@ -80,8 +80,9 @@ export const KeyframePromptSkill: Skill = {
 3. 禁止动态词汇: 不要使用walking/running/moving等动作词
 4. 使用静态表述: standing/sitting/leaning/holding等姿态词
 5. 英文输出，简洁精准，逗号分隔
-6. 末尾添加画质词: masterpiece, best quality, highly detailed
-7. 添加参数: --ar 16:9
+6. 将视觉风格融入描述中
+7. 末尾添加画质词: masterpiece, best quality, highly detailed
+8. 添加参数: --ar 16:9
 
 直接输出提示词，不要额外解释。`,
   outputFormat: { type: 'text', maxLength: 300 },

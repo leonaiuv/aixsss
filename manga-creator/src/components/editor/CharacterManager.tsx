@@ -13,7 +13,7 @@ import { useCharacterStore } from '@/stores/characterStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { AIFactory } from '@/lib/ai/factory';
-import { PortraitPrompts } from '@/types';
+import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -49,15 +49,45 @@ import {
 // AI生成状态类型
 type GeneratingState = 'idle' | 'generating_basic' | 'generating_portrait';
 
-// 画风预设映射
-const STYLE_LABELS: Record<string, string> = {
-  anime: '日式动漫风格，赛璐珞着色，高饱和度色彩',
-  realistic: '写实风格，真实光影，细腻质感，电影级画质',
-  ink: '水墨国风，留白意境，笔触飘逸，东方美学',
-  comic: '美式漫画风格，粗线条，网点阴影，动感构图',
-  cyberpunk: '赛博朋克风格，霓虹光效，高科技，未来都市',
-  fantasy: '奇幻风格，魔法元素，史诗场景，宏大叙事',
-};
+/**
+ * 获取当前项目的完整画风提示词
+ */
+function getProjectStylePrompt(currentProject: Project | null): string {
+  if (!currentProject) return '';
+  
+  // 优先使用新版 artStyleConfig
+  if (currentProject.artStyleConfig?.fullPrompt) {
+    return currentProject.artStyleConfig.fullPrompt;
+  }
+  
+  // 回退：从旧版 style 迁移
+  if (currentProject.style) {
+    const migratedConfig = migrateOldStyleToConfig(currentProject.style);
+    return migratedConfig.fullPrompt;
+  }
+  
+  return '';
+}
+
+/**
+ * 获取画风标签名称
+ */
+function getStyleLabel(currentProject: Project | null): string {
+  if (!currentProject) return '';
+  
+  if (currentProject.artStyleConfig) {
+    const preset = ART_STYLE_PRESETS.find(p => p.id === currentProject.artStyleConfig?.presetId);
+    return preset ? preset.label : '自定义画风';
+  }
+  
+  if (currentProject.style) {
+    const migratedConfig = migrateOldStyleToConfig(currentProject.style);
+    const preset = ART_STYLE_PRESETS.find(p => p.id === migratedConfig.presetId);
+    return preset ? preset.label : currentProject.style;
+  }
+  
+  return '';
+}
 
 interface CharacterManagerProps {
   projectId: string;
@@ -89,10 +119,14 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
   const [dialogStep, setDialogStep] = useState<'basic' | 'portrait'>('basic');
   
-  // 获取当前项目画风的完整描述
+  // 获取当前项目画风的完整描述（英文提示词）
   const getStyleDescription = () => {
-    if (!currentProject?.style) return '';
-    return STYLE_LABELS[currentProject.style] || currentProject.style;
+    return getProjectStylePrompt(currentProject);
+  };
+  
+  // 获取画风标签（中文名称）
+  const getStyleLabelText = () => {
+    return getStyleLabel(currentProject);
   };
 
   const projectCharacters = characters.filter((c) => c.projectId === projectId);
@@ -401,7 +435,7 @@ ${styleDesc}
                     <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-md">
                       <Sparkles className="h-4 w-4 text-primary flex-shrink-0" />
                       <span className="text-sm text-muted-foreground">
-                        当前画风：<span className="text-foreground font-medium">{getStyleDescription()}</span>
+                        当前画风：<span className="text-foreground font-medium">{getStyleLabelText()}</span>
                       </span>
                     </div>
                   )}

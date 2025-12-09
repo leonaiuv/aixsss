@@ -20,7 +20,20 @@ import {
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
 import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
-import { Scene } from '@/types';
+import { Scene, migrateOldStyleToConfig } from '@/types';
+
+/**
+ * 获取项目的完整画风提示词
+ */
+function getStyleFullPrompt(project: { style: string; artStyleConfig?: { fullPrompt: string } }): string {
+  if (project.artStyleConfig?.fullPrompt) {
+    return project.artStyleConfig.fullPrompt;
+  }
+  if (project.style) {
+    return migrateOldStyleToConfig(project.style).fullPrompt;
+  }
+  return '';
+}
 
 export function SceneGeneration() {
   const { currentProject, updateProject } = useProjectStore();
@@ -69,13 +82,16 @@ export function SceneGeneration() {
     try {
       const client = AIFactory.createClient(config);
 
+      // 获取完整画风提示词
+      const styleFullPrompt = getStyleFullPrompt(currentProject);
+
       // 调用AI生成分镜列表
       const prompt = `你是一位专业的分镜师。基于以下信息,将故事拆解为8-12个关键分镜节点:
 
 **故事梗概**:
 ${currentProject.summary}
 
-**画风**: ${currentProject.style}
+**画风**: ${styleFullPrompt}
 **主角**: ${currentProject.protagonist}
 
 **要求**:
@@ -99,7 +115,7 @@ ${currentProject.summary}
 **故事梗概**:
 {{summary}}
 
-**画风**: {{style}}
+**画风**: {{styleFullPrompt}}
 **主角**: {{protagonist}}
 
 **要求**:

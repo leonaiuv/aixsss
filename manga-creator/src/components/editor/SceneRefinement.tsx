@@ -24,8 +24,22 @@ import {
 import { AIFactory } from '@/lib/ai/factory';
 import { getSkillByName } from '@/lib/ai/skills';
 import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
-import { SceneStep } from '@/types';
+import { SceneStep, migrateOldStyleToConfig, Project } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
+
+/**
+ * 获取项目的完整画风提示词
+ */
+function getStyleFullPrompt(project: Project | null): string {
+  if (!project) return '';
+  if (project.artStyleConfig?.fullPrompt) {
+    return project.artStyleConfig.fullPrompt;
+  }
+  if (project.style) {
+    return migrateOldStyleToConfig(project.style).fullPrompt;
+  }
+  return '';
+}
 
 export function SceneRefinement() {
   const { currentProject, updateProject } = useProjectStore();
@@ -75,10 +89,13 @@ export function SceneRefinement() {
         throw new Error('技能配置未找到');
       }
 
+      // 获取完整画风提示词
+      const styleFullPrompt = getStyleFullPrompt(currentProject);
+
       // 构建上下文
       const context = {
         projectEssence: {
-          style: currentProject.style,
+          style: styleFullPrompt,
           protagonistCore: currentProject.protagonist,
           storyCore: currentProject.summary,
         },
@@ -162,9 +179,11 @@ export function SceneRefinement() {
         throw new Error('技能配置未找到');
       }
 
+      const styleFullPrompt = getStyleFullPrompt(currentProject);
+
       const prompt = skill.promptTemplate
         .replace('{scene_description}', latestScene.sceneDescription)
-        .replace('{style}', currentProject.style)
+        .replace('{style}', styleFullPrompt)
         .replace('{protagonist}', currentProject.protagonist);
 
       // 记录AI调用日志
@@ -175,7 +194,7 @@ export function SceneRefinement() {
         messages: [{ role: 'user', content: prompt }],
         context: {
           projectId: currentProject.id,
-          style: currentProject.style,
+          style: styleFullPrompt,
           protagonist: currentProject.protagonist,
           sceneId: latestScene.id,
           sceneOrder: currentSceneIndex + 1,

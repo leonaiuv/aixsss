@@ -12,6 +12,38 @@ import {
   Eye,
   Code
 } from 'lucide-react';
+import { migrateOldStyleToConfig, ART_STYLE_PRESETS, Project } from '@/types';
+
+/**
+ * 获取项目的完整画风提示词
+ */
+function getStyleFullPrompt(project: Project | null): string {
+  if (!project) return '';
+  if (project.artStyleConfig?.fullPrompt) {
+    return project.artStyleConfig.fullPrompt;
+  }
+  if (project.style) {
+    return migrateOldStyleToConfig(project.style).fullPrompt;
+  }
+  return '';
+}
+
+/**
+ * 获取画风标签名称
+ */
+function getStyleLabel(project: Project | null): string {
+  if (!project) return '';
+  if (project.artStyleConfig) {
+    const preset = ART_STYLE_PRESETS.find(p => p.id === project.artStyleConfig?.presetId);
+    return preset ? preset.label : '自定义画风';
+  }
+  if (project.style) {
+    const migratedConfig = migrateOldStyleToConfig(project.style);
+    const preset = ART_STYLE_PRESETS.find(p => p.id === migratedConfig.presetId);
+    return preset ? preset.label : project.style;
+  }
+  return '';
+}
 
 export function PromptExport() {
   const { currentProject } = useProjectStore();
@@ -41,13 +73,23 @@ export function PromptExport() {
 
   // 生成Markdown格式内容
   const generateMarkdown = () => {
+    const styleLabel = getStyleLabel(currentProject);
+    const styleFullPrompt = getStyleFullPrompt(currentProject);
+
     let md = `# ${currentProject.title}\n\n`;
     md += `## 项目信息\n\n`;
     md += `- **创建时间**: ${new Date(currentProject.createdAt).toLocaleString('zh-CN')}\n`;
     md += `- **更新时间**: ${new Date(currentProject.updatedAt).toLocaleString('zh-CN')}\n`;
-    md += `- **画风**: ${currentProject.style}\n`;
+    md += `- **画风**: ${styleLabel}\n`;
     md += `- **分镜总数**: ${scenes.length}\n`;
     md += `- **完成进度**: ${completionRate}%\n\n`;
+
+    md += `### 完整画风描述 (Full Style Prompt)\n\n`;
+    md += `\`\`\`
+${styleFullPrompt}
+\`\`\`
+
+`;
 
     md += `## 基础设定\n\n`;
     md += `### 剧本梗概\n\n`;
@@ -96,12 +138,17 @@ ${scene.motionPrompt}
 
   // 生成JSON格式
   const generateJSON = () => {
+    const styleFullPrompt = getStyleFullPrompt(currentProject);
+    const styleLabel = getStyleLabel(currentProject);
+
     const data = {
       project: {
         id: currentProject.id,
         title: currentProject.title,
         summary: currentProject.summary,
-        style: currentProject.style,
+        style: styleLabel,
+        styleFullPrompt: styleFullPrompt,
+        artStyleConfig: currentProject.artStyleConfig,
         protagonist: currentProject.protagonist,
         createdAt: currentProject.createdAt,
         updatedAt: currentProject.updatedAt,
@@ -127,9 +174,21 @@ ${scene.motionPrompt}
 
   // 仅导出关键帧提示词
   const generateKeyframePromptsOnly = () => {
+    const styleFullPrompt = getStyleFullPrompt(currentProject);
+
     let content = `# ${currentProject.title} - 关键帧提示词（绘图AI用）\n\n`;
-    content += `画风: ${currentProject.style}\n`;
-    content += `主角: ${currentProject.protagonist}\n\n`;
+    content += `## 画风
+
+\`\`\`
+${styleFullPrompt}
+\`\`\`
+
+`;
+    content += `## 主角
+
+${currentProject.protagonist}
+
+`;
     content += `---\n\n`;
 
     scenes.forEach((scene, index) => {

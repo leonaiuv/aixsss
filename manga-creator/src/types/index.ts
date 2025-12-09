@@ -2,6 +2,190 @@
 // 核心数据类型定义
 // ==========================================
 
+// ==========================================
+// 画风配置类型
+// ==========================================
+
+/**
+ * 画风配置结构
+ * 包含四个维度的专业描述，用于精确指导绘图AI
+ */
+export interface ArtStyleConfig {
+  /** 预设ID（如 'anime_cel', 'cyberpunk'），自定义时为 'custom' */
+  presetId: string;
+  /** 整体风格（如：cel shaded, anime style） */
+  baseStyle: string;
+  /** 渲染技法（如：heavy impasto brushstrokes, watercolor wash） */
+  technique: string;
+  /** 色彩倾向（如：muted palette, high contrast, neon colors） */
+  colorPalette: string;
+  /** 文化/时代特征（如：Oriental, Victorian, Futuristic） */
+  culturalFeature: string;
+  /** 合成后的完整英文提示词（供绘图AI使用） */
+  fullPrompt: string;
+}
+
+/**
+ * 画风预设定义
+ */
+export interface ArtStylePreset {
+  id: string;
+  label: string;
+  description: string;
+  config: Omit<ArtStyleConfig, 'presetId'>;
+}
+
+/**
+ * 8个专业画风预设
+ */
+export const ART_STYLE_PRESETS: ArtStylePreset[] = [
+  {
+    id: 'anime_cel',
+    label: '日式赛璐珞动漫',
+    description: '经典日系动画风格，清晰线条与平涂色块',
+    config: {
+      baseStyle: 'anime style, cel shaded, clean lineart',
+      technique: 'flat color blocking, sharp outlines, gradient shading',
+      colorPalette: 'vibrant saturated colors, high contrast shadows',
+      culturalFeature: 'Japanese animation aesthetics, expressive eyes',
+      fullPrompt: 'anime style, cel shaded, clean lineart, flat color blocking, sharp outlines, gradient shading, vibrant saturated colors, high contrast shadows, Japanese animation aesthetics, expressive eyes',
+    },
+  },
+  {
+    id: 'ink_oriental',
+    label: '东方水墨风',
+    description: '传统水墨意境，留白与笔触飘逸',
+    config: {
+      baseStyle: 'Chinese ink wash painting, sumi-e style',
+      technique: 'fluid brushstrokes, ink splatter, wet-on-wet technique',
+      colorPalette: 'monochrome ink tones, subtle color washes, negative space',
+      culturalFeature: 'Oriental aesthetics, traditional Chinese/Japanese art',
+      fullPrompt: 'Chinese ink wash painting, sumi-e style, fluid brushstrokes, ink splatter, wet-on-wet technique, monochrome ink tones, subtle color washes, negative space, Oriental aesthetics, traditional East Asian art',
+    },
+  },
+  {
+    id: 'comic_western',
+    label: '美式漫画',
+    description: '欧美超英风格，粗线条与动感构图',
+    config: {
+      baseStyle: 'American comic book style, superhero aesthetics',
+      technique: 'bold outlines, halftone dots, dynamic action lines',
+      colorPalette: 'primary colors, high contrast, dramatic lighting',
+      culturalFeature: 'Western comic art, Marvel/DC inspired',
+      fullPrompt: 'American comic book style, superhero aesthetics, bold outlines, halftone dots, dynamic action lines, primary colors, high contrast, dramatic lighting, Western comic art',
+    },
+  },
+  {
+    id: 'cyberpunk',
+    label: '赛博朋克',
+    description: '霓虹未来都市，高科技与颓废美学',
+    config: {
+      baseStyle: 'cyberpunk style, sci-fi noir, futuristic',
+      technique: 'neon glow effects, holographic overlays, digital glitch',
+      colorPalette: 'cyan and magenta dominance, neon lights, dark shadows',
+      culturalFeature: 'dystopian future, Asian street markets, tech noir',
+      fullPrompt: 'cyberpunk style, sci-fi noir, futuristic, neon glow effects, holographic overlays, digital glitch, cyan and magenta dominance, neon lights, dark shadows, dystopian future, Asian street markets, tech noir',
+    },
+  },
+  {
+    id: 'cinematic_realistic',
+    label: '写实电影风',
+    description: '电影级画质，真实光影与细腻质感',
+    config: {
+      baseStyle: 'cinematic, photorealistic, film still',
+      technique: 'volumetric lighting, depth of field, film grain',
+      colorPalette: 'natural color grading, cinematic teal and orange',
+      culturalFeature: 'Hollywood cinematography, ARRI camera look',
+      fullPrompt: 'cinematic, photorealistic, film still, volumetric lighting, depth of field, film grain, natural color grading, cinematic teal and orange tones, Hollywood cinematography, ARRI camera look, 8k resolution',
+    },
+  },
+  {
+    id: 'fantasy_epic',
+    label: '奇幻史诗',
+    description: '魔法世界，宏大叙事与史诗场景',
+    config: {
+      baseStyle: 'epic fantasy art, digital painting',
+      technique: 'detailed brushwork, atmospheric perspective, dramatic composition',
+      colorPalette: 'rich jewel tones, golden highlights, ethereal glow',
+      culturalFeature: 'medieval fantasy, mythical creatures, magical elements',
+      fullPrompt: 'epic fantasy art, digital painting, detailed brushwork, atmospheric perspective, dramatic composition, rich jewel tones, golden highlights, ethereal glow, medieval fantasy, mythical creatures, magical elements',
+    },
+  },
+  {
+    id: 'ghibli_watercolor',
+    label: '吉卜力水彩',
+    description: '宫崎骏风格，柔和水彩与自然意境',
+    config: {
+      baseStyle: 'Studio Ghibli style, watercolor illustration',
+      technique: 'soft edges, watercolor washes, hand-painted texture',
+      colorPalette: 'pastel tones, warm natural colors, soft gradients',
+      culturalFeature: 'Hayao Miyazaki inspired, whimsical nature scenes',
+      fullPrompt: 'Studio Ghibli style, watercolor illustration, soft edges, watercolor washes, hand-painted texture, pastel tones, warm natural colors, soft gradients, Hayao Miyazaki inspired, whimsical nature scenes',
+    },
+  },
+  {
+    id: 'pixel_retro',
+    label: '像素复古',
+    description: '复古游戏像素风，有限色板与方块美学',
+    config: {
+      baseStyle: 'pixel art, retro game aesthetics, 16-bit style',
+      technique: 'limited color palette, dithering, blocky shapes',
+      colorPalette: 'CRT color palette, vibrant primary colors, no anti-aliasing',
+      culturalFeature: '80s-90s video game nostalgia, arcade game style',
+      fullPrompt: 'pixel art, retro game aesthetics, 16-bit style, limited color palette, dithering, blocky shapes, CRT color palette, vibrant primary colors, no anti-aliasing, 80s-90s video game nostalgia, arcade game style',
+    },
+  },
+];
+
+/**
+ * 根据预设ID获取完整画风配置
+ */
+export function getArtStyleConfig(presetId: string): ArtStyleConfig | null {
+  const preset = ART_STYLE_PRESETS.find(p => p.id === presetId);
+  if (!preset) return null;
+  return {
+    presetId: preset.id,
+    ...preset.config,
+  };
+}
+
+/**
+ * 从旧版简单 style 字符串迁移到新版 ArtStyleConfig
+ */
+export function migrateOldStyleToConfig(oldStyle: string): ArtStyleConfig {
+  // 旧版预设值映射
+  const oldToNewMap: Record<string, string> = {
+    'anime': 'anime_cel',
+    'realistic': 'cinematic_realistic',
+    'ink': 'ink_oriental',
+    'comic': 'comic_western',
+    'cyberpunk': 'cyberpunk',
+    'fantasy': 'fantasy_epic',
+  };
+  
+  const newPresetId = oldToNewMap[oldStyle];
+  if (newPresetId) {
+    const config = getArtStyleConfig(newPresetId);
+    if (config) return config;
+  }
+  
+  // 如果无法映射，使用默认的日式动漫风格
+  return getArtStyleConfig('anime_cel')!;
+}
+
+/**
+ * 合成完整画风提示词
+ */
+export function composeStyleFullPrompt(config: Omit<ArtStyleConfig, 'presetId' | 'fullPrompt'>): string {
+  const parts = [
+    config.baseStyle,
+    config.technique,
+    config.colorPalette,
+    config.culturalFeature,
+  ].filter(Boolean);
+  return parts.join(', ');
+}
+
 // 工作流状态
 export type WorkflowState =
   | 'IDLE'
@@ -46,7 +230,10 @@ export interface Project {
   id: string;
   title: string;
   summary: string;
+  /** @deprecated 保留用于向后兼容，请使用 artStyleConfig */
   style: string;
+  /** 新版画风配置，包含完整的专业描述 */
+  artStyleConfig?: ArtStyleConfig;
   protagonist: string;
   contextCache?: ProjectContextCache;
   workflowState: WorkflowState;

@@ -7,36 +7,47 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Sparkles, Globe, Users } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { ArrowRight, Sparkles, Globe, Users, Palette, Brush, Layers, MapPin, Copy, Check } from 'lucide-react';
 import { WorldViewBuilder } from './WorldViewBuilder';
 import { CharacterManager } from './CharacterManager';
-
-const STYLE_PRESETS = [
-  { value: 'anime', label: '日式动漫', desc: '赛璐珞、高饱和度、夸张表情' },
-  { value: 'realistic', label: '写实风格', desc: '真实光影、细腻质感、电影级' },
-  { value: 'ink', label: '水墨国风', desc: '留白意境、笔触飘逸、东方美学' },
-  { value: 'comic', label: '美式漫画', desc: '粗线条、网点阴影、动感构图' },
-  { value: 'cyberpunk', label: '赛博朋克', desc: '霓虹光效、高科技、未来都市' },
-  { value: 'fantasy', label: '奇幻风格', desc: '魔法元素、史诗场景、宏大叙事' },
-];
+import { 
+  ART_STYLE_PRESETS, 
+  ArtStyleConfig, 
+  getArtStyleConfig, 
+  composeStyleFullPrompt,
+  migrateOldStyleToConfig 
+} from '@/types';
 
 export function BasicSettings() {
   const { currentProject, updateProject } = useProjectStore();
   
+  // 初始化画风配置
+  const getInitialStyleConfig = (): ArtStyleConfig => {
+    if (currentProject?.artStyleConfig) {
+      return currentProject.artStyleConfig;
+    }
+    if (currentProject?.style) {
+      return migrateOldStyleToConfig(currentProject.style);
+    }
+    return getArtStyleConfig('anime_cel')!;
+  };
+
   const [formData, setFormData] = useState({
     summary: currentProject?.summary || '',
-    style: currentProject?.style || '',
     protagonist: currentProject?.protagonist || '',
   });
+  const [styleConfig, setStyleConfig] = useState<ArtStyleConfig>(getInitialStyleConfig());
   const [activeTab, setActiveTab] = useState('basic');
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   useEffect(() => {
     if (currentProject) {
       setFormData({
         summary: currentProject.summary || '',
-        style: currentProject.style || '',
         protagonist: currentProject.protagonist || '',
       });
+      setStyleConfig(getInitialStyleConfig());
     }
   }, [currentProject?.id]);
 
@@ -44,13 +55,41 @@ export function BasicSettings() {
     return null;
   }
 
-  const canProceed = formData.summary.length >= 50 && formData.style && formData.protagonist.length >= 20;
+  // 处理预设选择
+  const handlePresetChange = (presetId: string) => {
+    const newConfig = getArtStyleConfig(presetId);
+    if (newConfig) {
+      setStyleConfig(newConfig);
+    }
+  };
+
+  // 处理单个维度修改
+  const handleStyleFieldChange = (field: keyof Omit<ArtStyleConfig, 'presetId' | 'fullPrompt'>, value: string) => {
+    const newConfig = {
+      ...styleConfig,
+      presetId: 'custom', // 修改后变为自定义
+      [field]: value,
+    };
+    // 重新合成 fullPrompt
+    newConfig.fullPrompt = composeStyleFullPrompt(newConfig);
+    setStyleConfig(newConfig);
+  };
+
+  // 复制完整提示词
+  const handleCopyFullPrompt = async () => {
+    await navigator.clipboard.writeText(styleConfig.fullPrompt);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2000);
+  };
+
+  const canProceed = formData.summary.length >= 50 && styleConfig.fullPrompt && formData.protagonist.length >= 20;
 
   const handleSave = () => {
     if (canProceed) {
       updateProject(currentProject.id, {
         summary: formData.summary,
-        style: formData.style,
+        style: styleConfig.presetId, // 向后兼容
+        artStyleConfig: styleConfig,  // 新版完整配置
         protagonist: formData.protagonist,
         workflowState: 'DATA_COLLECTED',
         updatedAt: new Date().toISOString(),
@@ -133,43 +172,133 @@ export function BasicSettings() {
             </div>
           </div>
 
-          {/* 风格选择 */}
-          <div className="space-y-2">
-            <Label htmlFor="style" className="text-base font-semibold">
-              画风选择 *
-            </Label>
-            <p className="text-sm text-muted-foreground mb-3">
-              选择符合故事基调的视觉风格
-            </p>
-            <Select value={formData.style} onValueChange={(value) => setFormData({ ...formData, style: value })}>
-              <SelectTrigger id="style" className="h-12">
-                <SelectValue placeholder="选择画风..." />
-              </SelectTrigger>
-              <SelectContent>
-                {STYLE_PRESETS.map((preset) => (
-                  <SelectItem key={preset.value} value={preset.value}>
-                    <div className="flex flex-col items-start py-1">
-                      <span className="font-medium">{preset.label}</span>
-                      <span className="text-xs text-muted-foreground">{preset.desc}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* 风格选择 - 重构版 */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="style" className="text-base font-semibold">
+                画风选择 *
+              </Label>
+              <p className="text-sm text-muted-foreground mb-3">
+                选择预设画风，或自定义调整各项参数
+              </p>
+              <Select value={styleConfig.presetId} onValueChange={handlePresetChange}>
+                <SelectTrigger id="style" className="h-12">
+                  <SelectValue placeholder="选择画风预设..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {ART_STYLE_PRESETS.map((preset) => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      <div className="flex flex-col items-start py-1">
+                        <span className="font-medium">{preset.label}</span>
+                        <span className="text-xs text-muted-foreground">{preset.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {styleConfig.presetId === 'custom' && (
+                    <SelectItem value="custom">
+                      <div className="flex flex-col items-start py-1">
+                        <span className="font-medium">自定义画风</span>
+                        <span className="text-xs text-muted-foreground">已修改的自定义配置</span>
+                      </div>
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
             
-            {/* 自定义风格描述 */}
-            {formData.style && (
-              <div className="mt-3">
-                <Label htmlFor="custom-style" className="text-sm text-muted-foreground">
-                  补充风格细节 (可选)
-                </Label>
-                <Input
-                  id="custom-style"
-                  placeholder="例如: 增加蒸汽朋克元素、强调戏剧性光影..."
-                  className="mt-1"
-                />
+            {/* 画风细节调整区 - 可展开 */}
+            <Accordion type="single" collapsible className="border rounded-lg">
+              <AccordionItem value="style-details" className="border-0">
+                <AccordionTrigger className="px-4 hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <Palette className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">画风细节调整</span>
+                    {styleConfig.presetId === 'custom' && (
+                      <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">已自定义</span>
+                    )}
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4 space-y-4">
+                  {/* 整体风格 */}
+                  <div className="space-y-2">
+                    <Label className="text-sm flex items-center gap-2">
+                      <Layers className="h-3.5 w-3.5" />
+                      整体风格
+                    </Label>
+                    <Input
+                      value={styleConfig.baseStyle}
+                      onChange={(e) => handleStyleFieldChange('baseStyle', e.target.value)}
+                      placeholder="如: anime style, cel shaded, clean lineart"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  
+                  {/* 渲染技法 */}
+                  <div className="space-y-2">
+                    <Label className="text-sm flex items-center gap-2">
+                      <Brush className="h-3.5 w-3.5" />
+                      渲染技法
+                    </Label>
+                    <Input
+                      value={styleConfig.technique}
+                      onChange={(e) => handleStyleFieldChange('technique', e.target.value)}
+                      placeholder="如: heavy impasto brushstrokes, watercolor wash"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  
+                  {/* 色彩倾向 */}
+                  <div className="space-y-2">
+                    <Label className="text-sm flex items-center gap-2">
+                      <Palette className="h-3.5 w-3.5" />
+                      色彩倾向
+                    </Label>
+                    <Input
+                      value={styleConfig.colorPalette}
+                      onChange={(e) => handleStyleFieldChange('colorPalette', e.target.value)}
+                      placeholder="如: vibrant saturated colors, high contrast"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                  
+                  {/* 文化/时代特征 */}
+                  <div className="space-y-2">
+                    <Label className="text-sm flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5" />
+                      文化/时代特征
+                    </Label>
+                    <Input
+                      value={styleConfig.culturalFeature}
+                      onChange={(e) => handleStyleFieldChange('culturalFeature', e.target.value)}
+                      placeholder="如: Oriental aesthetics, Victorian era"
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+            
+            {/* 完整提示词预览 */}
+            <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">完整画风提示词 (Full Prompt)</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopyFullPrompt}
+                  className="h-7 gap-1.5"
+                >
+                  {copiedPrompt ? (
+                    <><Check className="h-3.5 w-3.5" />已复制</>
+                  ) : (
+                    <><Copy className="h-3.5 w-3.5" />复制</>
+                  )}
+                </Button>
               </div>
-            )}
+              <p className="text-xs text-muted-foreground font-mono leading-relaxed break-all">
+                {styleConfig.fullPrompt}
+              </p>
+            </div>
           </div>
 
           {/* 主角描述 */}
