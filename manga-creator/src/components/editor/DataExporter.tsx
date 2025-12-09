@@ -9,7 +9,8 @@
 // ==========================================
 
 import { useState } from 'react';
-import { Project } from '@/types';
+import { Project, Scene } from '@/types';
+import { useStoryboardStore } from '@/stores/storyboardStore';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -49,6 +50,12 @@ interface DataExporterProps {
 
 export function DataExporter({ projects, onImport }: DataExporterProps) {
   const { toast } = useToast();
+  const { scenes: allScenes } = useStoryboardStore();
+  
+  // 获取项目的场景数据
+  const getProjectScenes = (projectId: string): Scene[] => {
+    return allScenes.filter((scene: Scene) => scene.projectId === projectId);
+  };
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -121,7 +128,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
               ? {
                   totalProjects: selectedProjectData.length,
                   totalScenes: selectedProjectData.reduce(
-                    (sum, p) => sum + (p.scenes?.length || 0),
+                    (sum, p) => sum + getProjectScenes(p.id).length,
                     0
                   ),
                 }
@@ -199,7 +206,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
 
       // 校验每个项目
       for (const project of data.projects) {
-        if (!project.id || !project.name || !project.summary) {
+                if (!project.id || !project.title || !project.summary) {
           throw new Error('项目数据不完整');
         }
       }
@@ -332,9 +339,9 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
                 >
                   <Checkbox checked={selectedProjects.has(project.id)} />
                   <div className="flex-1">
-                    <p className="font-medium">{project.name}</p>
+                    <p className="font-medium">{project.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {project.scenes?.length || 0} 个分镜
+                      {getProjectScenes(project.id).length} 个分镜
                     </p>
                   </div>
                 </div>
@@ -426,15 +433,16 @@ function generateMarkdown(projects: Project[], options: any): string {
   markdown += `---\n\n`;
 
   projects.forEach((project, index) => {
-    markdown += `## ${index + 1}. ${project.name}\n\n`;
+    const projectScenes = options.scenesMap?.get(project.id) || [];
+    markdown += `## ${index + 1}. ${project.title}\n\n`;
     markdown += `**画风:** ${project.style}\n\n`;
     markdown += `**主角:** ${project.protagonist}\n\n`;
     markdown += `**剧情:**\n${project.summary}\n\n`;
 
-    if (options.includeScenes && project.scenes && project.scenes.length > 0) {
-      markdown += `### 分镜列表 (${project.scenes.length}个)\n\n`;
+    if (options.includeScenes && projectScenes.length > 0) {
+      markdown += `### 分镜列表 (${projectScenes.length}个)\n\n`;
 
-      project.scenes.forEach((scene, sceneIndex) => {
+      projectScenes.forEach((scene: Scene, sceneIndex: number) => {
         markdown += `#### 分镜 ${sceneIndex + 1}\n\n`;
         markdown += `**概要:** ${scene.summary}\n\n`;
 
@@ -447,7 +455,12 @@ function generateMarkdown(projects: Project[], options: any): string {
         }
 
         if (scene.shotPrompt) {
-          markdown += `**提示词:**\n\`\`\`\n${scene.shotPrompt}\n\`\`\`\n\n`;
+          markdown += `**提示词:**
+\`\`\`
+${scene.shotPrompt}
+\`\`\`
+
+`;
         }
 
         markdown += `---\n\n`;

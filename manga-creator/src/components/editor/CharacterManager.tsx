@@ -67,9 +67,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     if (!formData.name.trim()) return;
 
     if (editingCharacter) {
-      updateCharacter(editingCharacter, formData);
+      updateCharacter(projectId, editingCharacter, formData);
     } else {
-      addCharacter({
+      addCharacter(projectId, {
         ...formData,
         projectId,
         relationships: [],
@@ -98,7 +98,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
   const handleDelete = (characterId: string) => {
     if (confirm('确定要删除这个角色吗？')) {
-      deleteCharacter(characterId);
+      deleteCharacter(projectId, characterId);
     }
   };
 

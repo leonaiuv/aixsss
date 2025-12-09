@@ -145,6 +145,7 @@ ${currentProject.summary}
       actionDescription: '',
       shotPrompt: '',
       notes: '',
+      status: 'pending',
     });
 
     updateProject(currentProject.id, {

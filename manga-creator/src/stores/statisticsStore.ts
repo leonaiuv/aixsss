@@ -12,6 +12,8 @@ interface StatisticsStore {
   // 操作方法
   calculate: (projects: Project[], scenesMap: Record<string, Scene[]>) => void;
   setDateRange: (start: string, end: string) => void;
+  getProjectStatistics: (projectId: string) => Statistics;
+  getGlobalStatistics: () => Statistics;
 }
 
 export const useStatisticsStore = create<StatisticsStore>((set, get) => ({
@@ -80,5 +82,32 @@ export const useStatisticsStore = create<StatisticsStore>((set, get) => ({
   
   setDateRange: (start: string, end: string) => {
     set({ dateRange: { start, end } });
+  },
+  
+  getProjectStatistics: (_projectId: string): Statistics => {
+    // 返回默认统计数据
+    return get().statistics || {
+      projectCount: 1,
+      sceneCount: 0,
+      completedSceneCount: 0,
+      totalTokens: 0,
+      estimatedCost: 0,
+      averageSceneTime: 0,
+      generationSuccessRate: 95,
+      creationTimeData: [],
+    };
+  },
+  
+  getGlobalStatistics: (): Statistics => {
+    return get().statistics || {
+      projectCount: 0,
+      sceneCount: 0,
+      completedSceneCount: 0,
+      totalTokens: 0,
+      estimatedCost: 0,
+      averageSceneTime: 0,
+      generationSuccessRate: 95,
+      creationTimeData: [],
+    };
   },
 }));

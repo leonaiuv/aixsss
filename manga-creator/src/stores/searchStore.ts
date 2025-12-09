@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { Project, Scene, SearchFilter } from '@/types';
 
+interface SearchHistory {
+  id: string;
+  query: string;
+  timestamp: string;
+}
+
 interface SearchStore {
   query: string;
   filters: SearchFilter;
@@ -9,12 +15,16 @@ interface SearchStore {
     scenes: Scene[];
   };
   isSearching: boolean;
+  searchHistory: SearchHistory[];
   
   // 操作方法
   setQuery: (query: string) => void;
   setFilters: (filters: Partial<SearchFilter>) => void;
   search: (projects: Project[], scenesMap: Record<string, Scene[]>) => void;
   clearSearch: () => void;
+  addSearchHistory: (query: string) => void;
+  getSearchHistory: () => SearchHistory[];
+  clearSearchHistory: () => void;
 }
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -27,6 +37,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     scenes: [],
   },
   isSearching: false,
+  searchHistory: [],
   
   setQuery: (query: string) => {
     set({ query });
@@ -92,5 +103,25 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
       filters: { query: '' },
       results: { projects: [], scenes: [] },
     });
+  },
+  
+  addSearchHistory: (query: string) => {
+    if (!query.trim()) return;
+    const newHistory: SearchHistory = {
+      id: `sh_${Date.now()}`,
+      query: query.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    set(state => ({
+      searchHistory: [newHistory, ...state.searchHistory.filter(h => h.query !== query)].slice(0, 10),
+    }));
+  },
+  
+  getSearchHistory: () => {
+    return get().searchHistory;
+  },
+  
+  clearSearchHistory: () => {
+    set({ searchHistory: [] });
   },
 }));

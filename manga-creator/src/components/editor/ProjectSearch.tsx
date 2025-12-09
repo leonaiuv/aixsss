@@ -61,7 +61,7 @@ export function ProjectSearch({
       const lowerQuery = query.toLowerCase();
       results = results.filter(
         (project) =>
-          project.name.toLowerCase().includes(lowerQuery) ||
+          project.title.toLowerCase().includes(lowerQuery) ||
           project.summary.toLowerCase().includes(lowerQuery) ||
           project.style.toLowerCase().includes(lowerQuery) ||
           project.protagonist.toLowerCase().includes(lowerQuery)
@@ -85,7 +85,7 @@ export function ProjectSearch({
             new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
           break;
         case 'name':
-          comparison = a.name.localeCompare(b.name, 'zh-CN');
+          comparison = a.title.localeCompare(b.title, 'zh-CN');
           break;
         case 'status':
           comparison = a.workflowState.localeCompare(b.workflowState);

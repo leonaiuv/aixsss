@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
+import { useCharacterStore } from '@/stores/characterStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -15,22 +17,31 @@ import {
   Loader2,
   RotateCw,
   Eye,
-  FileText
+  FileText,
+  BookOpen,
+  Users
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
 import { getSkillByName } from '@/lib/ai/skills';
 import { SceneStep } from '@/types';
+import { TemplateGallery } from './TemplateGallery';
 
 export function SceneRefinement() {
   const { currentProject, updateProject } = useProjectStore();
   const { scenes, updateScene, loadScenes } = useStoryboardStore();
   const { config } = useConfigStore();
+  const { characters } = useCharacterStore();
 
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingStep, setGeneratingStep] = useState<SceneStep | null>(null);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [error, setError] = useState('');
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [characterDialogOpen, setCharacterDialogOpen] = useState(false);
+
+  // 项目角色列表
+  const projectCharacters = characters.filter(c => c.projectId === currentProject?.id);
 
   useEffect(() => {
     if (currentProject) {
@@ -101,7 +112,11 @@ export function SceneRefinement() {
 
   // 生成动作描述
   const generateActionDescription = async () => {
-    if (!config || !currentScene || !currentScene.sceneDescription) return;
+    // 从 store 获取最新的场景数据，避免闭包问题
+    const { scenes: latestScenes } = useStoryboardStore.getState();
+    const latestScene = latestScenes.find(s => s.id === currentScene?.id);
+    
+    if (!config || !latestScene || !latestScene.sceneDescription) return;
 
     setIsGenerating(true);
     setGeneratingStep('action_description');
@@ -121,20 +136,20 @@ export function SceneRefinement() {
           protagonistCore: currentProject.protagonist,
           storyCore: currentProject.summary,
         },
-        currentScene: currentScene,
-        confirmedContent: currentScene.sceneDescription,
+        currentScene: latestScene,
+        confirmedContent: latestScene.sceneDescription,
       };
 
       const prompt = skill.promptTemplate
         .replace('{protagonist}', context.projectEssence.protagonistCore)
-        .replace('{scene_description}', currentScene.sceneDescription)
-        .replace('{current_scene_summary}', currentScene.summary);
+        .replace('{scene_description}', latestScene.sceneDescription)
+        .replace('{current_scene_summary}', latestScene.summary);
 
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
 
-      updateScene(currentProject.id, currentScene.id, {
+      updateScene(currentProject.id, latestScene.id, {
         actionDescription: response.content.trim(),
         status: 'action_confirmed',
       });
@@ -150,7 +165,11 @@ export function SceneRefinement() {
 
   // 生成镜头提示词
   const generateShotPrompt = async () => {
-    if (!config || !currentScene || !currentScene.actionDescription) return;
+    // 从 store 获取最新的场景数据，避免闭包问题
+    const { scenes: latestScenes } = useStoryboardStore.getState();
+    const latestScene = latestScenes.find(s => s.id === currentScene?.id);
+    
+    if (!config || !latestScene || !latestScene.actionDescription) return;
 
     setIsGenerating(true);
     setGeneratingStep('shot_prompt');
@@ -170,21 +189,21 @@ export function SceneRefinement() {
           protagonistCore: currentProject.protagonist,
           storyCore: currentProject.summary,
         },
-        currentScene: currentScene,
-        confirmedContent: `场景:${currentScene.sceneDescription}\n动作:${currentScene.actionDescription}`,
+        currentScene: latestScene,
+        confirmedContent: `场景:${latestScene.sceneDescription}\n动作:${latestScene.actionDescription}`,
       };
 
       const prompt = skill.promptTemplate
         .replace('{style}', context.projectEssence.style)
         .replace('{protagonist}', context.projectEssence.protagonistCore)
-        .replace('{scene_description}', currentScene.sceneDescription)
-        .replace('{action_description}', currentScene.actionDescription);
+        .replace('{scene_description}', latestScene.sceneDescription)
+        .replace('{action_description}', latestScene.actionDescription);
 
       const response = await client.chat([
         { role: 'user', content: prompt }
       ]);
 
-      updateScene(currentProject.id, currentScene.id, {
+      updateScene(currentProject.id, latestScene.id, {
         shotPrompt: response.content.trim(),
         status: 'completed',
       });
@@ -246,8 +265,8 @@ export function SceneRefinement() {
       }
 
       // 重新获取最新的场景数据
-      let { scenes: updatedScenes1 } = useStoryboardStore.getState();
-      let latestScene1 = updatedScenes1.find(s => s.id === currentScene.id);
+      const { scenes: updatedScenes1 } = useStoryboardStore.getState();
+      const latestScene1 = updatedScenes1.find(s => s.id === currentScene.id);
       
       if (!latestScene1?.sceneDescription) {
         throw new Error('场景描述生成失败');
@@ -263,8 +282,8 @@ export function SceneRefinement() {
       }
 
       // 再次获取最新的场景数据
-      let { scenes: updatedScenes2 } = useStoryboardStore.getState();
-      let latestScene2 = updatedScenes2.find(s => s.id === currentScene.id);
+      const { scenes: updatedScenes2 } = useStoryboardStore.getState();
+      const latestScene2 = updatedScenes2.find(s => s.id === currentScene.id);
       
       if (!latestScene2?.actionDescription) {
         throw new Error('动作描述生成失败');
@@ -295,10 +314,45 @@ export function SceneRefinement() {
   const canGeneratePrompt = currentScene.actionDescription && !currentScene.shotPrompt;
   const isCompleted = currentScene.status === 'completed';
 
+  // 应用模板
+  const handleApplyTemplate = (template: string, variables: Record<string, string>) => {
+    let content = template;
+    Object.entries(variables).forEach(([key, value]) => {
+      content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+    });
+    
+    // 应用到当前分镜的场景描述
+    if (currentScene) {
+      updateScene(currentProject!.id, currentScene.id, {
+        sceneDescription: content,
+        status: 'scene_confirmed',
+      });
+    }
+    setTemplateDialogOpen(false);
+  };
+
+  // 引用角色
+  const handleCharacterSelect = (character: typeof projectCharacters[0]) => {
+    if (currentScene) {
+      const characterInfo = `角色: ${character.name}
+外观: ${character.appearance}
+性格: ${character.personality}`;
+      
+      const newDescription = currentScene.sceneDescription 
+        ? `${currentScene.sceneDescription}\n\n${characterInfo}`
+        : characterInfo;
+      
+      updateScene(currentProject!.id, currentScene.id, {
+        sceneDescription: newDescription,
+      });
+    }
+    setCharacterDialogOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <Card className="p-8">
-        {/* 头部导航 */}
+      {/* 头部导航 */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
             <h2 className="text-2xl font-bold">分镜细化</h2>
@@ -308,6 +362,27 @@ export function SceneRefinement() {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* 模板库按钮 */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTemplateDialogOpen(true)}
+              className="gap-2"
+            >
+              <BookOpen className="h-4 w-4" />
+              <span className="hidden sm:inline">使用模板</span>
+            </Button>
+            {/* 角色引用按钮 */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCharacterDialogOpen(true)}
+              disabled={projectCharacters.length === 0}
+              className="gap-2"
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">引用角色</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -632,6 +707,55 @@ export function SceneRefinement() {
           <li>• <strong>批量处理</strong>: 完成所有分镜后可在导出页面统一查看和管理</li>
         </ul>
       </Card>
+
+      {/* 模板库对话框 */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>提示词模板库</DialogTitle>
+          </DialogHeader>
+          <TemplateGallery onApplyTemplate={handleApplyTemplate} />
+        </DialogContent>
+      </Dialog>
+
+      {/* 角色引用对话框 */}
+      <Dialog open={characterDialogOpen} onOpenChange={setCharacterDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>选择角色</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[400px] overflow-auto">
+            {projectCharacters.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                还没有创建角色，请先在基础设定中添加角色
+              </p>
+            ) : (
+              projectCharacters.map((character) => (
+                <div
+                  key={character.id}
+                  className="p-4 rounded-lg border hover:border-primary cursor-pointer transition-colors"
+                  onClick={() => handleCharacterSelect(character)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+                      style={{ backgroundColor: character.themeColor || '#6366f1' }}
+                    >
+                      {character.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium">{character.name}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">
+                        {character.appearance || '暂无外观描述'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

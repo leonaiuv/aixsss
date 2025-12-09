@@ -13,6 +13,9 @@ interface VersionStore {
   deleteVersion: (projectId: string, versionId: string) => void;
   clearOldVersions: (projectId: string, keepCount: number) => void;
   getVersionHistory: (projectId: string, targetId: string) => Version[];
+  getProjectVersions: (projectId: string) => Version[];
+  getSceneVersions: (sceneId: string) => Version[];
+  addLabel: (versionId: string, label: string, notes?: string) => void;
 }
 
 export const useVersionStore = create<VersionStore>((set, get) => ({
@@ -90,6 +93,28 @@ export const useVersionStore = create<VersionStore>((set, get) => ({
     return get().versions
       .filter(v => v.projectId === projectId && v.targetId === targetId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+  
+  getProjectVersions: (projectId: string) => {
+    return get().versions
+      .filter(v => v.projectId === projectId && v.type === 'project')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+  
+  getSceneVersions: (sceneId: string) => {
+    return get().versions
+      .filter(v => v.targetId === sceneId && v.type === 'scene')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+  
+  addLabel: (versionId: string, label: string, notes?: string) => {
+    set(state => ({
+      versions: state.versions.map(v => 
+        v.id === versionId 
+          ? { ...v, label, notes: notes || v.notes }
+          : v
+      )
+    }));
   },
 }));
 

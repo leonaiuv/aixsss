@@ -6,7 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowRight, Sparkles, Globe, Users } from 'lucide-react';
+import { WorldViewBuilder } from './WorldViewBuilder';
+import { CharacterManager } from './CharacterManager';
 
 const STYLE_PRESETS = [
   { value: 'anime', label: '日式动漫', desc: '赛璐珞、高饱和度、夸张表情' },
@@ -25,6 +28,7 @@ export function BasicSettings() {
     style: currentProject?.style || '',
     protagonist: currentProject?.protagonist || '',
   });
+  const [activeTab, setActiveTab] = useState('basic');
 
   useEffect(() => {
     if (currentProject) {
@@ -76,6 +80,25 @@ export function BasicSettings() {
           </div>
         </div>
 
+        {/* Tabs结构：基本信息/世界观/角色 */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="basic" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              基本信息
+            </TabsTrigger>
+            <TabsTrigger value="worldview" className="gap-2">
+              <Globe className="h-4 w-4" />
+              世界观 (可选)
+            </TabsTrigger>
+            <TabsTrigger value="characters" className="gap-2">
+              <Users className="h-4 w-4" />
+              角色 (可选)
+            </TabsTrigger>
+          </TabsList>
+
+          {/* 基本信息Tab */}
+          <TabsContent value="basic">
         {/* 剧本输入 */}
         <div className="space-y-6">
           <div className="space-y-2">
@@ -203,6 +226,18 @@ export function BasicSettings() {
             </p>
           </div>
         )}
+          </TabsContent>
+
+          {/* 世界观Tab */}
+          <TabsContent value="worldview">
+            <WorldViewBuilder />
+          </TabsContent>
+
+          {/* 角色Tab */}
+          <TabsContent value="characters">
+            <CharacterManager projectId={currentProject.id} />
+          </TabsContent>
+        </Tabs>
       </Card>
 
       {/* 示例参考卡片 */}
