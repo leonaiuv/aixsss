@@ -1,8 +1,10 @@
 import CryptoJS from 'crypto-js';
 import { Project, Scene, UserConfig } from '@/types';
 
-const STORAGE_VERSION = '1.0.0';
+// 当前版本号 - 每次数据结构变化时递增
+const STORAGE_VERSION = '1.1.0';
 const ENCRYPTION_KEY = 'aixs-manga-creator-secret-key-2024';
+const BACKUP_PREFIX = 'aixs_backup_';
 
 // ==========================================
 // 加密工具
@@ -29,20 +31,283 @@ const KEYS = {
 };
 
 // ==========================================
-// 版本迁移
+// 版本迁移系统
 // ==========================================
 
-function runMigrations(fromVersion: string, toVersion: string): void {
-  console.log(`Migrating storage from ${fromVersion} to ${toVersion}`);
-  // MVP阶段暂不实现具体迁移逻辑
+// 迁移函数类型定义
+type MigrationFn = () => void;
+
+// 迁移注册表 - 按版本顺序注册迁移函数
+const MIGRATIONS: Record<string, MigrationFn> = {
+  // 从 1.0.0 迁移到 1.1.0
+  '1.0.0_to_1.1.0': () => {
+    console.log('执行迁移: 1.0.0 -> 1.1.0');
+    
+    // 示例：为旧项目添加新字段的默认值
+    const projectsData = localStorage.getItem(KEYS.PROJECTS);
+    if (projectsData) {
+      try {
+        const projects = JSON.parse(projectsData) as Project[];
+        const migratedProjects = projects.map(project => ({
+          ...project,
+          // 确保新字段有默认值
+          contextCache: project.contextCache || undefined,
+          currentSceneStep: project.currentSceneStep || undefined,
+        }));
+        localStorage.setItem(KEYS.PROJECTS, JSON.stringify(migratedProjects));
+      } catch (e) {
+        console.error('项目迁移失败:', e);
+      }
+    }
+    
+    // 迁移分镜数据
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('aixs_scenes_')) {
+        try {
+          const scenesData = localStorage.getItem(key);
+          if (scenesData) {
+            const scenes = JSON.parse(scenesData) as Scene[];
+            const migratedScenes = scenes.map(scene => ({
+              ...scene,
+              // 确保新字段有默认值
+              contextSummary: scene.contextSummary || undefined,
+            }));
+            localStorage.setItem(key, JSON.stringify(migratedScenes));
+          }
+        } catch (e) {
+          console.error(`分镜迁移失败 (${key}):`, e);
+        }
+      }
+    });
+  },
+  
+  // 未来版本迁移可在此添加
+  // '1.1.0_to_1.2.0': () => { ... },
+};
+
+// 版本比较函数
+function compareVersions(v1: string, v2: string): number {
+  const parts1 = v1.split('.').map(Number);
+  const parts2 = v2.split('.').map(Number);
+  
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const p1 = parts1[i] || 0;
+    const p2 = parts2[i] || 0;
+    if (p1 < p2) return -1;
+    if (p1 > p2) return 1;
+  }
+  return 0;
 }
 
+// 获取版本之间需要执行的迁移列表
+function getMigrationPath(fromVersion: string, toVersion: string): string[] {
+  const allVersions = ['0.0.0', '1.0.0', '1.1.0']; // 所有版本列表
+  const path: string[] = [];
+  
+  for (let i = 0; i < allVersions.length - 1; i++) {
+    const from = allVersions[i];
+    const to = allVersions[i + 1];
+    
+    // 如果当前版本在迁移路径中
+    if (compareVersions(from, fromVersion) >= 0 && compareVersions(to, toVersion) <= 0) {
+      const migrationKey = `${from}_to_${to}`;
+      if (MIGRATIONS[migrationKey]) {
+        path.push(migrationKey);
+      }
+    }
+  }
+  
+  return path;
+}
+
+// 创建数据备份
+export function createBackup(): string {
+  const backupId = `${BACKUP_PREFIX}${Date.now()}`;
+  const backupData: Record<string, string> = {};
+  
+  // 备份所有 aixs_ 开头的数据
+  const keys = Object.keys(localStorage);
+  keys.forEach(key => {
+    if (key.startsWith('aixs_') && !key.startsWith(BACKUP_PREFIX)) {
+      const value = localStorage.getItem(key);
+      if (value) {
+        backupData[key] = value;
+      }
+    }
+  });
+  
+  localStorage.setItem(backupId, JSON.stringify(backupData));
+  console.log(`数据备份已创建: ${backupId}`);
+  return backupId;
+}
+
+// 从备份恢复数据
+export function restoreFromBackup(backupId: string): boolean {
+  try {
+    const backupData = localStorage.getItem(backupId);
+    if (!backupData) {
+      console.error('备份不存在:', backupId);
+      return false;
+    }
+    
+    const data = JSON.parse(backupData) as Record<string, string>;
+    
+    // 清除当前数据
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('aixs_') && !key.startsWith(BACKUP_PREFIX)) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // 恢复备份数据
+    Object.entries(data).forEach(([key, value]) => {
+      localStorage.setItem(key, value);
+    });
+    
+    console.log('数据已从备份恢复:', backupId);
+    return true;
+  } catch (error) {
+    console.error('恢复备份失败:', error);
+    return false;
+  }
+}
+
+// 删除备份
+export function deleteBackup(backupId: string): void {
+  localStorage.removeItem(backupId);
+  console.log('备份已删除:', backupId);
+}
+
+// 删除所有备份
+export function deleteAllBackups(): void {
+  const keys = Object.keys(localStorage);
+  keys.forEach(key => {
+    if (key.startsWith(BACKUP_PREFIX)) {
+      localStorage.removeItem(key);
+    }
+  });
+  console.log('所有备份已删除');
+}
+
+// 获取所有备份列表
+export function getBackups(): { id: string; timestamp: number }[] {
+  const backups: { id: string; timestamp: number }[] = [];
+  const keys = Object.keys(localStorage);
+  
+  keys.forEach(key => {
+    if (key.startsWith(BACKUP_PREFIX)) {
+      const timestamp = parseInt(key.replace(BACKUP_PREFIX, ''), 10);
+      backups.push({ id: key, timestamp });
+    }
+  });
+  
+  return backups.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+// 执行迁移
+function runMigrations(fromVersion: string, toVersion: string): boolean {
+  console.log(`开始迁移: ${fromVersion} -> ${toVersion}`);
+  
+  // 1. 创建备份
+  const backupId = createBackup();
+  
+  try {
+    // 2. 获取迁移路径
+    const migrationPath = getMigrationPath(fromVersion, toVersion);
+    
+    if (migrationPath.length === 0) {
+      console.log('无需执行迁移');
+      deleteBackup(backupId);
+      return true;
+    }
+    
+    // 3. 依次执行迁移
+    for (const migrationKey of migrationPath) {
+      console.log(`执行迁移步骤: ${migrationKey}`);
+      MIGRATIONS[migrationKey]();
+    }
+    
+    // 4. 迁移成功，删除备份
+    console.log('迁移成功完成');
+    deleteBackup(backupId);
+    
+    // 5. 清理旧版本的冗余数据
+    cleanupDeprecatedData();
+    
+    return true;
+  } catch (error) {
+    // 迁移失败，从备份恢复
+    console.error('迁移失败，正在恢复备份:', error);
+    restoreFromBackup(backupId);
+    deleteBackup(backupId);
+    return false;
+  }
+}
+
+// 清理废弃的数据
+function cleanupDeprecatedData(): void {
+  console.log('清理废弃数据...');
+  
+  // 获取所有项目ID
+  const projects = getProjectsRaw();
+  const validProjectIds = new Set(projects.map(p => p.id));
+  
+  // 删除孤立的分镜数据（项目已删除但分镜还在）
+  const keys = Object.keys(localStorage);
+  keys.forEach(key => {
+    if (key.startsWith('aixs_scenes_')) {
+      const projectId = key.replace('aixs_scenes_', '');
+      if (!validProjectIds.has(projectId)) {
+        console.log(`删除孤立分镜数据: ${key}`);
+        localStorage.removeItem(key);
+      }
+    }
+  });
+  
+  // 只保留最近3个备份
+  const backups = getBackups();
+  if (backups.length > 3) {
+    backups.slice(3).forEach(backup => {
+      deleteBackup(backup.id);
+    });
+  }
+}
+
+// 内部使用的获取项目函数（避免循环依赖）
+function getProjectsRaw(): Project[] {
+  try {
+    const data = localStorage.getItem(KEYS.PROJECTS);
+    if (!data) return [];
+    return JSON.parse(data) as Project[];
+  } catch {
+    return [];
+  }
+}
+
+// 初始化存储（应用启动时调用）
 export function initStorage(): void {
   const storedVersion = localStorage.getItem(KEYS.VERSION) || '0.0.0';
+  
   if (storedVersion !== STORAGE_VERSION) {
-    runMigrations(storedVersion, STORAGE_VERSION);
-    localStorage.setItem(KEYS.VERSION, STORAGE_VERSION);
+    const success = runMigrations(storedVersion, STORAGE_VERSION);
+    if (success) {
+      localStorage.setItem(KEYS.VERSION, STORAGE_VERSION);
+    } else {
+      console.error('迁移失败，保持原版本');
+    }
   }
+}
+
+// 获取当前存储版本
+export function getStorageVersion(): string {
+  return localStorage.getItem(KEYS.VERSION) || '0.0.0';
+}
+
+// 获取目标版本
+export function getTargetVersion(): string {
+  return STORAGE_VERSION;
 }
 
 // ==========================================

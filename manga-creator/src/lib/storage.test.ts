@@ -143,13 +143,13 @@ describe('加密解密功能', () => {
 describe('存储初始化', () => {
   it('首次初始化应设置版本号', () => {
     initStorage();
-    expect(localStorage.getItem('aixs_version')).toBe('1.0.0');
+    expect(localStorage.getItem('aixs_version')).toBe('1.1.0');
   });
 
   it('重复初始化应保持版本号', () => {
     initStorage();
     initStorage();
-    expect(localStorage.getItem('aixs_version')).toBe('1.0.0');
+    expect(localStorage.getItem('aixs_version')).toBe('1.1.0');
   });
 
   it('从旧版本迁移时应更新版本号', () => {
@@ -158,8 +158,8 @@ describe('存储初始化', () => {
     
     initStorage();
     
-    expect(localStorage.getItem('aixs_version')).toBe('1.0.0');
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Migrating'));
+    expect(localStorage.getItem('aixs_version')).toBe('1.1.0');
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('迁移'));
     consoleSpy.mockRestore();
   });
 });
@@ -519,7 +519,7 @@ describe('数据导入导出', () => {
     const exported = exportData();
     const parsed = JSON.parse(exported);
     
-    expect(parsed.version).toBe('1.0.0');
+    expect(parsed.version).toBe('1.1.0');
     expect(parsed.projects).toEqual([]);
     expect(parsed.scenes).toEqual({});
     expect(parsed.exportedAt).toBeDefined();
@@ -563,7 +563,7 @@ describe('数据导入导出', () => {
 
   it('应正确导入数据', () => {
     const dataToImport = JSON.stringify({
-      version: '1.0.0',
+      version: '1.1.0',
       projects: [
         {
           id: 'imported_proj',
@@ -731,7 +731,7 @@ describe('清理与维护', () => {
     expect(getScenes('proj_1')).toHaveLength(0);
     
     // 版本号应保留
-    expect(localStorage.getItem('aixs_version')).toBe('1.0.0');
+    expect(localStorage.getItem('aixs_version')).toBe('1.1.0');
     
     // 非 aixs 数据应保留
     expect(localStorage.getItem('other_key')).toBe('other_value');

@@ -49,7 +49,7 @@ export function Editor() {
       
       if (state === 'DATA_COLLECTED') {
         setActiveStep('generation');
-      } else if (state === 'SCENE_LIST_CONFIRMED') {
+      } else if (state === 'SCENE_LIST_CONFIRMED' || state === 'SCENE_PROCESSING') {
         setActiveStep('refinement');
       } else if (state === 'ALL_SCENES_COMPLETE') {
         setActiveStep('export');

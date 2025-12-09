@@ -42,10 +42,17 @@ export function SceneGeneration() {
   }
 
   const canGenerate = currentProject.workflowState === 'DATA_COLLECTED' || 
-                      currentProject.workflowState === 'SCENE_LIST_EDITING';
+                      currentProject.workflowState === 'SCENE_LIST_EDITING' ||
+                      currentProject.workflowState === 'SCENE_LIST_CONFIRMED' ||
+                      currentProject.workflowState === 'SCENE_PROCESSING';
+  
+  // 是否已经确认过分镜列表（已进入细化流程）
+  const isAlreadyConfirmed = currentProject.workflowState === 'SCENE_LIST_CONFIRMED' || 
+                             currentProject.workflowState === 'SCENE_PROCESSING' ||
+                             currentProject.workflowState === 'ALL_SCENES_COMPLETE';
   
   const canProceed = scenes.length >= 6 && 
-                     currentProject.workflowState === 'SCENE_LIST_EDITING';
+                     (currentProject.workflowState === 'SCENE_LIST_EDITING' || isAlreadyConfirmed);
 
   // 生成分镜列表
   const handleGenerate = async () => {
@@ -183,6 +190,12 @@ ${currentProject.summary}
 
   // 确认分镜列表
   const handleConfirm = () => {
+    // 如果已经确认过，直接进入细化步骤，不需要重置状态
+    if (isAlreadyConfirmed) {
+      window.dispatchEvent(new CustomEvent('workflow:next-step'));
+      return;
+    }
+    
     updateProject(currentProject.id, {
       workflowState: 'SCENE_LIST_CONFIRMED',
       currentSceneOrder: 1,
@@ -349,7 +362,7 @@ ${currentProject.summary}
               disabled={!canProceed}
               className="gap-2"
             >
-              <span>确认分镜列表</span>
+              <span>{isAlreadyConfirmed ? '继续细化' : '确认分镜列表'}</span>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
