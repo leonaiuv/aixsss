@@ -7,6 +7,8 @@ export type WorkflowState =
   | 'IDLE'
   | 'DATA_COLLECTING'
   | 'DATA_COLLECTED'
+  | 'WORLD_VIEW_BUILDING'
+  | 'CHARACTER_MANAGING'
   | 'SCENE_LIST_GENERATING'
   | 'SCENE_LIST_EDITING'
   | 'SCENE_LIST_CONFIRMED'
@@ -186,4 +188,163 @@ export interface Context {
   prevSceneSummary?: string;
   confirmedContent?: string;
   sceneListOverview?: string;
+}
+
+// ==========================================
+// 新增功能类型定义
+// ==========================================
+
+// 主题类型
+export type ThemeMode = 'light' | 'dark' | 'system';
+
+// 世界观要素
+export interface WorldViewElement {
+  id: string;
+  projectId: string;
+  type: 'era' | 'geography' | 'society' | 'technology' | 'magic' | 'custom';
+  title: string;
+  content: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 角色实体
+export interface Character {
+  id: string;
+  projectId: string;
+  name: string;
+  avatar?: string;
+  appearance: string;
+  personality: string;
+  background: string;
+  relationships: CharacterRelationship[];
+  appearances: SceneAppearance[];
+  themeColor?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 角色关系
+export interface CharacterRelationship {
+  targetCharacterId: string;
+  relationshipType: string;
+  description: string;
+}
+
+// 角色出场记录
+export interface SceneAppearance {
+  sceneId: string;
+  role: 'main' | 'supporting' | 'background';
+  notes: string;
+}
+
+// 版本历史
+export interface Version {
+  id: string;
+  projectId: string;
+  type: 'project' | 'scene';
+  targetId: string;
+  snapshot: unknown;
+  diff?: unknown;
+  label?: string;
+  notes?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+// 提示词模板
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  template: string;
+  variables: string[];
+  style?: string;
+  isBuiltIn: boolean;
+  usageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 批量操作
+export interface BatchOperation {
+  type: 'generate' | 'edit' | 'delete' | 'export';
+  targetIds: string[];
+  params?: Record<string, unknown>;
+}
+
+// AI生成参数
+export interface AIGenerationParams {
+  temperature: number;
+  topP: number;
+  maxTokens: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+}
+
+// 搜索过滤器
+export interface SearchFilter {
+  query: string;
+  status?: SceneStatus[];
+  dateRange?: {
+    start: string;
+    end: string;
+  };
+  tags?: string[];
+}
+
+// 统计数据
+export interface Statistics {
+  projectCount: number;
+  sceneCount: number;
+  completedSceneCount: number;
+  totalTokens: number;
+  estimatedCost: number;
+  averageSceneTime: number;
+  generationSuccessRate: number;
+  creationTimeData: {
+    date: string;
+    count: number;
+  }[];
+}
+
+// 快捷键配置
+export interface KeyboardShortcut {
+  id: string;
+  name: string;
+  description: string;
+  keys: string[];
+  action: string;
+  enabled: boolean;
+}
+
+// 导出格式
+export type ExportFormat = 'markdown' | 'json' | 'pdf' | 'txt' | 'zip';
+
+// 导出选项
+export interface ExportOptions {
+  format: ExportFormat;
+  includeMetadata: boolean;
+  includeImages: boolean;
+  compression: boolean;
+}
+
+// 上下文压缩策略
+export type CompressionStrategy = 'aggressive' | 'balanced' | 'conservative';
+
+// 级联更新配置
+export interface CascadeUpdateConfig {
+  autoUpdate: boolean;
+  affectedScenes: string[];
+  updateType: 'scene' | 'action' | 'prompt';
+}
+
+// 流式响应状态
+export interface StreamingState {
+  isStreaming: boolean;
+  content: string;
+  progress: number;
+  canCancel: boolean;
 }
