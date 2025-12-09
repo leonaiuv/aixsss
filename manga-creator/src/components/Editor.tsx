@@ -63,7 +63,7 @@ export function Editor() {
   if (!currentProject) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <p className="text-slate-400">请先选择或创建一个项目</p>
+        <p className="text-muted-foreground">请先选择或创建一个项目</p>
       </div>
     );
   }

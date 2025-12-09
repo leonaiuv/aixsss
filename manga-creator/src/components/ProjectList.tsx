@@ -138,8 +138,8 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
       {/* 操作栏 */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-slate-100">我的项目</h2>
-          <p className="text-slate-400 mt-1">管理你的漫剧创作项目</p>
+          <h2 className="text-3xl font-bold text-foreground">我的项目</h2>
+          <p className="text-muted-foreground mt-1">管理你的漫剧创作项目</p>
         </div>
         <div className="flex items-center gap-2">
           <Button 
@@ -165,12 +165,12 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
       {projects.length > 0 && (
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索项目名称、剧情、风格..."
-              className="pl-10 bg-slate-800 border-slate-700"
+              className="pl-10 bg-muted border-border"
             />
             {searchQuery && (
               <Button
@@ -185,7 +185,7 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
           </div>
           
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px] bg-slate-800 border-slate-700">
+            <SelectTrigger className="w-[140px] bg-muted border-border">
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue placeholder="状态" />
             </SelectTrigger>
@@ -199,7 +199,7 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
           </Select>
 
           <Select value={sortBy} onValueChange={(v: 'date' | 'name') => setSortBy(v)}>
-            <SelectTrigger className="w-[120px] bg-slate-800 border-slate-700">
+            <SelectTrigger className="w-[120px] bg-muted border-border">
               <SelectValue placeholder="排序" />
             </SelectTrigger>
             <SelectContent>
@@ -215,7 +215,7 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
                 setSearchQuery('');
                 setStatusFilter('all');
               }}
-              className="text-slate-400"
+              className="text-muted-foreground"
             >
               <X className="h-4 w-4 mr-1" />
               清除筛选
@@ -226,8 +226,8 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
 
       {/* 结果统计 */}
       {hasActiveFilters && (
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <span>找到 <span className="font-semibold text-slate-200">{filteredProjects.length}</span> 个项目</span>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>找到 <span className="font-semibold text-foreground">{filteredProjects.length}</span> 个项目</span>
           {filteredProjects.length !== projects.length && (
             <span>(共 {projects.length} 个)</span>
           )}
@@ -238,14 +238,14 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
       {filteredProjects.length === 0 ? (
         projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <div className="h-20 w-20 rounded-full bg-slate-800 flex items-center justify-center">
-            <FileText className="h-10 w-10 text-slate-600" />
+          <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center">
+            <FileText className="h-10 w-10 text-muted-foreground" />
           </div>
           <div className="text-center">
-            <h3 className="text-xl font-semibold text-slate-300 mb-2">
+            <h3 className="text-xl font-semibold text-foreground mb-2">
               还没有项目
             </h3>
-            <p className="text-slate-500 mb-4">
+            <p className="text-muted-foreground mb-4">
               开始创建你的第一个漫剧项目吧
             </p>
             <Button 
@@ -260,14 +260,14 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
         </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <div className="h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center">
-              <Search className="h-8 w-8 text-slate-600" />
+            <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+              <Search className="h-8 w-8 text-muted-foreground" />
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-slate-300 mb-2">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
                 没有找到匹配的项目
               </h3>
-              <p className="text-slate-500">
+              <p className="text-muted-foreground">
                 试试调整搜索条件或筛选项
               </p>
             </div>
