@@ -1,110 +1,152 @@
-import { z } from 'zod';
+import { z } from "zod";
+import { jsonSchema } from "ai";
 
-/**
- * 生成分镜工具的输入 Schema
- */
-export const generateScenesInputSchema = z.object({
-  count: z
-    .number()
-    .min(6, '至少需要6个分镜')
-    .max(15, '最多15个分镜')
-    .default(8)
-    .describe('期望生成的分镜数量'),
+// 使用 jsonSchema 直接定义，避免 zod 转换问题
+export const generateScenesSchema = jsonSchema<{
+  title: string;
+  summary: string;
+  artStyle: string;
+  protagonist: string;
+  count: number;
+}>({
+  type: "object",
+  properties: {
+    title: { type: "string", description: "Project title" },
+    summary: { type: "string", description: "Story summary" },
+    artStyle: { type: "string", description: "Art style description" },
+    protagonist: { type: "string", description: "Protagonist description" },
+    count: { type: "number", description: "Number of scenes to generate, recommended 8", minimum: 1, maximum: 20 },
+  },
+  required: ["title", "summary", "artStyle", "protagonist", "count"],
 });
 
-export type GenerateScenesInput = z.infer<typeof generateScenesInputSchema>;
-
-/**
- * 细化分镜工具的输入 Schema
- */
-export const refineSceneInputSchema = z.object({
-  sceneId: z
-    .string()
-    .min(1, '分镜ID不能为空')
-    .describe('要细化的分镜ID'),
+export const refineSceneSchema = jsonSchema<{
+  sceneId: string;
+  sceneSummary: string;
+  artStyle: string;
+  protagonist: string;
+  projectTitle: string;
+}>({
+  type: "object",
+  properties: {
+    sceneId: { type: "string", description: "Unique identifier for the scene" },
+    sceneSummary: { type: "string", description: "Summary of the scene content" },
+    artStyle: { type: "string", description: "Art style to apply" },
+    protagonist: { type: "string", description: "Protagonist details" },
+    projectTitle: { type: "string", description: "Title of the project" },
+  },
+  required: ["sceneId", "sceneSummary", "artStyle", "protagonist", "projectTitle"],
 });
 
-export type RefineSceneInput = z.infer<typeof refineSceneInputSchema>;
-
-/**
- * 批量细化分镜工具的输入 Schema
- */
-export const batchRefineInputSchema = z.object({
-  sceneIds: z
-    .array(z.string().min(1))
-    .min(1, '至少选择一个分镜')
-    .describe('要批量细化的分镜ID列表'),
+export const batchRefineScenesSchema = jsonSchema<{
+  scenes: Array<{ sceneId: string; sceneSummary: string }>;
+  artStyle: string;
+  protagonist: string;
+  projectTitle: string;
+}>({
+  type: "object",
+  properties: {
+    scenes: {
+      type: "array",
+      description: "List of scenes to refine",
+      items: {
+        type: "object",
+        properties: {
+          sceneId: { type: "string", description: "ID of the scene to refine" },
+          sceneSummary: { type: "string", description: "Summary of the scene" },
+        },
+        required: ["sceneId", "sceneSummary"],
+      },
+    },
+    artStyle: { type: "string", description: "Art style to apply" },
+    protagonist: { type: "string", description: "Protagonist details" },
+    projectTitle: { type: "string", description: "Title of the project" },
+  },
+  required: ["scenes", "artStyle", "protagonist", "projectTitle"],
 });
 
-export type BatchRefineInput = z.infer<typeof batchRefineInputSchema>;
-
-/**
- * 设置项目信息工具的输入 Schema
- */
-export const setProjectInfoInputSchema = z.object({
-  title: z
-    .string()
-    .min(1, '标题不能为空')
-    .max(100, '标题最多100个字符')
-    .optional()
-    .describe('项目标题'),
-  summary: z
-    .string()
-    .max(2000, '简介最多2000个字符')
-    .optional()
-    .describe('故事简介/梗概'),
-  artStyle: z
-    .string()
-    .max(200, '画风描述最多200个字符')
-    .optional()
-    .describe('画风风格'),
-  protagonist: z
-    .string()
-    .max(500, '主角描述最多500个字符')
-    .optional()
-    .describe('主角信息'),
+export const exportPromptsSchema = jsonSchema<{
+  format: "json" | "txt" | "csv";
+  projectData: {
+    title: string;
+    artStyle: string;
+    scenes: Array<{
+      order: number;
+      summary: string;
+      sceneDescription?: string;
+      keyframePrompt?: string;
+      spatialPrompt?: string;
+      fullPrompt?: string;
+    }>;
+  };
+}>({
+  type: "object",
+  properties: {
+    format: { type: "string", enum: ["json", "txt", "csv"], description: "Format to export the prompts in" },
+    projectData: {
+      type: "object",
+      description: "Project data to export",
+      properties: {
+        title: { type: "string" },
+        artStyle: { type: "string" },
+        scenes: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              order: { type: "number" },
+              summary: { type: "string" },
+              sceneDescription: { type: "string" },
+              keyframePrompt: { type: "string" },
+              spatialPrompt: { type: "string" },
+              fullPrompt: { type: "string" },
+            },
+            required: ["order", "summary"],
+          },
+        },
+      },
+      required: ["title", "artStyle", "scenes"],
+    },
+  },
+  required: ["format", "projectData"],
 });
 
-export type SetProjectInfoInput = z.infer<typeof setProjectInfoInputSchema>;
+// 类型定义
+export type GenerateScenesInput = {
+  title: string;
+  summary: string;
+  artStyle: string;
+  protagonist: string;
+  count: number;
+};
 
-/**
- * 导出提示词工具的输入 Schema
- */
-export const exportPromptsInputSchema = z.object({
-  format: z
-    .enum(['json', 'txt', 'csv'])
-    .default('json')
-    .describe('导出格式'),
-  includeMetadata: z
-    .boolean()
-    .default(true)
-    .describe('是否包含元数据'),
-});
+export type RefineSceneInput = {
+  sceneId: string;
+  sceneSummary: string;
+  artStyle: string;
+  protagonist: string;
+  projectTitle: string;
+};
 
-export type ExportPromptsInput = z.infer<typeof exportPromptsInputSchema>;
+export type BatchRefineScenesInput = {
+  scenes: Array<{ sceneId: string; sceneSummary: string }>;
+  artStyle: string;
+  protagonist: string;
+  projectTitle: string;
+};
 
-/**
- * 创建项目工具的输入 Schema
- */
-export const createProjectInputSchema = z.object({
-  title: z
-    .string()
-    .min(1, '标题不能为空')
-    .max(100, '标题最多100个字符')
-    .describe('项目标题'),
-});
-
-export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
-
-/**
- * 获取项目状态工具的输入 Schema
- */
-export const getProjectStateInputSchema = z.object({
-  projectId: z
-    .string()
-    .min(1)
-    .optional()
-    .describe('项目ID，不传则获取当前项目'),
-});
-
-export type GetProjectStateInput = z.infer<typeof getProjectStateInputSchema>;
+export type ExportPromptsInput = {
+  format: "json" | "txt" | "csv";
+  projectData: {
+    title: string;
+    artStyle: string;
+    scenes: Array<{
+      order: number;
+      summary: string;
+      sceneDescription?: string;
+      keyframePrompt?: string;
+      spatialPrompt?: string;
+      fullPrompt?: string;
+    }>;
+  };
+};

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCheckpointStore, type ProjectCheckpoint, type Scene } from '@/lib/checkpoint/store';
-import type { SceneStatus } from '@/types';
+import { graph } from '@/lib/agent/graph';
+import type { SceneStatus, Scene } from '@/types';
 
 /**
- * 画布块数据结构
+ * Canvas Block Data Structure
  */
 interface CanvasBlockData {
   id: string;
@@ -12,7 +12,7 @@ interface CanvasBlockData {
 }
 
 /**
- * 请求体结构
+ * Request Body Structure
  */
 interface UpdateCanvasRequest {
   projectId: string;
@@ -22,8 +22,8 @@ interface UpdateCanvasRequest {
 /**
  * POST /api/agent/update-canvas
  * 
- * 接收画布变化，更新 Checkpoint 存储
- * 实现 Canvas → Agent 同步
+ * Receives canvas changes and updates the LangGraph Agent State.
+ * This ensures the canvas (BlockNote) is always in sync with the Agent's memory.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -32,93 +32,106 @@ export async function POST(request: NextRequest) {
 
     if (!projectId) {
       return NextResponse.json(
-        { success: false, error: '缺少 projectId' },
+        { success: false, error: 'Missing projectId' },
         { status: 400 }
       );
     }
 
     if (!blocks || !Array.isArray(blocks)) {
       return NextResponse.json(
-        { success: false, error: '缺少 blocks 数据' },
+        { success: false, error: 'Missing blocks data' },
         { status: 400 }
       );
     }
 
-    // 获取检查点存储
-    const store = await getCheckpointStore();
+    // 1. Load current Agent State
+    const config = { configurable: { thread_id: projectId } };
+    const state = await graph.getState(config);
     
-    // 加载现有检查点
-    const checkpoint = await store.load(projectId);
-    if (!checkpoint) {
-      return NextResponse.json(
-        { success: false, error: '项目不存在' },
-        { status: 404 }
-      );
-    }
+    // Get current project state (or default)
+    const currentProject = state.values.project || {
+      projectId,
+      title: '',
+      summary: '',
+      artStyle: '',
+      protagonist: '',
+      workflowState: 'IDLE',
+      scenes: [],
+      currentSceneIndex: 0,
+      canvasContent: [],
+      characters: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
 
-    // 解析画布块，更新检查点数据
-    const updatedCheckpoint = applyCanvasChanges(checkpoint, blocks);
+    // 2. Extract changes from canvas blocks
+    const changes = extractProjectChanges(currentProject, blocks);
     
-    // 保存更新后的检查点
-    await store.save(updatedCheckpoint);
+    // 3. Update LangGraph State
+    if (Object.keys(changes).length > 0) {
+      await graph.updateState(config, {
+        project: {
+          ...changes,
+          canvasContent: blocks, // Also save the raw blocks for restoration
+          updatedAt: new Date(),
+        }
+      });
+    }
 
     return NextResponse.json({
       success: true,
       data: {
         projectId,
-        updatedAt: updatedCheckpoint.updatedAt,
+        updatedAt: new Date().toISOString(),
       },
-      message: '画布数据已同步到 Agent 状态',
+      message: 'Canvas synced to Agent State',
     });
   } catch (error) {
     console.error('[update-canvas] Error:', error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : '同步失败' },
+      { success: false, error: error instanceof Error ? error.message : 'Sync failed' },
       { status: 500 }
     );
   }
 }
 
 /**
- * 将画布块变化应用到检查点
+ * Extract changes from canvas blocks to update project state
  */
-function applyCanvasChanges(
-  checkpoint: ProjectCheckpoint,
+function extractProjectChanges(
+  currentProject: any,
   blocks: CanvasBlockData[]
-): ProjectCheckpoint {
-  // 分离项目块和分镜块
+): Record<string, any> {
+  const changes: Record<string, any> = {};
+  
   const projectBlock = blocks.find((b) => b.type === 'project');
   const sceneBlocks = blocks.filter((b) => b.type === 'scene');
 
-  // 更新项目基础信息（如果有项目块）
+  // 1. Update Basic Info
   if (projectBlock) {
     const content = projectBlock.content;
-    if (content.title !== undefined) {
-      checkpoint.title = String(content.title);
-    }
-    if (content.summary !== undefined) {
-      checkpoint.summary = String(content.summary);
-    }
-    if (content.artStyle !== undefined) {
-      checkpoint.artStyle = String(content.artStyle);
-    }
-    if (content.protagonist !== undefined) {
-      checkpoint.protagonist = String(content.protagonist);
-    }
+    if (content.title !== undefined) changes.title = String(content.title);
+    if (content.summary !== undefined) changes.summary = String(content.summary);
+    if (content.artStyle !== undefined) changes.artStyle = String(content.artStyle);
+    if (content.protagonist !== undefined) changes.protagonist = String(content.protagonist);
   }
 
-  // 更新分镜列表
+  // 2. Update Scenes
+  // If we have scene blocks, we rebuild the scenes array.
+  // Note: This assumes the canvas has the *full* list of scenes. 
+  // If partial updates are sent, this logic needs to be more complex (merge).
+  // BlockNote usually represents the full document.
   if (sceneBlocks.length > 0) {
-    // 创建现有分镜的映射
-    const existingScenesMap = new Map(
-      checkpoint.scenes.map((s) => [s.id, s])
+    const existingScenesMap = new Map<string, Scene>(
+      (currentProject.scenes || []).map((s: Scene) => [s.id, s])
     );
 
-    // 合并更新分镜
-    checkpoint.scenes = sceneBlocks.map((block): Scene => {
+    const newScenes = sceneBlocks.map((block): Scene => {
       const existing = existingScenesMap.get(block.id);
       const content = block.content;
 
+      // Merge existing data with block content
+      // We prioritize block content for editable fields
       return {
         id: block.id,
         order: (content.order as number) ?? existing?.order ?? 0,
@@ -127,13 +140,12 @@ function applyCanvasChanges(
         sceneDescription: (content.sceneDescription as string) ?? existing?.sceneDescription,
         keyframePrompt: (content.keyframePrompt as string) ?? existing?.keyframePrompt,
         spatialPrompt: (content.spatialPrompt as string) ?? existing?.spatialPrompt,
-        error: (content.error as string) ?? existing?.error,
+        dialogues: existing?.dialogues || [], // Preserve dialogues if not in block
       };
     });
+
+    changes.scenes = newScenes;
   }
 
-  // 更新时间戳
-  checkpoint.updatedAt = new Date().toISOString();
-
-  return checkpoint;
+  return changes;
 }

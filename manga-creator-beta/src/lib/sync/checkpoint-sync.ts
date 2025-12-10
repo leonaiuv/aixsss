@@ -1,11 +1,9 @@
-import type { ProjectCheckpoint, Scene } from '@/lib/checkpoint/store';
-import { getCheckpointStore } from '@/lib/checkpoint/store';
 import { useProjectStore } from '@/stores/projectStore';
 import { useCanvasStore, CanvasBlock } from '@/stores/canvasStore';
-import type { ProjectState } from '@/types';
+import type { ProjectState, Scene } from '@/types';
 
 /**
- * 同步状态结果
+ * Sync Result Interface
  */
 export interface SyncResult {
   success: boolean;
@@ -14,36 +12,25 @@ export interface SyncResult {
 }
 
 /**
- * 将 Checkpoint 转换为 ProjectState
+ * Fetch Project State from API
  */
-export function checkpointToProjectState(checkpoint: ProjectCheckpoint): ProjectState {
-  return {
-    projectId: checkpoint.projectId,
-    workflowState: checkpoint.workflowState,
-    title: checkpoint.title,
-    summary: checkpoint.summary,
-    artStyle: checkpoint.artStyle,
-    protagonist: checkpoint.protagonist,
-    scenes: checkpoint.scenes.map((scene) => ({
-      id: scene.id,
-      order: scene.order,
-      summary: scene.summary,
-      status: scene.status,
-      sceneDescription: scene.sceneDescription,
-      keyframePrompt: scene.keyframePrompt,
-      spatialPrompt: scene.spatialPrompt,
-      dialogues: [], // Checkpoint 中不存储对话，默认为空
-    })),
-    currentSceneIndex: 0,
-    canvasContent: [],
-    characters: [],
-    createdAt: new Date(checkpoint.createdAt),
-    updatedAt: new Date(checkpoint.updatedAt),
-  };
+async function fetchProjectState(projectId: string): Promise<ProjectState | null> {
+  try {
+    const res = await fetch(`/api/agent/state?threadId=${projectId}`);
+    if (!res.ok) {
+      console.error(`Failed to fetch state: ${res.statusText}`);
+      return null;
+    }
+    const data = await res.json();
+    return data.project as ProjectState;
+  } catch (e) {
+    console.error('Fetch error:', e);
+    return null;
+  }
 }
 
 /**
- * 将 Checkpoint 中的分镜转换为画布块
+ * Convert Scenes to Canvas Blocks
  */
 export function scenesToCanvasBlocks(scenes: Scene[], artStyle: string): CanvasBlock[] {
   return scenes.map((scene) => ({
@@ -57,7 +44,6 @@ export function scenesToCanvasBlocks(scenes: Scene[], artStyle: string): CanvasB
       sceneDescription: scene.sceneDescription,
       keyframePrompt: scene.keyframePrompt,
       spatialPrompt: scene.spatialPrompt,
-      // 完整提示词 = 画风 + 关键帧提示词
       fullPrompt: scene.keyframePrompt && artStyle
         ? `${artStyle}, ${scene.keyframePrompt}`
         : scene.keyframePrompt || '',
@@ -66,42 +52,38 @@ export function scenesToCanvasBlocks(scenes: Scene[], artStyle: string): CanvasB
 }
 
 /**
- * 将 Checkpoint 中的项目信息转换为画布块
+ * Convert Project Info to Canvas Block
  */
-export function projectInfoToCanvasBlock(checkpoint: ProjectCheckpoint): CanvasBlock {
+export function projectInfoToCanvasBlock(project: ProjectState): CanvasBlock {
   return {
-    id: `basicInfo-${checkpoint.projectId}`,
+    id: `basicInfo-${project.projectId || 'new'}`,
     type: 'basicInfo',
     content: {
-      title: checkpoint.title,
-      summary: checkpoint.summary,
-      artStyle: checkpoint.artStyle,
-      protagonist: checkpoint.protagonist,
+      title: project.title,
+      summary: project.summary,
+      artStyle: project.artStyle,
+      protagonist: project.protagonist,
     },
   };
 }
 
 /**
- * 同步 Checkpoint 到 UI Stores
- * 
- * 将 Checkpoint 数据同步到 projectStore 和 canvasStore
+ * Sync Agent State to UI Stores
  */
 export async function syncCheckpointToStores(projectId: string): Promise<SyncResult> {
   try {
-    const store = await getCheckpointStore();
-    const checkpoint = await store.load(projectId);
+    const projectState = await fetchProjectState(projectId);
 
-    if (!checkpoint) {
+    if (!projectState) {
       return { success: false, error: `Project ${projectId} not found` };
     }
 
-    // 同步到 projectStore
-    const projectState = checkpointToProjectState(checkpoint);
+    // Sync to projectStore
     useProjectStore.getState().syncFromAgent(projectState);
 
-    // 同步到 canvasStore
-    const basicInfoBlock = projectInfoToCanvasBlock(checkpoint);
-    const sceneBlocks = scenesToCanvasBlocks(checkpoint.scenes, checkpoint.artStyle);
+    // Sync to canvasStore
+    const basicInfoBlock = projectInfoToCanvasBlock(projectState);
+    const sceneBlocks = scenesToCanvasBlocks(projectState.scenes || [], projectState.artStyle || '');
     useCanvasStore.getState().setBlocks([basicInfoBlock, ...sceneBlocks]);
     useCanvasStore.getState().markSynced();
 
@@ -113,10 +95,7 @@ export async function syncCheckpointToStores(projectId: string): Promise<SyncRes
 }
 
 /**
- * 从 Checkpoint 加载项目并同步到 UI
- * 
- * @param projectId 项目 ID
- * @param threadId 线程 ID（用于设置当前线程）
+ * Load Project and Sync
  */
 export async function loadProjectAndSync(
   projectId: string,
@@ -124,17 +103,14 @@ export async function loadProjectAndSync(
 ): Promise<SyncResult> {
   const projectStore = useProjectStore.getState();
 
-  // 设置加载状态
   projectStore.setLoading(true);
   projectStore.setError(null);
 
   try {
-    // 如果提供了 threadId，设置当前线程
     if (threadId) {
       projectStore.setCurrentThread(threadId);
     }
 
-    // 同步 Checkpoint 到 Stores
     const result = await syncCheckpointToStores(projectId);
 
     if (!result.success) {
@@ -148,9 +124,7 @@ export async function loadProjectAndSync(
 }
 
 /**
- * 订阅 Checkpoint 变化并自动同步
- * 
- * 返回取消订阅函数
+ * Subscribe to Checkpoint Changes
  */
 export function subscribeToCheckpointChanges(
   projectId: string,
@@ -163,18 +137,23 @@ export function subscribeToCheckpointChanges(
     if (!isActive) return;
 
     try {
-      const store = await getCheckpointStore();
-      const checkpoint = await store.load(projectId);
-
-      if (checkpoint && checkpoint.updatedAt !== lastUpdatedAt) {
-        lastUpdatedAt = checkpoint.updatedAt;
-        const result = await syncCheckpointToStores(projectId);
-        onSync?.(result);
+      const projectState = await fetchProjectState(projectId);
+      
+      if (projectState) {
+        // Simple change detection based on updatedAt
+        // Assuming updatedAt is an ISO string or Date object
+        const currentUpdatedAt = new Date(projectState.updatedAt).toISOString();
+        
+        if (currentUpdatedAt !== lastUpdatedAt) {
+          lastUpdatedAt = currentUpdatedAt;
+          const result = await syncCheckpointToStores(projectId);
+          onSync?.(result);
+        }
       }
     } catch (error) {
       console.error('Checkpoint sync error:', error);
     }
-  }, 1000); // 每秒轮询一次
+  }, 2000); // Poll every 2 seconds
 
   return () => {
     isActive = false;

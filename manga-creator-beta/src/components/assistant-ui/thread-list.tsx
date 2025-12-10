@@ -5,16 +5,35 @@ import {
   ThreadListItemPrimitive,
   ThreadListPrimitive,
 } from "@assistant-ui/react";
-import { ArchiveIcon, PlusIcon } from "lucide-react";
+import { ArchiveIcon, PlusIcon, Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
+import { ConfigPanel } from "@/components/ConfigPanel";
+import { useConfigStore } from "@/stores/configStore";
+import { cn } from "@/lib/utils";
 
 export const ThreadList: FC = () => {
+  const { isConfigured } = useConfigStore();
+
   return (
     <ThreadListPrimitive.Root className="flex h-full flex-col">
       <div className="p-4 border-b">
-        <h2 className="text-lg font-semibold mb-3">项目列表</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">项目列表</h2>
+          <ConfigPanel 
+            trigger={
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={cn("h-8 w-8", isConfigured ? "text-green-600" : "text-muted-foreground")}
+                title="API 设置"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            } 
+          />
+        </div>
         <ThreadListNew />
       </div>
       <div className="flex-1 overflow-y-auto">

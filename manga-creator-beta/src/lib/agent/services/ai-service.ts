@@ -66,6 +66,28 @@ export interface AIServiceResult<T> {
 // AI 客户端配置
 // =====================
 
+// 自定义 fetch：拦截请求，将 developer 角色替换为 system
+const deepseekFetch: typeof fetch = async (input, init) => {
+  if (init?.body && typeof init.body === 'string') {
+    try {
+      const data = JSON.parse(init.body);
+      if (data.messages && Array.isArray(data.messages)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data.messages = data.messages.map((msg: any) => {
+          if (msg.role === 'developer') {
+            return { ...msg, role: 'system' };
+          }
+          return msg;
+        });
+        init = { ...init, body: JSON.stringify(data) };
+      }
+    } catch {
+      // 解析失败时不处理
+    }
+  }
+  return fetch(input, init);
+};
+
 /**
  * 获取 DeepSeek 模型客户端
  */
@@ -77,10 +99,12 @@ function getAIModel() {
   
   const deepseek = createOpenAI({
     apiKey,
-    baseURL: 'https://api.deepseek.com',
+    baseURL: 'https://api.deepseek.com/v1',
+    fetch: deepseekFetch,
   });
   
-  return deepseek('deepseek-chat');
+  // 使用 .chat() 强制使用 Chat Completions API
+  return deepseek.chat('deepseek-chat');
 }
 
 // =====================
@@ -94,7 +118,9 @@ export async function generateScenesWithAI(
   context: GenerateScenesContext
 ): Promise<AIServiceResult<{ scenes: GeneratedScene[] }>> {
   try {
+    console.log('[generateScenesWithAI] 开始执行, context:', context.title);
     const model = context.model ?? getAIModel();
+    console.log('[generateScenesWithAI] 获取模型成功');
     
     const prompt = `你是一个专业的漫画分镜师。根据以下故事信息，生成 ${context.count} 个分镜摘要。
 
@@ -125,8 +151,8 @@ export async function generateScenesWithAI(
     const result = await generateText({
       model,
       prompt,
-      temperature: 0.7,
     });
+    console.log('[generateScenesWithAI] AI 调用成功, 响应长度:', result.text?.length);
 
     // 解析 AI 响应
     let parsed;
@@ -138,7 +164,9 @@ export async function generateScenesWithAI(
       } else {
         parsed = JSON.parse(result.text);
       }
-    } catch {
+      console.log('[generateScenesWithAI] JSON 解析成功, scenes数量:', parsed.scenes?.length);
+    } catch (e) {
+      console.error('[generateScenesWithAI] JSON 解析失败:', e, 'text:', result.text?.substring(0, 200));
       return {
         success: false,
         error: '解析 AI 响应失败：无效的 JSON 格式',
@@ -147,6 +175,7 @@ export async function generateScenesWithAI(
 
     // 验证并转换数据
     if (!parsed.scenes || !Array.isArray(parsed.scenes)) {
+      console.error('[generateScenesWithAI] 缺少 scenes 字段, parsed:', JSON.stringify(parsed).substring(0, 200));
       return {
         success: false,
         error: '解析 AI 响应失败：缺少 scenes 字段',
@@ -167,6 +196,7 @@ export async function generateScenesWithAI(
       data: { scenes },
     };
   } catch (error) {
+    console.error('[generateScenesWithAI] 错误:', error);
     return {
       success: false,
       error: `AI 服务调用失败：${error instanceof Error ? error.message : String(error)}`,
@@ -244,7 +274,6 @@ export async function refineSceneWithAI(
     const result = await generateText({
       model,
       prompt,
-      temperature: 0.7,
     });
 
     // 解析 AI 响应

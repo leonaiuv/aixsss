@@ -86,7 +86,7 @@ export const CreateProjectToolUI = makeAssistantToolUI<
   { title: string },
   ToolResult<{ projectId: string; title: string; createdAt: string }>
 >({
-  toolName: 'create_project',
+  toolName: 'createProject',
   render: ({ args, result, status }) => {
     if (status.type === 'running') {
       return (
@@ -137,9 +137,9 @@ export const CreateProjectToolUI = makeAssistantToolUI<
  */
 export const SceneListToolUI = makeAssistantToolUI<
   { count: number },
-  ToolResult<{ scenes: SceneData[] }>
+  { scenes: SceneData[] } // tool 直接返回 scenes 数据
 >({
-  toolName: 'generate_scenes',
+  toolName: 'generateScenes',
   render: function GenerateScenesUI({ args, result, status }) {
     if (status.type === 'running') {
       return (
@@ -165,28 +165,30 @@ export const SceneListToolUI = makeAssistantToolUI<
       );
     }
 
-    if (!result?.success || !result.data?.scenes) {
+    // tool 直接返回 { scenes: [...] }
+    if (!result?.scenes || !Array.isArray(result.scenes)) {
       return (
         <div className="rounded-lg border bg-yellow-50 p-4 my-2">
-          <p className="text-sm text-yellow-700">{result?.message || result?.error || '生成失败'}</p>
+          <p className="text-sm text-yellow-700">生成失败：数据格式错误</p>
         </div>
       );
     }
+
+    const scenes = result.scenes;
 
     return (
       <div className="rounded-lg border bg-card p-4 my-2">
         <div className="flex items-center gap-2 mb-3">
           <Film className="h-5 w-5 text-primary" />
           <span className="text-sm font-semibold">
-            生成了 {result.data.scenes.length} 个分镜
+            生成了 {scenes.length} 个分镜
           </span>
         </div>
         <div className="space-y-2 max-h-80 overflow-y-auto">
-          {result.data.scenes.map((scene) => (
+          {scenes.map((scene: SceneData) => (
             <SceneCard key={scene.id} scene={scene} />
           ))}
         </div>
-        <p className="text-xs text-muted-foreground mt-2">{result.message}</p>
       </div>
     );
   },
@@ -208,7 +210,7 @@ export const SceneDetailToolUI = makeAssistantToolUI<
     status: string;
   }>
 >({
-  toolName: 'refine_scene',
+  toolName: 'refineScene',
   render: function RefineSceneUI({ result, status }) {
     if (status.type === 'running') {
       return (
@@ -308,7 +310,7 @@ export const BasicInfoToolUI = makeAssistantToolUI<
   { title?: string; summary?: string; artStyle?: string; protagonist?: string },
   ToolResult<{ title?: string; summary?: string; artStyle?: string; protagonist?: string }>
 >({
-  toolName: 'set_project_info',
+  toolName: 'setProjectInfo',
   render: function SetProjectInfoUI({ args, result, status }) {
     if (status.type === 'running') {
       return (
@@ -382,7 +384,7 @@ export const ExportToolUI = makeAssistantToolUI<
   { format?: 'json' | 'csv' | 'text' },
   ToolResult<{ format: string; content: string; scenesCount: number; downloadUrl?: string | null }>
 >({
-  toolName: 'export_prompts',
+  toolName: 'exportPrompts',
   render: function ExportPromptsUI({ result, status }) {
     if (status.type === 'running') {
       return (
@@ -439,7 +441,7 @@ export const BatchRefineToolUI = makeAssistantToolUI<
   { sceneIds: string[] },
   ToolResult<{ results: Array<{ sceneId: string; status: string }> }>
 >({
-  toolName: 'batch_refine_scenes',
+  toolName: 'batchRefineScenes',
   render: function BatchRefineUI({ args, result, status }) {
     if (status.type === 'running') {
       return (
@@ -496,7 +498,7 @@ export const ProjectStateToolUI = makeAssistantToolUI<
     scenesCount: number;
   }>
 >({
-  toolName: 'get_project_state',
+  toolName: 'getProjectState',
   render: function GetProjectStateUI({ result, status }) {
     if (status.type === 'running') {
       return (

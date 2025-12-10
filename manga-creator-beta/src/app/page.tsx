@@ -18,6 +18,7 @@ import {
   BatchRefineToolUI,
   ProjectStateToolUI,
 } from "@/components/assistant-ui/tool-uis";
+import { useConfigStore } from "@/stores/configStore";
 
 // 动态导入 BlockNote 编辑器，禁用 SSR
 const Editor = dynamic(
@@ -37,9 +38,47 @@ function EditorLoading() {
 }
 
 export default function Home() {
+  const { isConfigured } = useConfigStore();
+
+  // 自定义 fetch 拦截 developer 角色，并动态注入最新的配置 headers
+  const customFetch: typeof fetch = async (input, init) => {
+    // 使用 getState() 动态获取最新配置（避免闭包问题）
+    const currentConfig = useConfigStore.getState().config;
+    const headers = {
+      'X-API-Key': currentConfig.apiKey,
+      'X-Base-URL': currentConfig.baseURL,
+      'X-Model': currentConfig.model,
+    };
+
+    // 合并 headers
+    const newInit = {
+      ...init,
+      headers: {
+        ...init?.headers,
+        ...headers,
+      },
+    };
+
+    if (newInit.body && typeof newInit.body === 'string') {
+      try {
+        const data = JSON.parse(newInit.body);
+        if (data.messages) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          data.messages = data.messages.map((msg: any) => ({
+            ...msg,
+            role: msg.role === 'developer' ? 'system' : msg.role,
+          }));
+          newInit.body = JSON.stringify(data);
+        }
+      } catch {}
+    }
+    return fetch(input, newInit);
+  };
+
   const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
       api: "/api/chat",
+      fetch: customFetch,
     }),
   });
 
@@ -57,7 +96,18 @@ export default function Home() {
       <ThreeColumnLayout
         left={<ThreadList />}
         center={<Editor />}
-        right={<Thread />}
+        right={
+          isConfigured ? (
+            <Thread />
+          ) : (
+            <div className="flex h-full items-center justify-center p-4">
+              <div className="text-center text-muted-foreground">
+                <p className="text-sm mb-2">请先配置 API Key</p>
+                <p className="text-xs">点击左下角的设置按钮</p>
+              </div>
+            </div>
+          )
+        }
       />
     </AssistantRuntimeProvider>
   );

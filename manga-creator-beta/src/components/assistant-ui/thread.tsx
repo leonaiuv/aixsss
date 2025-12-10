@@ -27,6 +27,15 @@ import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { cn } from "@/lib/utils";
+import {
+  BasicInfoToolUI,
+  SceneListToolUI,
+  SceneDetailToolUI,
+  BatchRefineToolUI,
+  ExportToolUI,
+  ProjectStateToolUI,
+  CreateProjectToolUI
+} from "./tool-uis";
 
 export const Thread: FC = () => {
   return (
@@ -174,7 +183,18 @@ const AssistantMessage: FC = () => {
         <MessagePrimitive.Parts
           components={{
             Text: MarkdownText,
-            tools: { Fallback: ToolFallback },
+            tools: {
+              by_name: {
+                setProjectInfo: BasicInfoToolUI,
+                generateScenes: SceneListToolUI,
+                refineScene: SceneDetailToolUI,
+                batchRefineScenes: BatchRefineToolUI,
+                exportPrompts: ExportToolUI,
+                getProjectState: ProjectStateToolUI,
+                createProject: CreateProjectToolUI,
+              },
+              Fallback: ToolFallback,
+            },
           }}
         />
       </div>
