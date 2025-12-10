@@ -18,7 +18,15 @@ import {
   importData,
   clearAllData,
   getStorageUsage,
+  configNeedsMigration,
+  migrateConfigToNewKey,
+  initializeEncryption,
+  changeEncryptionPassword,
+  hasCustomEncryptionPassword,
+  getLegacyEncryptionKey,
+  KeyPurpose,
 } from '@/lib/storage';
+import { KeyManager } from '@/lib/keyManager';
 import { Project, Scene, UserConfig } from '@/types';
 
 // ==========================================
@@ -72,6 +80,8 @@ beforeEach(() => {
     value: createMockLocalStorage(),
     writable: true,
   });
+  // 重置 KeyManager 状态
+  KeyManager.reset();
 });
 
 // ==========================================
@@ -79,10 +89,22 @@ beforeEach(() => {
 // ==========================================
 
 describe('加密解密功能', () => {
-  it('应正确加密和解密字符串', () => {
+  it('应正确加密和解密字符串（遗留模式）', () => {
+    // 未初始化 KeyManager，使用遗留密钥
     const original = 'Hello, World!';
     const encrypted = encrypt(original);
     const decrypted = decrypt(encrypted);
+    
+    expect(encrypted).not.toBe(original);
+    expect(decrypted).toBe(original);
+  });
+
+  it('应正确加密和解密字符串（新密钥模式）', () => {
+    initializeEncryption('my-secure-password');
+    
+    const original = 'Hello, World!';
+    const encrypted = encrypt(original, KeyPurpose.CONFIG);
+    const decrypted = decrypt(encrypted, KeyPurpose.CONFIG);
     
     expect(encrypted).not.toBe(original);
     expect(decrypted).toBe(original);
@@ -143,13 +165,13 @@ describe('加密解密功能', () => {
 describe('存储初始化', () => {
   it('首次初始化应设置版本号', () => {
     initStorage();
-    expect(localStorage.getItem('aixs_version')).toBe('1.1.0');
+    expect(localStorage.getItem('aixs_version')).toBe('1.2.0');
   });
 
   it('重复初始化应保持版本号', () => {
     initStorage();
     initStorage();
-    expect(localStorage.getItem('aixs_version')).toBe('1.1.0');
+    expect(localStorage.getItem('aixs_version')).toBe('1.2.0');
   });
 
   it('从旧版本迁移时应更新版本号', () => {
@@ -158,7 +180,7 @@ describe('存储初始化', () => {
     
     initStorage();
     
-    expect(localStorage.getItem('aixs_version')).toBe('1.1.0');
+    expect(localStorage.getItem('aixs_version')).toBe('1.2.0');
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('迁移'));
     consoleSpy.mockRestore();
   });
@@ -519,7 +541,7 @@ describe('数据导入导出', () => {
     const exported = exportData();
     const parsed = JSON.parse(exported);
     
-    expect(parsed.version).toBe('1.1.0');
+    expect(parsed.version).toBe('1.2.0');
     expect(parsed.projects).toEqual([]);
     expect(parsed.scenes).toEqual({});
     expect(parsed.exportedAt).toBeDefined();
@@ -731,7 +753,7 @@ describe('清理与维护', () => {
     expect(getScenes('proj_1')).toHaveLength(0);
     
     // 版本号应保留
-    expect(localStorage.getItem('aixs_version')).toBe('1.1.0');
+    expect(localStorage.getItem('aixs_version')).toBe('1.2.0');
     
     // 非 aixs 数据应保留
     expect(localStorage.getItem('other_key')).toBe('other_value');
@@ -941,5 +963,135 @@ describe('边界情况', () => {
     const retrieved = getScene('proj_1', 'scene_unicode');
     expect(retrieved?.summary).toContain('🌍');
     expect(retrieved?.summary).toContain('مرحبا');
+  });
+});
+
+// ==========================================
+// 密钥迁移测试
+// ==========================================
+
+describe('密钥迁移功能', () => {
+  it('初始化加密应设置自定义密码标志', () => {
+    expect(hasCustomEncryptionPassword()).toBe(false);
+    
+    initializeEncryption('my-password');
+    
+    expect(hasCustomEncryptionPassword()).toBe(true);
+  });
+
+  it('配置迁移标志应正确工作', () => {
+    expect(configNeedsMigration()).toBe(false);
+    
+    localStorage.setItem('aixs_config_needs_migration', 'true');
+    expect(configNeedsMigration()).toBe(true);
+    
+    localStorage.removeItem('aixs_config_needs_migration');
+    expect(configNeedsMigration()).toBe(false);
+  });
+
+  it('应能将遗留加密配置迁移到新密钥', () => {
+    // 使用遗留密钥加密配置
+    const config: UserConfig = {
+      provider: 'deepseek',
+      apiKey: 'test-api-key-12345',
+      model: 'deepseek-chat',
+    };
+    
+    // 未初始化时保存（使用遗留密钥）
+    saveConfig(config);
+    const legacyEncrypted = localStorage.getItem('aixs_config');
+    expect(legacyEncrypted).toBeDefined();
+    
+    // 标记需要迁移
+    localStorage.setItem('aixs_config_needs_migration', 'true');
+    
+    // 初始化加密（应自动迁移）
+    initializeEncryption('new-secure-password');
+    
+    // 迁移标志应被清除
+    expect(configNeedsMigration()).toBe(false);
+    
+    // 配置应能正确读取
+    const retrieved = getConfig();
+    expect(retrieved?.apiKey).toBe('test-api-key-12345');
+  });
+
+  it('更换密码应重新加密配置', () => {
+    initializeEncryption('password-1');
+    
+    const config: UserConfig = {
+      provider: 'gemini',
+      apiKey: 'gemini-api-key',
+      model: 'gemini-pro',
+    };
+    saveConfig(config);
+    
+    // 获取旧加密数据
+    const oldEncrypted = localStorage.getItem('aixs_config');
+    
+    // 更换密码
+    const result = changeEncryptionPassword('password-2');
+    expect(result).toBe(true);
+    
+    // 加密数据应变化
+    const newEncrypted = localStorage.getItem('aixs_config');
+    expect(newEncrypted).not.toBe(oldEncrypted);
+    
+    // 配置应仍可读取
+    const retrieved = getConfig();
+    expect(retrieved?.apiKey).toBe('gemini-api-key');
+  });
+
+  it('未初始化时更换密码应失败', () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    
+    const result = changeEncryptionPassword('new-password');
+    expect(result).toBe(false);
+    expect(consoleSpy).toHaveBeenCalled();
+    
+    consoleSpy.mockRestore();
+  });
+
+  it('未初始化时迁移配置应失败', () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    
+    const result = migrateConfigToNewKey();
+    expect(result).toBe(false);
+    expect(consoleSpy).toHaveBeenCalled();
+    
+    consoleSpy.mockRestore();
+  });
+
+  it('获取遗留密钥应返回正确值', () => {
+    const legacyKey = getLegacyEncryptionKey();
+    expect(legacyKey).toBe('aixs-manga-creator-secret-key-2024');
+  });
+
+  it('不同用途应使用不同密钥加密', () => {
+    initializeEncryption('my-password');
+    
+    const data = 'same-data';
+    const configEncrypted = encrypt(data, KeyPurpose.CONFIG);
+    const projectEncrypted = encrypt(data, KeyPurpose.PROJECT);
+    const sceneEncrypted = encrypt(data, KeyPurpose.SCENE);
+    
+    // 不同用途加密结果应不同
+    expect(configEncrypted).not.toBe(projectEncrypted);
+    expect(configEncrypted).not.toBe(sceneEncrypted);
+    expect(projectEncrypted).not.toBe(sceneEncrypted);
+    
+    // 但都能正确解密
+    expect(decrypt(configEncrypted, KeyPurpose.CONFIG)).toBe(data);
+    expect(decrypt(projectEncrypted, KeyPurpose.PROJECT)).toBe(data);
+    expect(decrypt(sceneEncrypted, KeyPurpose.SCENE)).toBe(data);
+  });
+
+  it('错误用途解密应失败', () => {
+    initializeEncryption('my-password');
+    
+    const encrypted = encrypt('secret', KeyPurpose.CONFIG);
+    const decrypted = decrypt(encrypted, KeyPurpose.PROJECT);
+    
+    expect(decrypted).toBe('');
   });
 });
