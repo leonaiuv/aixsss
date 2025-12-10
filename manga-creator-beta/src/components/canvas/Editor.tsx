@@ -108,9 +108,11 @@ export const Editor: FC<EditorProps> = ({ className, syncDebounceMs = 1000 }) =>
         };
       });
 
-      // 替换编辑器内容
-      editor.replaceBlocks(editor.document, newBlocks as never[]);
-      markSynced();
+      // 使用 setTimeout 避免 flushSync 在 React 渲染期间被调用
+      setTimeout(() => {
+        editor.replaceBlocks(editor.document, newBlocks as never[]);
+        markSynced();
+      }, 0);
     }
   }, [blocks, editor, markSynced]);
 

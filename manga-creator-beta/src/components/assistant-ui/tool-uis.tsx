@@ -1,8 +1,10 @@
 'use client';
 
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { makeAssistantToolUI } from '@assistant-ui/react';
-import { CheckCircle, Clock, AlertCircle, Loader2, FileText, Download, Film, Settings } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, Loader2, FileText, Download, Film, Settings, Check, ChevronDown } from 'lucide-react';
 import type { SceneStatus } from '@/types';
+import { useCanvasStore } from '@/stores/canvasStore';
 
 /**
  * 场景数据类型
@@ -141,6 +143,35 @@ export const SceneListToolUI = makeAssistantToolUI<
 >({
   toolName: 'generateScenes',
   render: function GenerateScenesUI({ args, result, status }) {
+    const setBlocks = useCanvasStore((s) => s.setBlocks);
+    const blocks = useCanvasStore((s) => s.blocks);
+    const syncedRef = useRef(false);
+
+    // 同步分镜到 Canvas
+    useEffect(() => {
+      if (status.type === 'complete' && result?.scenes && !syncedRef.current) {
+        syncedRef.current = true;
+        console.log('[SceneListToolUI] Syncing scenes to canvas:', result.scenes);
+        
+        const sceneBlocks = result.scenes.map((scene) => ({
+          id: scene.id,
+          type: 'scene' as const,
+          content: {
+            order: scene.order,
+            summary: scene.summary,
+            status: scene.status,
+            sceneDescription: scene.sceneDescription,
+            keyframePrompt: scene.keyframePrompt,
+            spatialPrompt: scene.spatialPrompt,
+          },
+        }));
+        
+        // 保留项目块，替换分镜块
+        const projectBlocks = blocks.filter((b) => b.type === 'project');
+        setBlocks([...projectBlocks, ...sceneBlocks]);
+      }
+    }, [status.type, result, blocks, setBlocks]);
+
     if (status.type === 'running') {
       return (
         <div className="rounded-lg border bg-blue-50 p-4 my-2">
@@ -201,14 +232,14 @@ export const SceneListToolUI = makeAssistantToolUI<
  */
 export const SceneDetailToolUI = makeAssistantToolUI<
   { sceneId: string },
-  ToolResult<{
+  {
     sceneId: string;
     sceneDescription?: string;
     keyframePrompt?: string;
     spatialPrompt?: string;
     fullPrompt?: string;
     status: string;
-  }>
+  } // tool 直接返回数据
 >({
   toolName: 'refineScene',
   render: function RefineSceneUI({ result, status }) {
@@ -236,10 +267,11 @@ export const SceneDetailToolUI = makeAssistantToolUI<
       );
     }
 
-    if (!result?.success || !result.data) {
+    // tool 直接返回数据对象
+    if (!result?.sceneId) {
       return (
         <div className="rounded-lg border bg-yellow-50 p-4 my-2">
-          <p className="text-sm text-yellow-700">{result?.message || result?.error || '细化失败'}</p>
+          <p className="text-sm text-yellow-700">细化失败：数据格式错误</p>
         </div>
       );
     }
@@ -252,50 +284,49 @@ export const SceneDetailToolUI = makeAssistantToolUI<
         </div>
 
         <div className="space-y-3">
-          {result.data.sceneDescription && (
+          {result.sceneDescription && (
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1">
                 <FileText className="h-3 w-3" />
                 场景描述
               </h4>
-              <p className="text-sm">{result.data.sceneDescription}</p>
+              <p className="text-sm">{result.sceneDescription}</p>
             </div>
           )}
 
-          {result.data.keyframePrompt && (
+          {result.keyframePrompt && (
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1">
                 关键帧提示词
               </h4>
               <code className="block text-xs bg-muted p-2 rounded whitespace-pre-wrap">
-                {result.data.keyframePrompt}
+                {result.keyframePrompt}
               </code>
             </div>
           )}
 
-          {result.data.fullPrompt && (
+          {result.fullPrompt && (
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1">
                 完整提示词（含画风）
               </h4>
               <code className="block text-xs bg-blue-50 p-2 rounded whitespace-pre-wrap border border-blue-100">
-                {result.data.fullPrompt}
+                {result.fullPrompt}
               </code>
             </div>
           )}
 
-          {result.data.spatialPrompt && (
+          {result.spatialPrompt && (
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1">
                 时空提示词
               </h4>
               <code className="block text-xs bg-purple-50 p-2 rounded whitespace-pre-wrap border border-purple-100">
-                {result.data.spatialPrompt}
+                {result.spatialPrompt}
               </code>
             </div>
           )}
         </div>
-        <p className="text-xs text-muted-foreground mt-2">{result.message}</p>
       </div>
     );
   },
@@ -382,7 +413,7 @@ export const BasicInfoToolUI = makeAssistantToolUI<
  */
 export const ExportToolUI = makeAssistantToolUI<
   { format?: 'json' | 'csv' | 'text' },
-  ToolResult<{ format: string; content: string; scenesCount: number; downloadUrl?: string | null }>
+  { format: string; content: string } // tool 直接返回数据
 >({
   toolName: 'exportPrompts',
   render: function ExportPromptsUI({ result, status }) {
@@ -399,10 +430,19 @@ export const ExportToolUI = makeAssistantToolUI<
       );
     }
 
-    if (!result?.success || !result.data) {
+    if (status.type === 'incomplete' && status.reason === 'error') {
       return (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 my-2">
-          <p className="text-sm text-red-700">{result?.message || result?.error || '导出失败'}</p>
+          <p className="text-sm text-red-700">导出失败</p>
+        </div>
+      );
+    }
+
+    // tool 直接返回 { content, format }
+    if (!result?.content) {
+      return (
+        <div className="rounded-lg border bg-yellow-50 p-4 my-2">
+          <p className="text-sm text-yellow-700">导出失败：数据格式错误</p>
         </div>
       );
     }
@@ -413,20 +453,16 @@ export const ExportToolUI = makeAssistantToolUI<
           <div className="flex items-center gap-2">
             <Download className="h-5 w-5 text-green-500" />
             <span className="text-sm font-semibold text-green-700">
-              导出完成 ({result.data.format})
+              导出完成 ({result.format})
             </span>
           </div>
-          <span className="text-xs text-muted-foreground">
-            共 {result.data.scenesCount} 个分镜
-          </span>
         </div>
-        {result.data.content && (
+        {result.content && (
           <pre className="text-xs bg-white p-2 rounded border max-h-40 overflow-auto">
-            {result.data.content.slice(0, 500)}
-            {result.data.content.length > 500 && '...'}
+            {result.content.slice(0, 500)}
+            {result.content.length > 500 && '...'}
           </pre>
         )}
-        <p className="text-xs text-green-600 mt-2">{result.message}</p>
       </div>
     );
   },
@@ -435,47 +471,176 @@ export const ExportToolUI = makeAssistantToolUI<
 /**
  * batch_refine_scenes 工具 UI
  * 
- * 显示批量细化结果
+ * 显示批量细化进度和结果 - 任务列表样式
  */
 export const BatchRefineToolUI = makeAssistantToolUI<
-  { sceneIds: string[] },
-  ToolResult<{ results: Array<{ sceneId: string; status: string }> }>
+  { sceneIds: string[]; scenes?: Array<{ sceneId: string; sceneSummary: string }> },
+  { results: Array<{ sceneId: string; status: string; keyframePrompt?: string; spatialPrompt?: string; sceneDescription?: string }> }
 >({
   toolName: 'batchRefineScenes',
   render: function BatchRefineUI({ args, result, status }) {
-    if (status.type === 'running') {
-      return (
-        <div className="rounded-lg border bg-purple-50 p-4 my-2">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-5 w-5 text-purple-500 animate-spin" />
-            <span className="text-sm font-medium text-purple-700">
-              正在批量细化 {args.sceneIds.length} 个分镜...
-            </span>
-          </div>
-        </div>
-      );
-    }
+    const updateBlock = useCanvasStore((s) => s.updateBlock);
+    const blocks = useCanvasStore((s) => s.blocks);
+    const syncedRef = useRef(false);
+    const [expanded, setExpanded] = useState(true);
+    const [showAll, setShowAll] = useState(false);
+    
+    // 获取分镜信息用于显示
+    const sceneIds = args.sceneIds || args.scenes?.map(s => s.sceneId) || [];
+    const totalCount = sceneIds.length;
+    const completedCount = result?.results?.length || 0;
+    const isRunning = status.type === 'running';
+    const isComplete = status.type === 'complete';
+    const isError = status.type === 'incomplete' && status.reason === 'error';
+    
+    // 构建任务列表状态
+    const taskItems: Array<{
+      sceneId: string;
+      name: string;
+      status: 'completed' | 'running' | 'pending';
+      result?: { sceneId: string; status: string; keyframePrompt?: string; spatialPrompt?: string; sceneDescription?: string };
+    }> = useMemo(() => {
+      return sceneIds.map((sceneId, index) => {
+        const completedResult = result?.results?.find(r => r.sceneId === sceneId);
+        const sceneBlock = blocks.find(b => b.id === sceneId);
+        const sceneName = String(sceneBlock?.content?.summary || `分镜 ${index + 1}`);
+        
+        let taskStatus: 'completed' | 'running' | 'pending' = 'pending';
+        if (completedResult) {
+          taskStatus = 'completed';
+        } else if (isRunning && index === completedCount) {
+          taskStatus = 'running';
+        }
+        
+        return {
+          sceneId,
+          name: sceneName,
+          status: taskStatus,
+          result: completedResult,
+        };
+      });
+    }, [sceneIds, result?.results, blocks, isRunning, completedCount]);
+    
+    // 显示的任务数量限制
+    const maxVisibleItems = 4;
+    const visibleItems = showAll ? taskItems : taskItems.slice(0, maxVisibleItems);
+    const hiddenCount = taskItems.length - maxVisibleItems;
 
-    if (!result?.success || !result.data) {
+    // 同步细化结果到 Canvas
+    useEffect(() => {
+      if (status.type === 'complete' && result?.results && !syncedRef.current) {
+        syncedRef.current = true;
+        console.log('[BatchRefineToolUI] Syncing refined scenes to canvas:', result.results);
+        
+        result.results.forEach((r) => {
+          updateBlock(r.sceneId, {
+            content: {
+              status: r.status as SceneStatus,
+              keyframePrompt: r.keyframePrompt,
+              spatialPrompt: r.spatialPrompt,
+              sceneDescription: r.sceneDescription,
+            },
+          });
+        });
+      }
+    }, [status.type, result, updateBlock]);
+
+    // 渲染任务状态图标
+    const renderStatusIcon = (taskStatus: 'completed' | 'running' | 'pending') => {
+      switch (taskStatus) {
+        case 'completed':
+          return (
+            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+              <Check className="h-3 w-3 text-white" />
+            </div>
+          );
+        case 'running':
+          return (
+            <div className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+              <Loader2 className="h-3 w-3 text-gray-400 animate-spin" />
+            </div>
+          );
+        case 'pending':
+        default:
+          return (
+            <div className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300" />
+          );
+      }
+    };
+
+    if (isError) {
       return (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 my-2">
-          <p className="text-sm text-red-700">{result?.message || result?.error || '批量细化失败'}</p>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 my-2">
+          <p className="text-sm text-red-700">批量细化失败</p>
         </div>
       );
     }
 
     return (
-      <div className="rounded-lg border bg-green-50 p-4 my-2">
-        <div className="flex items-center gap-2 mb-2">
-          <CheckCircle className="h-5 w-5 text-green-500" />
-          <span className="text-sm font-semibold text-green-700">
-            批量细化完成
-          </span>
+      <div className="rounded-xl border bg-card shadow-sm my-3">
+        {/* 标题区域 */}
+        <div className="p-4 pb-3">
+          <h3 className="text-base font-semibold text-foreground">分镜批量细化</h3>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {isComplete ? '所有分镜细化已完成' : '正在为每个分镜生成详细描述和提示词'}
+          </p>
         </div>
-        <p className="text-sm text-green-700">
-          已成功细化 {result.data.results.length} 个分镜
-        </p>
-        <p className="text-xs text-green-600 mt-1">{result.message}</p>
+        
+        {/* 进度卡片 */}
+        <div className="mx-4 mb-4 rounded-lg border bg-muted/30 p-4">
+          {/* 进度统计 */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-muted-foreground">
+              {completedCount} of {totalCount} complete
+            </span>
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+            </button>
+          </div>
+          
+          {/* 进度条 */}
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-4">
+            <div 
+              className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+              style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+            />
+          </div>
+          
+          {/* 任务列表 */}
+          {expanded && (
+            <div className="space-y-3">
+              {visibleItems.map((item, index) => (
+                <div key={`${item.sceneId}-${index}`} className="flex items-center gap-3">
+                  {renderStatusIcon(item.status)}
+                  <span className={`text-sm flex-1 ${
+                    item.status === 'completed' 
+                      ? 'text-muted-foreground line-through' 
+                      : 'text-foreground'
+                  }`}>
+                    {item.name}
+                  </span>
+                  {item.status === 'completed' && (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
+              ))}
+              
+              {/* 显示更多按钮 */}
+              {!showAll && hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors pt-1"
+                >
+                  <span className="text-lg leading-none">•••</span>
+                  <span>{hiddenCount} more</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     );
   },

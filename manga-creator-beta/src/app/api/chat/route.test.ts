@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock ai 模块 - 必须在导入之前
 vi.mock('ai', async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as Record<string, unknown>;
   return {
     ...actual,
     convertToModelMessages: vi.fn((messages) => messages || []),
@@ -14,7 +14,11 @@ vi.mock('ai', async (importOriginal) => {
 
 // Mock @ai-sdk/openai 模块
 vi.mock('@ai-sdk/openai', () => ({
-  createOpenAI: vi.fn(() => vi.fn(() => ({}))),
+  createOpenAI: vi.fn(() => {
+    const fn = (() => ({})) as (() => object) & { chat: () => object };
+    fn.chat = () => ({});
+    return fn;
+  }),
 }));
 
 // 导入要测试的路由
@@ -92,13 +96,11 @@ describe('Chat API Route', () => {
       expect(streamText).toHaveBeenCalledWith(
         expect.objectContaining({
           tools: expect.objectContaining({
-            create_project: expect.anything(),
-            get_project_state: expect.anything(),
-            set_project_info: expect.anything(),
-            generate_scenes: expect.anything(),
-            refine_scene: expect.anything(),
-            batch_refine_scenes: expect.anything(),
-            export_prompts: expect.anything(),
+            // 工具名称是 camelCase
+            generateScenes: expect.anything(),
+            refineScene: expect.anything(),
+            batchRefineScenes: expect.anything(),
+            exportPrompts: expect.anything(),
           }),
         })
       );

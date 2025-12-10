@@ -1,18 +1,19 @@
 import { useCallback } from 'react';
 import { useCanvasStore, CanvasBlock } from '@/stores/canvasStore';
-import type { AgentToolName } from '@/lib/agent/tools';
+
+/**
+ * 工具名称类型
+ */
+type ToolName = 'createProject' | 'setProjectInfo' | 'generateScenes' | 'refineScene' | 'batchRefineScenes' | 'exportPrompts' | string;
 
 /**
  * 工具调用结果的数据结构
+ * 
+ * 注意：tool 直接返回数据对象，不是包装在 { success, data } 中
  */
 export interface ToolCallResult {
-  toolName: AgentToolName | string;
-  result: {
-    success: boolean;
-    data?: Record<string, unknown>;
-    error?: string;
-    message?: string;
-  };
+  toolName: ToolName;
+  result: Record<string, unknown>; // tool 直接返回的数据
 }
 
 /**
@@ -56,21 +57,23 @@ export function useToolCallSync() {
 
   /**
    * 处理工具调用结果
+   * 
+   * 注意：tool 直接返回数据对象，不是 { success, data } 结构
    */
   const handleToolResult = useCallback((toolResult: ToolCallResult) => {
-    const { toolName, result } = toolResult;
+    const { toolName, result: data } = toolResult;
 
-    // 失败的调用不处理
-    if (!result.success) {
-      console.warn(`Tool ${toolName} failed:`, result.error);
+    // 空结果不处理
+    if (!data || Object.keys(data).length === 0) {
+      console.warn(`Tool ${toolName} returned empty result`);
       return;
     }
 
-    const data = result.data;
-    if (!data) return;
+    // toolName 可能是 camelCase 或 snake_case，统一处理
+    const normalizedToolName = toolName.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
 
-    switch (toolName) {
-      case 'create_project': {
+    switch (normalizedToolName) {
+      case 'createProject': {
         // 创建项目 - 添加项目信息块
         addBlock({
           id: `project-${data.projectId}`,
@@ -84,7 +87,7 @@ export function useToolCallSync() {
         break;
       }
 
-      case 'set_project_info': {
+      case 'setProjectInfo': {
         // 更新项目信息 - 找到并更新项目块
         const projectBlock = blocks.find((b) => b.type === 'project');
         if (projectBlock) {
@@ -98,7 +101,7 @@ export function useToolCallSync() {
         break;
       }
 
-      case 'generate_scenes': {
+      case 'generateScenes': {
         // 生成分镜 - 设置所有分镜块
         const scenes = data.scenes as SceneData[];
         if (scenes && Array.isArray(scenes)) {
@@ -110,7 +113,7 @@ export function useToolCallSync() {
         break;
       }
 
-      case 'refine_scene': {
+      case 'refineScene': {
         // 细化分镜 - 更新单个分镜块
         const sceneId = data.sceneId as string;
         if (sceneId) {
@@ -119,6 +122,7 @@ export function useToolCallSync() {
               sceneDescription: data.sceneDescription,
               keyframePrompt: data.keyframePrompt,
               spatialPrompt: data.spatialPrompt,
+              fullPrompt: data.fullPrompt,
               status: data.status ?? 'completed',
             },
           });
@@ -126,7 +130,7 @@ export function useToolCallSync() {
         break;
       }
 
-      case 'batch_refine_scenes': {
+      case 'batchRefineScenes': {
         // 批量细化 - 更新多个分镜块
         const results = data.results as Array<{ sceneId: string; status: string }>;
         if (results && Array.isArray(results)) {
@@ -139,7 +143,7 @@ export function useToolCallSync() {
         break;
       }
 
-      case 'export_prompts': {
+      case 'exportPrompts': {
         // 导出提示词 - 添加导出结果块
         addBlock({
           id: `export-${Date.now()}`,
@@ -147,7 +151,6 @@ export function useToolCallSync() {
           content: {
             format: data.format,
             content: data.content,
-            downloadUrl: data.downloadUrl,
           },
         });
         break;

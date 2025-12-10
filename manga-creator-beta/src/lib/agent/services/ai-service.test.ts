@@ -16,7 +16,12 @@ vi.mock('ai', () => ({
 
 // Mock @ai-sdk/openai 模块
 vi.mock('@ai-sdk/openai', () => ({
-  createOpenAI: vi.fn(() => vi.fn(() => ({}))),
+  createOpenAI: vi.fn(() => {
+    // 返回一个带有 .chat() 方法的函数
+    const fn = vi.fn(() => ({})) as ReturnType<typeof vi.fn> & { chat: ReturnType<typeof vi.fn> };
+    fn.chat = vi.fn(() => ({}));
+    return fn;
+  }),
 }));
 
 describe('AI Service', () => {

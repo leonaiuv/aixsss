@@ -17,7 +17,7 @@ import {
 describe('Tool UI Components', () => {
   describe('CreateProjectToolUI', () => {
     it('应该正确导出工具名称', () => {
-      expect(CreateProjectToolUI.unstable_tool.toolName).toBe('create_project');
+      expect(CreateProjectToolUI.unstable_tool.toolName).toBe('createProject');
     });
 
     it('应该有 render 函数', () => {
@@ -27,7 +27,7 @@ describe('Tool UI Components', () => {
 
   describe('SceneListToolUI', () => {
     it('应该正确导出工具名称', () => {
-      expect(SceneListToolUI.unstable_tool.toolName).toBe('generate_scenes');
+      expect(SceneListToolUI.unstable_tool.toolName).toBe('generateScenes');
     });
 
     it('应该有 render 函数', () => {
@@ -37,7 +37,7 @@ describe('Tool UI Components', () => {
 
   describe('SceneDetailToolUI', () => {
     it('应该正确导出工具名称', () => {
-      expect(SceneDetailToolUI.unstable_tool.toolName).toBe('refine_scene');
+      expect(SceneDetailToolUI.unstable_tool.toolName).toBe('refineScene');
     });
 
     it('应该有 render 函数', () => {
@@ -47,7 +47,7 @@ describe('Tool UI Components', () => {
 
   describe('BasicInfoToolUI', () => {
     it('应该正确导出工具名称', () => {
-      expect(BasicInfoToolUI.unstable_tool.toolName).toBe('set_project_info');
+      expect(BasicInfoToolUI.unstable_tool.toolName).toBe('setProjectInfo');
     });
 
     it('应该有 render 函数', () => {
@@ -57,7 +57,7 @@ describe('Tool UI Components', () => {
 
   describe('ExportToolUI', () => {
     it('应该正确导出工具名称', () => {
-      expect(ExportToolUI.unstable_tool.toolName).toBe('export_prompts');
+      expect(ExportToolUI.unstable_tool.toolName).toBe('exportPrompts');
     });
 
     it('应该有 render 函数', () => {
@@ -67,7 +67,7 @@ describe('Tool UI Components', () => {
 
   describe('BatchRefineToolUI', () => {
     it('应该正确导出工具名称', () => {
-      expect(BatchRefineToolUI.unstable_tool.toolName).toBe('batch_refine_scenes');
+      expect(BatchRefineToolUI.unstable_tool.toolName).toBe('batchRefineScenes');
     });
 
     it('应该有 render 函数', () => {
@@ -77,7 +77,7 @@ describe('Tool UI Components', () => {
 
   describe('ProjectStateToolUI', () => {
     it('应该正确导出工具名称', () => {
-      expect(ProjectStateToolUI.unstable_tool.toolName).toBe('get_project_state');
+      expect(ProjectStateToolUI.unstable_tool.toolName).toBe('getProjectState');
     });
 
     it('应该有 render 函数', () => {
@@ -87,13 +87,13 @@ describe('Tool UI Components', () => {
 
   describe('所有工具的完整性检查', () => {
     const tools = [
-      { name: 'create_project', ui: CreateProjectToolUI },
-      { name: 'generate_scenes', ui: SceneListToolUI },
-      { name: 'refine_scene', ui: SceneDetailToolUI },
-      { name: 'set_project_info', ui: BasicInfoToolUI },
-      { name: 'export_prompts', ui: ExportToolUI },
-      { name: 'batch_refine_scenes', ui: BatchRefineToolUI },
-      { name: 'get_project_state', ui: ProjectStateToolUI },
+      { name: 'createProject', ui: CreateProjectToolUI },
+      { name: 'generateScenes', ui: SceneListToolUI },
+      { name: 'refineScene', ui: SceneDetailToolUI },
+      { name: 'setProjectInfo', ui: BasicInfoToolUI },
+      { name: 'exportPrompts', ui: ExportToolUI },
+      { name: 'batchRefineScenes', ui: BatchRefineToolUI },
+      { name: 'getProjectState', ui: ProjectStateToolUI },
     ];
 
     it('应该有 7 个工具 UI 组件', () => {
