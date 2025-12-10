@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
+import { useCustomStyleStore } from '@/stores/customStyleStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,7 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ArrowRight, Sparkles, Globe, Users, Palette, Brush, Layers, MapPin, Copy, Check } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { ArrowRight, Sparkles, Globe, Users, Palette, Brush, Layers, MapPin, Copy, Check, Plus, Edit2, Trash2, Save } from 'lucide-react';
 import { WorldViewBuilder } from './WorldViewBuilder';
 import { CharacterManager } from './CharacterManager';
 import { 
@@ -16,11 +19,22 @@ import {
   ArtStyleConfig, 
   getArtStyleConfig, 
   composeStyleFullPrompt,
-  migrateOldStyleToConfig 
+  migrateOldStyleToConfig,
+  isCustomStyleId,
+  CustomArtStyle
 } from '@/types';
 
 export function BasicSettings() {
   const { currentProject, updateProject } = useProjectStore();
+  const { 
+    customStyles, 
+    loadCustomStyles, 
+    isLoaded: customStylesLoaded,
+    createCustomStyle,
+    updateCustomStyle,
+    deleteCustomStyle,
+    getCustomStyleById,
+  } = useCustomStyleStore();
   
   // 初始化画风配置
   const getInitialStyleConfig = (): ArtStyleConfig => {
@@ -40,6 +54,27 @@ export function BasicSettings() {
   const [styleConfig, setStyleConfig] = useState<ArtStyleConfig>(getInitialStyleConfig());
   const [activeTab, setActiveTab] = useState('basic');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  
+  // 自定义画风管理状态
+  const [showCustomStyleDialog, setShowCustomStyleDialog] = useState(false);
+  const [editingCustomStyle, setEditingCustomStyle] = useState<CustomArtStyle | null>(null);
+  const [customStyleForm, setCustomStyleForm] = useState({
+    name: '',
+    description: '',
+    baseStyle: '',
+    technique: '',
+    colorPalette: '',
+    culturalFeature: '',
+  });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [styleToDelete, setStyleToDelete] = useState<string | null>(null);
+
+  // 加载自定义画风
+  useEffect(() => {
+    if (!customStylesLoaded) {
+      loadCustomStyles();
+    }
+  }, [customStylesLoaded, loadCustomStyles]);
 
   useEffect(() => {
     if (currentProject) {
@@ -55,11 +90,22 @@ export function BasicSettings() {
     return null;
   }
 
-  // 处理预设选择
+  // 处理预设选择（支持内置和自定义）
   const handlePresetChange = (presetId: string) => {
-    const newConfig = getArtStyleConfig(presetId);
-    if (newConfig) {
-      setStyleConfig(newConfig);
+    // 检查是否为自定义画风
+    if (isCustomStyleId(presetId)) {
+      const customStyle = getCustomStyleById(presetId);
+      if (customStyle) {
+        setStyleConfig({
+          presetId: customStyle.id,
+          ...customStyle.config,
+        });
+      }
+    } else {
+      const newConfig = getArtStyleConfig(presetId);
+      if (newConfig) {
+        setStyleConfig(newConfig);
+      }
     }
   };
 
@@ -80,6 +126,107 @@ export function BasicSettings() {
     await navigator.clipboard.writeText(styleConfig.fullPrompt);
     setCopiedPrompt(true);
     setTimeout(() => setCopiedPrompt(false), 2000);
+  };
+
+  // 打开创建自定义画风对话框
+  const handleOpenCreateDialog = () => {
+    setEditingCustomStyle(null);
+    setCustomStyleForm({
+      name: '',
+      description: '',
+      baseStyle: styleConfig.baseStyle || '',
+      technique: styleConfig.technique || '',
+      colorPalette: styleConfig.colorPalette || '',
+      culturalFeature: styleConfig.culturalFeature || '',
+    });
+    setShowCustomStyleDialog(true);
+  };
+
+  // 打开编辑自定义画风对话框
+  const handleOpenEditDialog = (style: CustomArtStyle) => {
+    setEditingCustomStyle(style);
+    setCustomStyleForm({
+      name: style.name,
+      description: style.description,
+      baseStyle: style.config.baseStyle,
+      technique: style.config.technique,
+      colorPalette: style.config.colorPalette,
+      culturalFeature: style.config.culturalFeature,
+    });
+    setShowCustomStyleDialog(true);
+  };
+
+  // 保存自定义画风
+  const handleSaveCustomStyle = () => {
+    const config = {
+      baseStyle: customStyleForm.baseStyle,
+      technique: customStyleForm.technique,
+      colorPalette: customStyleForm.colorPalette,
+      culturalFeature: customStyleForm.culturalFeature,
+      fullPrompt: composeStyleFullPrompt({
+        baseStyle: customStyleForm.baseStyle,
+        technique: customStyleForm.technique,
+        colorPalette: customStyleForm.colorPalette,
+        culturalFeature: customStyleForm.culturalFeature,
+      }),
+    };
+
+    if (editingCustomStyle) {
+      // 更新现有画风
+      updateCustomStyle(editingCustomStyle.id, {
+        name: customStyleForm.name,
+        description: customStyleForm.description,
+        config,
+      });
+      // 如果当前正在使用该画风，更新配置
+      if (styleConfig.presetId === editingCustomStyle.id) {
+        setStyleConfig({
+          presetId: editingCustomStyle.id,
+          ...config,
+        });
+      }
+    } else {
+      // 创建新画风
+      const newStyle = createCustomStyle({
+        name: customStyleForm.name,
+        description: customStyleForm.description,
+        config,
+      });
+      // 自动选中新创建的画风
+      setStyleConfig({
+        presetId: newStyle.id,
+        ...newStyle.config,
+      });
+    }
+    setShowCustomStyleDialog(false);
+  };
+
+  // 确认删除自定义画风
+  const handleConfirmDelete = () => {
+    if (styleToDelete) {
+      deleteCustomStyle(styleToDelete);
+      // 如果删除的是当前使用的画风，切换到默认
+      if (styleConfig.presetId === styleToDelete) {
+        const defaultConfig = getArtStyleConfig('anime_cel')!;
+        setStyleConfig(defaultConfig);
+      }
+    }
+    setDeleteConfirmOpen(false);
+    setStyleToDelete(null);
+  };
+
+  // 将当前配置保存为自定义画风
+  const handleSaveCurrentAsCustom = () => {
+    setEditingCustomStyle(null);
+    setCustomStyleForm({
+      name: '',
+      description: '',
+      baseStyle: styleConfig.baseStyle || '',
+      technique: styleConfig.technique || '',
+      colorPalette: styleConfig.colorPalette || '',
+      culturalFeature: styleConfig.culturalFeature || '',
+    });
+    setShowCustomStyleDialog(true);
   };
 
   const canProceed = formData.summary.length >= 50 && styleConfig.fullPrompt && formData.protagonist.length >= 20;
@@ -179,31 +326,114 @@ export function BasicSettings() {
                 画风选择 *
               </Label>
               <p className="text-sm text-muted-foreground mb-3">
-                选择预设画风，或自定义调整各项参数
+                选择预设画风，或创建自定义画风
               </p>
-              <Select value={styleConfig.presetId} onValueChange={handlePresetChange}>
-                <SelectTrigger id="style" className="h-12">
-                  <SelectValue placeholder="选择画风预设..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {ART_STYLE_PRESETS.map((preset) => (
-                    <SelectItem key={preset.id} value={preset.id}>
-                      <div className="flex flex-col items-start py-1">
-                        <span className="font-medium">{preset.label}</span>
-                        <span className="text-xs text-muted-foreground">{preset.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                  {styleConfig.presetId === 'custom' && (
-                    <SelectItem value="custom">
-                      <div className="flex flex-col items-start py-1">
-                        <span className="font-medium">自定义画风</span>
-                        <span className="text-xs text-muted-foreground">已修改的自定义配置</span>
-                      </div>
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select value={styleConfig.presetId} onValueChange={handlePresetChange}>
+                  <SelectTrigger id="style" className="h-12 flex-1">
+                    <SelectValue placeholder="选择画风预设..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* 内置预设 */}
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">内置预设</div>
+                    {ART_STYLE_PRESETS.map((preset) => (
+                      <SelectItem key={preset.id} value={preset.id}>
+                        <div className="flex flex-col items-start py-1">
+                          <span className="font-medium">{preset.label}</span>
+                          <span className="text-xs text-muted-foreground">{preset.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {/* 自定义画风 */}
+                    {customStyles.length > 0 && (
+                      <>
+                        <div className="h-px bg-border my-1" />
+                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground flex items-center justify-between">
+                          <span>我的自定义画风</span>
+                          <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">{customStyles.length}</span>
+                        </div>
+                        {customStyles.map((style) => (
+                          <SelectItem key={style.id} value={style.id}>
+                            <div className="flex flex-col items-start py-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{style.name}</span>
+                                <span className="text-xs bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded">自定义</span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">{style.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {/* 当前臨时自定义 */}
+                    {styleConfig.presetId === 'custom' && (
+                      <>
+                        <div className="h-px bg-border my-1" />
+                        <SelectItem value="custom">
+                          <div className="flex flex-col items-start py-1">
+                            <span className="font-medium">当前自定义配置</span>
+                            <span className="text-xs text-muted-foreground">未保存的修改</span>
+                          </div>
+                        </SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-12 w-12"
+                  onClick={handleOpenCreateDialog}
+                  title="创建自定义画风"
+                >
+                  <Plus className="h-5 w-5" />
+                </Button>
+              </div>
+              
+              {/* 当前选中自定义画风时显示编辑/删除按钮 */}
+              {isCustomStyleId(styleConfig.presetId) && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() => {
+                      const style = getCustomStyleById(styleConfig.presetId);
+                      if (style) handleOpenEditDialog(style);
+                    }}
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                    编辑画风
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 text-destructive hover:text-destructive"
+                    onClick={() => {
+                      setStyleToDelete(styleConfig.presetId);
+                      setDeleteConfirmOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    删除
+                  </Button>
+                </div>
+              )}
+              
+              {/* 当前为临时自定义时显示保存按钮 */}
+              {styleConfig.presetId === 'custom' && (
+                <div className="mt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 text-primary"
+                    onClick={handleSaveCurrentAsCustom}
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    保存为自定义画风
+                  </Button>
+                </div>
+              )}
             </div>
             
             {/* 画风细节调整区 - 可展开 */}
@@ -382,6 +612,136 @@ export function BasicSettings() {
           <li>• <strong>一致性原则</strong>: 所有描述将被提取为"项目上下文",贯穿整个创作流程</li>
         </ul>
       </Card>
+
+      {/* 自定义画风创建/编辑对话框 */}
+      <Dialog open={showCustomStyleDialog} onOpenChange={setShowCustomStyleDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {editingCustomStyle ? '编辑自定义画风' : '创建自定义画风'}
+            </DialogTitle>
+            <DialogDescription>
+              配置四维画风参数，系统将自动合成完整的提示词
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>画风名称 *</Label>
+                <Input
+                  value={customStyleForm.name}
+                  onChange={(e) => setCustomStyleForm({ ...customStyleForm, name: e.target.value })}
+                  placeholder="例如：我的水墨风"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>简要描述</Label>
+                <Input
+                  value={customStyleForm.description}
+                  onChange={(e) => setCustomStyleForm({ ...customStyleForm, description: e.target.value })}
+                  placeholder="例如：我喜欢的水墨风格"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Layers className="h-3.5 w-3.5" />
+                整体风格
+              </Label>
+              <Input
+                value={customStyleForm.baseStyle}
+                onChange={(e) => setCustomStyleForm({ ...customStyleForm, baseStyle: e.target.value })}
+                placeholder="如: anime style, cel shaded, clean lineart"
+                className="font-mono text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Brush className="h-3.5 w-3.5" />
+                渲染技法
+              </Label>
+              <Input
+                value={customStyleForm.technique}
+                onChange={(e) => setCustomStyleForm({ ...customStyleForm, technique: e.target.value })}
+                placeholder="如: heavy impasto brushstrokes, watercolor wash"
+                className="font-mono text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Palette className="h-3.5 w-3.5" />
+                色彩倾向
+              </Label>
+              <Input
+                value={customStyleForm.colorPalette}
+                onChange={(e) => setCustomStyleForm({ ...customStyleForm, colorPalette: e.target.value })}
+                placeholder="如: vibrant saturated colors, high contrast"
+                className="font-mono text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <MapPin className="h-3.5 w-3.5" />
+                文化/时代特征
+              </Label>
+              <Input
+                value={customStyleForm.culturalFeature}
+                onChange={(e) => setCustomStyleForm({ ...customStyleForm, culturalFeature: e.target.value })}
+                placeholder="如: Oriental aesthetics, Victorian era"
+                className="font-mono text-sm"
+              />
+            </div>
+            
+            {/* 预览合成的提示词 */}
+            <div className="p-3 rounded-lg bg-muted/50">
+              <Label className="text-xs text-muted-foreground">合成提示词预览</Label>
+              <p className="text-xs font-mono mt-1 break-all">
+                {composeStyleFullPrompt({
+                  baseStyle: customStyleForm.baseStyle,
+                  technique: customStyleForm.technique,
+                  colorPalette: customStyleForm.colorPalette,
+                  culturalFeature: customStyleForm.culturalFeature,
+                }) || '请填写以上字段...'}
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCustomStyleDialog(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={handleSaveCustomStyle}
+              disabled={!customStyleForm.name.trim() || !customStyleForm.baseStyle.trim()}
+            >
+              {editingCustomStyle ? '保存修改' : '创建画风'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除确认对话框 */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除自定义画风</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除后无法恢复。如果有项目正在使用该画风，将自动切换到默认画风。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

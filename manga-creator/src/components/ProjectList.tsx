@@ -38,13 +38,16 @@ interface ProjectListProps {
 }
 
 export function ProjectList({ onOpenEditor }: ProjectListProps) {
-  const { projects, createProject, deleteProject, setCurrentProject } = useProjectStore();
+  const { projects, createProject, deleteProject, setCurrentProject, updateProject } = useProjectStore();
   const { toast } = useToast();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [projectToRename, setProjectToRename] = useState<{id: string, currentTitle: string} | null>(null);
   const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [renameTitle, setRenameTitle] = useState('');
   
   // 搜索和过滤状态
   const [searchQuery, setSearchQuery] = useState('');
@@ -133,6 +136,25 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
       setDeleteDialogOpen(false);
     }
   }, [projectToDelete, deleteProject, toast]);
+
+  const handleRenameClick = useCallback((projectId: string, currentTitle: string) => {
+    setProjectToRename({ id: projectId, currentTitle });
+    setRenameTitle(currentTitle);
+    setRenameDialogOpen(true);
+  }, []);
+
+  const handleRenameConfirm = useCallback(() => {
+    if (projectToRename && renameTitle.trim()) {
+      updateProject(projectToRename.id, { title: renameTitle.trim() });
+      toast({
+        title: '项目已重命名',
+        description: `项目名称已更新为"${renameTitle.trim()}"`,
+      });
+      setProjectToRename(null);
+      setRenameTitle('');
+      setRenameDialogOpen(false);
+    }
+  }, [projectToRename, renameTitle, updateProject, toast]);
 
   return (
     <div className="space-y-6">
@@ -282,6 +304,7 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
               project={project}
               onOpen={handleOpenProject}
               onDelete={handleDeleteClick}
+              onRename={handleRenameClick}
             />
           ))}
         </div>
@@ -337,6 +360,43 @@ export function ProjectList({ onOpenEditor }: ProjectListProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 重命名项目对话框 */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>重命名项目</DialogTitle>
+            <DialogDescription>
+              为项目输入一个新的名称
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="rename-title">项目名称</Label>
+              <Input
+                id="rename-title"
+                value={renameTitle}
+                onChange={(e) => setRenameTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRenameConfirm()}
+                placeholder="输入新项目名称"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setRenameDialogOpen(false);
+              setProjectToRename(null);
+              setRenameTitle('');
+            }}>
+              取消
+            </Button>
+            <Button onClick={handleRenameConfirm} disabled={!renameTitle.trim()}>
+              确认重命名
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 批量导出对话框 */}
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>

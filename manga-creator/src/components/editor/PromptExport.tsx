@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
+import { useCustomStyleStore } from '@/stores/customStyleStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +13,7 @@ import {
   Eye,
   Code
 } from 'lucide-react';
-import { migrateOldStyleToConfig, ART_STYLE_PRESETS, Project } from '@/types';
+import { migrateOldStyleToConfig, ART_STYLE_PRESETS, Project, isCustomStyleId } from '@/types';
 
 /**
  * 获取项目的完整画风提示词
@@ -34,7 +35,13 @@ function getStyleFullPrompt(project: Project | null): string {
 function getStyleLabel(project: Project | null): string {
   if (!project) return '';
   if (project.artStyleConfig) {
-    const preset = ART_STYLE_PRESETS.find(p => p.id === project.artStyleConfig?.presetId);
+    const presetId = project.artStyleConfig.presetId;
+    // 检查是否为自定义画风
+    if (isCustomStyleId(presetId)) {
+      const customStyle = useCustomStyleStore.getState().getCustomStyleById(presetId);
+      return customStyle ? customStyle.name : '自定义画风';
+    }
+    const preset = ART_STYLE_PRESETS.find(p => p.id === presetId);
     return preset ? preset.label : '自定义画风';
   }
   if (project.style) {
