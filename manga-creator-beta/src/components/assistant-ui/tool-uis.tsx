@@ -468,10 +468,171 @@ export const ExportToolUI = makeAssistantToolUI<
   },
 });
 
+// =====================
+// Plan 组件 - 基于 tool-ui 设计
+// =====================
+
+type TodoStatus = 'completed' | 'in_progress' | 'pending' | 'cancelled';
+
+interface TodoItem {
+  id: string;
+  label: string;
+  status: TodoStatus;
+  description?: string;
+}
+
+interface PlanProps {
+  id: string;
+  title: string;
+  description?: string;
+  todos: TodoItem[];
+}
+
+/**
+ * Plan 组件 - 显示分步任务工作流
+ * 基于 tool-ui 的 Plan 组件 API 设计
+ */
+function Plan({ id, title, description, todos }: PlanProps) {
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
+  
+  const completedCount = todos.filter(t => t.status === 'completed').length;
+  const totalCount = todos.length;
+  const allCompleted = completedCount === totalCount && totalCount > 0;
+  const showProgressBar = totalCount > 3;
+  
+  const maxVisibleItems = 4;
+  const visibleTodos = showAll ? todos : todos.slice(0, maxVisibleItems);
+  const hiddenCount = todos.length - maxVisibleItems;
+  
+  const toggleExpand = (todoId: string) => {
+    setExpandedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(todoId)) {
+        next.delete(todoId);
+      } else {
+        next.add(todoId);
+      }
+      return next;
+    });
+  };
+  
+  // 渲染状态图标
+  const renderStatusIcon = (status: TodoStatus) => {
+    switch (status) {
+      case 'completed':
+        return (
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+            <Check className="h-3 w-3 text-white" />
+          </div>
+        );
+      case 'in_progress':
+        return (
+          <div className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
+            <Loader2 className="h-3 w-3 text-gray-400 animate-spin" />
+          </div>
+        );
+      case 'cancelled':
+        return (
+          <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-300 flex items-center justify-center">
+            <span className="text-white text-xs">—</span>
+          </div>
+        );
+      case 'pending':
+      default:
+        return (
+          <div className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300" />
+        );
+    }
+  };
+  
+  return (
+    <div id={id} className="rounded-xl border bg-card shadow-sm my-3">
+      {/* 标题区域 */}
+      <div className="p-4 pb-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-base font-semibold text-foreground">{title}</h3>
+          {allCompleted && (
+            <span className="text-emerald-500">🎉</span>
+          )}
+        </div>
+        {description && (
+          <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+        )}
+      </div>
+      
+      {/* 进度卡片 */}
+      <div className="mx-4 mb-4 rounded-lg border bg-muted/30 p-4">
+        {/* 进度统计和进度条 */}
+        {showProgressBar && (
+          <>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">
+                {completedCount} of {totalCount} complete
+              </span>
+            </div>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-4">
+              <div 
+                className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+                style={{ width: `${(completedCount / totalCount) * 100}%` }}
+              />
+            </div>
+          </>
+        )}
+        
+        {/* 任务列表 */}
+        <div className="space-y-2">
+          {visibleTodos.map((todo) => (
+            <div key={todo.id} className="space-y-1">
+              <div 
+                className="flex items-center gap-3 cursor-pointer"
+                onClick={() => todo.description && toggleExpand(todo.id)}
+              >
+                {renderStatusIcon(todo.status)}
+                <span className={`text-sm flex-1 ${
+                  todo.status === 'completed' || todo.status === 'cancelled'
+                    ? 'text-muted-foreground line-through' 
+                    : 'text-foreground'
+                }`}>
+                  {todo.label}
+                </span>
+                {todo.description && (
+                  <ChevronDown 
+                    className={`h-4 w-4 text-muted-foreground transition-transform ${
+                      expandedItems.has(todo.id) ? 'rotate-180' : ''
+                    }`} 
+                  />
+                )}
+              </div>
+              {/* 展开的描述 */}
+              {todo.description && expandedItems.has(todo.id) && (
+                <div className="ml-8 text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                  {todo.description}
+                </div>
+              )}
+            </div>
+          ))}
+          
+          {/* 显示更多按钮 */}
+          {!showAll && hiddenCount > 0 && (
+            <button
+              onClick={() => setShowAll(true)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors pt-1"
+            >
+              <span className="text-lg leading-none">•••</span>
+              <span>{hiddenCount} more</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * batch_refine_scenes 工具 UI
  * 
- * 显示批量细化进度和结果 - 任务列表样式
+ * 使用 Plan 组件显示批量细化进度
  */
 export const BatchRefineToolUI = makeAssistantToolUI<
   { sceneIds: string[]; scenes?: Array<{ sceneId: string; sceneSummary: string }> },
@@ -482,49 +643,10 @@ export const BatchRefineToolUI = makeAssistantToolUI<
     const updateBlock = useCanvasStore((s) => s.updateBlock);
     const blocks = useCanvasStore((s) => s.blocks);
     const syncedRef = useRef(false);
-    const [expanded, setExpanded] = useState(true);
-    const [showAll, setShowAll] = useState(false);
     
-    // 获取分镜信息用于显示
+    // 获取分镜信息
     const sceneIds = args.sceneIds || args.scenes?.map(s => s.sceneId) || [];
-    const totalCount = sceneIds.length;
-    const completedCount = result?.results?.length || 0;
-    const isRunning = status.type === 'running';
-    const isComplete = status.type === 'complete';
     const isError = status.type === 'incomplete' && status.reason === 'error';
-    
-    // 构建任务列表状态
-    const taskItems: Array<{
-      sceneId: string;
-      name: string;
-      status: 'completed' | 'running' | 'pending';
-      result?: { sceneId: string; status: string; keyframePrompt?: string; spatialPrompt?: string; sceneDescription?: string };
-    }> = useMemo(() => {
-      return sceneIds.map((sceneId, index) => {
-        const completedResult = result?.results?.find(r => r.sceneId === sceneId);
-        const sceneBlock = blocks.find(b => b.id === sceneId);
-        const sceneName = String(sceneBlock?.content?.summary || `分镜 ${index + 1}`);
-        
-        let taskStatus: 'completed' | 'running' | 'pending' = 'pending';
-        if (completedResult) {
-          taskStatus = 'completed';
-        } else if (isRunning && index === completedCount) {
-          taskStatus = 'running';
-        }
-        
-        return {
-          sceneId,
-          name: sceneName,
-          status: taskStatus,
-          result: completedResult,
-        };
-      });
-    }, [sceneIds, result?.results, blocks, isRunning, completedCount]);
-    
-    // 显示的任务数量限制
-    const maxVisibleItems = 4;
-    const visibleItems = showAll ? taskItems : taskItems.slice(0, maxVisibleItems);
-    const hiddenCount = taskItems.length - maxVisibleItems;
 
     // 同步细化结果到 Canvas
     useEffect(() => {
@@ -544,29 +666,29 @@ export const BatchRefineToolUI = makeAssistantToolUI<
         });
       }
     }, [status.type, result, updateBlock]);
-
-    // 渲染任务状态图标
-    const renderStatusIcon = (taskStatus: 'completed' | 'running' | 'pending') => {
-      switch (taskStatus) {
-        case 'completed':
-          return (
-            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
-              <Check className="h-3 w-3 text-white" />
-            </div>
-          );
-        case 'running':
-          return (
-            <div className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center">
-              <Loader2 className="h-3 w-3 text-gray-400 animate-spin" />
-            </div>
-          );
-        case 'pending':
-        default:
-          return (
-            <div className="flex-shrink-0 w-5 h-5 rounded-full border-2 border-gray-300" />
-          );
-      }
-    };
+    
+    // 构建 todos 数组
+    const todos: TodoItem[] = useMemo(() => {
+      return sceneIds.map((sceneId, index) => {
+        const completedResult = result?.results?.find(r => r.sceneId === sceneId);
+        const sceneBlock = blocks.find(b => b.id === sceneId);
+        const label = String(sceneBlock?.content?.summary || `分镜 ${index + 1}`);
+        
+        let todoStatus: TodoStatus = 'pending';
+        if (completedResult) {
+          todoStatus = 'completed';
+        } else if (status.type === 'running' && index === (result?.results?.length || 0)) {
+          todoStatus = 'in_progress';
+        }
+        
+        return {
+          id: sceneId || `scene-${index}`,
+          label,
+          status: todoStatus,
+          description: completedResult?.sceneDescription,
+        };
+      });
+    }, [sceneIds, result?.results, blocks, status.type]);
 
     if (isError) {
       return (
@@ -575,73 +697,16 @@ export const BatchRefineToolUI = makeAssistantToolUI<
         </div>
       );
     }
+    
+    const allCompleted = status.type === 'complete';
 
     return (
-      <div className="rounded-xl border bg-card shadow-sm my-3">
-        {/* 标题区域 */}
-        <div className="p-4 pb-3">
-          <h3 className="text-base font-semibold text-foreground">分镜批量细化</h3>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isComplete ? '所有分镜细化已完成' : '正在为每个分镜生成详细描述和提示词'}
-          </p>
-        </div>
-        
-        {/* 进度卡片 */}
-        <div className="mx-4 mb-4 rounded-lg border bg-muted/30 p-4">
-          {/* 进度统计 */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">
-              {completedCount} of {totalCount} complete
-            </span>
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? '' : '-rotate-90'}`} />
-            </button>
-          </div>
-          
-          {/* 进度条 */}
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-4">
-            <div 
-              className="h-full bg-emerald-500 transition-all duration-300 ease-out"
-              style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
-            />
-          </div>
-          
-          {/* 任务列表 */}
-          {expanded && (
-            <div className="space-y-3">
-              {visibleItems.map((item, index) => (
-                <div key={`${item.sceneId}-${index}`} className="flex items-center gap-3">
-                  {renderStatusIcon(item.status)}
-                  <span className={`text-sm flex-1 ${
-                    item.status === 'completed' 
-                      ? 'text-muted-foreground line-through' 
-                      : 'text-foreground'
-                  }`}>
-                    {item.name}
-                  </span>
-                  {item.status === 'completed' && (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </div>
-              ))}
-              
-              {/* 显示更多按钮 */}
-              {!showAll && hiddenCount > 0 && (
-                <button
-                  onClick={() => setShowAll(true)}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors pt-1"
-                >
-                  <span className="text-lg leading-none">•••</span>
-                  <span>{hiddenCount} more</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      <Plan
+        id="batch-refine-plan"
+        title="分镜批量细化"
+        description={allCompleted ? '所有分镜细化已完成' : '正在为每个分镜生成详细描述和提示词'}
+        todos={todos}
+      />
     );
   },
 });
