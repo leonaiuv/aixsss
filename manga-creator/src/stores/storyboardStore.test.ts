@@ -452,4 +452,258 @@ describe('storyboardStore', () => {
       expect(updated?.dialogues).toEqual([]);
     });
   });
+
+  describe('boundary conditions for reordering', () => {
+    const scenes: Scene[] = [
+      { id: 'scene_1', projectId: 'proj_1', order: 1, summary: 'Scene 1', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
+      { id: 'scene_2', projectId: 'proj_1', order: 2, summary: 'Scene 2', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
+      { id: 'scene_3', projectId: 'proj_1', order: 3, summary: 'Scene 3', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
+      { id: 'scene_4', projectId: 'proj_1', order: 4, summary: 'Scene 4', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
+    ];
+
+    beforeEach(() => {
+      useStoryboardStore.setState({ scenes });
+    });
+
+    it('should handle moving scene to first position', () => {
+      const { reorderScenes } = useStoryboardStore.getState();
+      reorderScenes('proj_1', 3, 0);
+
+      const result = useStoryboardStore.getState().scenes;
+      expect(result[0].id).toBe('scene_4');
+      expect(result[0].order).toBe(1);
+    });
+
+    it('should handle moving scene to last position', () => {
+      const { reorderScenes } = useStoryboardStore.getState();
+      reorderScenes('proj_1', 0, 3);
+
+      const result = useStoryboardStore.getState().scenes;
+      expect(result[3].id).toBe('scene_1');
+      expect(result[3].order).toBe(4);
+    });
+
+    it('should handle moving scene to middle position', () => {
+      const { reorderScenes } = useStoryboardStore.getState();
+      reorderScenes('proj_1', 0, 2);
+
+      const result = useStoryboardStore.getState().scenes;
+      expect(result[2].id).toBe('scene_1');
+      expect(result[0].id).toBe('scene_2');
+      expect(result[1].id).toBe('scene_3');
+    });
+
+    it('should handle moving scene to same position', () => {
+      const { reorderScenes } = useStoryboardStore.getState();
+      reorderScenes('proj_1', 1, 1);
+
+      const result = useStoryboardStore.getState().scenes;
+      expect(result[1].id).toBe('scene_2');
+      expect(result).toHaveLength(4);
+    });
+
+    it('should correctly reorder when deleting middle scene', () => {
+      const { deleteScene } = useStoryboardStore.getState();
+      deleteScene('proj_1', 'scene_2');
+
+      const result = useStoryboardStore.getState().scenes;
+      expect(result).toHaveLength(3);
+      expect(result[0].order).toBe(1);
+      expect(result[1].order).toBe(2);
+      expect(result[2].order).toBe(3);
+      expect(result[1].id).toBe('scene_3');
+    });
+  });
+
+  describe('concurrent operations', () => {
+    it('should handle concurrent scene additions', () => {
+      const { addScene } = useStoryboardStore.getState();
+      
+      const scene1 = addScene('proj_1', {
+        projectId: 'proj_1',
+        order: 1,
+        summary: 'Scene 1',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      });
+
+      const scene2 = addScene('proj_1', {
+        projectId: 'proj_1',
+        order: 1,
+        summary: 'Scene 2',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      });
+
+      expect(scene1.order).toBe(1);
+      expect(scene2.order).toBe(2);
+      expect(scene1.id).not.toBe(scene2.id);
+    });
+
+    it('should handle concurrent scene updates', () => {
+      const scene: Scene = {
+        id: 'scene_1',
+        projectId: 'proj_1',
+        order: 1,
+        summary: 'Original',
+        sceneDescription: 'Desc',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      };
+      useStoryboardStore.setState({ scenes: [scene] });
+
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { summary: 'Update 1' });
+      updateScene('proj_1', 'scene_1', { sceneDescription: 'New Desc' });
+      updateScene('proj_1', 'scene_1', { status: 'completed' });
+
+      const updated = useStoryboardStore.getState().scenes[0];
+      expect(updated.summary).toBe('Update 1');
+      expect(updated.sceneDescription).toBe('New Desc');
+      expect(updated.status).toBe('completed');
+    });
+  });
+
+  describe('performance and edge cases', () => {
+    it('should handle loading 500+ scenes efficiently', () => {
+      const largeSceneSet: Scene[] = Array.from({ length: 500 }, (_, i) => ({
+        id: `scene_${i}`,
+        projectId: 'proj_1',
+        order: i + 1,
+        summary: `Scene ${i}`,
+        sceneDescription: `Description ${i}`,
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending' as const,
+        notes: '',
+      }));
+
+      vi.mocked(storage.getScenes).mockReturnValue(largeSceneSet);
+
+      const startTime = performance.now();
+      const { loadScenes } = useStoryboardStore.getState();
+      loadScenes('proj_1');
+      const endTime = performance.now();
+
+      expect(useStoryboardStore.getState().scenes).toHaveLength(500);
+      expect(endTime - startTime).toBeLessThan(100); // Should complete within 100ms
+    });
+
+    it('should handle scene with null/undefined contextSummary', () => {
+      const sceneWithoutContext: Scene = {
+        id: 'scene_1',
+        projectId: 'proj_1',
+        order: 1,
+        summary: 'Test',
+        sceneDescription: 'Desc',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+        contextSummary: undefined,
+      };
+
+      const { addScene, updateScene } = useStoryboardStore.getState();
+      useStoryboardStore.setState({ scenes: [sceneWithoutContext] });
+
+      expect(() => updateScene('proj_1', 'scene_1', { summary: 'Updated' })).not.toThrow();
+    });
+
+    it('should handle empty scene list operations', () => {
+      useStoryboardStore.setState({ scenes: [] });
+      const { deleteScene, reorderScenes, updateScene } = useStoryboardStore.getState();
+
+      expect(() => deleteScene('proj_1', 'nonexistent')).not.toThrow();
+      expect(() => reorderScenes('proj_1', 0, 1)).not.toThrow();
+      expect(() => updateScene('proj_1', 'nonexistent', { summary: 'Test' })).not.toThrow();
+    });
+
+    it('should generate unique IDs for 1000 scenes', () => {
+      const { addScene } = useStoryboardStore.getState();
+      const ids = new Set<string>();
+
+      for (let i = 0; i < 1000; i++) {
+        const scene = addScene('proj_1', {
+          projectId: 'proj_1',
+          order: 1,
+          summary: `Scene ${i}`,
+          sceneDescription: '',
+          actionDescription: '',
+          shotPrompt: '',
+          motionPrompt: '',
+          status: 'pending',
+          notes: '',
+        });
+        ids.add(scene.id);
+      }
+
+      expect(ids.size).toBe(1000);
+    });
+  });
+
+  describe('status transitions', () => {
+    const scene: Scene = {
+      id: 'scene_1',
+      projectId: 'proj_1',
+      order: 1,
+      summary: 'Test',
+      sceneDescription: '',
+      actionDescription: '',
+      shotPrompt: '',
+      motionPrompt: '',
+      status: 'pending',
+      notes: '',
+    };
+
+    beforeEach(() => {
+      useStoryboardStore.setState({ scenes: [scene] });
+    });
+
+    it('should allow transitioning from pending to generating', () => {
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { status: 'generating' });
+
+      const updated = useStoryboardStore.getState().scenes[0];
+      expect(updated.status).toBe('generating');
+    });
+
+    it('should allow transitioning from generating to completed', () => {
+      useStoryboardStore.setState({ scenes: [{ ...scene, status: 'generating' }] });
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { status: 'completed' });
+
+      const updated = useStoryboardStore.getState().scenes[0];
+      expect(updated.status).toBe('completed');
+    });
+
+    it('should allow transitioning from completed to needs_update', () => {
+      useStoryboardStore.setState({ scenes: [{ ...scene, status: 'completed' }] });
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { status: 'needs_update' });
+
+      const updated = useStoryboardStore.getState().scenes[0];
+      expect(updated.status).toBe('needs_update');
+    });
+
+    it('should allow transitioning to error status', () => {
+      const { updateScene } = useStoryboardStore.getState();
+      updateScene('proj_1', 'scene_1', { status: 'error' });
+
+      const updated = useStoryboardStore.getState().scenes[0];
+      expect(updated.status).toBe('error');
+    });
+  });
 });

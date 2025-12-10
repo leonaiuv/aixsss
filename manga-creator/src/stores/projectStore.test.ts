@@ -58,7 +58,11 @@ describe('projectStore', () => {
       const { loadProjects } = useProjectStore.getState();
       loadProjects();
 
-      expect(useProjectStore.getState().projects).toEqual(mockProjects);
+      const loaded = useProjectStore.getState().projects;
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].id).toBe('proj_1');
+      expect(loaded[0].title).toBe('Test Project');
+      expect(loaded[0].artStyleConfig).toBeDefined(); // 应该已迁移
       expect(useProjectStore.getState().isLoading).toBe(false);
     });
 
@@ -105,7 +109,11 @@ describe('projectStore', () => {
       const { loadProject } = useProjectStore.getState();
       loadProject('proj_1');
 
-      expect(useProjectStore.getState().currentProject).toEqual(mockProject);
+      const loaded = useProjectStore.getState().currentProject;
+      expect(loaded).toBeDefined();
+      expect(loaded?.id).toBe('proj_1');
+      expect(loaded?.title).toBe('Test Project');
+      expect(loaded?.artStyleConfig).toBeDefined(); // 应该已迁移
     });
 
     it('should not set currentProject if project not found', () => {
@@ -368,6 +376,210 @@ describe('projectStore', () => {
       const p2 = createProject({ title: 'P2', summary: 'S', style: 'anime', protagonist: 'H' });
 
       expect(p1.id).not.toBe(p2.id);
+    });
+
+    it('should generate unique IDs when creating 1000 projects', () => {
+      const { createProject } = useProjectStore.getState();
+      const ids = new Set<string>();
+
+      for (let i = 0; i < 1000; i++) {
+        const project = createProject({ 
+          title: `Project ${i}`, 
+          summary: 'Test', 
+          style: 'anime', 
+          protagonist: 'Hero' 
+        });
+        ids.add(project.id);
+      }
+
+      expect(ids.size).toBe(1000);
+    });
+  });
+
+  describe('boundary conditions', () => {
+    it('should handle updateProject with non-existent ID gracefully', () => {
+      const { updateProject } = useProjectStore.getState();
+      
+      expect(() => updateProject('nonexistent-id', { title: 'New Title' })).not.toThrow();
+      expect(storage.saveProject).not.toHaveBeenCalled();
+    });
+
+    it('should handle concurrent project updates', () => {
+      const project = {
+        id: 'proj_1',
+        title: 'Original',
+        summary: 'Test',
+        style: 'anime',
+        protagonist: 'Hero',
+        workflowState: 'IDLE' as const,
+        currentSceneOrder: 0,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+      useProjectStore.setState({ projects: [project] });
+
+      const { updateProject } = useProjectStore.getState();
+      updateProject('proj_1', { title: 'Title Update' });
+      updateProject('proj_1', { summary: 'Summary Update' });
+
+      const updated = useProjectStore.getState().projects[0];
+      expect(updated.title).toBe('Title Update');
+      expect(updated.summary).toBe('Summary Update');
+    });
+
+    it('should handle empty projects list gracefully', () => {
+      useProjectStore.setState({ projects: [], currentProject: null });
+      const { updateProject, deleteProject } = useProjectStore.getState();
+      
+      expect(() => updateProject('any-id', { title: 'Test' })).not.toThrow();
+      expect(() => deleteProject('any-id')).not.toThrow();
+    });
+
+    it('should handle localStorage QuotaExceededError gracefully', () => {
+      const { createProject } = useProjectStore.getState();
+      vi.mocked(storage.saveProject).mockImplementation(() => {
+        const error = new Error('QuotaExceededError');
+        error.name = 'QuotaExceededError';
+        throw error;
+      });
+
+      expect(() => createProject({
+        title: 'Test',
+        summary: 'Test',
+        style: 'anime',
+        protagonist: 'Hero',
+      })).toThrow();
+    });
+  });
+
+  describe('art style migration', () => {
+    beforeEach(() => {
+      // 确保每个测试前恢复所有mocks
+      vi.restoreAllMocks();
+      vi.mocked(storage.saveProject).mockImplementation(() => {});
+    });
+
+    it('should migrate old style field to artStyleConfig on loadProjects', () => {
+      const oldStyleProject = {
+        id: 'proj_old',
+        title: 'Old Project',
+        summary: 'Test',
+        style: 'anime',
+        protagonist: 'Hero',
+        workflowState: 'IDLE' as const,
+        currentSceneOrder: 0,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+      vi.mocked(storage.getProjects).mockReturnValue([oldStyleProject]);
+
+      const { loadProjects } = useProjectStore.getState();
+      loadProjects();
+
+      const migrated = useProjectStore.getState().projects[0];
+      expect(migrated).toBeDefined();
+      expect(migrated.artStyleConfig).toBeDefined();
+      expect(migrated.artStyleConfig?.presetId).toBe('anime_cel');
+      expect(storage.saveProject).toHaveBeenCalled();
+    });
+
+    it('should migrate old style field to artStyleConfig on loadProject', () => {
+      const oldStyleProject = {
+        id: 'proj_old',
+        title: 'Old Project',
+        summary: 'Test',
+        style: 'realistic',
+        protagonist: 'Hero',
+        workflowState: 'IDLE' as const,
+        currentSceneOrder: 0,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+      vi.mocked(storage.getProject).mockReturnValue(oldStyleProject);
+
+      const { loadProject } = useProjectStore.getState();
+      loadProject('proj_old');
+
+      const migrated = useProjectStore.getState().currentProject;
+      expect(migrated).toBeDefined();
+      expect(migrated?.artStyleConfig).toBeDefined();
+      expect(migrated?.artStyleConfig?.presetId).toBe('cinematic_realistic');
+      expect(storage.saveProject).toHaveBeenCalled();
+    });
+
+    it('should not migrate if artStyleConfig already exists', () => {
+      const modernProject = {
+        id: 'proj_modern',
+        title: 'Modern Project',
+        summary: 'Test',
+        style: 'anime',
+        protagonist: 'Hero',
+        workflowState: 'IDLE' as const,
+        currentSceneOrder: 0,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        artStyleConfig: {
+          presetId: 'custom',
+          baseStyle: 'custom style',
+          characterStyle: 'custom characters',
+          sceneStyle: 'custom scenes',
+          colorPalette: 'vibrant',
+          lightingStyle: 'dramatic',
+        },
+      };
+      vi.mocked(storage.getProjects).mockReturnValue([modernProject]);
+
+      const { loadProjects } = useProjectStore.getState();
+      loadProjects();
+
+      const loaded = useProjectStore.getState().projects[0];
+      expect(loaded.artStyleConfig?.presetId).toBe('custom');
+      expect(loaded.artStyleConfig?.baseStyle).toBe('custom style');
+    });
+  });
+
+  describe('workflow state transitions', () => {
+    beforeEach(() => {
+      // 确保每个测试前恢复所有mocks
+      vi.restoreAllMocks();
+      vi.mocked(storage.saveProject).mockImplementation(() => {});
+    });
+
+    it('should allow valid workflow state transitions', () => {
+      const project = {
+        id: 'proj_1',
+        title: 'Test',
+        summary: 'Test',
+        style: 'anime',
+        protagonist: 'Hero',
+        workflowState: 'IDLE' as const,
+        currentSceneOrder: 0,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      };
+      useProjectStore.setState({ projects: [project] });
+
+      const { updateProject } = useProjectStore.getState();
+      updateProject('proj_1', { workflowState: 'DATA_COLLECTING' });
+      expect(useProjectStore.getState().projects[0].workflowState).toBe('DATA_COLLECTING');
+
+      updateProject('proj_1', { workflowState: 'SCENE_PROCESSING' });
+      expect(useProjectStore.getState().projects[0].workflowState).toBe('SCENE_PROCESSING');
+
+      updateProject('proj_1', { workflowState: 'EXPORTING' });
+      expect(useProjectStore.getState().projects[0].workflowState).toBe('EXPORTING');
+    });
+
+    it('should set initial workflow state to DATA_COLLECTING for new projects', () => {
+      const { createProject } = useProjectStore.getState();
+      const newProject = createProject({
+        title: 'New',
+        summary: 'Test',
+        style: 'anime',
+        protagonist: 'Hero',
+      });
+
+      expect(newProject.workflowState).toBe('DATA_COLLECTING');
     });
   });
 });
