@@ -2,7 +2,7 @@ import { memo, useMemo, useCallback } from 'react';
 import { Project } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MoreVertical, Trash2, FolderOpen } from 'lucide-react';
+import { MoreVertical, Trash2, Edit3 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,9 +14,10 @@ interface ProjectCardProps {
   project: Project;
   onOpen: (project: Project) => void;
   onDelete: (projectId: string) => void;
+  onRename: (projectId: string, currentTitle: string) => void;
 }
 
-function ProjectCardComponent({ project, onOpen, onDelete }: ProjectCardProps) {
+function ProjectCardComponent({ project, onOpen, onDelete, onRename }: ProjectCardProps) {
   // 使用 useMemo 缓存进度计算
   const progressPercentage = useMemo(() => {
     switch (project.workflowState) {
@@ -54,9 +55,10 @@ function ProjectCardComponent({ project, onOpen, onDelete }: ProjectCardProps) {
   // 使用 useCallback 缓存事件处理器
   const handleOpen = useCallback(() => onOpen(project), [onOpen, project]);
   const handleDelete = useCallback(() => onDelete(project.id), [onDelete, project.id]);
+  const handleRename = useCallback(() => onRename(project.id, project.title), [onRename, project]);
 
   return (
-    <Card className="hover:shadow-xl hover:scale-105 transition-all duration-300 hover:ring-2 hover:ring-primary cursor-pointer group">
+    <Card className="hover:shadow-xl transition-all duration-300 hover:ring-2 hover:ring-primary cursor-pointer group">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex-1" onClick={handleOpen}>
@@ -70,20 +72,20 @@ function ProjectCardComponent({ project, onOpen, onDelete }: ProjectCardProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreVertical className="h-4 w-4" />
+                <MoreVertical className="h-4 w-4" data-testid="more-icon" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleOpen}>
-                <FolderOpen className="mr-2 h-4 w-4" />
-                打开项目
+              <DropdownMenuItem onClick={handleRename}>
+                <Edit3 className="mr-2 h-4 w-4" />
+                重命名
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={handleDelete}
                 className="text-destructive"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                删除项目
+                删除
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -125,6 +127,7 @@ export const ProjectCard = memo(ProjectCardComponent, (prevProps, nextProps) => 
     prevProps.project.style === nextProps.project.style &&
     prevProps.project.createdAt === nextProps.project.createdAt &&
     prevProps.onOpen === nextProps.onOpen &&
-    prevProps.onDelete === nextProps.onDelete
+    prevProps.onDelete === nextProps.onDelete &&
+    prevProps.onRename === nextProps.onRename
   );
 });

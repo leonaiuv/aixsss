@@ -36,6 +36,25 @@ export interface ArtStylePreset {
 }
 
 /**
+ * 用户自定义画风
+ * 允许用户创建、保存、编辑自己的画风配置
+ */
+export interface CustomArtStyle {
+  /** 唯一标识符 */
+  id: string;
+  /** 画风名称（用户自定义） */
+  name: string;
+  /** 画风描述（用户自定义） */
+  description: string;
+  /** 画风配置 */
+  config: Omit<ArtStyleConfig, 'presetId'>;
+  /** 创建时间 */
+  createdAt: string;
+  /** 更新时间 */
+  updatedAt: string;
+}
+
+/**
  * 8个专业画风预设
  */
 export const ART_STYLE_PRESETS: ArtStylePreset[] = [
@@ -138,14 +157,36 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
 ];
 
 /**
+ * 判断是否为自定义画风ID（以 'custom_' 前缀开头）
+ */
+export function isCustomStyleId(presetId: string): boolean {
+  return presetId.startsWith('custom_');
+}
+
+/**
  * 根据预设ID获取完整画风配置
+ * 注意：此函数仅处理内置预设，自定义画风需通过 customStyleStore 获取
  */
 export function getArtStyleConfig(presetId: string): ArtStyleConfig | null {
+  // 自定义画风需要通过 store 获取，这里不处理
+  if (isCustomStyleId(presetId)) {
+    return null;
+  }
   const preset = ART_STYLE_PRESETS.find(p => p.id === presetId);
   if (!preset) return null;
   return {
     presetId: preset.id,
     ...preset.config,
+  };
+}
+
+/**
+ * 从自定义画风创建 ArtStyleConfig
+ */
+export function createConfigFromCustomStyle(customStyle: CustomArtStyle): ArtStyleConfig {
+  return {
+    presetId: customStyle.id,
+    ...customStyle.config,
   };
 }
 

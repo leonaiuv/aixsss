@@ -15,9 +15,10 @@ import { useConfigStore } from '@/stores/configStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
+import { useCustomStyleStore } from '@/stores/customStyleStore';
 import { AIFactory } from '@/lib/ai/factory';
 import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
-import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project, Character } from '@/types';
+import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project, Character, isCustomStyleId } from '@/types';
 import {
   analyzeCharacterImpact,
   CharacterChange,
@@ -118,7 +119,13 @@ function getStyleLabel(currentProject: Project | null): string {
   if (!currentProject) return '';
   
   if (currentProject.artStyleConfig) {
-    const preset = ART_STYLE_PRESETS.find(p => p.id === currentProject.artStyleConfig?.presetId);
+    const presetId = currentProject.artStyleConfig.presetId;
+    // 检查是否为自定义画风
+    if (isCustomStyleId(presetId)) {
+      const customStyle = useCustomStyleStore.getState().getCustomStyleById(presetId);
+      return customStyle ? customStyle.name : '自定义画风';
+    }
+    const preset = ART_STYLE_PRESETS.find(p => p.id === presetId);
     return preset ? preset.label : '自定义画风';
   }
   

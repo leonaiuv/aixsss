@@ -24,6 +24,7 @@ describe('ProjectCard', () => {
 
   const mockOnOpen = vi.fn();
   const mockOnDelete = vi.fn();
+  const mockOnRename = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -36,6 +37,7 @@ describe('ProjectCard', () => {
           project={createTestProject()}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
@@ -48,6 +50,7 @@ describe('ProjectCard', () => {
           project={createTestProject({ style: 'watercolor' })}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
@@ -60,6 +63,7 @@ describe('ProjectCard', () => {
           project={createTestProject({ style: '' })}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
@@ -72,6 +76,7 @@ describe('ProjectCard', () => {
           project={createTestProject()}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
@@ -99,6 +104,7 @@ describe('ProjectCard', () => {
             project={createTestProject({ workflowState: state })}
             onOpen={mockOnOpen}
             onDelete={mockOnDelete}
+            onRename={mockOnRename}
           />
         );
 
@@ -114,6 +120,7 @@ describe('ProjectCard', () => {
           project={createTestProject()}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
@@ -123,44 +130,84 @@ describe('ProjectCard', () => {
       expect(mockOnOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj_test' }));
     });
 
+    it('点击重命名菜单项应调用 onRename', async () => {
+      render(
+        <ProjectCard
+          project={createTestProject()}
+          onOpen={mockOnOpen}
+          onDelete={mockOnDelete}
+          onRename={mockOnRename}
+        />
+      );
+
+      // 找到并点击下拉菜单按钮
+      const menuButton = screen.getByTestId('more-icon').closest('button');
+      await userEvent.click(menuButton!);
+
+      // 点击重命名选项
+      const renameOption = await screen.findByText('重命名');
+      await userEvent.click(renameOption);
+
+      expect(mockOnRename).toHaveBeenCalledWith('proj_test', 'Test Project');
+    });
+
     it('点击删除菜单项应调用 onDelete', async () => {
       render(
         <ProjectCard
           project={createTestProject()}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
-      // 打开下拉菜单
-      const menuButton = screen.getByRole('button');
-      await userEvent.click(menuButton);
+      // 找到并点击下拉菜单按钮
+      const menuButton = screen.getByTestId('more-icon').closest('button');
+      await userEvent.click(menuButton!);
 
       // 点击删除选项
-      const deleteOption = await screen.findByText('删除项目');
+      const deleteOption = await screen.findByText('删除');
       await userEvent.click(deleteOption);
 
       expect(mockOnDelete).toHaveBeenCalledWith('proj_test');
     });
 
-    it('点击打开菜单项应调用 onOpen', async () => {
+    it('下拉菜单不应包含打开项目选项', async () => {
       render(
         <ProjectCard
           project={createTestProject()}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
-      // 打开下拉菜单
-      const menuButton = screen.getByRole('button');
-      await userEvent.click(menuButton);
+      // 找到并点击下拉菜单按钮
+      const menuButton = screen.getByTestId('more-icon').closest('button');
+      await userEvent.click(menuButton!);
 
-      // 点击打开选项
-      const openOption = await screen.findByText('打开项目');
-      await userEvent.click(openOption);
+      // 确保没有"打开项目"选项
+      expect(screen.queryByText('打开项目')).not.toBeInTheDocument();
+      expect(screen.getByText('重命名')).toBeInTheDocument();
+      expect(screen.getByText('删除')).toBeInTheDocument();
+    });
 
-      expect(mockOnOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj_test' }));
+    it('点击下拉菜单按钮不应触发 onOpen', async () => {
+      render(
+        <ProjectCard
+          project={createTestProject()}
+          onOpen={mockOnOpen}
+          onDelete={mockOnDelete}
+          onRename={mockOnRename}
+        />
+      );
+
+      // 找到并点击下拉菜单按钮
+      const menuButton = screen.getByTestId('more-icon').closest('button');
+      await userEvent.click(menuButton!);
+
+      // 确保 onOpen 没有被调用
+      expect(mockOnOpen).not.toHaveBeenCalled();
     });
   });
 
@@ -172,6 +219,7 @@ describe('ProjectCard', () => {
           project={createTestProject({ title: longTitle })}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
@@ -185,6 +233,7 @@ describe('ProjectCard', () => {
           project={createTestProject({ title: '<script>alert("xss")</script>' })}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
@@ -197,6 +246,7 @@ describe('ProjectCard', () => {
           project={createTestProject({ title: '中文项目标题' })}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
@@ -209,10 +259,33 @@ describe('ProjectCard', () => {
           project={createTestProject({ title: '🎨 Art Project 🖌️' })}
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
+          onRename={mockOnRename}
         />
       );
 
       expect(screen.getByText('🎨 Art Project 🖌️')).toBeInTheDocument();
+    });
+
+    it('重命名功能应传递正确的当前标题', async () => {
+      const testTitle = '特殊标题 !@#$%^&*()';
+      render(
+        <ProjectCard
+          project={createTestProject({ title: testTitle })}
+          onOpen={mockOnOpen}
+          onDelete={mockOnDelete}
+          onRename={mockOnRename}
+        />
+      );
+
+      // 找到并点击下拉菜单按钮
+      const menuButton = screen.getByTestId('more-icon').closest('button');
+      await userEvent.click(menuButton!);
+
+      // 点击重命名选项
+      const renameOption = await screen.findByText('重命名');
+      await userEvent.click(renameOption);
+
+      expect(mockOnRename).toHaveBeenCalledWith('proj_test', testTitle);
     });
   });
 });

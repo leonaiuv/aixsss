@@ -1,10 +1,12 @@
 import CryptoJS from 'crypto-js';
 import { Project, Scene, UserConfig } from '@/types';
 import { debounce, BatchQueue } from './performance';
+import { KeyManager, KeyPurpose } from './keyManager';
 
 // 当前版本号 - 每次数据结构变化时递增
-const STORAGE_VERSION = '1.1.0';
-const ENCRYPTION_KEY = 'aixs-manga-creator-secret-key-2024';
+const STORAGE_VERSION = '1.2.0'; // 升级版本以触发密钥迁移
+/** @deprecated 遗留密钥，仅用于向后兼容迁移 */
+const LEGACY_ENCRYPTION_KEY = 'aixs-manga-creator-secret-key-2024';
 const BACKUP_PREFIX = 'aixs_backup_';
 
 // ==========================================
@@ -65,13 +67,54 @@ const sceneSaveQueue = new BatchQueue<{ projectId: string; scene: Scene }>(
 // 加密工具
 // ==========================================
 
-export function encrypt(data: string): string {
-  return CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString();
+/**
+ * 加密数据
+ * @param data 要加密的数据
+ * @param purpose 数据用途，不同用途使用不同派生密钥
+ */
+export function encrypt(data: string, purpose: KeyPurpose = KeyPurpose.CONFIG): string {
+  // 如果 KeyManager 已初始化，使用新的密钥管理系统
+  if (KeyManager.isInitialized()) {
+    return KeyManager.encrypt(data, purpose);
+  }
+  // 否则使用遗留密钥（向后兼容）
+  return CryptoJS.AES.encrypt(data, LEGACY_ENCRYPTION_KEY).toString();
 }
 
-export function decrypt(encryptedData: string): string {
-  const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
-  return bytes.toString(CryptoJS.enc.Utf8);
+/**
+ * 解密数据
+ * @param encryptedData 加密的数据
+ * @param purpose 数据用途
+ */
+export function decrypt(encryptedData: string, purpose: KeyPurpose = KeyPurpose.CONFIG): string {
+  // 检查是否为新格式加密数据
+  if (!KeyManager.isLegacyEncrypted(encryptedData)) {
+    return KeyManager.decrypt(encryptedData, purpose);
+  }
+  
+  // 遗留格式数据，使用遗留密钥解密
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedData, LEGACY_ENCRYPTION_KEY);
+    return bytes.toString(CryptoJS.enc.Utf8);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 使用指定密钥解密（用于迁移）
+ * @param encryptedData 加密的数据
+ * @param key 解密密钥
+ */
+export function decryptWithKey(encryptedData: string, key: string): string {
+  return KeyManager.decryptWithKey(encryptedData, key);
+}
+
+/**
+ * 获取遗留密钥（仅用于迁移）
+ */
+export function getLegacyEncryptionKey(): string {
+  return LEGACY_ENCRYPTION_KEY;
 }
 
 // ==========================================
@@ -137,8 +180,20 @@ const MIGRATIONS: Record<string, MigrationFn> = {
     });
   },
   
-  // 未来版本迁移可在此添加
-  // '1.1.0_to_1.2.0': () => { ... },
+  // 从 1.1.0 迁移到 1.2.0 - 密钥管理升级
+  '1.1.0_to_1.2.0': () => {
+    console.log('执行迁移: 1.1.0 -> 1.2.0 (密钥管理升级)');
+    
+    // 迁移加密的配置数据
+    // 注意：如果 KeyManager 未初始化，配置仍然使用遗留密钥
+    // 用户设置自定义密码后，需要调用 migrateConfigToNewKey 进行迁移
+    const configData = localStorage.getItem(KEYS.CONFIG);
+    if (configData) {
+      // 标记配置需要迁移（使用遗留密钥加密）
+      localStorage.setItem('aixs_config_needs_migration', 'true');
+      console.log('配置数据已标记为需要迁移');
+    }
+  },
 };
 
 // 版本比较函数
@@ -157,7 +212,7 @@ function compareVersions(v1: string, v2: string): number {
 
 // 获取版本之间需要执行的迁移列表
 function getMigrationPath(fromVersion: string, toVersion: string): string[] {
-  const allVersions = ['0.0.0', '1.0.0', '1.1.0']; // 所有版本列表
+  const allVersions = ['0.0.0', '1.0.0', '1.1.0', '1.2.0']; // 所有版本列表
   const path: string[] = [];
   
   for (let i = 0; i < allVersions.length - 1; i++) {
@@ -593,3 +648,121 @@ export function getStorageUsage(): { used: number; total: number } {
   const total = 5 * 1024 * 1024;
   return { used, total };
 }
+
+// ==========================================
+// 密钥迁移功能
+// ==========================================
+
+/**
+ * 检查配置是否需要迁移到新密钥
+ */
+export function configNeedsMigration(): boolean {
+  return localStorage.getItem('aixs_config_needs_migration') === 'true';
+}
+
+/**
+ * 将配置迁移到新密钥
+ * 应在用户设置自定义密码后调用
+ */
+export function migrateConfigToNewKey(): boolean {
+  if (!KeyManager.isInitialized()) {
+    console.error('密钥管理器未初始化，无法迁移配置');
+    return false;
+  }
+
+  try {
+    const encryptedConfig = localStorage.getItem(KEYS.CONFIG);
+    if (!encryptedConfig) {
+      // 没有配置需要迁移
+      localStorage.removeItem('aixs_config_needs_migration');
+      return true;
+    }
+
+    // 使用遗留密钥解密
+    let decryptedConfig: string;
+    if (KeyManager.isLegacyEncrypted(encryptedConfig)) {
+      const bytes = CryptoJS.AES.decrypt(encryptedConfig, LEGACY_ENCRYPTION_KEY);
+      decryptedConfig = bytes.toString(CryptoJS.enc.Utf8);
+    } else {
+      // 已经是新格式，无需迁移
+      localStorage.removeItem('aixs_config_needs_migration');
+      return true;
+    }
+
+    if (!decryptedConfig) {
+      console.error('无法解密配置数据');
+      return false;
+    }
+
+    // 使用新密钥重新加密
+    const newEncrypted = KeyManager.encrypt(decryptedConfig, KeyPurpose.CONFIG);
+    localStorage.setItem(KEYS.CONFIG, newEncrypted);
+    localStorage.removeItem('aixs_config_needs_migration');
+
+    console.log('配置已成功迁移到新密钥');
+    return true;
+  } catch (error) {
+    console.error('配置迁移失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 获取密钥信息
+ */
+export function getKeyInfo() {
+  return KeyManager.getKeyInfo();
+}
+
+/**
+ * 初始化密钥管理器（设置自定义密码）
+ * @param masterPassword 主密码
+ */
+export function initializeEncryption(masterPassword: string): void {
+  KeyManager.initialize(masterPassword);
+  
+  // 如果有待迁移的配置，自动迁移
+  if (configNeedsMigration()) {
+    migrateConfigToNewKey();
+  }
+}
+
+/**
+ * 更换主密码
+ * @param newPassword 新密码
+ */
+export function changeEncryptionPassword(newPassword: string): boolean {
+  if (!KeyManager.isInitialized()) {
+    console.error('密钥管理器未初始化');
+    return false;
+  }
+
+  try {
+    // 先读取并解密当前配置
+    const currentConfig = getConfig();
+    
+    // 更换密码
+    KeyManager.changeMasterPassword(newPassword);
+    
+    // 重新加密配置
+    if (currentConfig) {
+      saveConfig(currentConfig);
+    }
+    
+    console.log('密码已成功更换');
+    return true;
+  } catch (error) {
+    console.error('更换密码失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 检查是否已设置自定义密码
+ */
+export function hasCustomEncryptionPassword(): boolean {
+  return KeyManager.hasCustomPassword();
+}
+
+// 导出 KeyPurpose 以便外部使用
+export { KeyPurpose } from './keyManager';
