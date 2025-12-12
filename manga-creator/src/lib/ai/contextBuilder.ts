@@ -25,6 +25,10 @@ export interface ContextBuildOptions {
   protagonist?: string;
   /** 场景描述 */
   sceneDescription?: string;
+  /** 关键帧提示词（可包含多关键帧） */
+  shotPrompt?: string;
+  /** 时空/运动提示词 */
+  motionPrompt?: string;
   /** 场景概要 */
   sceneSummary?: string;
   /** 前一场景概要 */
@@ -246,7 +250,13 @@ export function fillPromptTemplate(
     '{scene_summary}': options.sceneSummary || '',
     '{current_scene_summary}': options.sceneSummary || '',
     '{prev_scene_summary}': options.prevSceneSummary || '',
-    
+
+    // 分镜内容相关
+    '{shot_prompt}': options.shotPrompt || '',
+    '{keyframe_prompt}': options.shotPrompt || '',
+    '{keyframe_prompts}': options.shotPrompt || '',
+    '{motion_prompt}': options.motionPrompt || '',
+     
     // 故事相关
     '{summary}': options.summary || '',
     '{{summary}}': options.summary || '',

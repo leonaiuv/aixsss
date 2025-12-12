@@ -223,19 +223,21 @@ export function Editor() {
         const latestScene2 = updatedScenes2.find(s => s.id === sceneId);
 
         // 生成时空提示词
-        if (latestScene2?.shotPrompt && !latestScene2.motionPrompt) {
-          const motionSkill = getSkillByName('generate_motion_prompt');
-          if (motionSkill) {
-            const prompt = fillPromptTemplate(motionSkill.promptTemplate, {
-              artStyle: currentProject.artStyleConfig,
-              characters: projectCharacters,
-              worldViewElements,
-              sceneDescription: latestScene2.sceneDescription,
-            });
+         if (latestScene2?.shotPrompt && !latestScene2.motionPrompt) {
+           const motionSkill = getSkillByName('generate_motion_prompt');
+           if (motionSkill) {
+             const prompt = fillPromptTemplate(motionSkill.promptTemplate, {
+               artStyle: currentProject.artStyleConfig,
+               characters: projectCharacters,
+               worldViewElements,
+               sceneDescription: latestScene2.sceneDescription,
+               shotPrompt: latestScene2.shotPrompt,
+               sceneSummary: latestScene2.summary,
+             });
 
-            const response = await client.chat([{ role: 'user', content: prompt }]);
-            updateScene(currentProject.id, sceneId, {
-              motionPrompt: response.content.trim(),
+             const response = await client.chat([{ role: 'user', content: prompt }]);
+             updateScene(currentProject.id, sceneId, {
+               motionPrompt: response.content.trim(),
               status: 'motion_generating',
             });
           }
@@ -256,6 +258,8 @@ export function Editor() {
               worldViewElements,
               sceneDescription: latestScene3.sceneDescription || '',
               sceneSummary: scene.summary,
+              shotPrompt: latestScene3.shotPrompt,
+              motionPrompt: latestScene3.motionPrompt,
             });
 
             const response = await client.chat([{ role: 'user', content: prompt }]);

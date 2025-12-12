@@ -1136,9 +1136,9 @@ describe('helper functions', () => {
   describe('getTaskTypeLabel', () => {
     it('should return correct labels for all types', () => {
       expect(getTaskTypeLabel('scene_list_generation')).toBe('分镜列表生成');
-      expect(getTaskTypeLabel('scene_description')).toBe('场景描述');
-      expect(getTaskTypeLabel('keyframe_prompt')).toBe('关键帧提示词');
-      expect(getTaskTypeLabel('motion_prompt')).toBe('时空提示词');
+      expect(getTaskTypeLabel('scene_description')).toBe('场景锚点');
+      expect(getTaskTypeLabel('keyframe_prompt')).toBe('关键帧提示词（KF0/KF1/KF2）');
+      expect(getTaskTypeLabel('motion_prompt')).toBe('时空/运动提示词');
       expect(getTaskTypeLabel('custom')).toBe('自定义调用');
     });
   });

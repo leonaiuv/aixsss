@@ -318,8 +318,13 @@ export function SceneRefinement() {
         throw new Error('技能配置未找到');
       }
 
-      const prompt = skill.promptTemplate
-        .replace('{scene_description}', latestScene.sceneDescription);
+      const prompt = fillPromptTemplate(skill.promptTemplate, {
+        artStyle: currentProject.artStyleConfig,
+        characters: projectCharacters,
+        sceneSummary: latestScene.summary,
+        sceneDescription: latestScene.sceneDescription,
+        shotPrompt: latestScene.shotPrompt,
+      });
 
       // 记录AI调用日志
       const logId = logAICall('motion_prompt', {
@@ -406,6 +411,8 @@ export function SceneRefinement() {
         characters: projectCharacters,
         sceneSummary: latestScene.summary,
         sceneDescription: latestScene.sceneDescription,
+        shotPrompt: latestScene.shotPrompt,
+        motionPrompt: latestScene.motionPrompt,
       });
 
       // 记录AI调用日志

@@ -608,11 +608,11 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
 export function getTaskTypeLabel(type: AICallType): string {
   const labels: Record<AICallType, string> = {
     scene_list_generation: '分镜列表生成',
-    scene_description: '场景描述',
+    scene_description: '场景锚点',
     action_description: '动作描述',
     shot_prompt: '镜头提示词',
-    keyframe_prompt: '关键帧提示词',
-    motion_prompt: '时空提示词',
+    keyframe_prompt: '关键帧提示词（KF0/KF1/KF2）',
+    motion_prompt: '时空/运动提示词',
     dialogue: '台词生成',
     character_basic_info: '角色信息生成',
     character_portrait: '角色定妆照生成',
