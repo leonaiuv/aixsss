@@ -56,7 +56,7 @@ function createMockScenes(projectId: string, count: number): Scene[] {
     projectId,
     order: i + 1,
     summary: `分镜 ${i + 1} 概要`,
-    sceneDescription: `分镜 ${i + 1} 场景描述`,
+    sceneDescription: `分镜 ${i + 1} 场景锚点`,
     actionDescription: `分镜 ${i + 1} 动作描述`,
     shotPrompt: `keyframe prompt for scene ${i + 1}`,
     motionPrompt: `motion prompt for scene ${i + 1}`,

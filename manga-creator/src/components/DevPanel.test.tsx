@@ -150,7 +150,7 @@ describe('DevPanel', () => {
       const { addTask } = useAIProgressStore.getState();
       addTask({
         type: 'scene_description',
-        title: '生成场景描述',
+        title: '生成场景锚点',
         status: 'running',
         priority: 'normal',
         progress: 50,
@@ -160,7 +160,7 @@ describe('DevPanel', () => {
       
       render(<DevPanel />);
       
-      expect(screen.getByText('生成场景描述')).toBeInTheDocument();
+      expect(screen.getByText('生成场景锚点')).toBeInTheDocument();
       expect(screen.getByText('处理中...')).toBeInTheDocument();
       expect(screen.getByText('50%')).toBeInTheDocument();
     });
@@ -169,7 +169,7 @@ describe('DevPanel', () => {
       const { addTask } = useAIProgressStore.getState();
       addTask({
         type: 'keyframe_prompt',
-        title: '生成关键帧提示词',
+        title: '生成关键帧提示词（KF0/KF1/KF2）',
         status: 'running',
         priority: 'normal',
         progress: 30,
@@ -203,7 +203,7 @@ describe('DevPanel', () => {
       
       const taskId = addTask({
         type: 'scene_description',
-        title: '生成场景描述',
+        title: '生成场景锚点',
         status: 'running',
         priority: 'normal',
         progress: 50,
@@ -214,7 +214,7 @@ describe('DevPanel', () => {
       render(<DevPanel />);
       await user.click(screen.getByRole('tab', { name: /历史/ }));
       
-      expect(screen.getByText('生成场景描述')).toBeInTheDocument();
+      expect(screen.getByText('生成场景锚点')).toBeInTheDocument();
     });
 
     it('should have export button', async () => {

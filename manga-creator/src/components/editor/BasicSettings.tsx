@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useCustomStyleStore } from '@/stores/customStyleStore';
 import { Card } from '@/components/ui/card';
@@ -14,6 +14,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ArrowRight, Sparkles, Globe, Users, Palette, Brush, Layers, MapPin, Copy, Check, Plus, Edit2, Trash2, Save } from 'lucide-react';
 import { WorldViewBuilder } from './WorldViewBuilder';
 import { CharacterManager } from './CharacterManager';
+import { useToast } from '@/hooks/use-toast';
+import { useKeyboardShortcut, GLOBAL_SHORTCUTS, getPlatformShortcut } from '@/hooks/useKeyboardShortcut';
 import { 
   ART_STYLE_PRESETS, 
   ArtStyleConfig, 
@@ -26,6 +28,7 @@ import {
 
 export function BasicSettings() {
   const { currentProject, updateProject } = useProjectStore();
+  const { toast } = useToast();
   const { 
     customStyles, 
     loadCustomStyles, 
@@ -85,6 +88,82 @@ export function BasicSettings() {
       setStyleConfig(getInitialStyleConfig());
     }
   }, [currentProject?.id]);
+
+  const canProceed = formData.summary.length >= 50 && styleConfig.fullPrompt && formData.protagonist.length >= 20;
+
+  const draftPayload = useMemo(
+    () => ({
+      summary: formData.summary,
+      protagonist: formData.protagonist,
+      // 向后兼容：旧字段里存 presetId
+      style: styleConfig.presetId,
+      artStyleConfig: styleConfig,
+    }),
+    [formData.protagonist, formData.summary, styleConfig]
+  );
+
+  const hasDraftChanges = useMemo(() => {
+    if (!currentProject) return false;
+    return (
+      (currentProject.summary || '') !== draftPayload.summary ||
+      (currentProject.protagonist || '') !== draftPayload.protagonist ||
+      (currentProject.style || '') !== draftPayload.style ||
+      JSON.stringify(currentProject.artStyleConfig || null) !== JSON.stringify(draftPayload.artStyleConfig || null)
+    );
+  }, [
+    currentProject,
+    draftPayload.artStyleConfig,
+    draftPayload.protagonist,
+    draftPayload.style,
+    draftPayload.summary,
+  ]);
+
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+
+  // 自动保存草稿：用户停顿 800ms 后写入（不改变 workflowState）
+  useEffect(() => {
+    if (!currentProject) return;
+    if (!hasDraftChanges) return;
+
+    const timer = window.setTimeout(() => {
+      updateProject(currentProject.id, draftPayload);
+      setLastSavedAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [currentProject, draftPayload, hasDraftChanges, updateProject]);
+
+  const handleSaveDraft = () => {
+    if (!currentProject) return;
+    updateProject(currentProject.id, draftPayload);
+    setLastSavedAt(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+    toast({
+      title: '已保存草稿',
+      description: '你的基础设定已保存到本地',
+    });
+  };
+
+  const handleProceed = () => {
+    if (!currentProject) return;
+    if (!canProceed) return;
+
+    updateProject(currentProject.id, {
+      ...draftPayload,
+      workflowState: 'DATA_COLLECTED',
+    });
+    // 触发进入下一步的事件
+    window.dispatchEvent(new CustomEvent('workflow:next-step'));
+  };
+
+  // 快捷键：Ctrl/Cmd + S 保存草稿
+  useKeyboardShortcut(
+    getPlatformShortcut(GLOBAL_SHORTCUTS.SAVE, GLOBAL_SHORTCUTS.SAVE_MAC),
+    () => {
+      if (!currentProject) return;
+      if (!hasDraftChanges) return;
+      handleSaveDraft();
+    }
+  );
 
   if (!currentProject) {
     return null;
@@ -227,27 +306,6 @@ export function BasicSettings() {
       culturalFeature: styleConfig.culturalFeature || '',
     });
     setShowCustomStyleDialog(true);
-  };
-
-  const canProceed = formData.summary.length >= 50 && styleConfig.fullPrompt && formData.protagonist.length >= 20;
-
-  const handleSave = () => {
-    if (canProceed) {
-      updateProject(currentProject.id, {
-        summary: formData.summary,
-        style: styleConfig.presetId, // 向后兼容
-        artStyleConfig: styleConfig,  // 新版完整配置
-        protagonist: formData.protagonist,
-        workflowState: 'DATA_COLLECTED',
-        updatedAt: new Date().toISOString(),
-      });
-    }
-  };
-
-  const handleProceed = () => {
-    handleSave();
-    // 触发进入下一步的事件
-    window.dispatchEvent(new CustomEvent('workflow:next-step'));
   };
 
   return (
@@ -564,9 +622,18 @@ export function BasicSettings() {
 
         {/* 操作按钮 */}
         <div className="flex items-center justify-between mt-8 pt-6 border-t">
-          <Button variant="outline" onClick={handleSave} disabled={!canProceed}>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={handleSaveDraft}
+              disabled={!hasDraftChanges}
+            >
             保存草稿
-          </Button>
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {lastSavedAt ? `已保存 ${lastSavedAt}` : '支持自动保存'}
+            </span>
+          </div>
           <Button 
             onClick={handleProceed} 
             disabled={!canProceed}

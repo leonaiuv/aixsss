@@ -253,9 +253,9 @@ describe('progressBridge', () => {
     it('should use correct title and description for each type', () => {
       const types = [
         { type: 'scene_list_generation' as const, title: '生成分镜列表' },
-        { type: 'scene_description' as const, title: '生成场景描述' },
-        { type: 'keyframe_prompt' as const, title: '生成关键帧提示词' },
-        { type: 'motion_prompt' as const, title: '生成时空提示词' },
+        { type: 'scene_description' as const, title: '生成场景锚点' },
+        { type: 'keyframe_prompt' as const, title: '生成关键帧提示词（KF0/KF1/KF2）' },
+        { type: 'motion_prompt' as const, title: '生成时空/运动提示词' },
         { type: 'custom' as const, title: '自定义AI调用' },
       ];
 

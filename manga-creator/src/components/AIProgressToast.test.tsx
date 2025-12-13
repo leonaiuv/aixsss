@@ -31,7 +31,7 @@ describe('AIProgressToast', () => {
       render(<AIProgressToast />);
       
       // Component should render nothing visible
-      expect(screen.queryByText('生成场景描述')).not.toBeInTheDocument();
+      expect(screen.queryByText('生成场景锚点')).not.toBeInTheDocument();
     });
   });
 
@@ -41,7 +41,7 @@ describe('AIProgressToast', () => {
       const { addTask } = useAIProgressStore.getState();
       addTask({
         type: 'scene_description',
-        title: '生成场景描述',
+        title: '生成场景锚点',
         status: 'running',
         priority: 'normal',
         progress: 50,
@@ -60,7 +60,7 @@ describe('AIProgressToast', () => {
         state.emit('task:started', task);
       });
       
-      expect(screen.getByText('生成场景描述')).toBeInTheDocument();
+      expect(screen.getByText('生成场景锚点')).toBeInTheDocument();
     });
 
     it('should show progress percentage', () => {
@@ -91,7 +91,7 @@ describe('AIProgressToast', () => {
       const { addTask } = useAIProgressStore.getState();
       addTask({
         type: 'motion_prompt',
-        title: '生成时空提示词',
+        title: '生成时空/运动提示词',
         status: 'running',
         priority: 'normal',
         progress: 30,
@@ -117,7 +117,7 @@ describe('AIProgressToast', () => {
       const { addTask, completeTask } = useAIProgressStore.getState();
       const taskId = addTask({
         type: 'scene_description',
-        title: '生成场景描述',
+        title: '生成场景锚点',
         status: 'running',
         priority: 'normal',
         progress: 50,
@@ -147,7 +147,7 @@ describe('AIProgressToast', () => {
       const { addTask, failTask } = useAIProgressStore.getState();
       const taskId = addTask({
         type: 'motion_prompt',
-        title: '生成时空提示词',
+        title: '生成时空/运动提示词',
         status: 'running',
         priority: 'normal',
         progress: 50,
@@ -193,7 +193,7 @@ describe('AIProgressIndicator', () => {
     const { addTask } = useAIProgressStore.getState();
     addTask({
       type: 'scene_description',
-      title: '生成场景描述',
+      title: '生成场景锚点',
       status: 'running',
       priority: 'normal',
       progress: 45,
@@ -202,7 +202,7 @@ describe('AIProgressIndicator', () => {
     
     render(<AIProgressIndicator />);
     
-    expect(screen.getByText('生成场景描述')).toBeInTheDocument();
+    expect(screen.getByText('生成场景锚点')).toBeInTheDocument();
     expect(screen.getByText('45%')).toBeInTheDocument();
   });
 

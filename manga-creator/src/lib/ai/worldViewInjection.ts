@@ -4,7 +4,7 @@
 // 功能：
 // 1. 定义世界观注入时机设置
 // 2. 提供开关控制注入行为
-// 3. 支持两种注入时机：分镜列表生成时、场景描述生成时
+// 3. 支持两种注入时机：分镜列表生成时、场景锚点生成时
 // ==========================================
 
 // ==========================================
@@ -17,7 +17,7 @@ export interface WorldViewInjectionSettings {
   enabled: boolean;
   /** 是否在生成分镜列表时注入 */
   injectAtSceneList: boolean;
-  /** 是否在生成场景描述时注入 */
+  /** 是否在生成场景锚点时注入 */
   injectAtSceneDescription: boolean;
 }
 
@@ -25,7 +25,7 @@ export interface WorldViewInjectionSettings {
 export const InjectionTiming = {
   /** 仅在生成分镜列表时注入 */
   SCENE_LIST: 'scene_list' as const,
-  /** 仅在生成场景描述时注入 */
+  /** 仅在生成场景锚点时注入 */
   SCENE_DESCRIPTION: 'scene_description' as const,
   /** 在两个时机都注入 */
   BOTH: 'both' as const,
@@ -110,7 +110,7 @@ export function shouldInjectAtSceneList(settings: WorldViewInjectionSettings): b
 }
 
 /**
- * 判断是否应该在场景描述生成时注入世界观
+ * 判断是否应该在场景锚点生成时注入世界观
  * @param settings 注入设置
  * @returns 是否应该注入
  */

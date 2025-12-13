@@ -57,7 +57,18 @@ export class GeminiProvider implements AIProvider {
 
   async chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse> {
     const url = this.buildURL(config.baseURL, config.model);
-    const requestBody = this.convertMessagesToGeminiFormat(messages);
+    const params = config.generationParams;
+    const requestBody: Record<string, unknown> = {
+      ...this.convertMessagesToGeminiFormat(messages),
+    };
+
+    if (params) {
+      requestBody.generationConfig = {
+        ...(typeof params.temperature === 'number' ? { temperature: params.temperature } : {}),
+        ...(typeof params.topP === 'number' ? { topP: params.topP } : {}),
+        ...(typeof params.maxTokens === 'number' ? { maxOutputTokens: params.maxTokens } : {}),
+      };
+    }
     
     const response = await fetch(url, {
       method: 'POST',
@@ -89,7 +100,18 @@ export class GeminiProvider implements AIProvider {
 
   async *streamChat(messages: ChatMessage[], config: AIProviderConfig): AsyncGenerator<string> {
     const url = this.buildStreamURL(config.baseURL, config.model);
-    const requestBody = this.convertMessagesToGeminiFormat(messages);
+    const params = config.generationParams;
+    const requestBody: Record<string, unknown> = {
+      ...this.convertMessagesToGeminiFormat(messages),
+    };
+
+    if (params) {
+      requestBody.generationConfig = {
+        ...(typeof params.temperature === 'number' ? { temperature: params.temperature } : {}),
+        ...(typeof params.topP === 'number' ? { topP: params.topP } : {}),
+        ...(typeof params.maxTokens === 'number' ? { maxOutputTokens: params.maxTokens } : {}),
+      };
+    }
     
     const response = await fetch(url, {
       method: 'POST',

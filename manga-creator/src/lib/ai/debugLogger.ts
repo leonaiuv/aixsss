@@ -9,11 +9,11 @@
 // AI调用类型
 export type AICallType = 
   | 'scene_list_generation'      // 分镜列表生成
-  | 'scene_description'          // 场景描述生成
+  | 'scene_description'          // 场景锚点生成
   | 'action_description'         // 动作描述生成（已废弃，保留兼容）
   | 'shot_prompt'                // 镜头提示词生成（已废弃，保留兼容）
-  | 'keyframe_prompt'            // 关键帧提示词生成
-  | 'motion_prompt'              // 时空提示词生成
+  | 'keyframe_prompt'            // 关键帧提示词生成（KF0/KF1/KF2）
+  | 'motion_prompt'              // 时空/运动提示词生成
   | 'dialogue'                   // 台词生成
   | 'character_basic_info'       // 角色基础信息生成
   | 'character_portrait'         // 角色定妆照提示词生成
@@ -79,7 +79,7 @@ export interface AICallContext {
   prevSceneSummary?: string;// 前一分镜概要
   
   // 已生成内容
-  sceneDescription?: string;  // 场景描述
+  sceneDescription?: string;  // 场景锚点（原字段名 sceneDescription）
   actionDescription?: string; // 动作描述
   
   // 其他上下文
@@ -179,11 +179,11 @@ function generateId(): string {
 function formatLogOutput(entry: AICallLogEntry): void {
   const callTypeLabels: Record<AICallType, string> = {
     scene_list_generation: '📋 分镜列表生成',
-    scene_description: '🎬 场景描述生成',
+    scene_description: '🎬 场景锚点生成',
     action_description: '🏃 动作描述生成',
     shot_prompt: '🎯 镜头提示词生成',
-    keyframe_prompt: '🖼️ 关键帧提示词生成',
-    motion_prompt: '🎬 时空提示词生成',
+    keyframe_prompt: '🖼️ 关键帧提示词生成（KF0/KF1/KF2）',
+    motion_prompt: '🎬 时空/运动提示词生成',
     dialogue: '💬 台词生成',
     character_basic_info: '👤 角色信息生成',
     character_portrait: '📷 角色定妆照生成',
@@ -224,7 +224,7 @@ function formatLogOutput(entry: AICallLogEntry): void {
   });
 
   if (entry.context.sceneDescription) {
-    console.log('%c已有场景描述:', 'color: #3b82f6;');
+    console.log('%c已有场景锚点:', 'color: #3b82f6;');
     console.log(entry.context.sceneDescription);
   }
 

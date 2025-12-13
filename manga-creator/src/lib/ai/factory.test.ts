@@ -3,6 +3,7 @@ import { AIFactory, createAIProvider } from '@/lib/ai/factory';
 import { DeepSeekProvider } from '@/lib/ai/providers/deepseek';
 import { OpenAICompatibleProvider } from '@/lib/ai/providers/openai';
 import { GeminiProvider } from '@/lib/ai/providers/gemini';
+import { KimiProvider } from '@/lib/ai/providers/kimi';
 import { ChatMessage, UserConfig, ProviderType } from '@/types';
 
 // ==========================================
@@ -22,9 +23,10 @@ describe('createAIProvider', () => {
     expect(provider.name).toBe('OpenAI Compatible');
   });
 
-  it('应根据 kimi 类型返回 OpenAICompatibleProvider 实例', () => {
+  it('应根据 kimi 类型返回 KimiProvider 实例', () => {
     const provider = createAIProvider('kimi');
-    expect(provider).toBeInstanceOf(OpenAICompatibleProvider);
+    expect(provider).toBeInstanceOf(KimiProvider);
+    expect(provider.name).toBe('Kimi');
   });
 
   it('应根据 gemini 类型返回 GeminiProvider 实例', () => {
@@ -270,7 +272,7 @@ describe('不同 Provider 类型测试', () => {
   const providers: Array<{ type: ProviderType; name: string }> = [
     { type: 'deepseek', name: 'DeepSeek' },
     { type: 'openai-compatible', name: 'OpenAI Compatible' },
-    { type: 'kimi', name: 'OpenAI Compatible' },
+    { type: 'kimi', name: 'Kimi' },
     { type: 'gemini', name: 'Gemini' },
   ];
 

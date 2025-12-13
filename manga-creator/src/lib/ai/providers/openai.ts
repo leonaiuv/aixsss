@@ -6,6 +6,7 @@ export class OpenAICompatibleProvider implements AIProvider {
 
   async chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse> {
     const url = `${config.baseURL || 'https://api.openai.com'}/v1/chat/completions`;
+    const params = config.generationParams;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -16,6 +17,11 @@ export class OpenAICompatibleProvider implements AIProvider {
       body: JSON.stringify({
         model: config.model,
         messages,
+        ...(typeof params?.temperature === 'number' ? { temperature: params.temperature } : {}),
+        ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
+        ...(typeof params?.maxTokens === 'number' ? { max_tokens: params.maxTokens } : {}),
+        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
+        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
     });
 
@@ -36,6 +42,7 @@ export class OpenAICompatibleProvider implements AIProvider {
 
   async *streamChat(messages: ChatMessage[], config: AIProviderConfig): AsyncGenerator<string> {
     const url = `${config.baseURL || 'https://api.openai.com'}/v1/chat/completions`;
+    const params = config.generationParams;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -47,6 +54,11 @@ export class OpenAICompatibleProvider implements AIProvider {
         model: config.model,
         messages,
         stream: true,
+        ...(typeof params?.temperature === 'number' ? { temperature: params.temperature } : {}),
+        ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
+        ...(typeof params?.maxTokens === 'number' ? { max_tokens: params.maxTokens } : {}),
+        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
+        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
     });
 

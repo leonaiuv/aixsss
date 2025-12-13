@@ -8,7 +8,7 @@
 // 4. 搜索历史
 // ==========================================
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchStore } from '@/stores/searchStore';
 import { Project } from '@/types';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { getWorkflowStateLabel } from '@/lib/workflowLabels';
 import {
   Popover,
   PopoverContent,
@@ -35,12 +36,12 @@ import { zhCN } from 'date-fns/locale';
 
 interface ProjectSearchProps {
   projects: Project[];
-  onResultsChange: (projects: Project[]) => void;
+  onSelect?: (project: Project) => void;
 }
 
 export function ProjectSearch({
   projects,
-  onResultsChange,
+  onSelect,
 }: ProjectSearchProps) {
   const { addSearchHistory, getSearchHistory, clearSearchHistory } =
     useSearchStore();
@@ -49,6 +50,8 @@ export function ProjectSearch({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const searchHistory = getSearchHistory();
 
@@ -98,16 +101,12 @@ export function ProjectSearch({
     return results;
   }, [projects, query, statusFilter, sortBy, sortOrder]);
 
-  // 更新父组件
-  useMemo(() => {
-    onResultsChange(filteredProjects);
-  }, [filteredProjects, onResultsChange]);
+  useEffect(() => {
+    setHighlightIndex(0);
+  }, [query, statusFilter, sortBy, sortOrder]);
 
   const handleSearch = (value: string) => {
     setQuery(value);
-    if (value.trim()) {
-      addSearchHistory(value);
-    }
   };
 
   const handleHistoryClick = (historyQuery: string) => {
@@ -132,6 +131,13 @@ export function ProjectSearch({
 
   const hasActiveFilters = query || statusFilter.length > 0;
 
+  const selectProject = (project: Project) => {
+    if (query.trim()) {
+      addSearchHistory(query.trim());
+    }
+    onSelect?.(project);
+  };
+
   return (
     <div className="space-y-4">
       {/* 搜索栏 */}
@@ -139,12 +145,34 @@ export function ProjectSearch({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            ref={inputRef}
             value={query}
             onChange={(e) => handleSearch(e.target.value)}
             onFocus={() => setShowHistory(true)}
             onBlur={() => setTimeout(() => setShowHistory(false), 200)}
             placeholder="搜索项目名称、剧情、风格..."
             className="pl-10 pr-10"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlightIndex((i) =>
+                  Math.min(i + 1, Math.max(0, filteredProjects.length - 1))
+                );
+                return;
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlightIndex((i) => Math.max(i - 1, 0));
+                return;
+              }
+              if (e.key === 'Enter') {
+                if (filteredProjects.length === 0) return;
+                e.preventDefault();
+                const project = filteredProjects[highlightIndex];
+                if (project) selectProject(project);
+              }
+            }}
           />
           {query && (
             <Button
@@ -304,6 +332,50 @@ export function ProjectSearch({
           </div>
         )}
       </div>
+
+      {/* 结果列表 */}
+      <ScrollArea className="max-h-[360px] pr-2">
+        {filteredProjects.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            没有找到匹配的项目
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredProjects.slice(0, 50).map((project, index) => (
+              <button
+                key={project.id}
+                type="button"
+                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                  index === highlightIndex
+                    ? 'border-primary bg-primary/5'
+                    : 'hover:bg-muted'
+                }`}
+                onMouseEnter={() => setHighlightIndex(index)}
+                onClick={() => selectProject(project)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{project.title}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                      {project.summary || '暂无描述'}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 text-xs">
+                    <span title={project.workflowState}>
+                      {getWorkflowStateLabel(project.workflowState)}
+                    </span>
+                  </Badge>
+                </div>
+              </button>
+            ))}
+            {filteredProjects.length > 50 && (
+              <div className="text-xs text-muted-foreground text-center py-2">
+                仅显示前 50 条结果
+              </div>
+            )}
+          </div>
+        )}
+      </ScrollArea>
     </div>
   );
 }

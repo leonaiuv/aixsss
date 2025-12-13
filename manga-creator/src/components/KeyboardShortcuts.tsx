@@ -9,7 +9,7 @@
 // ==========================================
 
 import { useState, useEffect } from 'react';
-import { useKeyboardShortcut } from '@/hooks/useKeyboardShortcut';
+import { useKeyboardShortcut, GLOBAL_SHORTCUTS, getPlatformShortcut } from '@/hooks/useKeyboardShortcut';
 import {
   Dialog,
   DialogContent,
@@ -73,14 +73,14 @@ const DEFAULT_SHORTCUTS: ShortcutConfig[] = [
     id: 'search',
     name: '搜索',
     description: '打开搜索对话框',
-    keys: ['Ctrl', 'F'],
+    keys: ['Ctrl', 'K'],
     enabled: true,
     category: 'navigation',
   },
   {
     id: 'generate-scene',
-    name: '生成场景',
-    description: '生成当前分镜的场景描述',
+    name: '生成场景锚点',
+    description: '生成当前分镜的场景锚点（环境一致性）',
     keys: ['Ctrl', 'G'],
     enabled: true,
     category: 'generation',
@@ -135,9 +135,10 @@ export function KeyboardShortcuts() {
   const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
 
   // 监听快捷键提示 (Ctrl+/)
-  useKeyboardShortcut(['Control', '/'], () => {
-    setIsOpen(true);
-  });
+  useKeyboardShortcut(
+    getPlatformShortcut(GLOBAL_SHORTCUTS.HELP, GLOBAL_SHORTCUTS.HELP_MAC),
+    () => setIsOpen(true)
+  );
 
   // 录制快捷键
   useEffect(() => {
@@ -217,7 +218,7 @@ export function KeyboardShortcuts() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" aria-label="键盘快捷键" title="键盘快捷键 (Ctrl+/)">
           <Keyboard className="h-5 w-5" />
         </Button>
       </DialogTrigger>

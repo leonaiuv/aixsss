@@ -93,6 +93,8 @@ export const GLOBAL_SHORTCUTS = {
   REDO_MAC: 'cmd+shift+z',
   SEARCH: 'ctrl+k',
   SEARCH_MAC: 'cmd+k',
+  HELP: 'ctrl+/',
+  HELP_MAC: 'cmd+/',
   
   // 导航
   ESCAPE: 'escape',

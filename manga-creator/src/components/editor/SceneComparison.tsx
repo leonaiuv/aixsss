@@ -136,7 +136,7 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
 
           <TabsContent value="scene" className="space-y-4">
             <ComparisonField
-              label="场景描述"
+              label="场景锚点"
               leftContent={leftScene.sceneDescription || '(未生成)'}
               rightContent={rightScene.sceneDescription || '(未生成)'}
               onCopyToLeft={() => handleCopyToLeft('sceneDescription')}
@@ -177,7 +177,7 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
                 <Badge variant="outline">{getStatusText(leftScene.status)}</Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">场景描述</span>
+                <span className="text-muted-foreground">场景锚点</span>
                 <span>
                   {leftScene.sceneDescription ? '已生成' : '未生成'}
                 </span>
@@ -203,7 +203,7 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
                 <Badge variant="outline">{getStatusText(rightScene.status)}</Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">场景描述</span>
+                <span className="text-muted-foreground">场景锚点</span>
                 <span>
                   {rightScene.sceneDescription ? '已生成' : '未生成'}
                 </span>

@@ -10,6 +10,7 @@
 
 import { useState, useMemo } from 'react';
 import { useTemplateStore } from '@/stores/templateStore';
+import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,6 +51,7 @@ interface TemplateGalleryProps {
 export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
   const { templates, addTemplate, updateTemplate, deleteTemplate } =
     useTemplateStore();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -140,14 +142,21 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
     setIsCreateDialogOpen(false);
   };
 
-  const handleDelete = (templateId: string) => {
-    if (confirm('确定要删除这个模板吗？')) {
-      deleteTemplate(templateId);
-    }
+  const handleDelete = async (templateId: string) => {
+    const ok = await confirm({
+      title: '确认删除模板？',
+      description: '删除后无法恢复。',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteTemplate(templateId);
   };
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog />
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

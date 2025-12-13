@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useConfigStore } from '@/stores/configStore';
-import { ProviderType } from '@/types';
+import { ProviderType, type AIGenerationParams } from '@/types';
 import { KeyManager } from '@/lib/keyManager';
 import { initializeEncryption, changeEncryptionPassword } from '@/lib/storage';
 import {
@@ -16,7 +16,27 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, Shield, ShieldAlert, Lock } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Shield, ShieldAlert, Lock, Sliders } from 'lucide-react';
+import { AIParameterTuner } from './editor/AIParameterTuner';
+
+const DEFAULT_GENERATION_PARAMS: AIGenerationParams = {
+  temperature: 0.7,
+  topP: 0.9,
+  maxTokens: 1500,
+  presencePenalty: 0.3,
+  frequencyPenalty: 0.3,
+};
+
+function normalizeGenerationParams(
+  params: AIGenerationParams | undefined
+): AIGenerationParams {
+  return {
+    ...DEFAULT_GENERATION_PARAMS,
+    ...params,
+    presencePenalty: params?.presencePenalty ?? DEFAULT_GENERATION_PARAMS.presencePenalty,
+    frequencyPenalty: params?.frequencyPenalty ?? DEFAULT_GENERATION_PARAMS.frequencyPenalty,
+  };
+}
 
 interface ConfigDialogProps {
   open: boolean;
@@ -33,6 +53,10 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const [model, setModel] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [generationParams, setGenerationParams] = useState<AIGenerationParams>(
+    DEFAULT_GENERATION_PARAMS
+  );
+  const [aiTunerOpen, setAiTunerOpen] = useState(false);
   
   // 加密密码相关状态
   const [encryptionPassword, setEncryptionPassword] = useState('');
@@ -50,6 +74,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setApiKey(config.apiKey);
       setBaseURL(config.baseURL || '');
       setModel(config.model);
+      setGenerationParams(normalizeGenerationParams(config.generationParams));
     }
     // 检查加密状态
     setHasCustomPassword(KeyManager.hasCustomPassword());
@@ -70,6 +95,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       apiKey,
       baseURL: baseURL || undefined,
       model,
+      generationParams,
     });
 
     toast({
@@ -95,6 +121,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       apiKey,
       baseURL: baseURL || undefined,
       model,
+      generationParams,
     });
     setIsTesting(false);
 
@@ -359,6 +386,29 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             />
           </div>
 
+          <div className="border rounded-lg p-4 bg-muted/30">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <Sliders className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">AI 生成参数</p>
+                  <p className="text-xs text-muted-foreground">
+                    Temperature {generationParams.temperature.toFixed(2)} · TopP{' '}
+                    {generationParams.topP.toFixed(2)} · MaxTokens {generationParams.maxTokens}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setAiTunerOpen(true)}
+              >
+                调优
+              </Button>
+            </div>
+          </div>
+
           <Button 
             variant="outline" 
             onClick={handleTest}
@@ -375,6 +425,21 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             )}
           </Button>
         </div>
+
+        <Dialog open={aiTunerOpen} onOpenChange={setAiTunerOpen}>
+          <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>AI 参数调优</DialogTitle>
+              <DialogDescription>这些参数会影响所有 AI 生成效果。</DialogDescription>
+            </DialogHeader>
+            <AIParameterTuner params={generationParams} onParamsChange={setGenerationParams} />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAiTunerOpen(false)}>
+                完成
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

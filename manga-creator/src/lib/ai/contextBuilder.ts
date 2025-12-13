@@ -23,9 +23,9 @@ export interface ContextBuildOptions {
   worldViewElements?: WorldViewElement[];
   /** 主角描述（兼容旧版） */
   protagonist?: string;
-  /** 场景描述 */
+  /** 场景锚点（环境一致性，原字段名 sceneDescription） */
   sceneDescription?: string;
-  /** 关键帧提示词（可包含多关键帧） */
+  /** 关键帧提示词（可包含 KF0/KF1/KF2） */
   shotPrompt?: string;
   /** 时空/运动提示词 */
   motionPrompt?: string;
@@ -289,7 +289,7 @@ export function buildContextForSkill(
       });
     
     case 'scene-description':
-      // 场景描述：需要画风、角色、世界观
+      // 场景锚点：通常只需要画风、世界观（以及分镜概要/前序概要）
       return buildFullContext({
         artStyle: options.artStyle,
         characters: options.characters,
@@ -304,7 +304,7 @@ export function buildContextForSkill(
       });
     
     case 'motion-prompt':
-      // 时空提示词：需要画风
+      // 时空/运动提示词：需要画风
       return buildFullContext({
         artStyle: options.artStyle,
       });

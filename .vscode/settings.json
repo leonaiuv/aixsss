@@ -1,3 +1,4 @@
 {
-    "codingcopilot.enableCompletionLanguage": {}
+    "codingcopilot.enableCompletionLanguage": {},
+    "chatgpt.openOnStartup": false
 }

@@ -83,7 +83,7 @@ export function analyzeProjectSettingsImpact(
       
       // 根据修改的字段确定需要更新的内容
       if (modifiedFields.includes('style')) {
-        // 风格修改影响场景描述和提示词
+        // 风格修改影响场景锚点和提示词
         if (scene.sceneDescription) {
           updatePlan.push({
             sceneId: scene.id,
@@ -131,7 +131,7 @@ export function analyzeProjectSettingsImpact(
       }
       
       if (modifiedFields.includes('summary')) {
-        // 故事梗概修改影响场景描述
+        // 故事梗概修改影响场景锚点
         if (scene.sceneDescription) {
           updatePlan.push({
             sceneId: scene.id,
@@ -177,7 +177,7 @@ export function analyzeSceneImpact(
       updatePlan.push({
         sceneId: modifiedScene.id,
         field: 'actionDescription',
-        reason: `${modifiedField === 'summary' ? '分镜概要' : '场景描述'}已修改`,
+        reason: `${modifiedField === 'summary' ? '分镜概要' : '场景锚点'}已修改`,
         priority: 'high',
       });
     }
@@ -185,7 +185,7 @@ export function analyzeSceneImpact(
       updatePlan.push({
         sceneId: modifiedScene.id,
         field: 'shotPrompt',
-        reason: `${modifiedField === 'summary' ? '分镜概要' : '场景描述'}已修改`,
+        reason: `${modifiedField === 'summary' ? '分镜概要' : '场景锚点'}已修改`,
         priority: 'high',
       });
     }
@@ -420,7 +420,7 @@ export function analyzeWorldViewImpact(
   const updatePlan: UpdateAction[] = [];
 
   affectedScenes.forEach(scene => {
-    // 世界观主要影响场景描述
+    // 世界观主要影响场景锚点
     if (scene.sceneDescription) {
       updatePlan.push({
         sceneId: scene.id,
@@ -494,7 +494,7 @@ export function generateUpdateOptions(impact: UpdateImpact): string[] {
   // 添加全部重新生成选项
   options.unshift('all');
 
-  // 检查是否有场景描述更新
+  // 检查是否有场景锚点更新
   const hasSceneUpdates = impact.updatePlan.some(
     action => action.field === 'sceneDescription'
   );

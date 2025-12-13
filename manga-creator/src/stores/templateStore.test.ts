@@ -57,17 +57,24 @@ describe('TemplateStore', () => {
 
   describe('updateTemplate', () => {
     it('应该能够更新模板', () => {
-      const { templates, updateTemplate } = useTemplateStore.getState();
-      const templateId = templates[0].id;
+      const { addTemplate, updateTemplate } = useTemplateStore.getState();
+      const created = addTemplate({
+        name: '可更新模板',
+        category: 'scene',
+        description: '用于测试 update',
+        template: 'test',
+        variables: [],
+        isBuiltIn: false,
+      });
 
-      updateTemplate(templateId, {
+      updateTemplate(created.id, {
         name: '更新后的名称',
         usageCount: 10,
       });
 
       const updatedTemplate = useTemplateStore
         .getState()
-        .templates.find((t) => t.id === templateId);
+        .templates.find((t) => t.id === created.id);
 
       expect(updatedTemplate?.name).toBe('更新后的名称');
       expect(updatedTemplate?.usageCount).toBe(10);
@@ -92,10 +99,9 @@ describe('TemplateStore', () => {
 
   describe('deleteTemplate', () => {
     it('应该能够删除自定义模板', () => {
-      const { addTemplate, deleteTemplate, templates } =
-        useTemplateStore.getState();
+      const { addTemplate, deleteTemplate } = useTemplateStore.getState();
 
-      addTemplate({
+      const created = addTemplate({
         name: '待删除模板',
         category: 'scene',
         description: '',
@@ -103,14 +109,12 @@ describe('TemplateStore', () => {
         variables: [],
         isBuiltIn: false,
       });
+      const afterAddCount = useTemplateStore.getState().templates.length;
 
-      const templateId = templates[templates.length - 1].id;
-      const beforeCount = templates.length;
-
-      deleteTemplate(templateId);
+      deleteTemplate(created.id);
 
       expect(useTemplateStore.getState().templates).toHaveLength(
-        beforeCount - 1
+        afterAddCount - 1
       );
     });
 

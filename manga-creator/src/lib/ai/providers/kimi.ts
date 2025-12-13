@@ -10,6 +10,19 @@ export class KimiProvider implements AIProvider {
     const url = `${KIMI_BASE_URL}/v1/chat/completions`;
     const model = config.model || 'moonshot-v1-8k';
     const isThinkingModel = model.includes('thinking');
+    const params = config.generationParams;
+
+    const temperature = isThinkingModel
+      ? 1.0
+      : typeof params?.temperature === 'number'
+      ? params.temperature
+      : 0.6;
+
+    const maxTokens = isThinkingModel
+      ? Math.max(16000, typeof params?.maxTokens === 'number' ? params.maxTokens : 16000)
+      : typeof params?.maxTokens === 'number'
+      ? params.maxTokens
+      : 4096;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -20,9 +33,11 @@ export class KimiProvider implements AIProvider {
       body: JSON.stringify({
         model,
         messages,
-        // kimi-k2-thinking 模型必须设置 temperature=1.0 和 max_tokens>=16000
-        temperature: isThinkingModel ? 1.0 : 0.6,
-        max_tokens: isThinkingModel ? 16000 : 4096,
+        temperature,
+        max_tokens: maxTokens,
+        ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
+        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
+        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
     });
 
@@ -51,6 +66,19 @@ export class KimiProvider implements AIProvider {
     const url = `${KIMI_BASE_URL}/v1/chat/completions`;
     const model = config.model || 'moonshot-v1-8k';
     const isThinkingModel = model.includes('thinking');
+    const params = config.generationParams;
+
+    const temperature = isThinkingModel
+      ? 1.0
+      : typeof params?.temperature === 'number'
+      ? params.temperature
+      : 0.6;
+
+    const maxTokens = isThinkingModel
+      ? Math.max(16000, typeof params?.maxTokens === 'number' ? params.maxTokens : 16000)
+      : typeof params?.maxTokens === 'number'
+      ? params.maxTokens
+      : 4096;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -62,9 +90,11 @@ export class KimiProvider implements AIProvider {
         model,
         messages,
         stream: true,
-        // kimi-k2-thinking 模型必须设置 temperature=1.0 和 max_tokens>=16000
-        temperature: isThinkingModel ? 1.0 : 0.6,
-        max_tokens: isThinkingModel ? 16000 : 4096,
+        temperature,
+        max_tokens: maxTokens,
+        ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
+        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
+        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
     });
 

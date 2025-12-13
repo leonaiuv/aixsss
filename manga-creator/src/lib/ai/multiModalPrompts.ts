@@ -461,7 +461,7 @@ export const BGMPromptSkill: Skill = {
 ## 场景概要
 {scene_summary}
 
-## 场景描述
+## 场景锚点
 {scene_description}
 
 ## 整体风格

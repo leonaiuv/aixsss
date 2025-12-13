@@ -243,7 +243,7 @@ export function AIParameterTuner({
             <p className="font-semibold mb-1">💡 使用建议</p>
             <ul className="space-y-1 text-xs">
               <li>
-                • <strong>场景描述</strong>: 使用平衡或保守模式，确保描述清晰
+                • <strong>场景锚点</strong>: 使用平衡或保守模式，确保锚点清晰稳定
               </li>
               <li>
                 • <strong>动作描述</strong>: 使用平衡模式，兼顾细节和连贯性

@@ -5,13 +5,15 @@ import { useThemeStore } from './stores/themeStore';
 import { initStorage } from './lib/storage';
 import { ProjectList } from './components/ProjectList';
 import { ThemeToggle } from './components/ThemeToggle';
+import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { Toaster } from './components/ui/toaster';
-import { AIProgressToast } from './components/AIProgressToast';
+import { AIProgressToast, AIProgressIndicator } from './components/AIProgressToast';
 import { initProgressBridge } from './lib/ai/progressBridge';
 import { Settings, Search, Terminal, Loader2 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent } from './components/ui/dialog';
 import { useAIProgressStore } from './stores/aiProgressStore';
+import { useKeyboardShortcut, GLOBAL_SHORTCUTS, getPlatformShortcut } from './hooks/useKeyboardShortcut';
 
 // 懒加载重型组件
 const Editor = lazy(() => import('./components/Editor').then(m => ({ default: m.Editor })));
@@ -41,11 +43,10 @@ function App() {
   const setCurrentProject = useProjectStore(state => state.setCurrentProject);
   const loadConfig = useConfigStore(state => state.loadConfig);
   const initTheme = useThemeStore(state => state.initTheme);
+  const toggleThemeMode = useThemeStore(state => state.toggleMode);
   const togglePanel = useAIProgressStore(state => state.togglePanel);
   const isPanelVisible = useAIProgressStore(state => state.isPanelVisible);
   
-  const [filteredProjects, setFilteredProjects] = useState(projects);
-
   useEffect(() => {
     initStorage();
     loadProjects();
@@ -60,17 +61,17 @@ function App() {
     };
   }, [loadProjects, loadConfig, initTheme]);
 
-  // 全局搜索快捷键 Ctrl+K
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setSearchDialogOpen(true);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  // 全局搜索快捷键：Ctrl/Cmd + K
+  useKeyboardShortcut(
+    getPlatformShortcut(GLOBAL_SHORTCUTS.SEARCH, GLOBAL_SHORTCUTS.SEARCH_MAC),
+    () => setSearchDialogOpen(true)
+  );
+
+  // 切换主题：Ctrl/Cmd + Shift + T
+  useKeyboardShortcut(
+    getPlatformShortcut(GLOBAL_SHORTCUTS.TOGGLE_THEME, GLOBAL_SHORTCUTS.TOGGLE_THEME_MAC),
+    () => toggleThemeMode()
+  );
 
   // 使用 useCallback 缓存回调函数
   const handleOpenEditor = useCallback(() => setCurrentView('editor'), []);
@@ -83,10 +84,6 @@ function App() {
     setCurrentView('editor');
     setSearchDialogOpen(false);
   }, [setCurrentProject]);
-
-  const handleFilteredProjectsChange = useCallback((projects: typeof filteredProjects) => {
-    setFilteredProjects(projects);
-  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -117,6 +114,7 @@ function App() {
               size="icon"
               onClick={handleOpenSearch}
               title="搜索 (Ctrl+K)"
+              aria-label="搜索项目 (Ctrl+K)"
             >
               <Search className="h-5 w-5" />
             </Button>
@@ -126,14 +124,17 @@ function App() {
               onClick={togglePanel}
               title="开发者面板"
               className={isPanelVisible ? 'bg-muted' : ''}
+              aria-label="开发者面板"
             >
               <Terminal className="h-5 w-5" />
             </Button>
+            <KeyboardShortcuts />
             <ThemeToggle />
             <Button 
               variant="ghost" 
               size="icon"
               onClick={handleOpenConfig}
+              aria-label="设置"
             >
               <Settings className="h-5 w-5" />
             </Button>
@@ -166,25 +167,9 @@ function App() {
           <Suspense fallback={<LoadingFallback />}>
             <ProjectSearch
               projects={projects}
-              onResultsChange={handleFilteredProjectsChange}
+              onSelect={handleSearchResultClick}
             />
           </Suspense>
-          {filteredProjects.length > 0 && (
-            <div className="mt-4 space-y-2 max-h-60 overflow-auto">
-              {filteredProjects.slice(0, 5).map((project) => (
-                <div
-                  key={project.id}
-                  className="p-3 rounded-lg border hover:bg-muted cursor-pointer"
-                  onClick={() => handleSearchResultClick(project)}
-                >
-                  <p className="font-medium">{project.title}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {project.summary || '暂无描述'}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
         </DialogContent>
       </Dialog>
 
@@ -193,6 +178,7 @@ function App() {
       
       {/* AI进度提醒 */}
       <AIProgressToast />
+      <AIProgressIndicator />
       
       {/* 开发者面板 */}
       <Suspense fallback={null}>

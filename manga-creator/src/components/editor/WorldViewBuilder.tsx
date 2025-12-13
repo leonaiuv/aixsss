@@ -28,6 +28,7 @@ import {
   saveInjectionSettings,
   WorldViewInjectionSettings
 } from '@/lib/ai/worldViewInjection';
+import { useConfirm } from '@/hooks/use-confirm';
 
 const ELEMENT_TYPES = [
   { value: 'era', label: '时代背景', icon: '🕐', desc: '故事发生的时代特征' },
@@ -42,6 +43,7 @@ export function WorldViewBuilder() {
   const { currentProject } = useProjectStore();
   const { elements, loadElements, addElement, updateElement, deleteElement, currentElementId, setCurrentElement } = useWorldViewStore();
   const { config } = useConfigStore();
+  const { confirm, ConfirmDialog } = useConfirm();
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -169,12 +171,18 @@ export function WorldViewBuilder() {
   };
 
   // 删除要素
-  const handleDelete = (elementId: string) => {
-    if (window.confirm('确认删除这个世界观要素吗？')) {
-      deleteElement(currentProject.id, elementId);
-      if (currentElementId === elementId) {
-        setCurrentElement(null);
-      }
+  const handleDelete = async (elementId: string) => {
+    const ok = await confirm({
+      title: '确认删除世界观要素？',
+      description: '删除后无法恢复。该要素可能影响后续AI生成效果。',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteElement(currentProject.id, elementId);
+    if (currentElementId === elementId) {
+      setCurrentElement(null);
     }
   };
 
@@ -187,6 +195,7 @@ export function WorldViewBuilder() {
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog />
       <Card className="p-8">
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -424,14 +433,14 @@ export function WorldViewBuilder() {
                   />
                 </div>
 
-                {/* 场景描述生成时注入 */}
+                {/* 场景锚点生成时注入 */}
                 <div className={`flex items-center justify-between p-4 rounded-lg border ${
                   injectionSettings.enabled ? '' : 'opacity-50'
                 }`}>
                   <div className="space-y-0.5">
-                    <Label htmlFor="inject-scene-desc" className="font-medium">场景描述生成时注入</Label>
+                    <Label htmlFor="inject-scene-desc" className="font-medium">场景锚点生成时注入</Label>
                     <p className="text-sm text-muted-foreground">
-                      在生成场景描述时考虑世界观设定
+                      在生成场景锚点时考虑世界观设定
                     </p>
                   </div>
                   <Switch
@@ -453,11 +462,11 @@ export function WorldViewBuilder() {
                     <span className="text-primary">
                       {' '}将在
                       {injectionSettings.injectAtSceneList && injectionSettings.injectAtSceneDescription
-                        ? ' 分镜列表生成 和 场景描述生成 '
+                        ? ' 分镜列表生成 和 场景锚点生成 '
                         : injectionSettings.injectAtSceneList
                         ? ' 分镜列表生成 '
                         : injectionSettings.injectAtSceneDescription
-                        ? ' 场景描述生成 '
+                        ? ' 场景锚点生成 '
                         : ' 无任何阶段 '}
                       时注入世界观
                     </span>

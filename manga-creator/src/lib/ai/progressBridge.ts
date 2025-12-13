@@ -15,24 +15,28 @@ const logToTaskMap: Map<string, string> = new Map();
 // AI调用类型到任务标题的映射
 const callTypeToTitle: Record<AICallType, string> = {
   scene_list_generation: '生成分镜列表',
-  scene_description: '生成场景描述',
+  scene_description: '生成场景锚点',
   action_description: '生成动作描述',
   shot_prompt: '生成镜头提示词',
-  keyframe_prompt: '生成关键帧提示词',
-  motion_prompt: '生成时空提示词',
+  keyframe_prompt: '生成关键帧提示词（KF0/KF1/KF2）',
+  motion_prompt: '生成时空/运动提示词',
   dialogue: '生成台词',
+  character_basic_info: '生成角色信息',
+  character_portrait: '生成角色定妆照提示词',
   custom: '自定义AI调用',
 };
 
 // AI调用类型到描述的映射
 const callTypeToDesc: Record<AICallType, string> = {
   scene_list_generation: '将故事拆解为关键分镜节点',
-  scene_description: '根据分镜概要生成详细场景描述',
+  scene_description: '生成可复用的场景锚点（环境一致性）',
   action_description: '描述角色的具体动作',
   shot_prompt: '生成适合绘图AI的镜头描述',
-  keyframe_prompt: '生成静态关键帧图片描述',
-  motion_prompt: '生成动作/镜头/变化描述',
-  dialogue: '生成场景台词和对白',
+  keyframe_prompt: '生成三张静止关键帧（起/中/终）提示词',
+  motion_prompt: '基于关键帧差分生成“变化描述”',
+  dialogue: '生成可用于字幕/配音的台词',
+  character_basic_info: '生成角色的基础设定与属性信息',
+  character_portrait: '生成适合绘图AI的角色定妆照提示词',
   custom: '执行自定义AI操作',
 };
 

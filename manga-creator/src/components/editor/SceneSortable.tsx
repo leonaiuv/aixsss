@@ -163,7 +163,7 @@ function SortableSceneCard({ scene, index }: { scene: Scene; index: number }) {
               {getStatusText(scene.status)}
             </Badge>
             {scene.sceneDescription && (
-              <span className="text-xs text-muted-foreground">有场景描述</span>
+              <span className="text-xs text-muted-foreground">有场景锚点</span>
             )}
             {scene.actionDescription && (
               <span className="text-xs text-muted-foreground">有动作描述</span>

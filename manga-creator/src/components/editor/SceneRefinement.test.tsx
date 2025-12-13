@@ -225,7 +225,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     // 验证四个阶段都被调用
     expect(mockUpdateScene).toHaveBeenCalledTimes(4);
     
-    // 验证第一次调用（场景描述）
+    // 验证第一次调用（场景锚点）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(1, 'test-project-1', 'scene-1', {
       sceneDescription: '废墟场景，昏暗的光线',
       status: 'scene_confirmed',
@@ -237,7 +237,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       status: 'keyframe_confirmed',
     });
 
-    // 验证第三次调用（时空提示词）
+    // 验证第三次调用（时空/运动提示词）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(3, 'test-project-1', 'scene-1', {
       motionPrompt: 'character slowly turns head, camera zooms in',
       status: 'motion_generating',
@@ -295,8 +295,8 @@ describe('SceneRefinement - 一键生成全部功能', () => {
   it('当某个阶段失败时应该显示错误信息', async () => {
     mockChatFn
       .mockImplementationOnce(async () => {
-        scenesState[0].sceneDescription = '场景描述成功';
-        return { content: '场景描述成功' };
+        scenesState[0].sceneDescription = '场景锚点成功';
+        return { content: '场景锚点成功' };
       })
       .mockRejectedValueOnce(new Error('API调用失败'));
 
@@ -343,10 +343,10 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     // 模拟已完成的场景
     scenesState = [{
       ...mockScene,
-      sceneDescription: '已有场景描述',
+      sceneDescription: '已有场景锚点',
       actionDescription: '',
-      shotPrompt: '已有关键帧提示词',
-      motionPrompt: '已有时空提示词',
+      shotPrompt: '已有关键帧提示词（KF0/KF1/KF2）',
+      motionPrompt: '已有时空/运动提示词',
       dialogues: [{ id: 'dl1', type: 'dialogue' as const, characterName: '角色', content: '台词', order: 1 }],
       status: 'completed' as const,
     }];
@@ -554,8 +554,8 @@ describe('SceneRefinement - 台词生成功能', () => {
     expect(elements.length).toBeGreaterThan(0);
   });
 
-  it('应该在时空提示词完成后启用台词生成按钮', async () => {
-    // 模拟已有时空提示词的场景
+  it('应该在时空/运动提示词完成后启用台词生成按钮', async () => {
+    // 模拟已有时空/运动提示词的场景
     scenesState = [{
       ...mockSceneWithContent,
       motionPrompt: 'character walks forward',
@@ -702,13 +702,13 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
     } as any);
 
     // 不应该报错
-    const { container } = render(<SceneRefinement />);
-    
-    // 应该返回 null（空容器）
-    expect(container.firstChild).toBeNull();
+    render(<SceneRefinement />);
+
+    // 应该显示友好提示
+    expect(screen.getByText('请先选择或创建一个项目')).toBeInTheDocument();
   });
 
-  it('当没有场景时应该正确返回 null 且不报错', () => {
+  it('当没有场景时应该正确返回提示且不报错', async () => {
     const mockProject = {
       id: 'test-project-1',
       title: '测试项目',
@@ -783,10 +783,12 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
     } as any);
 
     // 不应该报错
-    const { container } = render(<SceneRefinement />);
-    
-    // 应该返回 null（空容器）
-    expect(container.firstChild).toBeNull();
+    render(<SceneRefinement />);
+
+    // 应该显示友好提示
+    await waitFor(() => {
+      expect(screen.getByText(/还没有分镜数据/)).toBeInTheDocument();
+    });
   });
 
   it('多次渲染时 hooks 顺序应该保持一致', async () => {

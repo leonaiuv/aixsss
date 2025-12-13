@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BatchOperations } from './BatchOperations';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
@@ -12,9 +12,9 @@ function createMockScenes(count: number): Scene[] {
     projectId: 'project-1',
     order: i + 1,
     summary: `场景 ${i + 1} 概要`,
-    sceneDescription: i % 2 === 0 ? `场景 ${i + 1} 描述` : '',
+    sceneDescription: i % 2 === 0 ? `场景 ${i + 1} 锚点` : '',
     shotPrompt: i % 3 === 0 ? `关键帧提示词 ${i + 1}` : '',
-    motionPrompt: i % 4 === 0 ? `时空提示词 ${i + 1}` : '',
+    motionPrompt: i % 4 === 0 ? `时空/运动提示词 ${i + 1}` : '',
     dialogues: i === 0 ? [{ id: 'd1', type: 'dialogue' as const, content: '测试台词', characterName: '角色A' }] : [],
     status: i === 0 ? 'completed' : 'pending',
     createdAt: new Date().toISOString(),
@@ -264,39 +264,31 @@ describe('BatchOperations', () => {
     it('应该在选择分镜后能够执行批量删除', async () => {
       const user = userEvent.setup();
       
-      // Mock confirm
-      const originalConfirm = window.confirm;
-      window.confirm = vi.fn(() => true);
-
       render(<BatchOperations {...defaultProps} />);
 
       await user.click(screen.getByRole('button', { name: '全选' }));
       await user.click(screen.getByRole('button', { name: /批量删除/ }));
 
-      expect(window.confirm).toHaveBeenCalled();
+      const dialog = await screen.findByRole('alertdialog');
+      await user.click(within(dialog).getByRole('button', { name: '确认删除' }));
+
       expect(mockOnBatchDelete).toHaveBeenCalledWith(
         expect.arrayContaining(['scene-1', 'scene-2', 'scene-3', 'scene-4', 'scene-5'])
       );
-
-      window.confirm = originalConfirm;
     });
 
     it('应该在用户取消确认时不执行删除', async () => {
       const user = userEvent.setup();
       
-      // Mock confirm to return false
-      const originalConfirm = window.confirm;
-      window.confirm = vi.fn(() => false);
-
       render(<BatchOperations {...defaultProps} />);
 
       await user.click(screen.getByRole('button', { name: '全选' }));
       await user.click(screen.getByRole('button', { name: /批量删除/ }));
 
-      expect(window.confirm).toHaveBeenCalled();
-      expect(mockOnBatchDelete).not.toHaveBeenCalled();
+      const dialog = await screen.findByRole('alertdialog');
+      await user.click(within(dialog).getByRole('button', { name: '取消' }));
 
-      window.confirm = originalConfirm;
+      expect(mockOnBatchDelete).not.toHaveBeenCalled();
     });
 
     it('应该禁用删除按钮当未选择分镜时', () => {

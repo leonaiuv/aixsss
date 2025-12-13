@@ -113,7 +113,7 @@ describe('CascadeUpdater', () => {
       expect(updateFields).toContain('shotPrompt');
     });
 
-    it('故事梗概修改应该影响场景描述', () => {
+    it('故事梗概修改应该影响场景锚点', () => {
       const impact = analyzeProjectSettingsImpact(
         mockProject,
         mockScenes,
@@ -410,7 +410,7 @@ describe('CascadeUpdater', () => {
       expect(impact.affectedScenes.length).toBe(2);
     });
 
-    it('世界观修改应该主要影响场景描述', () => {
+    it('世界观修改应该主要影响场景锚点', () => {
       const impact = analyzeWorldViewImpact(
         { elementId: 'wv-1', type: 'geography' },
         mockScenes
@@ -468,7 +468,7 @@ describe('CascadeUpdater', () => {
       const options = generateUpdateOptions(impact);
       
       expect(options).toContain('all'); // 全部重新生成
-      expect(options).toContain('scene_only'); // 仅重新生成场景描述
+      expect(options).toContain('scene_only'); // 仅重新生成场景锚点
       expect(options).toContain('prompt_only'); // 仅重新生成提示词
       expect(options).toContain('skip'); // 跳过
     });

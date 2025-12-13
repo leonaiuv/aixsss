@@ -16,6 +16,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { useCustomStyleStore } from '@/stores/customStyleStore';
+import { useConfirm } from '@/hooks/use-confirm';
 import { AIFactory } from '@/lib/ai/factory';
 import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
 import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project, Character, isCustomStyleId } from '@/types';
@@ -143,6 +144,7 @@ interface CharacterManagerProps {
 }
 
 export function CharacterManager({ projectId }: CharacterManagerProps) {
+  const { confirm, ConfirmDialog } = useConfirm();
   const { characters, addCharacter, updateCharacter, deleteCharacter, loadCharacters } =
     useCharacterStore();
   
@@ -319,10 +321,16 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     }
   };
 
-  const handleDelete = (characterId: string) => {
-    if (confirm('确定要删除这个角色吗？')) {
-      deleteCharacter(projectId, characterId);
-    }
+  const handleDelete = async (characterId: string) => {
+    const ok = await confirm({
+      title: '确认删除角色？',
+      description: '删除后无法恢复。已生成的分镜内容可能需要重新生成。',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteCharacter(projectId, characterId);
   };
 
   const resetForm = () => {
@@ -719,6 +727,7 @@ ${styleDesc}
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog />
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

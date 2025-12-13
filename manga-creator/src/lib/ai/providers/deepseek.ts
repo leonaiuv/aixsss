@@ -28,6 +28,7 @@ export class DeepSeekProvider implements AIProvider {
 
   async chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse> {
     const url = this.buildURL(config.baseURL);
+    const params = config.generationParams;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -38,6 +39,11 @@ export class DeepSeekProvider implements AIProvider {
       body: JSON.stringify({
         model: config.model || 'deepseek-chat',
         messages,
+        ...(typeof params?.temperature === 'number' ? { temperature: params.temperature } : {}),
+        ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
+        ...(typeof params?.maxTokens === 'number' ? { max_tokens: params.maxTokens } : {}),
+        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
+        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
     });
 
@@ -58,6 +64,7 @@ export class DeepSeekProvider implements AIProvider {
 
   async *streamChat(messages: ChatMessage[], config: AIProviderConfig): AsyncGenerator<string> {
     const url = this.buildURL(config.baseURL);
+    const params = config.generationParams;
     
     const response = await fetch(url, {
       method: 'POST',
@@ -69,6 +76,11 @@ export class DeepSeekProvider implements AIProvider {
         model: config.model || 'deepseek-chat',
         messages,
         stream: true,
+        ...(typeof params?.temperature === 'number' ? { temperature: params.temperature } : {}),
+        ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
+        ...(typeof params?.maxTokens === 'number' ? { max_tokens: params.maxTokens } : {}),
+        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
+        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
     });
 

@@ -7,6 +7,7 @@ interface TemplateStore {
   currentTemplateId: string | null;
   
   // 操作方法
+  loadBuiltInTemplates: () => void;
   loadTemplates: () => void;
   addTemplate: (template: Omit<PromptTemplate, 'id' | 'usageCount' | 'createdAt' | 'updatedAt'>) => PromptTemplate;
   updateTemplate: (templateId: string, updates: Partial<PromptTemplate>) => void;
@@ -15,12 +16,29 @@ interface TemplateStore {
   setCurrentTemplate: (templateId: string | null) => void;
   getTemplatesByCategory: (category: string) => PromptTemplate[];
   searchTemplates: (query: string) => PromptTemplate[];
+  getPopularTemplates: (limit?: number) => PromptTemplate[];
+}
+
+function getInitialTemplates(): PromptTemplate[] {
+  if (typeof localStorage === 'undefined') return BUILT_IN_TEMPLATES;
+  try {
+    const stored = localStorage.getItem('aixs_templates');
+    const customTemplates: PromptTemplate[] = stored ? JSON.parse(stored) : [];
+    return [...BUILT_IN_TEMPLATES, ...customTemplates];
+  } catch (error) {
+    console.error('Failed to load templates:', error);
+    return BUILT_IN_TEMPLATES;
+  }
 }
 
 export const useTemplateStore = create<TemplateStore>((set, get) => ({
-  templates: [],
+  templates: getInitialTemplates(),
   currentTemplateId: null,
   
+  loadBuiltInTemplates: () => {
+    set({ templates: BUILT_IN_TEMPLATES });
+  },
+
   loadTemplates: () => {
     try {
       const stored = localStorage.getItem('aixs_templates');
@@ -108,6 +126,10 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
       t.description.toLowerCase().includes(lowerQuery) ||
       t.category.toLowerCase().includes(lowerQuery)
     );
+  },
+
+  getPopularTemplates: (limit: number = 10) => {
+    return [...get().templates].sort((a, b) => b.usageCount - a.usageCount).slice(0, limit);
   },
 }));
 

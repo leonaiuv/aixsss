@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import { useVersionStore } from '@/stores/versionStore';
+import { useConfirm } from '@/hooks/use-confirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,6 +51,7 @@ export function VersionHistory({
 }: VersionHistoryProps) {
   const { getProjectVersions, getSceneVersions, restoreVersion, addLabel } =
     useVersionStore();
+  const { confirm, ConfirmDialog } = useConfirm();
   const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
   const [showLabelDialog, setShowLabelDialog] = useState(false);
   const [labelForm, setLabelForm] = useState({ label: '', notes: '' });
@@ -62,13 +64,20 @@ export function VersionHistory({
       ? getSceneVersions(targetId)
       : [];
 
-  const handleRestore = (versionId: string) => {
-    if (confirm('确定要恢复到这个版本吗？当前内容将被覆盖。')) {
-      const version = versions.find((v) => v.id === versionId);
-      if (version) {
-        restoreVersion(versionId);
-        onRestore?.(version.snapshot);
-      }
+  const handleRestore = async (versionId: string) => {
+    const ok = await confirm({
+      title: '确认恢复版本？',
+      description: '当前内容将被覆盖，且无法撤销。建议先导出备份。',
+      confirmText: '确认恢复',
+      cancelText: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    const version = versions.find((v) => v.id === versionId);
+    if (version) {
+      restoreVersion(versionId);
+      onRestore?.(version.snapshot);
     }
   };
 
@@ -87,6 +96,7 @@ export function VersionHistory({
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog />
       {/* 头部 */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">

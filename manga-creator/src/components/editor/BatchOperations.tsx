@@ -41,6 +41,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
+import { useConfirm } from '@/hooks/use-confirm';
 
 interface BatchOperationsProps {
   scenes: Scene[];
@@ -57,6 +58,7 @@ export function BatchOperations({
   onBatchExport,
   onBatchDelete,
 }: BatchOperationsProps) {
+  const { confirm, ConfirmDialog } = useConfirm();
   // 使用全局状态
   const { 
     batchOperations,
@@ -109,17 +111,23 @@ export function BatchOperations({
     });
   };
 
-  const handleBatchDelete = () => {
+  const handleBatchDelete = async () => {
     if (selectedScenes.size === 0) return;
-    if (
-      confirm(`确定要删除选中的 ${selectedScenes.size} 个分镜吗？此操作不可撤销。`)
-    ) {
-      onBatchDelete(Array.from(selectedScenes));
-      updateBatchOperations({ 
-        selectedScenes: new Set(),
-        totalScenes: 0,
-      });
-    }
+
+    const ok = await confirm({
+      title: '确认批量删除分镜？',
+      description: `将删除选中的 ${selectedScenes.size} 个分镜，此操作不可撤销。`,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    onBatchDelete(Array.from(selectedScenes));
+    updateBatchOperations({ 
+      selectedScenes: new Set(),
+      totalScenes: 0,
+    });
   };
 
   const handlePauseToggle = () => {
@@ -128,6 +136,7 @@ export function BatchOperations({
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog />
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -265,7 +274,9 @@ export function BatchOperations({
             >
               <Checkbox
                 checked={selectedScenes.has(scene.id)}
+                onClick={(e) => e.stopPropagation()}
                 onCheckedChange={() => toggleScene(scene.id)}
+                aria-label={`选择分镜 ${index + 1}`}
               />
 
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">

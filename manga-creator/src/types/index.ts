@@ -329,12 +329,13 @@ export interface Scene {
   projectId: string;
   order: number;
   summary: string;
+  /** 场景锚点 - 环境一致性（避免人物/动作/镜头运动） */
   sceneDescription: string;
   /** @deprecated 保留用于向后兼容 */
   actionDescription: string;
-  /** 关键帧提示词 - 静态图片描述，用于绘图AI */
+  /** 关键帧提示词（KF0/KF1/KF2）- 静止画面描述，用于生图AI（建议中英双语） */
   shotPrompt: string;
-  /** 时空提示词 - 动作/镜头/变化，用于视频AI */
+  /** 时空/运动提示词 - 基于关键帧差分的“变化描述”，用于图生视频(I2V)模型（建议中英双语） */
   motionPrompt: string;
   /** 台词列表 - 对白/独白/旁白/心理活动 */
   dialogues?: DialogueLine[];
@@ -356,6 +357,7 @@ export interface UserConfig {
   apiKey: string;
   baseURL?: string;
   model: string;
+  generationParams?: AIGenerationParams;
 }
 
 // 聊天消息

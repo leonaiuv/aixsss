@@ -111,12 +111,12 @@ ${styleFullPrompt}
       md += `### 分镜 ${index + 1}: ${scene.summary}\n\n`;
       
       if (scene.sceneDescription) {
-        md += `**场景描述**:\n\n`;
+        md += `**场景锚点（Scene Anchor）**:\n\n`;
         md += `${scene.sceneDescription}\n\n`;
       }
 
       if (scene.shotPrompt) {
-        md += `**关键帧提示词**（给绘图AI）:\n\n`;
+        md += `**关键帧提示词（KF0/KF1/KF2）**（给绘图AI）:\n\n`;
         md += `\`\`\`
 ${scene.shotPrompt}
 \`\`\`
@@ -125,7 +125,7 @@ ${scene.shotPrompt}
       }
 
       if (scene.motionPrompt) {
-        md += `**时空提示词**（给视频AI）:\n\n`;
+        md += `**时空/运动提示词**（给视频AI）:\n\n`;
         md += `\`\`\`
 ${scene.motionPrompt}
 \`\`\`
@@ -179,11 +179,11 @@ ${scene.motionPrompt}
     return JSON.stringify(data, null, 2);
   };
 
-  // 仅导出关键帧提示词
+  // 仅导出关键帧提示词（KF0/KF1/KF2）
   const generateKeyframePromptsOnly = () => {
     const styleFullPrompt = getStyleFullPrompt(currentProject);
 
-    let content = `# ${currentProject.title} - 关键帧提示词（绘图AI用）\n\n`;
+    let content = `# ${currentProject.title} - 关键帧提示词（KF0/KF1/KF2，绘图AI用）\n\n`;
     content += `## 画风
 
 \`\`\`
@@ -209,9 +209,9 @@ ${currentProject.protagonist}
     return content;
   };
 
-  // 仅导出时空提示词
+  // 仅导出时空/运动提示词
   const generateMotionPromptsOnly = () => {
-    let content = `# ${currentProject.title} - 时空提示词（视频AI用）\n\n`;
+    let content = `# ${currentProject.title} - 时空/运动提示词（视频AI用）\n\n`;
     content += `---\n\n`;
 
     scenes.forEach((scene, index) => {
@@ -354,7 +354,7 @@ ${currentProject.protagonist}
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            <span>导出关键帧提示词</span>
+            <span>导出关键帧提示词（KF0/KF1/KF2）</span>
           </Button>
 
           <Button
@@ -363,7 +363,7 @@ ${currentProject.protagonist}
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            <span>导出时空提示词</span>
+            <span>导出时空/运动提示词</span>
           </Button>
         </div>
 
@@ -387,8 +387,8 @@ ${currentProject.protagonist}
         <ul className="space-y-2 text-sm text-muted-foreground">
           <li>• <strong>Markdown</strong>: 适合人类阅读,包含完整的项目信息和分镜细节</li>
           <li>• <strong>JSON</strong>: 适合程序处理,可导入其他工具或备份数据</li>
-          <li>• <strong>关键帧提示词</strong>: 纯文本格式,用于绘图AI(SD/MJ等)生成静态关键帧</li>
-          <li>• <strong>时空提示词</strong>: 纯文本格式,用于视频AI生成动态视频</li>
+          <li>• <strong>关键帧提示词（KF0/KF1/KF2）</strong>: 三张静止关键帧提示词，可分别用于生图模型</li>
+          <li>• <strong>时空/运动提示词</strong>: 基于关键帧差分的变化描述，用于图生视频模型</li>
           <li>• <strong>剪贴板复制</strong>: 快速分享或粘贴到其他应用</li>
         </ul>
       </Card>
@@ -414,13 +414,13 @@ ${currentProject.protagonist}
                   <p className="text-sm font-medium mb-1">{scene.summary}</p>
                   <div className="flex gap-2 text-xs">
                     <span className={scene.sceneDescription ? 'text-green-600' : 'text-muted-foreground'}>
-                      场景{scene.sceneDescription ? '✓' : '○'}
+                      锚点{scene.sceneDescription ? '✓' : '○'}
                     </span>
                     <span className={scene.shotPrompt ? 'text-green-600' : 'text-muted-foreground'}>
                       关键帧{scene.shotPrompt ? '✓' : '○'}
                     </span>
                     <span className={scene.motionPrompt ? 'text-green-600' : 'text-muted-foreground'}>
-                      时空{scene.motionPrompt ? '✓' : '○'}
+                      运动{scene.motionPrompt ? '✓' : '○'}
                     </span>
                   </div>
                 </div>

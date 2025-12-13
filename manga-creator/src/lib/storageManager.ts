@@ -87,7 +87,7 @@ export function decompressData(compressed: string): string {
 /**
  * 保存大数据（自动分片）
  */
-export function saveLargeData(key: string, data: string, compress = true): void {
+export function saveLargeData(key: string, data: string, compress = false): void {
   let processedData = data;
   
   // 压缩

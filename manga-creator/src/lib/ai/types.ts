@@ -1,10 +1,11 @@
-import { ChatMessage, AIResponse, ProviderType } from '@/types';
+import { ChatMessage, AIResponse, ProviderType, AIGenerationParams } from '@/types';
 
 export interface AIProviderConfig {
   provider: ProviderType;
   apiKey: string;
   baseURL?: string;
   model: string;
+  generationParams?: AIGenerationParams;
 }
 
 export interface AIProvider {

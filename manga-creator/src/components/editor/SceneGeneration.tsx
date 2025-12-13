@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Sparkles, 
   Plus, 
@@ -21,6 +22,8 @@ import {
 import { AIFactory } from '@/lib/ai/factory';
 import { logAICall, updateLogWithResponse, updateLogWithError, updateLogProgress } from '@/lib/ai/debugLogger';
 import { Scene, migrateOldStyleToConfig } from '@/types';
+import { SceneSortable } from './SceneSortable';
+import { useConfirm } from '@/hooks/use-confirm';
 
 /**
  * 获取项目的完整画风提示词
@@ -39,11 +42,13 @@ export function SceneGeneration() {
   const { currentProject, updateProject } = useProjectStore();
   const { scenes, setScenes, addScene, updateScene, deleteScene, isGenerating, setGenerating, loadScenes } = useStoryboardStore();
   const { config } = useConfigStore();
+  const { confirm, ConfirmDialog } = useConfirm();
   
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [generationProgress, setGenerationProgress] = useState(0);
   const [error, setError] = useState('');
+  const [sortDialogOpen, setSortDialogOpen] = useState(false);
 
   useEffect(() => {
     if (currentProject) {
@@ -264,10 +269,16 @@ ${currentProject.summary}
   };
 
   // 删除分镜
-  const handleDelete = (sceneId: string) => {
-    if (window.confirm('确认删除这个分镜吗?')) {
-      deleteScene(currentProject.id, sceneId);
-    }
+  const handleDelete = async (sceneId: string) => {
+    const ok = await confirm({
+      title: '确认删除分镜？',
+      description: '此操作无法撤销，将删除该分镜的所有细化内容。',
+      confirmText: '确认删除',
+      cancelText: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteScene(currentProject.id, sceneId);
   };
 
   // 确认分镜列表
@@ -290,6 +301,7 @@ ${currentProject.summary}
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog />
       <Card className="p-8">
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -356,11 +368,6 @@ ${currentProject.summary}
                 key={scene.id}
                 className="group flex items-start gap-3 p-4 rounded-lg border bg-card hover:border-primary/50 transition-colors"
               >
-                {/* 拖拽手柄 */}
-                <div className="flex-shrink-0 mt-1 cursor-move opacity-0 group-hover:opacity-100 transition-opacity">
-                  <GripVertical className="h-5 w-5 text-muted-foreground" />
-                </div>
-
                 {/* 序号 */}
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm">
                   {index + 1}
@@ -429,6 +436,15 @@ ${currentProject.summary}
                 <RotateCw className="h-4 w-4" />
                 <span>重新生成</span>
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setSortDialogOpen(true)}
+                disabled={scenes.length < 2 || isGenerating}
+                className="gap-2"
+              >
+                <GripVertical className="h-4 w-4" />
+                <span>拖拽排序</span>
+              </Button>
               <Button 
                 variant="outline" 
                 onClick={handleAddScene}
@@ -459,6 +475,23 @@ ${currentProject.summary}
           </div>
         )}
       </Card>
+
+      {/* 拖拽排序对话框 */}
+      <Dialog open={sortDialogOpen} onOpenChange={setSortDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>拖拽排序分镜</DialogTitle>
+          </DialogHeader>
+          <SceneSortable
+            scenes={scenes}
+            onReorder={(nextScenes) => {
+              if (!currentProject) return;
+              setScenes(currentProject.id, nextScenes);
+              setSortDialogOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* 操作提示 */}
       <Card className="p-6 bg-muted/30">

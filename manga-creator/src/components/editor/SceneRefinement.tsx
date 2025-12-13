@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
@@ -7,10 +7,13 @@ import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -33,8 +36,11 @@ import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuild
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
 import { generateBGMPrompt, generateTransitionPrompt, BGMPrompt, TransitionPrompt } from '@/lib/ai/multiModalPrompts';
 import { checkTokenLimit, calculateTotalTokens, compressProjectEssence } from '@/lib/ai/contextCompressor';
+import { parseKeyframePromptText, parseMotionPromptText, parseSceneAnchorText } from '@/lib/ai/promptParsers';
 import { SceneStep, migrateOldStyleToConfig, Project, DIALOGUE_TYPE_LABELS, DialogueLine } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
+import { useConfirm } from '@/hooks/use-confirm';
+import { useKeyboardShortcut, GLOBAL_SHORTCUTS, getPlatformShortcut } from '@/hooks/useKeyboardShortcut';
 
 /**
  * 获取项目的完整画风提示词
@@ -62,6 +68,7 @@ export function SceneRefinement() {
     startBatchGenerating,
     stopBatchGenerating 
   } = useAIProgressStore();
+  const { toast } = useToast();
 
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -70,6 +77,49 @@ export function SceneRefinement() {
   const [error, setError] = useState('');
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [characterDialogOpen, setCharacterDialogOpen] = useState(false);
+  const [isDataReady, setIsDataReady] = useState(() => {
+    if (!currentProject) return false;
+    if (scenes.length === 0) return false;
+    return scenes.every((scene) => scene.projectId === currentProject.id);
+  });
+  const [sceneListDialogOpen, setSceneListDialogOpen] = useState(false);
+  const [sceneListQuery, setSceneListQuery] = useState('');
+  const [sceneListFilter, setSceneListFilter] = useState<'all' | 'incomplete' | 'completed' | 'needs_update'>('all');
+
+  const { confirm, ConfirmDialog } = useConfirm();
+
+  // 关键帧提示词解析（用于拆分 KF0/KF1/KF2 的快速复制）
+  const currentSceneForParse = scenes[currentSceneIndex];
+  const parsedSceneAnchor = useMemo(
+    () => parseSceneAnchorText(currentSceneForParse?.sceneDescription || ''),
+    [currentSceneForParse?.sceneDescription]
+  );
+  const parsedKeyframes = useMemo(
+    () => parseKeyframePromptText(currentSceneForParse?.shotPrompt || ''),
+    [currentSceneForParse?.shotPrompt]
+  );
+  const parsedMotion = useMemo(
+    () => parseMotionPromptText(currentSceneForParse?.motionPrompt || ''),
+    [currentSceneForParse?.motionPrompt]
+  );
+
+  const filteredSceneList = useMemo(() => {
+    const query = sceneListQuery.trim().toLowerCase();
+    return scenes
+      .map((scene, index) => {
+        const isFullyCompleted = scene.status === 'completed' && Boolean(scene.dialogues?.length);
+        const isNeedsUpdate = scene.status === 'needs_update';
+        const isIncomplete = !isFullyCompleted;
+        return { scene, index, isFullyCompleted, isNeedsUpdate, isIncomplete };
+      })
+      .filter(({ scene, isFullyCompleted, isNeedsUpdate, isIncomplete }) => {
+        if (sceneListFilter === 'completed' && !isFullyCompleted) return false;
+        if (sceneListFilter === 'needs_update' && !isNeedsUpdate) return false;
+        if (sceneListFilter === 'incomplete' && !isIncomplete) return false;
+        if (!query) return true;
+        return (scene.summary || '').toLowerCase().includes(query);
+      });
+  }, [sceneListFilter, sceneListQuery, scenes]);
 
 // 使用 useMemo 优化项目角色列表过滤
   const projectCharacters = useMemo(() => 
@@ -102,22 +152,110 @@ export function SceneRefinement() {
     }
   }, [currentSceneIndex, scenes.length, currentProject?.id, updateProject]);
 
+  const goToScene = useCallback((index: number) => {
+    if (!currentProject) return;
+    const safeIndex = Math.max(0, Math.min(index, scenes.length - 1));
+    setCurrentSceneIndex(safeIndex);
+    updateProject(currentProject.id, {
+      currentSceneOrder: safeIndex + 1,
+    });
+  }, [currentProject?.id, scenes.length, updateProject]);
+
+  const loadScenesRef = useRef(loadScenes);
   useEffect(() => {
-    if (currentProject) {
-      loadScenes(currentProject.id);
-      loadWorldViewElements(currentProject.id);
-      const order = currentProject.currentSceneOrder || 1;
-      setCurrentSceneIndex(order - 1);
-    }
+    loadScenesRef.current = loadScenes;
+  }, [loadScenes]);
+
+  const loadWorldViewElementsRef = useRef(loadWorldViewElements);
+  useEffect(() => {
+    loadWorldViewElementsRef.current = loadWorldViewElements;
+  }, [loadWorldViewElements]);
+
+  // 快捷键
+  useKeyboardShortcut('ctrl+arrowleft', handleShortcutPrevScene);
+  useKeyboardShortcut('ctrl+arrowright', handleShortcutNextScene);
+  useKeyboardShortcut(
+    getPlatformShortcut(GLOBAL_SHORTCUTS.GENERATE, GLOBAL_SHORTCUTS.GENERATE_MAC),
+    handleShortcutGenerate
+  );
+
+  useEffect(() => {
+    if (!currentProject) return;
+    setIsDataReady(false);
+    loadScenesRef.current(currentProject.id);
+    loadWorldViewElementsRef.current(currentProject.id);
+    setIsDataReady(true);
   }, [currentProject?.id]);
 
-  if (!currentProject || scenes.length === 0) {
-    return null;
+  useEffect(() => {
+    if (!currentProject) return;
+    const order = currentProject.currentSceneOrder || 1;
+    setCurrentSceneIndex(Math.max(0, order - 1));
+  }, [currentProject?.currentSceneOrder, currentProject?.id]);
+
+  // 防止索引越界（例如分镜数量变化/数据迁移导致的 order 不合法）
+  useEffect(() => {
+    if (scenes.length === 0) return;
+    if (currentSceneIndex < 0) {
+      setCurrentSceneIndex(0);
+      return;
+    }
+    if (currentSceneIndex > scenes.length - 1) {
+      setCurrentSceneIndex(scenes.length - 1);
+    }
+  }, [currentSceneIndex, scenes.length]);
+
+  // 数据加载中：避免首屏空白
+  if (!currentProject) {
+    return (
+      <Card className="p-8">
+        <p className="text-muted-foreground">请先选择或创建一个项目</p>
+      </Card>
+    );
+  }
+
+  if (!isDataReady) {
+    return (
+      <Card className="p-8">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>正在加载分镜数据...</span>
+        </div>
+      </Card>
+    );
+  }
+
+  if (scenes.length === 0) {
+    return (
+      <div className="space-y-6">
+        <Card className="p-8">
+          <h2 className="text-2xl font-bold mb-2">分镜细化</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            还没有分镜数据，请先在“分镜生成”步骤创建分镜列表。
+          </p>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => updateProject(currentProject.id, { workflowState: 'SCENE_LIST_EDITING' })}
+              className="gap-2"
+            >
+              <BookOpen className="h-4 w-4" />
+              <span>去生成分镜</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => updateProject(currentProject.id, { workflowState: 'DATA_COLLECTED' })}
+            >
+              返回基础设定
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   const currentScene = scenes[currentSceneIndex];
 
-  // 生成场景描述
+  // 生成场景锚点
   const generateSceneDescription = async () => {
     if (!config || !currentScene) return;
 
@@ -187,7 +325,7 @@ export function SceneRefinement() {
         },
       });
       
-      updateLogProgress(logId, 30, '正在生成场景描述...');
+      updateLogProgress(logId, 30, '正在生成场景锚点...');
 
       const response = await client.chat([
         { role: 'user', content: prompt }
@@ -209,7 +347,7 @@ export function SceneRefinement() {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
-      console.error('生成场景描述失败:', err);
+      console.error('生成场景锚点失败:', err);
       updateLogWithError('scene_description_error', errorMsg);
     } finally {
       setIsGenerating(false);
@@ -217,7 +355,7 @@ export function SceneRefinement() {
     }
   };
 
-  // 生成关键帧提示词
+  // 生成关键帧提示词（KF0/KF1/KF2）
   const generateKeyframePrompt = async () => {
     // 从 store 获取最新的场景数据，避免闭包问题
     const { scenes: latestScenes } = useStoryboardStore.getState();
@@ -245,6 +383,8 @@ export function SceneRefinement() {
         characters: projectCharacters,
         protagonist: currentProject.protagonist,
         sceneDescription: latestScene.sceneDescription,
+        sceneSummary: latestScene.summary,
+        prevSceneSummary: currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined,
       });
 
       // 记录AI调用日志
@@ -268,7 +408,7 @@ export function SceneRefinement() {
         },
       });
       
-      updateLogProgress(logId, 30, '正在生成关键帧提示词...');
+      updateLogProgress(logId, 30, '正在生成关键帧提示词（KF0/KF1/KF2）...');
 
       const response = await client.chat([
         { role: 'user', content: prompt }
@@ -290,7 +430,7 @@ export function SceneRefinement() {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
-      console.error('生成关键帧提示词失败:', err);
+      console.error('生成关键帧提示词（KF0/KF1/KF2）失败:', err);
       updateLogWithError('keyframe_prompt_error', errorMsg);
     } finally {
       setIsGenerating(false);
@@ -298,7 +438,7 @@ export function SceneRefinement() {
     }
   };
 
-  // 生成时空提示词
+  // 生成时空/运动提示词
   const generateMotionPrompt = async () => {
     // 从 store 获取最新的场景数据，避免闭包问题
     const { scenes: latestScenes } = useStoryboardStore.getState();
@@ -345,7 +485,7 @@ export function SceneRefinement() {
         },
       });
       
-      updateLogProgress(logId, 30, '正在生成时空提示词...');
+      updateLogProgress(logId, 30, '正在生成时空/运动提示词...');
 
       const response = await client.chat([
         { role: 'user', content: prompt }
@@ -375,7 +515,7 @@ export function SceneRefinement() {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
-      console.error('生成时空提示词失败:', err);
+      console.error('生成时空/运动提示词失败:', err);
       updateLogWithError('motion_prompt_error', errorMsg);
     } finally {
       setIsGenerating(false);
@@ -502,7 +642,7 @@ export function SceneRefinement() {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      // 第一阶段：生成场景描述
+      // 第一阶段：生成场景锚点
       const { scenes: currentScenes } = useStoryboardStore.getState();
       const scene0 = currentScenes.find(s => s.id === currentScene.id);
       if (!scene0?.sceneDescription) {
@@ -516,10 +656,10 @@ export function SceneRefinement() {
       const latestScene1 = updatedScenes1.find(s => s.id === currentScene.id);
       
       if (!latestScene1?.sceneDescription) {
-        throw new Error('场景描述生成失败');
+        throw new Error('场景锚点生成失败');
       }
 
-      // 第二阶段：生成关键帧提示词
+      // 第二阶段：生成关键帧提示词（KF0/KF1/KF2）
       if (!latestScene1.shotPrompt) {
         setGeneratingStep('keyframe_prompt');
         await generateKeyframePrompt();
@@ -531,10 +671,10 @@ export function SceneRefinement() {
       const latestScene2 = updatedScenes2.find(s => s.id === currentScene.id);
       
       if (!latestScene2?.shotPrompt) {
-        throw new Error('关键帧提示词生成失败');
+        throw new Error('关键帧提示词（KF0/KF1/KF2）生成失败');
       }
 
-      // 第三阶段：生成时空提示词
+      // 第三阶段：生成时空/运动提示词
       if (!latestScene2.motionPrompt) {
         setGeneratingStep('motion_prompt');
         await generateMotionPrompt();
@@ -546,10 +686,10 @@ export function SceneRefinement() {
       const latestScene3 = updatedScenes3.find(s => s.id === currentScene.id);
       
       if (!latestScene3?.motionPrompt) {
-        throw new Error('时空提示词生成失败');
+        throw new Error('时空/运动提示词生成失败');
       }
 
-      // 第四阶段：生成台词
+      // 第四阶段：生成台词（可用于字幕/配音）
       if (!latestScene3.dialogues || latestScene3.dialogues.length === 0) {
         setGeneratingStep('dialogue');
         await generateDialogue();
@@ -579,6 +719,66 @@ export function SceneRefinement() {
   const isExternallyBlocked = isGlobalBatchGenerating && batchGeneratingSource === 'batch_panel';
   const externalBlockMessage = isExternallyBlocked ? '批量操作正在进行中，请等待完成' : '';
 
+  function handleShortcutPrevScene() {
+    if (isGenerating || isBatchGenerating || isExternallyBlocked) return;
+    goToPrevScene();
+  }
+
+  function handleShortcutNextScene() {
+    if (isGenerating || isBatchGenerating || isExternallyBlocked) return;
+    if (currentSceneIndex >= scenes.length - 1) return;
+    goToNextScene();
+  }
+
+  function handleShortcutGenerate() {
+    if (isGenerating || isBatchGenerating || isExternallyBlocked) return;
+    if (!config) {
+      toast({
+        title: '配置缺失',
+        description: '请先配置AI服务（右上角设置）',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (canGenerateScene) {
+      void generateSceneDescription();
+      return;
+    }
+    if (canGenerateKeyframe) {
+      void generateKeyframePrompt();
+      return;
+    }
+    if (canGenerateMotion) {
+      void generateMotionPrompt();
+      return;
+    }
+    if (canGenerateDialogue) {
+      void generateDialogue();
+      return;
+    }
+
+    toast({
+      title: '无需生成',
+      description: '当前分镜已完成或暂无可生成的阶段',
+    });
+  }
+
+  const copyToClipboard = (text: string, title: string, description?: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => {
+        toast({ title, description });
+      },
+      () => {
+        toast({
+          title: '复制失败',
+          description: '浏览器未授予剪贴板权限',
+          variant: 'destructive',
+        });
+      }
+    );
+  };
+
   // 应用模板
   const handleApplyTemplate = (template: string, variables: Record<string, string>) => {
     let content = template;
@@ -586,7 +786,7 @@ export function SceneRefinement() {
       content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
     });
     
-    // 应用到当前分镜的场景描述
+    // 应用到当前分镜的场景锚点
     if (currentScene) {
       updateScene(currentProject!.id, currentScene.id, {
         sceneDescription: content,
@@ -596,26 +796,19 @@ export function SceneRefinement() {
     setTemplateDialogOpen(false);
   };
 
-  // 引用角色
+  // 复制角色信息（用于粘贴到关键帧/台词备注等）
   const handleCharacterSelect = (character: typeof projectCharacters[0]) => {
-    if (currentScene) {
-      const characterInfo = `角色: ${character.name}
-外观: ${character.appearance}
-性格: ${character.personality}`;
-      
-      const newDescription = currentScene.sceneDescription 
-        ? `${currentScene.sceneDescription}\n\n${characterInfo}`
-        : characterInfo;
-      
-      updateScene(currentProject!.id, currentScene.id, {
-        sceneDescription: newDescription,
-      });
-    }
+    const characterInfo = `角色: ${character.name}
+外观: ${character.appearance || '(未填写)'}
+性格: ${character.personality || '(未填写)'}`;
+
+    copyToClipboard(characterInfo, '已复制角色信息', '可粘贴到关键帧提示词或台词备注中');
     setCharacterDialogOpen(false);
   };
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog />
       <Card className="p-8">
       {/* 头部导航 */}
         <div className="flex items-center justify-between mb-6">
@@ -637,20 +830,29 @@ export function SceneRefinement() {
               <BookOpen className="h-4 w-4" />
               <span className="hidden sm:inline">使用模板</span>
             </Button>
-            {/* 角色引用按钮 */}
+            {/* 复制角色信息按钮 */}
             <Button
               variant="outline"
               size="sm"
               onClick={() => setCharacterDialogOpen(true)}
               disabled={projectCharacters.length === 0}
               className="gap-2"
-              title={projectCharacters.length === 0 ? '请先在基础设定中添加角色' : '引用已创建的角色信息'}
+              title={projectCharacters.length === 0 ? '请先在基础设定中添加角色' : '复制角色信息（用于粘贴到关键帧/台词）'}
             >
               <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">引用角色</span>
+              <span className="hidden sm:inline">复制角色</span>
               {projectCharacters.length === 0 && (
                 <span className="text-xs text-muted-foreground">(无角色)</span>
               )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSceneListDialogOpen(true)}
+              className="gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">分镜列表</span>
             </Button>
             <Button
               variant="outline"
@@ -718,7 +920,7 @@ export function SceneRefinement() {
 
         {/* 三阶段生成 */}
         <Accordion type="single" collapsible className="space-y-4">
-          {/* 阶段1: 场景描述 */}
+          {/* 阶段1: 场景锚点 */}
           <AccordionItem value="scene" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-3">
@@ -732,9 +934,9 @@ export function SceneRefinement() {
                   )}
                 </div>
                 <div className="text-left">
-                  <h4 className="font-semibold">场景描述生成</h4>
+                  <h4 className="font-semibold">场景锚点生成</h4>
                   <p className="text-xs text-muted-foreground">
-                    基于分镜概要,生成详细的场景描述(环境、氛围、光影)
+                    只生成环境一致性锚点（空间/光线/固定物件），不含人物与动作
                   </p>
                 </div>
               </div>
@@ -742,6 +944,63 @@ export function SceneRefinement() {
             <AccordionContent className="pt-4">
               {currentScene.sceneDescription ? (
                 <div className="space-y-3">
+                  {parsedSceneAnchor.isStructured && (
+                    <div className="space-y-3">
+                      {[
+                        { label: 'SCENE_ANCHOR（场景锚点）', data: parsedSceneAnchor.sceneAnchor },
+                        { label: 'LOCK（锚点锁定）', data: parsedSceneAnchor.lock },
+                        { label: 'AVOID（避免项）', data: parsedSceneAnchor.avoid },
+                      ].map(({ label, data }) => {
+                        if (!data || (!data.zh && !data.en)) {
+                          return null;
+                        }
+
+                        const preview = [
+                          data.zh ? `ZH: ${data.zh}` : '',
+                          data.en ? `EN: ${data.en}` : '',
+                        ]
+                          .filter(Boolean)
+                          .join('\n\n');
+
+                        return (
+                          <div key={label} className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium text-sm">{label}</div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={!data.zh}
+                                  onClick={() =>
+                                    data.zh && copyToClipboard(data.zh, `已复制 ${label} 中文`)
+                                  }
+                                  title={`复制 ${label} 中文`}
+                                >
+                                  ZH
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={!data.en}
+                                  onClick={() =>
+                                    data.en && copyToClipboard(data.en, `已复制 ${label} 英文`)
+                                  }
+                                  title={`复制 ${label} 英文`}
+                                >
+                                  EN
+                                </Button>
+                              </div>
+                            </div>
+                            <Textarea
+                              value={preview}
+                              readOnly
+                              className="min-h-[80px] resize-none font-mono text-xs bg-background/60"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <Textarea
                     value={currentScene.sceneDescription}
                     onChange={(e) => updateScene(currentProject.id, currentScene.id, {
@@ -767,7 +1026,7 @@ export function SceneRefinement() {
                 </div>
               ) : (
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-                  <p className="text-sm text-muted-foreground">点击生成按钮开始创建场景描述</p>
+                  <p className="text-sm text-muted-foreground">点击生成按钮开始创建场景锚点</p>
                   <Button
                     onClick={generateSceneDescription}
                     disabled={!canGenerateScene || isGenerating || isExternallyBlocked}
@@ -796,7 +1055,7 @@ export function SceneRefinement() {
             </AccordionContent>
           </AccordionItem>
 
-          {/* 阶段2: 关键帧提示词 */}
+          {/* 阶段2: 关键帧提示词（KF0/KF1/KF2） */}
           <AccordionItem value="keyframe" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-3">
@@ -810,9 +1069,9 @@ export function SceneRefinement() {
                   )}
                 </div>
                 <div className="text-left">
-                  <h4 className="font-semibold">关键帧提示词</h4>
+                  <h4 className="font-semibold">关键帧提示词（KF0/KF1/KF2）</h4>
                   <p className="text-xs text-muted-foreground">
-                    生成静态图片描述，用于绘图AI生成关键帧
+                    三张静止关键帧（起/中/终），用于生图模型
                   </p>
                 </div>
               </div>
@@ -820,13 +1079,111 @@ export function SceneRefinement() {
             <AccordionContent className="pt-4">
               {currentScene.shotPrompt ? (
                 <div className="space-y-3">
+                  {/* KF0/KF1/KF2 快速复制区块（识别到结构化标签时显示） */}
+                  {parsedKeyframes.isStructured && (
+                    <div className="space-y-3">
+                      <div className="grid gap-3 lg:grid-cols-3">
+                        {[
+                          { label: 'KF0（起始）', data: parsedKeyframes.keyframes[0] },
+                          { label: 'KF1（中间）', data: parsedKeyframes.keyframes[1] },
+                          { label: 'KF2（结束）', data: parsedKeyframes.keyframes[2] },
+                        ].map(({ label, data }) => {
+                          const hasAny = Boolean(data.zh || data.en);
+                          const preview = [
+                            data.zh ? `ZH: ${data.zh}` : '',
+                            data.en ? `EN: ${data.en}` : '',
+                          ]
+                            .filter(Boolean)
+                            .join('\n\n');
+
+                          return (
+                            <div key={label} className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="font-medium text-sm">{label}</div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={!data.zh}
+                                    onClick={() => data.zh && copyToClipboard(data.zh, `已复制 ${label} 中文`)}
+                                    title={`复制 ${label} 中文`}
+                                  >
+                                    ZH
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={!data.en}
+                                    onClick={() => data.en && copyToClipboard(data.en, `已复制 ${label} 英文`)}
+                                    title={`复制 ${label} 英文`}
+                                  >
+                                    EN
+                                  </Button>
+                                </div>
+                              </div>
+                              <Textarea
+                                value={hasAny ? preview : '（未解析到该关键帧，请检查 KF0/KF1/KF2 标签是否完整）'}
+                                readOnly
+                                className="min-h-[120px] resize-none font-mono text-xs bg-background/60"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {parsedKeyframes.avoid && (
+                        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-medium text-sm">AVOID（负面/避免项）</div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!parsedKeyframes.avoid.zh}
+                                onClick={() =>
+                                  parsedKeyframes.avoid?.zh &&
+                                  copyToClipboard(parsedKeyframes.avoid.zh, '已复制 AVOID 中文')
+                                }
+                                title="复制 AVOID 中文"
+                              >
+                                ZH
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!parsedKeyframes.avoid.en}
+                                onClick={() =>
+                                  parsedKeyframes.avoid?.en &&
+                                  copyToClipboard(parsedKeyframes.avoid.en, '已复制 AVOID 英文')
+                                }
+                                title="复制 AVOID 英文"
+                              >
+                                EN
+                              </Button>
+                            </div>
+                          </div>
+                          <Textarea
+                            value={[
+                              parsedKeyframes.avoid.zh ? `ZH: ${parsedKeyframes.avoid.zh}` : '',
+                              parsedKeyframes.avoid.en ? `EN: ${parsedKeyframes.avoid.en}` : '',
+                            ]
+                              .filter(Boolean)
+                              .join('\n\n')}
+                            readOnly
+                            className="min-h-[80px] resize-none font-mono text-xs bg-background/60"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <Textarea
                     value={currentScene.shotPrompt}
                     onChange={(e) => updateScene(currentProject.id, currentScene.id, {
                       shotPrompt: e.target.value
                     })}
                     className="min-h-[150px] resize-none font-mono text-sm"
-                    placeholder="静态关键帧描述..."
+                    placeholder="三关键帧提示词（KF0/KF1/KF2）..."
                   />
                   <Button
                     variant="outline"
@@ -847,7 +1204,7 @@ export function SceneRefinement() {
               ) : (
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">
-                    {canGenerateKeyframe ? '准备就绪，可以生成关键帧提示词' : '请先完成场景描述'}
+                    {canGenerateKeyframe ? '准备就绪，可以生成关键帧提示词（KF0/KF1/KF2）' : '请先完成场景锚点'}
                   </p>
                   <Button
                     onClick={generateKeyframePrompt}
@@ -877,7 +1234,7 @@ export function SceneRefinement() {
             </AccordionContent>
           </AccordionItem>
 
-          {/* 阶段3: 时空提示词 */}
+          {/* 阶段3: 时空/运动提示词 */}
           <AccordionItem value="motion" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-3">
@@ -891,9 +1248,9 @@ export function SceneRefinement() {
                   )}
                 </div>
                 <div className="text-left">
-                  <h4 className="font-semibold">时空提示词</h4>
+                  <h4 className="font-semibold">时空/运动提示词</h4>
                   <p className="text-xs text-muted-foreground">
-                    生成动作/镜头/变化描述，用于视频AI
+                    基于三关键帧差分生成“变化描述”，用于图生视频模型
                   </p>
                 </div>
               </div>
@@ -901,16 +1258,73 @@ export function SceneRefinement() {
             <AccordionContent className="pt-4">
               {currentScene.motionPrompt ? (
                 <div className="space-y-3">
+                  {parsedMotion.isStructured && (
+                    <div className="space-y-3">
+                      {[
+                        { label: 'MOTION_SHORT（短版）', data: parsedMotion.motionShort },
+                        { label: 'MOTION_BEATS（分拍）', data: parsedMotion.motionBeats },
+                        { label: 'CONSTRAINTS（约束）', data: parsedMotion.constraints },
+                      ].map(({ label, data }) => {
+                        if (!data || (!data.zh && !data.en)) {
+                          return null;
+                        }
+
+                        const preview = [
+                          data.zh ? `ZH: ${data.zh}` : '',
+                          data.en ? `EN: ${data.en}` : '',
+                        ]
+                          .filter(Boolean)
+                          .join('\n\n');
+
+                        return (
+                          <div key={label} className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium text-sm">{label}</div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={!data.zh}
+                                  onClick={() =>
+                                    data.zh && copyToClipboard(data.zh, `已复制 ${label} 中文`)
+                                  }
+                                  title={`复制 ${label} 中文`}
+                                >
+                                  ZH
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={!data.en}
+                                  onClick={() =>
+                                    data.en && copyToClipboard(data.en, `已复制 ${label} 英文`)
+                                  }
+                                  title={`复制 ${label} 英文`}
+                                >
+                                  EN
+                                </Button>
+                              </div>
+                            </div>
+                            <Textarea
+                              value={preview}
+                              readOnly
+                              className="min-h-[80px] resize-none font-mono text-xs bg-background/60"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <Textarea
                     value={currentScene.motionPrompt}
                     onChange={(e) => updateScene(currentProject.id, currentScene.id, {
                       motionPrompt: e.target.value
                     })}
                     className="min-h-[100px] resize-none font-mono text-sm"
-                    placeholder="时空提示词..."
+                    placeholder="时空/运动提示词..."
                   />
                   <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                    💡 时空提示词应保持简短(15-25词)，包含动作、镜头运动、场面变化
+                    💡 建议包含：短版 + 分拍版(0-1s/1-2s/2-3s) + 强约束（保持人物/服装/场景锚点不漂）
                   </div>
                   <Button
                     variant="outline"
@@ -931,7 +1345,7 @@ export function SceneRefinement() {
               ) : (
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">
-                    {canGenerateMotion ? '准备就绪，可以生成时空提示词' : '请先完成关键帧提示词'}
+                    {canGenerateMotion ? '准备就绪，可以生成时空/运动提示词' : '请先完成关键帧提示词（KF0/KF1/KF2）'}
                   </p>
                   <Button
                     onClick={generateMotionPrompt}
@@ -1080,7 +1494,7 @@ export function SceneRefinement() {
               ) : (
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">
-                    {canGenerateDialogue ? '准备就绪，可以生成台词' : '请先完成时空提示词'}
+                    {canGenerateDialogue ? '准备就绪，可以生成台词' : '请先完成时空/运动提示词'}
                   </p>
                   <Button
                     onClick={generateDialogue}
@@ -1212,10 +1626,16 @@ export function SceneRefinement() {
             {isCompleted && (
               <Button
                 variant="ghost"
-                onClick={() => {
-                  if (confirm('确定要重新生成当前分镜的所有内容吗？这将覆盖现有内容。')) {
-                    generateAll(true);
-                  }
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: '确认重新生成当前分镜？',
+                    description: '这将覆盖当前分镜的所有已生成内容，且无法撤销。',
+                    confirmText: '重新生成',
+                    cancelText: '取消',
+                    destructive: true,
+                  });
+                  if (!ok) return;
+                  generateAll(true);
                 }}
                 disabled={isGenerating || isBatchGenerating || isExternallyBlocked}
                 className="gap-2"
@@ -1263,12 +1683,122 @@ export function SceneRefinement() {
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
           <li>• <strong>渐进式生成</strong>: 按顺序完成四个阶段，每步都可手动编辑优化</li>
-          <li>• <strong>关键帧提示词</strong>: 专注静态画面描述，适用于SD/MJ等绘图工具</li>
-          <li>• <strong>时空提示词</strong>: 简短的动态描述，用于视频生成AI</li>
+          <li>• <strong>关键帧提示词（KF0/KF1/KF2）</strong>: 三张静止画面描述，可分别用于生图模型</li>
+          <li>• <strong>时空/运动提示词</strong>: 基于三关键帧的变化描述，用于图生视频模型</li>
           <li>• <strong>台词生成</strong>: 对白/独白/旁白/心理活动，可用于配音或字幕</li>
           <li>• <strong>批量处理</strong>: 完成所有分镜后可在导出页面统一查看和管理</li>
         </ul>
       </Card>
+
+      {/* 分镜列表对话框 */}
+      <Dialog open={sceneListDialogOpen} onOpenChange={setSceneListDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>分镜列表（快速跳转）</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={sceneListQuery}
+              onChange={(e) => setSceneListQuery(e.target.value)}
+              placeholder="搜索分镜概要..."
+            />
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={sceneListFilter === 'all' ? 'default' : 'outline'}
+                onClick={() => setSceneListFilter('all')}
+              >
+                全部
+              </Button>
+              <Button
+                size="sm"
+                variant={sceneListFilter === 'incomplete' ? 'default' : 'outline'}
+                onClick={() => setSceneListFilter('incomplete')}
+              >
+                未完成
+              </Button>
+              <Button
+                size="sm"
+                variant={sceneListFilter === 'completed' ? 'default' : 'outline'}
+                onClick={() => setSceneListFilter('completed')}
+              >
+                已完成
+              </Button>
+              <Button
+                size="sm"
+                variant={sceneListFilter === 'needs_update' ? 'default' : 'outline'}
+                onClick={() => setSceneListFilter('needs_update')}
+              >
+                需更新
+              </Button>
+            </div>
+
+            <div className="space-y-2 max-h-[55vh] overflow-auto pr-1">
+              {filteredSceneList.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  没有匹配的分镜
+                </div>
+              ) : (
+                filteredSceneList.map(({ scene, index, isFullyCompleted, isNeedsUpdate }) => (
+                  <button
+                    key={scene.id}
+                    type="button"
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      index === currentSceneIndex
+                        ? 'border-primary bg-primary/5'
+                        : 'hover:bg-muted'
+                    }`}
+                    onClick={() => {
+                      goToScene(index);
+                      setSceneListDialogOpen(false);
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{scene.summary}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          {isNeedsUpdate ? (
+                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                              需更新
+                            </Badge>
+                          ) : isFullyCompleted ? (
+                            <Badge className="bg-green-500/15 text-green-700 dark:text-green-300">
+                              已完成
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">未完成</Badge>
+                          )}
+                          {scene.sceneDescription && (
+                            <span className="text-xs text-muted-foreground">锚点✓</span>
+                          )}
+                          {scene.shotPrompt && (
+                            <span className="text-xs text-muted-foreground">关键帧✓</span>
+                          )}
+                          {scene.motionPrompt && (
+                            <span className="text-xs text-muted-foreground">运动✓</span>
+                          )}
+                          {scene.dialogues?.length ? (
+                            <span className="text-xs text-muted-foreground">台词✓</span>
+                          ) : null}
+                        </div>
+                      </div>
+                      {index === currentSceneIndex && (
+                        <Badge variant="outline" className="flex-shrink-0">
+                          当前
+                        </Badge>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 模板库对话框 */}
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
@@ -1280,11 +1810,11 @@ export function SceneRefinement() {
         </DialogContent>
       </Dialog>
 
-      {/* 角色引用对话框 */}
+      {/* 复制角色信息对话框 */}
       <Dialog open={characterDialogOpen} onOpenChange={setCharacterDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>选择角色</DialogTitle>
+            <DialogTitle>选择要复制的角色</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 max-h-[400px] overflow-auto">
             {projectCharacters.length === 0 ? (

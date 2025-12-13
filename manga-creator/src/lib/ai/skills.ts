@@ -67,12 +67,15 @@ export const ActionDescriptionSkill: Skill = {
 
 export const KeyframePromptSkill: Skill = {
   name: 'keyframe-prompt',
-  description: '生成三张静止关键帧（起/中/终）的绘图提示词（中英双语）',
+  description: '生成三张静止关键帧（起/中/终）的“人物差分提示词”（适配图生图/参考图流程，中英双语）',
   requiredContext: ['project_essence', 'confirmed_content'],
-  promptTemplate: `你是专业的绘图/视频关键帧提示词工程师。请基于“场景锚点”与角色信息，输出 3 张「静止」关键帧提示词：KF0(起始) / KF1(中间) / KF2(结束)。
+  promptTemplate: `你是专业的绘图/视频关键帧提示词工程师。用户已经用“场景锚点”生成了一张无人物的场景图（背景参考图）。现在请为 img2img/图生图 输出 3 张「静止」关键帧的“人物差分提示词”：KF0(起始) / KF1(中间) / KF2(结束)，用于在同一背景上生成连贯的三帧。
 
 ## 输入
-场景锚点（环境一致性，包含 LOCK_*）:
+当前分镜概要（决定三帧的动作分解）:
+{current_scene_summary}
+
+场景锚点（环境一致性，包含 LOCK_*。注意：只允许引用 LOCK_* 里的锚点名用于定位，不要复述场景段落）:
 {scene_description}
 
 视觉风格参考（可融入，但避免堆砌“masterpiece/best quality/8k”等质量词）:
@@ -82,13 +85,15 @@ export const KeyframePromptSkill: Skill = {
 {characters}
 
 ## 关键规则（必须遵守）
-1. 每个关键帧都是“定格瞬间”，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
-2. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/mid-air/frozen moment。
-3. KF0/KF1/KF2 默认保持同一相机：景别+机位+角度+焦段+构图一致（除非剧情概要强制变镜头）。
-4. 每个 KF 都要明确：人物在画面中的位置（left/right/foreground/background 或三分法）、与场景锚点物的相对关系、手部/道具状态。
-5. 表情/情绪只有在“特写/表情镜头”才重点写；否则只轻描淡写。
-6. 中英双语都要输出，并且每个 KF 的 ZH/EN 都是可直接用于生图的完整提示词。
-7. 直接输出指定格式，不要解释。
+1. 三帧默认同一镜头/构图/透视/光照，并以同一背景参考图为底：不要改背景、不要新增场景物件。
+2. 每个关键帧都是“定格瞬间”，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
+3. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
+4. 每个 KF 只写“人物差分”：人物在画面中的位置（left/right/foreground/background 或三分法）、静态姿态/定格动作、手部/道具状态；表情/情绪只有在“特写/表情镜头”才重点写。
+5. 场景定位只允许引用 2-4 个 LOCK_* 锚点名（例如“车门/扶手杆/长条车窗/座椅”等），不要重新描述环境细节（不要写灯管/地板纹理/信息屏等长段）。
+6. KF0/KF1/KF2 必须明显不同：每帧至少 3 个可见差异（位置/姿态/手部/道具/视线/距离），但都必须是定格瞬间。
+7. AVOID 必须与关键帧不冲突：禁止写 “no people/no characters/no hands”。可写：no extra characters / keep background unchanged / no text/watermark / no motion blur / bad hands / extra fingers / bad anatomy。
+8. 中英双语都要输出，并且每个 KF 的 ZH/EN 都是可直接用于图生图/参考图的完整提示词。
+9. 直接输出指定格式，不要解释。
 
 ## 输出格式（严格按行输出）
 KF0_ZH: ...
@@ -286,4 +291,3 @@ export function parseDialoguesFromText(text: string): DialogueLine[] {
 
   return dialogues;
 }
-

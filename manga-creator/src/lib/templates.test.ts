@@ -36,8 +36,8 @@ describe('templates', () => {
       expect(categories.size).toBeGreaterThan(1);
     });
 
-    it('should include scene description templates', () => {
-      const sceneTemplates = BUILT_IN_TEMPLATES.filter(t => t.category === '场景描述');
+    it('should include scene anchor templates', () => {
+      const sceneTemplates = BUILT_IN_TEMPLATES.filter(t => t.category === '场景锚点');
       expect(sceneTemplates.length).toBeGreaterThan(0);
     });
 
@@ -56,7 +56,7 @@ describe('templates', () => {
     it('should return template by ID', () => {
       const template = getTemplateById('builtin_scene_realistic');
       expect(template).toBeDefined();
-      expect(template?.name).toBe('写实场景描述');
+      expect(template?.name).toBe('写实场景锚点');
     });
 
     it('should return undefined for non-existent ID', () => {
@@ -84,10 +84,10 @@ describe('templates', () => {
   });
 
   describe('getTemplatesByCategory', () => {
-    it('should return templates for scene description category', () => {
-      const templates = getTemplatesByCategory('场景描述');
+    it('should return templates for scene anchor category', () => {
+      const templates = getTemplatesByCategory('场景锚点');
       expect(templates.length).toBeGreaterThan(0);
-      expect(templates.every(t => t.category === '场景描述')).toBe(true);
+      expect(templates.every(t => t.category === '场景锚点')).toBe(true);
     });
 
     it('should return templates for action description category', () => {

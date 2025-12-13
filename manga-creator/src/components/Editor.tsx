@@ -8,7 +8,7 @@ import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { CheckCircle2, Circle, History, BarChart3, Download, Layers } from 'lucide-react';
+import { CheckCircle2, Circle, History, BarChart3, Download, Layers, GitCompare } from 'lucide-react';
 import { BasicSettings } from './editor/BasicSettings';
 import { SceneGeneration } from './editor/SceneGeneration';
 import { SceneRefinement } from './editor/SceneRefinement';
@@ -17,15 +17,17 @@ import { VersionHistory } from './editor/VersionHistory';
 import { StatisticsPanel } from './editor/StatisticsPanel';
 import { DataExporter } from './editor/DataExporter';
 import { BatchOperations } from './editor/BatchOperations';
+import { SceneComparison } from './editor/SceneComparison';
 import { AIFactory } from '@/lib/ai/factory';
 import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
 import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
 import { migrateOldStyleToConfig } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { getWorkflowStateLabel } from '@/lib/workflowLabels';
 
 type EditorStep = 'basic' | 'generation' | 'refinement' | 'export';
-type ActiveDialog = 'none' | 'version' | 'statistics' | 'export' | 'batch';
+type ActiveDialog = 'none' | 'version' | 'statistics' | 'export' | 'batch' | 'compare';
 
 export function Editor() {
   const { currentProject, updateProject } = useProjectStore();
@@ -91,6 +93,8 @@ export function Editor() {
       </div>
     );
   }
+
+  const workflowLabel = getWorkflowStateLabel(currentProject.workflowState);
 
   // 获取项目的完整画风提示词
   const getStyleFullPrompt = (project: typeof currentProject): string => {
@@ -170,7 +174,7 @@ export function Editor() {
       });
 
       try {
-        // 生成场景描述
+        // 生成场景锚点
         if (!scene.sceneDescription) {
           const sceneSkill = getSkillByName('generate_scene_desc');
           if (sceneSkill) {
@@ -203,11 +207,15 @@ export function Editor() {
         if (latestScene1?.sceneDescription && !latestScene1.shotPrompt) {
           const keyframeSkill = getSkillByName('generate_keyframe_prompt');
           if (keyframeSkill) {
+            const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+            const prevScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
             const prompt = fillPromptTemplate(keyframeSkill.promptTemplate, {
               artStyle: currentProject.artStyleConfig,
               characters: projectCharacters,
               worldViewElements: shouldInjectWorldView ? worldViewElements : [],
               sceneDescription: latestScene1.sceneDescription,
+              sceneSummary: latestScene1.summary,
+              prevSceneSummary: prevScene?.summary,
             });
 
             const response = await client.chat([{ role: 'user', content: prompt }]);
@@ -222,7 +230,7 @@ export function Editor() {
         const { scenes: updatedScenes2 } = useStoryboardStore.getState();
         const latestScene2 = updatedScenes2.find(s => s.id === sceneId);
 
-        // 生成时空提示词
+        // 生成时空/运动提示词
          if (latestScene2?.shotPrompt && !latestScene2.motionPrompt) {
            const motionSkill = getSkillByName('generate_motion_prompt');
            if (motionSkill) {
@@ -316,14 +324,14 @@ export function Editor() {
       content = selectedScenes.map((scene, index) => {
         const dialoguesText = scene.dialogues?.map(d => `- **${d.characterName || '旁白'}**: ${d.content}`).join('\n') || '(未生成)';
         return `## 分镜 ${index + 1}: ${scene.summary}\n\n` +
-          `### 场景描述\n${scene.sceneDescription || '(未生成)'}\n\n` +
-          `### 关键帧提示词
+          `### 场景锚点（Scene Anchor）\n${scene.sceneDescription || '(未生成)'}\n\n` +
+          `### 关键帧提示词（KF0/KF1/KF2）
 \`\`\`
 ${scene.shotPrompt || '(未生成)'}
 \`\`\`
 
 ` +
-          `### 时空提示词
+          `### 时空/运动提示词
 \`\`\`
 ${scene.motionPrompt || '(未生成)'}
 \`\`\`
@@ -356,9 +364,9 @@ ${dialoguesText}
       content = selectedScenes.map((scene, index) => {
         const dialoguesText = scene.dialogues?.map(d => `${d.characterName || '旁白'}: ${d.content}`).join('; ') || '(未生成)';
         return `[分镜 ${index + 1}] ${scene.summary}\n` +
-          `场景: ${scene.sceneDescription || '(未生成)'}\n` +
+          `锚点: ${scene.sceneDescription || '(未生成)'}\n` +
           `关键帧: ${scene.shotPrompt || '(未生成)'}\n` +
-          `时空: ${scene.motionPrompt || '(未生成)'}\n` +
+          `运动: ${scene.motionPrompt || '(未生成)'}\n` +
           `台词: ${dialoguesText}\n\n`;
       }).join('');
 
@@ -440,7 +448,7 @@ ${dialoguesText}
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold">{currentProject.title}</h2>
             <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
-              {currentProject.workflowState}
+              <span title={currentProject.workflowState}>{workflowLabel}</span>
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -461,6 +469,15 @@ ${dialoguesText}
             >
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">统计分析</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveDialog('compare')}
+              className="gap-2"
+            >
+              <GitCompare className="h-4 w-4" />
+              <span className="hidden sm:inline">分镜对比</span>
             </Button>
             <Button
               variant="outline"
@@ -566,6 +583,25 @@ ${dialoguesText}
             <DialogTitle>统计分析</DialogTitle>
           </DialogHeader>
           <StatisticsPanel projectId={currentProject.id} />
+        </DialogContent>
+      </Dialog>
+
+      {/* 分镜对比对话框 */}
+      <Dialog open={activeDialog === 'compare'} onOpenChange={(open) => setActiveDialog(open ? 'compare' : 'none')}>
+        <DialogContent className="max-w-5xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>分镜对比</DialogTitle>
+          </DialogHeader>
+          <SceneComparison
+            scenes={scenes}
+            onMerge={(targetId, sourceContent) => {
+              updateScene(currentProject.id, targetId, sourceContent);
+              toast({
+                title: '已合并内容',
+                description: '已将选择的字段复制到目标分镜',
+              });
+            }}
+          />
         </DialogContent>
       </Dialog>
 

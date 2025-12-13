@@ -779,11 +779,11 @@ ${char.portraitPrompts.general}
         markdown += `**概要:** ${scene.summary}\n\n`;
 
         if (scene.sceneDescription) {
-          markdown += `**场景描述:**\n${scene.sceneDescription}\n\n`;
+          markdown += `**场景锚点（Scene Anchor）:**\n${scene.sceneDescription}\n\n`;
         }
 
         if (scene.shotPrompt) {
-          markdown += `**关键帧提示词:**
+          markdown += `**关键帧提示词（KF0/KF1/KF2）:**
 \`\`\`
 ${scene.shotPrompt}
 \`\`\`
@@ -792,7 +792,7 @@ ${scene.shotPrompt}
         }
 
         if (scene.motionPrompt) {
-          markdown += `**时空提示词:**
+          markdown += `**时空/运动提示词:**
 \`\`\`
 ${scene.motionPrompt}
 \`\`\`
