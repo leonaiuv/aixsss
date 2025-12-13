@@ -152,7 +152,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   useEffect(() => {
     loadCharacters(projectId);
   }, [projectId, loadCharacters]);
-  const { config } = useConfigStore();
+  const { config, activeProfileId } = useConfigStore();
   const { currentProject } = useProjectStore();
   const { scenes, updateScene: updateSceneInStore } = useStoryboardStore();
   
@@ -389,6 +389,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     });
     setCurrentTaskId(taskId);
     showPanel();
+    let logId = '';
 
     try {
       const client = AIFactory.createClient(config);
@@ -412,7 +413,7 @@ ${projectContext}
 }`;
 
       // 记录日志
-      const logId = logAICall('character_basic_info', {
+      logId = logAICall('character_basic_info', {
         promptTemplate: prompt,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
@@ -424,6 +425,7 @@ ${projectContext}
         config: {
           provider: config.provider,
           model: config.model,
+          profileId: activeProfileId || undefined,
         },
       });
       
@@ -457,6 +459,7 @@ ${projectContext}
       console.error('生成角色信息失败:', err);
       const errorMsg = err instanceof Error ? err.message : '生成角色信息失败，请重试';
       setError(errorMsg);
+      if (logId) updateLogWithError(logId, errorMsg);
       failTask(taskId, {
         message: errorMsg,
         retryable: true,
@@ -494,6 +497,7 @@ ${projectContext}
     });
     setCurrentTaskId(taskId);
     showPanel();
+    let logId = '';
 
     try {
       const client = AIFactory.createClient(config);
@@ -522,7 +526,7 @@ ${styleDesc}
 }`;
 
       // 记录日志
-      const logId = logAICall('character_portrait', {
+      logId = logAICall('character_portrait', {
         promptTemplate: prompt,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
@@ -535,6 +539,7 @@ ${styleDesc}
         config: {
           provider: config.provider,
           model: config.model,
+          profileId: activeProfileId || undefined,
         },
       });
       
@@ -570,6 +575,7 @@ ${styleDesc}
       console.error('生成定妆照提示词失败:', err);
       const errorMsg = err instanceof Error ? err.message : '生成定妆照提示词失败，请重试';
       setError(errorMsg);
+      if (logId) updateLogWithError(logId, errorMsg);
       failTask(taskId, {
         message: errorMsg,
         retryable: true,
@@ -631,7 +637,7 @@ ${styleDesc}
         projectId,
         maxRetries: 2,
       });
-      
+      let logId = '';
       try {
         const prompt = `你是一位专业的AI绘图提示词专家。请根据以下角色信息，生成「角色定妆照」提示词。
 
@@ -654,12 +660,12 @@ ${styleDesc}
   "general": "通用中文描述"
 }`;
         
-        const logId = logAICall('character_portrait', {
+        logId = logAICall('character_portrait', {
           promptTemplate: prompt,
           filledPrompt: prompt,
           messages: [{ role: 'user', content: prompt }],
           context: { projectId, characterName: character.name },
-          config: { provider: config.provider, model: config.model },
+          config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
         });
         
         updateProgress(taskId, 30, '正在调用AI...');
@@ -694,6 +700,7 @@ ${styleDesc}
           message: err instanceof Error ? err.message : '生成失败',
           retryable: true,
         });
+        if (logId) updateLogWithError(logId, err instanceof Error ? err.message : '鐢熸垚澶辫触');
         setBatchGeneration(prev => ({
           ...prev,
           failedIds: [...prev.failedIds, character.id],

@@ -30,6 +30,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
+import { flushScenePatchQueue } from '@/lib/storage';
 import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
 import { logAICall, updateLogWithResponse, updateLogWithError, updateLogProgress } from '@/lib/ai/debugLogger';
 import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
@@ -56,10 +57,27 @@ function getStyleFullPrompt(project: Project | null): string {
   return '';
 }
 
+function getRecommendedAccordionValue(
+  scene:
+    | {
+        sceneDescription?: string;
+        shotPrompt?: string;
+        motionPrompt?: string;
+        dialogues?: unknown[];
+      }
+    | undefined
+): string {
+  if (!scene?.sceneDescription) return 'scene';
+  if (!scene.shotPrompt) return 'keyframe';
+  if (!scene.motionPrompt) return 'motion';
+  if (!scene.dialogues || scene.dialogues.length === 0) return 'dialogue';
+  return 'dialogue';
+}
+
 export function SceneRefinement() {
   const { currentProject, updateProject } = useProjectStore();
   const { scenes, updateScene, loadScenes } = useStoryboardStore();
-  const { config } = useConfigStore();
+  const { config, activeProfileId } = useConfigStore();
   const { characters } = useCharacterStore();
   const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
   const { 
@@ -85,11 +103,13 @@ export function SceneRefinement() {
   const [sceneListDialogOpen, setSceneListDialogOpen] = useState(false);
   const [sceneListQuery, setSceneListQuery] = useState('');
   const [sceneListFilter, setSceneListFilter] = useState<'all' | 'incomplete' | 'completed' | 'needs_update'>('all');
+  const [activeAccordion, setActiveAccordion] = useState<string>('scene');
 
   const { confirm, ConfirmDialog } = useConfirm();
 
   // 关键帧提示词解析（用于拆分 KF0/KF1/KF2 的快速复制）
   const currentSceneForParse = scenes[currentSceneIndex];
+  const currentSceneId = currentSceneForParse?.id;
   const parsedSceneAnchor = useMemo(
     () => parseSceneAnchorText(currentSceneForParse?.sceneDescription || ''),
     [currentSceneForParse?.sceneDescription]
@@ -136,6 +156,10 @@ export function SceneRefinement() {
   // 使用 useCallback 优化导航回调 - 必须在条件返回之前
   const goToPrevScene = useCallback(() => {
     if (currentSceneIndex > 0 && currentProject) {
+      try {
+        flushScenePatchQueue();
+      } catch {
+      }
       setCurrentSceneIndex(currentSceneIndex - 1);
       updateProject(currentProject.id, {
         currentSceneOrder: currentSceneIndex,
@@ -145,6 +169,10 @@ export function SceneRefinement() {
 
   const goToNextScene = useCallback(() => {
     if (currentSceneIndex < scenes.length - 1 && currentProject) {
+      try {
+        flushScenePatchQueue();
+      } catch {
+      }
       setCurrentSceneIndex(currentSceneIndex + 1);
       updateProject(currentProject.id, {
         currentSceneOrder: currentSceneIndex + 2,
@@ -155,6 +183,10 @@ export function SceneRefinement() {
   const goToScene = useCallback((index: number) => {
     if (!currentProject) return;
     const safeIndex = Math.max(0, Math.min(index, scenes.length - 1));
+    try {
+      flushScenePatchQueue();
+    } catch {
+    }
     setCurrentSceneIndex(safeIndex);
     updateProject(currentProject.id, {
       currentSceneOrder: safeIndex + 1,
@@ -204,6 +236,17 @@ export function SceneRefinement() {
       setCurrentSceneIndex(scenes.length - 1);
     }
   }, [currentSceneIndex, scenes.length]);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    if (!currentSceneId) return;
+
+    const { scenes: latestScenes } = useStoryboardStore.getState();
+    const latestScene = latestScenes.find((s) => s.id === currentSceneId);
+    if (!latestScene) return;
+
+    setActiveAccordion(getRecommendedAccordionValue(latestScene));
+  }, [currentProject?.id, currentSceneId]);
 
   // 数据加载中：避免首屏空白
   if (!currentProject) {
@@ -262,6 +305,7 @@ export function SceneRefinement() {
     setIsGenerating(true);
     setGeneratingStep('scene_description');
     setError('');
+    let logId = '';
 
     try {
       const client = AIFactory.createClient(config);
@@ -302,7 +346,7 @@ export function SceneRefinement() {
 
       // 记录AI调用日志
       const prevSceneSummary = currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined;
-      const logId = logAICall('scene_description', {
+      logId = logAICall('scene_description', {
         skillName: skill.name,
         promptTemplate: skill.promptTemplate,
         filledPrompt: prompt,
@@ -322,6 +366,7 @@ export function SceneRefinement() {
           provider: config.provider,
           model: config.model,
           maxTokens: skill.maxTokens,
+          profileId: activeProfileId || undefined,
         },
       });
       
@@ -343,12 +388,13 @@ export function SceneRefinement() {
         sceneDescription: response.content.trim(),
         status: 'scene_confirmed',
       });
+      setActiveAccordion('keyframe');
 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
       console.error('生成场景锚点失败:', err);
-      updateLogWithError('scene_description_error', errorMsg);
+      if (logId) updateLogWithError(logId, errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);
@@ -366,6 +412,7 @@ export function SceneRefinement() {
     setIsGenerating(true);
     setGeneratingStep('keyframe_prompt');
     setError('');
+    let logId = '';
 
     try {
       const client = AIFactory.createClient(config);
@@ -388,7 +435,7 @@ export function SceneRefinement() {
       });
 
       // 记录AI调用日志
-      const logId = logAICall('keyframe_prompt', {
+      logId = logAICall('keyframe_prompt', {
         skillName: skill.name,
         promptTemplate: skill.promptTemplate,
         filledPrompt: prompt,
@@ -405,6 +452,7 @@ export function SceneRefinement() {
           provider: config.provider,
           model: config.model,
           maxTokens: skill.maxTokens,
+          profileId: activeProfileId || undefined,
         },
       });
       
@@ -426,12 +474,13 @@ export function SceneRefinement() {
         shotPrompt: response.content.trim(),
         status: 'keyframe_confirmed',
       });
+      setActiveAccordion('motion');
 
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
       console.error('生成关键帧提示词（KF0/KF1/KF2）失败:', err);
-      updateLogWithError('keyframe_prompt_error', errorMsg);
+      if (logId) updateLogWithError(logId, errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);
@@ -449,6 +498,7 @@ export function SceneRefinement() {
     setIsGenerating(true);
     setGeneratingStep('motion_prompt');
     setError('');
+    let logId = '';
 
     try {
       const client = AIFactory.createClient(config);
@@ -467,7 +517,7 @@ export function SceneRefinement() {
       });
 
       // 记录AI调用日志
-      const logId = logAICall('motion_prompt', {
+      logId = logAICall('motion_prompt', {
         skillName: skill.name,
         promptTemplate: skill.promptTemplate,
         filledPrompt: prompt,
@@ -482,6 +532,7 @@ export function SceneRefinement() {
           provider: config.provider,
           model: config.model,
           maxTokens: skill.maxTokens,
+          profileId: activeProfileId || undefined,
         },
       });
       
@@ -503,6 +554,7 @@ export function SceneRefinement() {
         motionPrompt: response.content.trim(),
         status: 'motion_generating',
       });
+      setActiveAccordion('dialogue');
 
       // 如果是最后一个分镜,更新项目状态
       if (currentSceneIndex === scenes.length - 1) {
@@ -516,7 +568,7 @@ export function SceneRefinement() {
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
       console.error('生成时空/运动提示词失败:', err);
-      updateLogWithError('motion_prompt_error', errorMsg);
+      if (logId) updateLogWithError(logId, errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);
@@ -534,6 +586,7 @@ export function SceneRefinement() {
     setIsGenerating(true);
     setGeneratingStep('dialogue');
     setError('');
+    let logId = '';
 
     try {
       const client = AIFactory.createClient(config);
@@ -556,7 +609,7 @@ export function SceneRefinement() {
       });
 
       // 记录AI调用日志
-      const logId = logAICall('dialogue', {
+      logId = logAICall('dialogue', {
         skillName: skill.name,
         promptTemplate: skill.promptTemplate,
         filledPrompt: prompt,
@@ -573,6 +626,7 @@ export function SceneRefinement() {
           provider: config.provider,
           model: config.model,
           maxTokens: skill.maxTokens,
+          profileId: activeProfileId || undefined,
         },
       });
       
@@ -597,6 +651,7 @@ export function SceneRefinement() {
         dialogues,
         status: 'completed',
       });
+      setActiveAccordion('dialogue');
 
       // 如果是最后一个分镜,更新项目状态
       if (currentSceneIndex === scenes.length - 1) {
@@ -610,7 +665,7 @@ export function SceneRefinement() {
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
       console.error('生成台词失败:', err);
-      updateLogWithError('dialogue_error', errorMsg);
+      if (logId) updateLogWithError(logId, errorMsg);
     } finally {
       setIsGenerating(false);
       setGeneratingStep(null);
@@ -638,6 +693,7 @@ export function SceneRefinement() {
           dialogues: [],
           status: 'pending',
         });
+        setActiveAccordion('scene');
         // 等待状态更新
         await new Promise(resolve => setTimeout(resolve, 100));
       }
@@ -919,7 +975,13 @@ export function SceneRefinement() {
         </div>
 
         {/* 三阶段生成 */}
-        <Accordion type="single" collapsible className="space-y-4">
+        <Accordion
+          type="single"
+          collapsible
+          className="space-y-4"
+          value={activeAccordion}
+          onValueChange={setActiveAccordion}
+        >
           {/* 阶段1: 场景锚点 */}
           <AccordionItem value="scene" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">

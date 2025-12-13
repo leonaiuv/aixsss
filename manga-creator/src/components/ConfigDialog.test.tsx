@@ -1,22 +1,46 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConfigDialog } from './ConfigDialog';
-import { KeyManager } from '@/lib/keyManager';
+import { KeyManager, KeyPurpose } from '@/lib/keyManager';
 
 // Mock stores
 const mockSaveConfig = vi.fn();
 const mockTestConnection = vi.fn();
+const mockLoadConfig = vi.fn();
+const mockClearConfig = vi.fn();
+const mockSetActiveProfile = vi.fn();
+const mockCreateProfile = vi.fn(() => 'profile_2');
+const mockUpdateProfile = vi.fn();
+const mockDeleteProfile = vi.fn();
 const mockConfig = {
   provider: 'deepseek' as const,
   apiKey: 'test-api-key',
   model: 'deepseek-chat',
 };
 
+const mockProfiles = [
+  {
+    id: 'profile_1',
+    name: '默认档案',
+    config: mockConfig,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
 vi.mock('@/stores/configStore', () => ({
   useConfigStore: () => ({
     config: mockConfig,
     saveConfig: mockSaveConfig,
     testConnection: mockTestConnection,
+    loadConfig: mockLoadConfig,
+    clearConfig: mockClearConfig,
+    profiles: mockProfiles,
+    activeProfileId: 'profile_1',
+    setActiveProfile: mockSetActiveProfile,
+    createProfile: mockCreateProfile,
+    updateProfile: mockUpdateProfile,
+    deleteProfile: mockDeleteProfile,
   }),
 }));
 
@@ -124,6 +148,7 @@ describe('ConfigDialog 加密密码设置', () => {
     await waitFor(() => {
       expect(KeyManager.isInitialized()).toBe(true);
       expect(KeyManager.hasCustomPassword()).toBe(true);
+      expect(mockLoadConfig).toHaveBeenCalled();
     });
   });
 
@@ -148,6 +173,28 @@ describe('ConfigDialog 加密密码设置', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/当前密码/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/新密码/i)).toBeInTheDocument();
+    });
+  });
+
+  it('更换密码时当前密码错误应提示', async () => {
+    KeyManager.initialize('current-password');
+    localStorage.setItem('aixs_key_check', KeyManager.encrypt('ok', KeyPurpose.GENERAL));
+
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /更换密码/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/当前密码/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/新密码/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/当前密码/i), { target: { value: 'wrong-password' } });
+    fireEvent.change(screen.getByLabelText(/新密码/i), { target: { value: 'new-password-123' } });
+    fireEvent.click(screen.getByRole('button', { name: /确认更换/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/当前密码不正确/i)).toBeInTheDocument();
     });
   });
 });
@@ -208,5 +255,59 @@ describe('ConfigDialog 加密状态指示', () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
     
     expect(screen.getByText(/已启用加密保护/i)).toBeInTheDocument();
+  });
+});
+
+describe('ConfigDialog 解锁流程', () => {
+  it('已设置密码但未解锁时应显示解锁表单并禁用编辑', () => {
+    // 模拟“设置过密码但重启未解锁”的场景
+    localStorage.setItem('aixs_has_custom_password', 'true');
+    KeyManager.reset();
+
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    expect(screen.getByText(/请先解锁/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /解锁/i })).toBeInTheDocument();
+
+    expect(screen.getByLabelText(/API Key/i)).toBeDisabled();
+    expect(screen.getByLabelText(/模型名称/i)).toBeDisabled();
+    expect(screen.getByRole('button', { name: /测试连接/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /保存配置/i })).toBeDisabled();
+  });
+
+  it('解锁密码错误应提示错误信息', async () => {
+    // 先用正确密码初始化（写入校验标记），再模拟重启未解锁
+    KeyManager.initialize('correct-password');
+    localStorage.setItem('aixs_key_check', KeyManager.encrypt('ok', KeyPurpose.GENERAL));
+    KeyManager.reset();
+
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText(/^加密密码$/), { target: { value: 'wrong-password' } });
+    fireEvent.click(screen.getByRole('button', { name: /解锁/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/密码不正确/i)).toBeInTheDocument();
+      expect(mockLoadConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  it('解锁成功后应调用 loadConfig 并解除禁用', async () => {
+    KeyManager.initialize('correct-password');
+    localStorage.setItem('aixs_key_check', KeyManager.encrypt('ok', KeyPurpose.GENERAL));
+    KeyManager.reset();
+
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    fireEvent.change(screen.getByLabelText(/^加密密码$/), { target: { value: 'correct-password' } });
+    fireEvent.click(screen.getByRole('button', { name: /解锁/i }));
+
+    await waitFor(() => {
+      expect(mockLoadConfig).toHaveBeenCalled();
+      expect(screen.getByLabelText(/API Key/i)).not.toBeDisabled();
+      expect(screen.getByLabelText(/模型名称/i)).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /测试连接/i })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /保存配置/i })).not.toBeDisabled();
+    });
   });
 });

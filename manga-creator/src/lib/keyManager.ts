@@ -26,6 +26,9 @@ const KEY_SIZE = 256 / 32;
 /** 加密数据前缀标识 */
 const ENCRYPTED_PREFIX = 'AIXS_V2:';
 
+/** 密钥校验标记（用于验证密码是否正确） */
+export const ENCRYPTION_CHECK_KEY = 'aixs_key_check';
+
 // ==========================================
 // 密钥用途枚举
 // ==========================================
@@ -305,7 +308,12 @@ class KeyManagerImpl {
    * 检查是否使用自定义密码
    */
   hasCustomPassword(): boolean {
-    return this.state.hasCustomPassword;
+    if (this.state.hasCustomPassword) return true;
+    try {
+      return localStorage.getItem(STORAGE_KEYS.HAS_CUSTOM_PASSWORD) === 'true';
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -370,3 +378,61 @@ class KeyManagerImpl {
 // ==========================================
 
 export const KeyManager = new KeyManagerImpl();
+
+// ==========================================
+// 外部辅助函数（用于“解锁/验证密码”场景）
+// ==========================================
+
+export function deriveKeyFromPassword(
+  masterPassword: string,
+  purpose: KeyPurpose,
+  salt: string
+): string {
+  const combinedSalt = `${salt}:${purpose}`;
+  const derivedKey = CryptoJS.PBKDF2(masterPassword, combinedSalt, {
+    keySize: KEY_SIZE,
+    iterations: PBKDF2_ITERATIONS,
+  });
+  return derivedKey.toString();
+}
+
+export function getStoredSalt(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.SALT) || DEFAULT_SALT;
+  } catch {
+    return DEFAULT_SALT;
+  }
+}
+
+export function verifyMasterPassword(masterPassword: string): boolean {
+  try {
+    if (!KeyManager.hasCustomPassword()) return true;
+
+    const salt = getStoredSalt();
+
+    const encryptedCheck = localStorage.getItem(ENCRYPTION_CHECK_KEY);
+    if (encryptedCheck) {
+      const key = deriveKeyFromPassword(masterPassword, KeyPurpose.GENERAL, salt);
+      const decrypted = KeyManager.decryptWithKey(encryptedCheck, key);
+      if (decrypted === 'ok') return true;
+      return false;
+    }
+
+    // 兼容旧数据：没有校验标记时，尝试解密已存的配置
+    const encryptedConfig = localStorage.getItem('aixs_config');
+    if (!encryptedConfig) return true;
+
+    const key = deriveKeyFromPassword(masterPassword, KeyPurpose.CONFIG, salt);
+    const decrypted = KeyManager.decryptWithKey(encryptedConfig, key);
+    if (!decrypted) return false;
+
+    try {
+      const parsed = JSON.parse(decrypted) as unknown;
+      return Boolean(parsed && typeof parsed === 'object');
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}

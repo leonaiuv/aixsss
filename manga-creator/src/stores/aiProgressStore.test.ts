@@ -903,6 +903,7 @@ describe('批量操作状态管理', () => {
       const { batchOperations } = useAIProgressStore.getState();
       expect(batchOperations.isProcessing).toBe(false);
       expect(batchOperations.isPaused).toBe(false);
+      expect(batchOperations.cancelRequested).toBe(false);
       expect(batchOperations.progress).toBe(0);
       expect(batchOperations.currentScene).toBe(0);
       expect(batchOperations.totalScenes).toBe(0);

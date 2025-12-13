@@ -1,7 +1,7 @@
 import CryptoJS from 'crypto-js';
-import { Project, Scene, UserConfig } from '@/types';
+import { Project, Scene, UserConfig, type ConfigProfile, type UserConfigState } from '@/types';
 import { debounce, BatchQueue } from './performance';
-import { KeyManager, KeyPurpose } from './keyManager';
+import { ENCRYPTION_CHECK_KEY, KeyManager, KeyPurpose } from './keyManager';
 
 // 当前版本号 - 每次数据结构变化时递增
 const STORAGE_VERSION = '1.2.0'; // 升级版本以触发密钥迁移
@@ -61,6 +61,55 @@ const sceneSaveQueue = new BatchQueue<{ projectId: string; scene: Scene }>(
   },
   200, // 200ms 延迟
   20   // 最多 20 个场景合并
+);
+
+// ==========================================
+// Scene patch batching (partial updates)
+// ==========================================
+
+type ScenePatchItem = {
+  projectId: string;
+  sceneId: string;
+  updates: Partial<Scene>;
+};
+
+// Batched scene patch writes (partial updates) to reduce localStorage churn during typing.
+const scenePatchQueue = new BatchQueue<ScenePatchItem>(
+  (items) => {
+    const byProject = new Map<string, ScenePatchItem[]>();
+    for (const item of items) {
+      const list = byProject.get(item.projectId) || [];
+      list.push(item);
+      byProject.set(item.projectId, list);
+    }
+
+    for (const [projectId, patches] of byProject) {
+      try {
+        const existingScenes = getScenes(projectId);
+        if (existingScenes.length === 0) continue;
+
+        const sceneMap = new Map(existingScenes.map((s) => [s.id, s]));
+        const merged = new Map<string, Partial<Scene>>();
+
+        for (const patch of patches) {
+          const prev = merged.get(patch.sceneId) || {};
+          merged.set(patch.sceneId, { ...prev, ...patch.updates });
+        }
+
+        for (const [sceneId, updates] of merged) {
+          const current = sceneMap.get(sceneId);
+          if (!current) continue;
+          sceneMap.set(sceneId, { ...current, ...updates });
+        }
+
+        saveScenesDirect(projectId, [...sceneMap.values()]);
+      } catch (error) {
+        console.error('Batched patch scenes failed:', error);
+      }
+    }
+  },
+  250,
+  50
 );
 
 // ==========================================
@@ -233,6 +282,10 @@ function getMigrationPath(fromVersion: string, toVersion: string): string[] {
 
 // 创建数据备份
 export function createBackup(): string {
+  // Ensure any pending batched scene writes are flushed before snapshotting.
+  sceneSaveQueue.flush();
+  scenePatchQueue.flush();
+
   const backupId = `${BACKUP_PREFIX}${Date.now()}`;
   const backupData: Record<string, string> = {};
   
@@ -549,17 +602,165 @@ export function saveSceneBatched(projectId: string, scene: Scene): void {
   sceneSaveQueue.add({ projectId, scene });
 }
 
+export function saveScenePatchBatched(
+  projectId: string,
+  sceneId: string,
+  updates: Partial<Scene>
+): void {
+  scenePatchQueue.add({ projectId, sceneId, updates });
+}
+
+export function flushScenePatchQueue(): void {
+  scenePatchQueue.flush();
+}
+
 // ==========================================
 // API配置操作
 // ==========================================
 
-export function getConfig(): UserConfig | null {
+const CONFIG_STATE_VERSION = 1 as const;
+
+function generateConfigProfileId(): string {
+  return `cfg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function sanitizeUserConfig(value: unknown): UserConfig | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<UserConfig>;
+  if (typeof v.provider !== 'string') return null;
+  if (typeof v.apiKey !== 'string') return null;
+  if (typeof v.model !== 'string') return null;
+
+  return {
+    provider: v.provider as UserConfig['provider'],
+    apiKey: v.apiKey,
+    model: v.model,
+    baseURL: typeof v.baseURL === 'string' && v.baseURL.trim() ? v.baseURL : undefined,
+    generationParams: v.generationParams,
+  };
+}
+
+function sanitizeConfigProfile(value: unknown): ConfigProfile | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<ConfigProfile>;
+  if (typeof v.id !== 'string' || !v.id) return null;
+  if (typeof v.name !== 'string' || !v.name) return null;
+  const config = sanitizeUserConfig(v.config);
+  if (!config) return null;
+
+  const createdAt = typeof v.createdAt === 'string' && v.createdAt ? v.createdAt : new Date().toISOString();
+  const updatedAt = typeof v.updatedAt === 'string' && v.updatedAt ? v.updatedAt : createdAt;
+
+  return {
+    id: v.id,
+    name: v.name,
+    config,
+    createdAt,
+    updatedAt,
+    lastTest: v.lastTest,
+    pricing: v.pricing,
+  };
+}
+
+function sanitizeConfigState(value: unknown): UserConfigState | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<UserConfigState>;
+  if (v.version !== CONFIG_STATE_VERSION) return null;
+  if (!Array.isArray(v.profiles)) return null;
+
+  const profiles = v.profiles
+    .map((p) => sanitizeConfigProfile(p))
+    .filter((p): p is ConfigProfile => Boolean(p));
+
+  if (profiles.length === 0) return null;
+
+  let activeProfileId =
+    typeof v.activeProfileId === 'string' && v.activeProfileId ? v.activeProfileId : profiles[0].id;
+
+  if (!profiles.some((p) => p.id === activeProfileId)) {
+    activeProfileId = profiles[0].id;
+  }
+
+  return {
+    version: CONFIG_STATE_VERSION,
+    activeProfileId,
+    profiles,
+  };
+}
+
+export function getConfigState(): UserConfigState | null {
   try {
     const encrypted = localStorage.getItem(KEYS.CONFIG);
     if (!encrypted) return null;
-    
+
     const decrypted = decrypt(encrypted);
-    return JSON.parse(decrypted) as UserConfig;
+    if (!decrypted) {
+      const isLocked =
+        !KeyManager.isLegacyEncrypted(encrypted) &&
+        KeyManager.hasCustomPassword() &&
+        !KeyManager.isInitialized();
+
+      if (!isLocked) {
+        console.error('Failed to decrypt config state');
+      }
+
+      return null;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(decrypted) as unknown;
+    } catch (error) {
+      console.error('Failed to parse config state:', error);
+      return null;
+    }
+
+    const state = sanitizeConfigState(parsed);
+    if (state) return state;
+
+    const legacyConfig = sanitizeUserConfig(parsed);
+    if (!legacyConfig) return null;
+
+    const now = new Date().toISOString();
+    const id = generateConfigProfileId();
+    const migrated: UserConfigState = {
+      version: CONFIG_STATE_VERSION,
+      activeProfileId: id,
+      profiles: [
+        {
+          id,
+          name: '默认档案',
+          config: legacyConfig,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    };
+
+    try {
+      localStorage.setItem(KEYS.CONFIG, encrypt(JSON.stringify(migrated)));
+    } catch {
+      // 存储失败时不阻断读取
+    }
+
+    return migrated;
+  } catch {
+    return null;
+  }
+}
+
+export function saveConfigState(state: UserConfigState): void {
+  const json = JSON.stringify(state);
+  const encrypted = encrypt(json);
+  localStorage.setItem(KEYS.CONFIG, encrypted);
+}
+
+export function getConfig(): UserConfig | null {
+  try {
+    const state = getConfigState();
+    if (!state) return null;
+    const active = state.profiles.find((p) => p.id === state.activeProfileId) || state.profiles[0];
+    return active?.config ?? null;
   } catch (error) {
     console.error('Failed to load config:', error);
     return null;
@@ -568,9 +769,34 @@ export function getConfig(): UserConfig | null {
 
 export function saveConfig(config: UserConfig): void {
   try {
-    const json = JSON.stringify(config);
-    const encrypted = encrypt(json);
-    localStorage.setItem(KEYS.CONFIG, encrypted);
+    const state = getConfigState();
+    const now = new Date().toISOString();
+
+    if (!state) {
+      const id = generateConfigProfileId();
+      const next: UserConfigState = {
+        version: CONFIG_STATE_VERSION,
+        activeProfileId: id,
+        profiles: [
+          {
+            id,
+            name: '默认档案',
+            config,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      };
+      saveConfigState(next);
+      return;
+    }
+
+    const activeProfileId = state.activeProfileId;
+    const profiles = state.profiles.map((p) =>
+      p.id === activeProfileId ? { ...p, config, updatedAt: now } : p
+    );
+
+    saveConfigState({ ...state, profiles });
   } catch (error) {
     console.error('Failed to save config:', error);
     throw new Error('配置保存失败');
@@ -720,6 +946,11 @@ export function getKeyInfo() {
  */
 export function initializeEncryption(masterPassword: string): void {
   KeyManager.initialize(masterPassword);
+
+  // 写入校验标记（用于后续解锁/验证密码）
+  try {
+    localStorage.setItem(ENCRYPTION_CHECK_KEY, KeyManager.encrypt('ok', KeyPurpose.GENERAL));
+  } catch {}
   
   // 如果有待迁移的配置，自动迁移
   if (configNeedsMigration()) {
@@ -738,15 +969,25 @@ export function changeEncryptionPassword(newPassword: string): boolean {
   }
 
   try {
-    // 先读取并解密当前配置
-    const currentConfig = getConfig();
-    
+    const encryptedConfig = localStorage.getItem(KEYS.CONFIG);
+    const decryptedConfig = encryptedConfig ? decrypt(encryptedConfig, KeyPurpose.CONFIG) : null;
+
+    if (encryptedConfig && !decryptedConfig) {
+      console.error('无法解密当前配置，已取消更换密码');
+      return false;
+    }
+
     // 更换密码
     KeyManager.changeMasterPassword(newPassword);
+
+    // 更新校验标记
+    try {
+      localStorage.setItem(ENCRYPTION_CHECK_KEY, KeyManager.encrypt('ok', KeyPurpose.GENERAL));
+    } catch {}
     
-    // 重新加密配置
-    if (currentConfig) {
-      saveConfig(currentConfig);
+    // 重新加密配置（保持原始结构，避免丢失多档案/元数据）
+    if (encryptedConfig && decryptedConfig) {
+      localStorage.setItem(KEYS.CONFIG, encrypt(decryptedConfig, KeyPurpose.CONFIG));
     }
     
     console.log('密码已成功更换');

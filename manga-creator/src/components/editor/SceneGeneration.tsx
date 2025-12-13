@@ -41,7 +41,7 @@ function getStyleFullPrompt(project: { style: string; artStyleConfig?: { fullPro
 export function SceneGeneration() {
   const { currentProject, updateProject } = useProjectStore();
   const { scenes, setScenes, addScene, updateScene, deleteScene, isGenerating, setGenerating, loadScenes } = useStoryboardStore();
-  const { config } = useConfigStore();
+  const { config, activeProfileId } = useConfigStore();
   const { confirm, ConfirmDialog } = useConfirm();
   
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -93,6 +93,7 @@ export function SceneGeneration() {
     setGenerating(true);
     setError('');
     setGenerationProgress(0);
+    let logId = '';
 
     try {
       const client = AIFactory.createClient(config);
@@ -123,7 +124,7 @@ ${currentProject.summary}
 请开始生成:`;
 
       // 记录AI调用日志
-      const logId = logAICall('scene_list_generation', {
+      logId = logAICall('scene_list_generation', {
         skillName: 'scene-list-generator',
         promptTemplate: `你是一位专业的分镜师。基于以下信息,将故事拆解为8-12个关键分镜节点:
 
@@ -158,6 +159,7 @@ ${currentProject.summary}
           provider: config.provider,
           model: config.model,
           maxTokens: 1000,
+          profileId: activeProfileId || undefined,
         },
       });
 
@@ -218,7 +220,7 @@ ${currentProject.summary}
       console.error('生成分镜失败:', err);
       // 记录错误日志
       if (err instanceof Error) {
-        updateLogWithError('scene_list_generation_error', err.message);
+        if (logId) updateLogWithError(logId, err.message);
       }
     } finally {
       setTimeout(() => {

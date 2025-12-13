@@ -7,6 +7,7 @@ import { Scene } from '@/types';
 vi.mock('@/lib/storage', () => ({
   getScenes: vi.fn(() => []),
   saveScene: vi.fn(),
+  saveScenePatchBatched: vi.fn(),
   saveScenes: vi.fn(),
 }));
 
@@ -231,14 +232,14 @@ describe('storyboardStore', () => {
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'scene_1', { summary: 'Updated' });
 
-      expect(storage.saveScene).toHaveBeenCalled();
+      expect(storage.saveScenePatchBatched).toHaveBeenCalled();
     });
 
     it('should not update if scene not found', () => {
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'nonexistent', { summary: 'Updated' });
 
-      expect(storage.saveScene).not.toHaveBeenCalled();
+      expect(storage.saveScenePatchBatched).not.toHaveBeenCalled();
     });
 
     it('should update status', () => {
@@ -441,7 +442,7 @@ describe('storyboardStore', () => {
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'scene_1', { dialogues });
 
-      expect(storage.saveScene).toHaveBeenCalled();
+      expect(storage.saveScenePatchBatched).toHaveBeenCalled();
     });
 
     it('should handle empty dialogues array', () => {

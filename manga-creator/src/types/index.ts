@@ -360,6 +360,46 @@ export interface UserConfig {
   generationParams?: AIGenerationParams;
 }
 
+// ==========================================
+// API 配置档案（多配置）
+// ==========================================
+
+export type ConnectionTestStatus = 'success' | 'error';
+
+export interface ConnectionTestResult {
+  status: ConnectionTestStatus;
+  testedAt: number; // ms 时间戳
+  durationMs: number;
+  httpStatus?: number;
+  errorMessage?: string;
+  errorDetail?: string;
+  suggestions?: string[];
+}
+
+export type PricingCurrency = 'USD';
+
+export interface AIPricing {
+  currency: PricingCurrency;
+  promptPer1K: number;
+  completionPer1K: number;
+}
+
+export interface ConfigProfile {
+  id: string;
+  name: string;
+  config: UserConfig;
+  createdAt: string;
+  updatedAt: string;
+  lastTest?: ConnectionTestResult;
+  pricing?: AIPricing;
+}
+
+export interface UserConfigState {
+  version: 1;
+  activeProfileId: string;
+  profiles: ConfigProfile[];
+}
+
 // 聊天消息
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';

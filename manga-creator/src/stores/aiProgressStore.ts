@@ -25,6 +25,7 @@ export interface BatchOperationsState {
   selectedScenes: Set<string>;
   isProcessing: boolean;
   isPaused: boolean;
+  cancelRequested: boolean;
   progress: number;
   currentScene: number;
   totalScenes: number;
@@ -246,6 +247,7 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
     selectedScenes: new Set(),
     isProcessing: false,
     isPaused: false,
+    cancelRequested: false,
     progress: 0,
     currentScene: 0,
     totalScenes: 0,
@@ -475,6 +477,7 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
       selectedScenes: new Set(),
       isProcessing: false,
       isPaused: false,
+      cancelRequested: false,
       progress: 0,
       currentScene: 0,
       totalScenes: 0,
@@ -501,8 +504,22 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
     batchOperations: {
       ...state.batchOperations,
       completedScenes: [...state.batchOperations.completedScenes, sceneId],
-      currentScene: state.batchOperations.completedScenes.length + 1,
-      progress: Math.round(((state.batchOperations.completedScenes.length + 1) / state.batchOperations.totalScenes) * 100),
+      currentScene:
+        state.batchOperations.totalScenes > 0
+          ? state.batchOperations.completedScenes.length +
+            state.batchOperations.failedScenes.length +
+            1
+          : 0,
+      progress:
+        state.batchOperations.totalScenes > 0
+          ? Math.round(
+              ((state.batchOperations.completedScenes.length +
+                state.batchOperations.failedScenes.length +
+                1) /
+                state.batchOperations.totalScenes) *
+                100
+            )
+          : 0,
     }
   })),
   
@@ -511,6 +528,22 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
     batchOperations: {
       ...state.batchOperations,
       failedScenes: [...state.batchOperations.failedScenes, sceneId],
+      currentScene:
+        state.batchOperations.totalScenes > 0
+          ? state.batchOperations.completedScenes.length +
+            state.batchOperations.failedScenes.length +
+            1
+          : 0,
+      progress:
+        state.batchOperations.totalScenes > 0
+          ? Math.round(
+              ((state.batchOperations.completedScenes.length +
+                state.batchOperations.failedScenes.length +
+                1) /
+                state.batchOperations.totalScenes) *
+                100
+            )
+          : 0,
     }
   })),
   

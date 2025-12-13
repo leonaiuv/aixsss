@@ -20,6 +20,7 @@ import { BatchOperations } from './editor/BatchOperations';
 import { SceneComparison } from './editor/SceneComparison';
 import { AIFactory } from '@/lib/ai/factory';
 import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
+import { logAICall, updateLogProgress, updateLogWithError, updateLogWithResponse } from '@/lib/ai/debugLogger';
 import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
 import { migrateOldStyleToConfig } from '@/types';
@@ -32,7 +33,7 @@ type ActiveDialog = 'none' | 'version' | 'statistics' | 'export' | 'batch' | 'co
 export function Editor() {
   const { currentProject, updateProject } = useProjectStore();
   const { scenes, updateScene, deleteScene } = useStoryboardStore();
-  const { config } = useConfigStore();
+  const { config, activeProfileId } = useConfigStore();
   const { characters } = useCharacterStore();
   const { elements: worldViewElements } = useWorldViewStore();
   const { 
@@ -139,6 +140,7 @@ export function Editor() {
     updateBatchOperations({
       isProcessing: true,
       isPaused: false,
+      cancelRequested: false,
       progress: 0,
       currentScene: 0,
       operationType: 'generate',
@@ -161,8 +163,22 @@ export function Editor() {
 
     let successCount = 0;
     let failCount = 0;
+    let cancelled = false;
 
-    for (let i = 0; i < sceneIds.length; i++) {
+    const waitForResumeOrCancel = async (): Promise<boolean> => {
+      while (true) {
+        const { batchOperations } = useAIProgressStore.getState();
+        if (batchOperations.cancelRequested) return false;
+        if (!batchOperations.isPaused) return true;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    };
+
+    outer: for (let i = 0; i < sceneIds.length; i++) {
+      if (!(await waitForResumeOrCancel())) {
+        cancelled = true;
+        break outer;
+      }
       const sceneId = sceneIds[i];
       const scene = scenes.find(s => s.id === sceneId);
       if (!scene) continue;
@@ -170,10 +186,17 @@ export function Editor() {
       // 更新当前处理的分镜信息
       updateBatchOperations({
         currentSceneId: sceneId,
+        currentScene: i + 1,
+        progress: Math.round((i / sceneIds.length) * 100),
         statusMessage: `正在处理分镜 ${i + 1}/${sceneIds.length}...`,
       });
 
       try {
+        if (!(await waitForResumeOrCancel())) {
+          cancelled = true;
+          break outer;
+        }
+
         // 生成场景锚点
         if (!scene.sceneDescription) {
           const sceneSkill = getSkillByName('generate_scene_desc');
@@ -191,12 +214,59 @@ export function Editor() {
               summary: currentProject.summary,
             });
 
-            const response = await client.chat([{ role: 'user', content: prompt }]);
-            updateScene(currentProject.id, sceneId, {
-              sceneDescription: response.content.trim(),
-              status: 'scene_confirmed',
-            });
+            const messages = [{ role: 'user', content: prompt }] as const;
+            let logId = '';
+
+            try {
+              logId = logAICall('scene_description', {
+                skillName: sceneSkill.name,
+                promptTemplate: sceneSkill.promptTemplate,
+                filledPrompt: prompt,
+                messages: [...messages],
+                context: {
+                  projectId: currentProject.id,
+                  projectTitle: currentProject.title,
+                  style: styleFullPrompt,
+                  protagonist: currentProject.protagonist,
+                  summary: currentProject.summary,
+                  sceneId,
+                  sceneOrder: scene.order,
+                  sceneSummary: scene.summary,
+                  prevSceneSummary: prevScene?.summary,
+                  worldViewInjected: shouldInjectWorldView,
+                },
+                config: {
+                  provider: config.provider,
+                  model: config.model,
+                  maxTokens: sceneSkill.maxTokens,
+                  profileId: activeProfileId || undefined,
+                },
+              });
+
+              updateLogProgress(logId, 30, '正在生成场景锚点...');
+              const response = await client.chat([...messages]);
+              updateLogProgress(logId, 80, '正在保存结果...');
+
+              updateLogWithResponse(logId, {
+                content: response.content,
+                tokenUsage: response.tokenUsage,
+              });
+
+              updateScene(currentProject.id, sceneId, {
+                sceneDescription: response.content.trim(),
+                status: 'scene_confirmed',
+              });
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : '生成失败';
+              if (logId) updateLogWithError(logId, errorMessage);
+              throw error;
+            }
           }
+        }
+
+        if (!(await waitForResumeOrCancel())) {
+          cancelled = true;
+          break outer;
         }
 
         // 获取更新后的场景数据
@@ -218,12 +288,59 @@ export function Editor() {
               prevSceneSummary: prevScene?.summary,
             });
 
-            const response = await client.chat([{ role: 'user', content: prompt }]);
-            updateScene(currentProject.id, sceneId, {
-              shotPrompt: response.content.trim(),
-              status: 'keyframe_confirmed',
-            });
+            const messages = [{ role: 'user', content: prompt }] as const;
+            let logId = '';
+
+            try {
+              logId = logAICall('keyframe_prompt', {
+                skillName: keyframeSkill.name,
+                promptTemplate: keyframeSkill.promptTemplate,
+                filledPrompt: prompt,
+                messages: [...messages],
+                context: {
+                  projectId: currentProject.id,
+                  projectTitle: currentProject.title,
+                  style: styleFullPrompt,
+                  protagonist: currentProject.protagonist,
+                  summary: currentProject.summary,
+                  sceneId,
+                  sceneOrder: scene.order,
+                  sceneSummary: latestScene1.summary,
+                  prevSceneSummary: prevScene?.summary,
+                  sceneDescription: latestScene1.sceneDescription,
+                },
+                config: {
+                  provider: config.provider,
+                  model: config.model,
+                  maxTokens: keyframeSkill.maxTokens,
+                  profileId: activeProfileId || undefined,
+                },
+              });
+
+              updateLogProgress(logId, 30, '正在生成关键帧提示词...');
+              const response = await client.chat([...messages]);
+              updateLogProgress(logId, 80, '正在保存结果...');
+
+              updateLogWithResponse(logId, {
+                content: response.content,
+                tokenUsage: response.tokenUsage,
+              });
+
+              updateScene(currentProject.id, sceneId, {
+                shotPrompt: response.content.trim(),
+                status: 'keyframe_confirmed',
+              });
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : '生成失败';
+              if (logId) updateLogWithError(logId, errorMessage);
+              throw error;
+            }
           }
+        }
+
+        if (!(await waitForResumeOrCancel())) {
+          cancelled = true;
+          break outer;
         }
 
         // 获取更新后的场景数据
@@ -243,17 +360,69 @@ export function Editor() {
                sceneSummary: latestScene2.summary,
              });
 
-             const response = await client.chat([{ role: 'user', content: prompt }]);
-             updateScene(currentProject.id, sceneId, {
-               motionPrompt: response.content.trim(),
-              status: 'motion_generating',
-            });
-          }
+             const messages = [{ role: 'user', content: prompt }] as const;
+             let logId = '';
+
+             try {
+               logId = logAICall('motion_prompt', {
+                 skillName: motionSkill.name,
+                 promptTemplate: motionSkill.promptTemplate,
+                 filledPrompt: prompt,
+                 messages: [...messages],
+                 context: {
+                   projectId: currentProject.id,
+                   projectTitle: currentProject.title,
+                   style: styleFullPrompt,
+                   protagonist: currentProject.protagonist,
+                   summary: currentProject.summary,
+                   sceneId,
+                   sceneOrder: scene.order,
+                   sceneSummary: latestScene2.summary,
+                   sceneDescription: latestScene2.sceneDescription,
+                   shotPrompt: latestScene2.shotPrompt,
+                 },
+                 config: {
+                   provider: config.provider,
+                   model: config.model,
+                   maxTokens: motionSkill.maxTokens,
+                   profileId: activeProfileId || undefined,
+                 },
+               });
+
+               updateLogProgress(logId, 30, '正在生成时空/运动提示词...');
+               const response = await client.chat([...messages]);
+               updateLogProgress(logId, 80, '正在保存结果...');
+
+               updateLogWithResponse(logId, {
+                 content: response.content,
+                 tokenUsage: response.tokenUsage,
+               });
+
+               updateScene(currentProject.id, sceneId, {
+                 motionPrompt: response.content.trim(),
+                 status: 'motion_generating',
+               });
+             } catch (error) {
+               const errorMessage = error instanceof Error ? error.message : '生成失败';
+               if (logId) updateLogWithError(logId, errorMessage);
+               throw error;
+             }
+           }
+         }
+
+        if (!(await waitForResumeOrCancel())) {
+          cancelled = true;
+          break outer;
         }
 
         // 获取更新后的场景数据
         const { scenes: updatedScenes3 } = useStoryboardStore.getState();
         const latestScene3 = updatedScenes3.find(s => s.id === sceneId);
+
+        if (!(await waitForResumeOrCancel())) {
+          cancelled = true;
+          break outer;
+        }
 
         // 生成台词
         if (latestScene3?.motionPrompt && (!latestScene3.dialogues || latestScene3.dialogues.length === 0)) {
@@ -270,13 +439,57 @@ export function Editor() {
               motionPrompt: latestScene3.motionPrompt,
             });
 
-            const response = await client.chat([{ role: 'user', content: prompt }]);
-            const dialogues = parseDialoguesFromText(response.content);
-            
-            updateScene(currentProject.id, sceneId, {
-              dialogues,
-              status: 'completed',
-            });
+            const messages = [{ role: 'user', content: prompt }] as const;
+            let logId = '';
+
+            try {
+              logId = logAICall('dialogue', {
+                skillName: dialogueSkill.name,
+                promptTemplate: dialogueSkill.promptTemplate,
+                filledPrompt: prompt,
+                messages: [...messages],
+                context: {
+                  projectId: currentProject.id,
+                  projectTitle: currentProject.title,
+                  style: styleFullPrompt,
+                  protagonist: currentProject.protagonist,
+                  summary: currentProject.summary,
+                  sceneId,
+                  sceneOrder: scene.order,
+                  sceneSummary: scene.summary,
+                  characters: characterContext,
+                  sceneDescription: latestScene3.sceneDescription,
+                  shotPrompt: latestScene3.shotPrompt,
+                  motionPrompt: latestScene3.motionPrompt,
+                },
+                config: {
+                  provider: config.provider,
+                  model: config.model,
+                  maxTokens: dialogueSkill.maxTokens,
+                  profileId: activeProfileId || undefined,
+                },
+              });
+
+              updateLogProgress(logId, 30, '正在生成台词...');
+              const response = await client.chat([...messages]);
+              updateLogProgress(logId, 80, '正在解析台词...');
+
+              updateLogWithResponse(logId, {
+                content: response.content,
+                tokenUsage: response.tokenUsage,
+              });
+
+              const dialogues = parseDialoguesFromText(response.content);
+
+              updateScene(currentProject.id, sceneId, {
+                dialogues,
+                status: 'completed',
+              });
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : '生成失败';
+              if (logId) updateLogWithError(logId, errorMessage);
+              throw error;
+            }
           }
         }
 
@@ -291,18 +504,29 @@ export function Editor() {
 
     // 清除全局批量生成状态
     stopBatchGenerating();
+
+    const processedCount = successCount + failCount;
     
     // 更新批量操作完成状态
     updateBatchOperations({
       isProcessing: false,
+      isPaused: false,
+      cancelRequested: false,
       currentSceneId: null,
-      statusMessage: `完成！成功 ${successCount} 个，失败 ${failCount} 个`,
-      progress: 100,
+      currentScene: cancelled ? processedCount : sceneIds.length,
+      progress: cancelled
+        ? Math.round((processedCount / Math.max(1, sceneIds.length)) * 100)
+        : 100,
+      statusMessage: cancelled
+        ? `已停止：已处理 ${processedCount}/${sceneIds.length}（成功 ${successCount}，失败 ${failCount}）`
+        : `完成！成功 ${successCount} 个，失败 ${failCount} 个`,
     });
 
     toast({
-      title: '批量生成完成',
-      description: `成功: ${successCount}, 失败: ${failCount}`,
+      title: cancelled ? '批量生成已停止' : '批量生成完成',
+      description: cancelled
+        ? `已处理: ${processedCount}/${sceneIds.length}，成功: ${successCount}，失败: ${failCount}`
+        : `成功: ${successCount}, 失败: ${failCount}`,
       variant: failCount > 0 ? 'destructive' : 'default',
     });
   };
@@ -582,7 +806,10 @@ ${dialoguesText}
           <DialogHeader>
             <DialogTitle>统计分析</DialogTitle>
           </DialogHeader>
-          <StatisticsPanel projectId={currentProject.id} />
+          <StatisticsPanel
+            projectId={currentProject.id}
+            onOpenDataExport={() => setActiveDialog('export')}
+          />
         </DialogContent>
       </Dialog>
 

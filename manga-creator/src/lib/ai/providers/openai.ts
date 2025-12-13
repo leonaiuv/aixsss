@@ -4,6 +4,23 @@ import { ChatMessage, AIResponse } from '@/types';
 export class OpenAICompatibleProvider implements AIProvider {
   name = 'OpenAI Compatible';
 
+  private async throwResponseError(response: Response): Promise<never> {
+    let detail = '';
+    try {
+      const data = await response.json();
+      detail = data?.error?.message || JSON.stringify(data);
+    } catch {
+      try {
+        detail = await response.text();
+      } catch {
+        detail = '';
+      }
+    }
+
+    const suffix = detail ? ` - ${detail}` : '';
+    throw new Error(`OpenAI API error (${response.status} ${response.statusText})${suffix}`);
+  }
+
   async chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse> {
     const url = `${config.baseURL || 'https://api.openai.com'}/v1/chat/completions`;
     const params = config.generationParams;
@@ -26,7 +43,7 @@ export class OpenAICompatibleProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      await this.throwResponseError(response);
     }
 
     const data = await response.json();
@@ -63,7 +80,7 @@ export class OpenAICompatibleProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      await this.throwResponseError(response);
     }
 
     const reader = response.body?.getReader();

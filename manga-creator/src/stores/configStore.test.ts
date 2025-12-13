@@ -1,16 +1,21 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UserConfig, UserConfigState } from '@/types';
 import { useConfigStore } from './configStore';
-import * as storage from '@/lib/storage';
 import { AIFactory } from '@/lib/ai/factory';
+import * as storage from '@/lib/storage';
 
-// Mock storage functions
+let storedConfigState: UserConfigState | null = null;
+
 vi.mock('@/lib/storage', () => ({
-  getConfig: vi.fn(() => null),
-  saveConfig: vi.fn(),
-  clearConfig: vi.fn(),
+  getConfigState: vi.fn(() => storedConfigState),
+  saveConfigState: vi.fn((state: UserConfigState) => {
+    storedConfigState = state;
+  }),
+  clearConfig: vi.fn(() => {
+    storedConfigState = null;
+  }),
 }));
 
-// Mock AIFactory
 vi.mock('@/lib/ai/factory', () => ({
   AIFactory: {
     createClient: vi.fn(() => ({
@@ -19,449 +24,239 @@ vi.mock('@/lib/ai/factory', () => ({
   },
 }));
 
-describe('configStore', () => {
-  beforeEach(() => {
-    useConfigStore.setState({
-      config: null,
-      isConfigured: false,
-    });
-    vi.clearAllMocks();
+function createMockLocalStorage(): Storage {
+  const store: Record<string, string> = {};
+  return {
+    length: 0,
+    clear: () => Object.keys(store).forEach((k) => delete store[k]),
+    getItem: (key: string) => store[key] ?? null,
+    key: (index: number) => Object.keys(store)[index] ?? null,
+    removeItem: (key: string) => delete store[key],
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+  };
+}
+
+function buildState(
+  profiles: Array<{ id: string; name: string; config: UserConfig }>,
+  activeProfileId: string
+): UserConfigState {
+  const now = new Date().toISOString();
+  return {
+    version: 1,
+    activeProfileId,
+    profiles: profiles.map((p) => ({
+      id: p.id,
+      name: p.name,
+      config: p.config,
+      createdAt: now,
+      updatedAt: now,
+    })),
+  };
+}
+
+beforeEach(() => {
+  storedConfigState = null;
+  vi.clearAllMocks();
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: createMockLocalStorage(),
+    writable: true,
   });
 
-  describe('initial state', () => {
-    it('should have null config', () => {
-      const state = useConfigStore.getState();
-      expect(state.config).toBeNull();
-    });
+  useConfigStore.setState({
+    config: null,
+    isConfigured: false,
+    profiles: [],
+    activeProfileId: null,
+  });
+});
 
-    it('should have isConfigured as false', () => {
-      const state = useConfigStore.getState();
-      expect(state.isConfigured).toBe(false);
-    });
+describe('configStore（多配置档案）', () => {
+  it('loadConfig：无配置时应引导创建默认档案，但 config 仍不可用', () => {
+    useConfigStore.getState().loadConfig();
+
+    expect(vi.mocked(storage.saveConfigState)).toHaveBeenCalled();
+    expect(useConfigStore.getState().profiles.length).toBe(1);
+    expect(useConfigStore.getState().activeProfileId).toBeTruthy();
+    expect(useConfigStore.getState().config).toBeNull();
+    expect(useConfigStore.getState().isConfigured).toBe(false);
   });
 
-  describe('loadConfig', () => {
-    it('should load config from storage', () => {
-      const mockConfig = {
-        provider: 'deepseek' as const,
-        apiKey: 'test-key',
-        model: 'deepseek-chat',
-      };
-      vi.mocked(storage.getConfig).mockReturnValue(mockConfig);
+  it('loadConfig：本地有加密配置但不可解密时不应覆盖写入', () => {
+    localStorage.setItem('aixs_config', 'encrypted_payload');
+    storedConfigState = null;
 
-      const { loadConfig } = useConfigStore.getState();
-      loadConfig();
+    useConfigStore.getState().loadConfig();
 
-      expect(useConfigStore.getState().config).toEqual(mockConfig);
-      expect(useConfigStore.getState().isConfigured).toBe(true);
-    });
-
-    it('should set isConfigured to false if no config', () => {
-      vi.mocked(storage.getConfig).mockReturnValue(null);
-
-      const { loadConfig } = useConfigStore.getState();
-      loadConfig();
-
-      expect(useConfigStore.getState().config).toBeNull();
-      expect(useConfigStore.getState().isConfigured).toBe(false);
-    });
+    expect(vi.mocked(storage.saveConfigState)).not.toHaveBeenCalled();
+    expect(useConfigStore.getState().profiles).toEqual([]);
+    expect(useConfigStore.getState().config).toBeNull();
+    expect(useConfigStore.getState().isConfigured).toBe(false);
   });
 
-  describe('saveConfig', () => {
-    it('should save config to storage', () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'new-key',
-        model: 'deepseek-chat',
-      };
+  it('loadConfig：可用档案应把 config 置为可用', () => {
+    storedConfigState = buildState(
+      [
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: 'k', model: 'deepseek-chat' },
+        },
+      ],
+      'p1'
+    );
 
-      const { saveConfig } = useConfigStore.getState();
-      saveConfig(config);
+    useConfigStore.getState().loadConfig();
 
-      expect(storage.saveConfig).toHaveBeenCalledWith(config);
-    });
-
-    it('should update state with new config', () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'new-key',
-        model: 'deepseek-chat',
-      };
-
-      const { saveConfig } = useConfigStore.getState();
-      saveConfig(config);
-
-      expect(useConfigStore.getState().config).toEqual(config);
-      expect(useConfigStore.getState().isConfigured).toBe(true);
-    });
-
-    it('should handle different providers', () => {
-      const providers = ['deepseek', 'kimi', 'gemini', 'openai-compatible'] as const;
-
-      providers.forEach((provider) => {
-        const config = {
-          provider,
-          apiKey: 'key',
-          model: 'model',
-        };
-
-        const { saveConfig } = useConfigStore.getState();
-        saveConfig(config);
-
-        expect(useConfigStore.getState().config?.provider).toBe(provider);
-      });
-    });
-
-    it('should handle config with baseURL', () => {
-      const config = {
-        provider: 'openai-compatible' as const,
-        apiKey: 'key',
-        model: 'gpt-4',
-        baseURL: 'https://custom.api.com',
-      };
-
-      const { saveConfig } = useConfigStore.getState();
-      saveConfig(config);
-
-      expect(useConfigStore.getState().config?.baseURL).toBe('https://custom.api.com');
-    });
+    expect(useConfigStore.getState().isConfigured).toBe(true);
+    expect(useConfigStore.getState().config?.apiKey).toBe('k');
+    expect(useConfigStore.getState().profiles.length).toBe(1);
   });
 
-  describe('clearConfig', () => {
-    it('should clear config from storage', () => {
-      useConfigStore.setState({
-        config: { provider: 'deepseek', apiKey: 'key', model: 'model' },
-        isConfigured: true,
-      });
+  it('saveConfig：应更新当前档案并刷新可用 config', () => {
+    storedConfigState = buildState(
+      [
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: '', model: 'deepseek-chat' },
+        },
+      ],
+      'p1'
+    );
+    useConfigStore.getState().loadConfig();
 
-      const { clearConfig } = useConfigStore.getState();
-      clearConfig();
+    const next: UserConfig = { provider: 'deepseek', apiKey: 'new-key', model: 'deepseek-chat' };
+    useConfigStore.getState().saveConfig(next);
 
-      expect(storage.clearConfig).toHaveBeenCalled();
-    });
-
-    it('should reset state', () => {
-      useConfigStore.setState({
-        config: { provider: 'deepseek', apiKey: 'key', model: 'model' },
-        isConfigured: true,
-      });
-
-      const { clearConfig } = useConfigStore.getState();
-      clearConfig();
-
-      expect(useConfigStore.getState().config).toBeNull();
-      expect(useConfigStore.getState().isConfigured).toBe(false);
-    });
+    expect(vi.mocked(storage.saveConfigState)).toHaveBeenCalled();
+    expect(useConfigStore.getState().isConfigured).toBe(true);
+    expect(useConfigStore.getState().config?.apiKey).toBe('new-key');
   });
 
-  describe('testConnection', () => {
-    it('should return true for successful connection', async () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'valid-key',
-        model: 'deepseek-chat',
-      };
+  it('setActiveProfile：切换档案应更新 activeProfileId 与可用 config', () => {
+    storedConfigState = buildState(
+      [
+        { id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } },
+        { id: 'p2', name: 'B', config: { provider: 'gemini', apiKey: '', model: 'gemini-pro' } },
+      ],
+      'p1'
+    );
+    useConfigStore.getState().loadConfig();
 
-      vi.mocked(AIFactory.createClient).mockReturnValue({
-        chat: vi.fn().mockResolvedValue({ content: 'pong' }),
-      } as any);
+    useConfigStore.getState().setActiveProfile('p2');
 
-      const { testConnection } = useConfigStore.getState();
-      const result = await testConnection(config);
-
-      expect(result).toBe(true);
-    });
-
-    it('should return false for failed connection', async () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'invalid-key',
-        model: 'deepseek-chat',
-      };
-
-      vi.mocked(AIFactory.createClient).mockReturnValue({
-        chat: vi.fn().mockRejectedValue(new Error('Invalid API key')),
-      } as any);
-
-      const { testConnection } = useConfigStore.getState();
-      const result = await testConnection(config);
-
-      expect(result).toBe(false);
-    });
-
-    it('should return false for empty response', async () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'key',
-        model: 'model',
-      };
-
-      vi.mocked(AIFactory.createClient).mockReturnValue({
-        chat: vi.fn().mockResolvedValue({ content: '' }),
-      } as any);
-
-      const { testConnection } = useConfigStore.getState();
-      const result = await testConnection(config);
-
-      expect(result).toBe(false);
-    });
-
-    it('should call AIFactory.createClient with config', async () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'key',
-        model: 'model',
-      };
-
-      const { testConnection } = useConfigStore.getState();
-      await testConnection(config);
-
-      expect(AIFactory.createClient).toHaveBeenCalledWith(config);
-    });
+    expect(useConfigStore.getState().activeProfileId).toBe('p2');
+    expect(useConfigStore.getState().config).toBeNull();
+    expect(useConfigStore.getState().isConfigured).toBe(false);
   });
 
-  describe('edge cases', () => {
-    it('should handle rapid config changes', () => {
-      const { saveConfig, clearConfig } = useConfigStore.getState();
+  it('createProfile：应创建新档案并切换为 active', () => {
+    storedConfigState = buildState(
+      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
+      'p1'
+    );
+    useConfigStore.getState().loadConfig();
 
-      saveConfig({ provider: 'deepseek', apiKey: 'key1', model: 'model' });
-      saveConfig({ provider: 'kimi', apiKey: 'key2', model: 'model2' });
-      clearConfig();
-      saveConfig({ provider: 'gemini', apiKey: 'key3', model: 'model3' });
-
-      expect(useConfigStore.getState().config?.provider).toBe('gemini');
-      expect(useConfigStore.getState().isConfigured).toBe(true);
+    const id = useConfigStore.getState().createProfile({
+      name: 'New',
+      config: { provider: 'openai-compatible', apiKey: '', model: 'gpt-4o-mini' },
     });
+
+    expect(id).toBeTruthy();
+    expect(useConfigStore.getState().activeProfileId).toBe(id);
+    expect(useConfigStore.getState().profiles.length).toBe(2);
+    expect(useConfigStore.getState().config).toBeNull();
   });
 
-  describe('provider switching', () => {
-    it('should correctly switch between different providers', () => {
-      const { saveConfig } = useConfigStore.getState();
+  it('updateProfile：应更新名称与价格', () => {
+    storedConfigState = buildState(
+      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
+      'p1'
+    );
+    useConfigStore.getState().loadConfig();
 
-      // Switch from deepseek to kimi
-      saveConfig({ provider: 'deepseek', apiKey: 'key1', model: 'deepseek-chat' });
-      expect(useConfigStore.getState().config?.provider).toBe('deepseek');
-
-      // Switch to kimi
-      saveConfig({ provider: 'kimi', apiKey: 'key2', model: 'moonshot-v1-8k' });
-      expect(useConfigStore.getState().config?.provider).toBe('kimi');
-      expect(useConfigStore.getState().config?.model).toBe('moonshot-v1-8k');
-
-      // Switch to gemini
-      saveConfig({ provider: 'gemini', apiKey: 'key3', model: 'gemini-pro' });
-      expect(useConfigStore.getState().config?.provider).toBe('gemini');
-      expect(useConfigStore.getState().config?.model).toBe('gemini-pro');
+    useConfigStore.getState().updateProfile('p1', {
+      name: 'Renamed',
+      pricing: { currency: 'USD', promptPer1K: 0.001, completionPer1K: 0.002 },
     });
 
-    it('should preserve provider-specific settings during switch', () => {
-      const { saveConfig } = useConfigStore.getState();
-
-      const openaiConfig = {
-        provider: 'openai-compatible' as const,
-        apiKey: 'key',
-        model: 'gpt-4',
-        baseURL: 'https://custom.api.com',
-      };
-
-      saveConfig(openaiConfig);
-      expect(useConfigStore.getState().config?.baseURL).toBe('https://custom.api.com');
-
-      // Switch back should retain baseURL if provided
-      saveConfig({ provider: 'deepseek', apiKey: 'key2', model: 'deepseek-chat' });
-      expect(useConfigStore.getState().config?.baseURL).toBeUndefined();
-    });
+    const profile = useConfigStore.getState().profiles.find((p) => p.id === 'p1');
+    expect(profile?.name).toBe('Renamed');
+    expect(profile?.pricing?.promptPer1K).toBe(0.001);
   });
 
-  describe('config validation', () => {
-    it('should handle config with empty model', () => {
-      const { saveConfig } = useConfigStore.getState();
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'key',
-        model: '',
-      };
+  it('deleteProfile：删除 active 后应自动切换到剩余档案', () => {
+    storedConfigState = buildState(
+      [
+        { id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } },
+        { id: 'p2', name: 'B', config: { provider: 'gemini', apiKey: 'k2', model: 'gemini-pro' } },
+      ],
+      'p2'
+    );
+    useConfigStore.getState().loadConfig();
 
-      saveConfig(config);
-      expect(useConfigStore.getState().config?.model).toBe('');
-      expect(useConfigStore.getState().isConfigured).toBe(true);
-    });
+    useConfigStore.getState().deleteProfile('p2');
 
-    it('should handle config with invalid baseURL format', async () => {
-      const config = {
-        provider: 'openai-compatible' as const,
-        apiKey: 'key',
-        model: 'gpt-4',
-        baseURL: 'invalid-url-without-protocol',
-      };
-
-      vi.mocked(AIFactory.createClient).mockImplementation(() => {
-        throw new Error('Invalid baseURL');
-      });
-
-      const { testConnection } = useConfigStore.getState();
-      const result = await testConnection(config);
-
-      expect(result).toBe(false);
-    });
-
-    it('should handle baseURL with trailing slash', () => {
-      const { saveConfig } = useConfigStore.getState();
-      const config = {
-        provider: 'openai-compatible' as const,
-        apiKey: 'key',
-        model: 'gpt-4',
-        baseURL: 'https://api.openai.com/',
-      };
-
-      saveConfig(config);
-      expect(useConfigStore.getState().config?.baseURL).toBe('https://api.openai.com/');
-    });
+    expect(useConfigStore.getState().profiles.length).toBe(1);
+    expect(useConfigStore.getState().activeProfileId).toBe('p1');
+    expect(useConfigStore.getState().config?.apiKey).toBe('k1');
   });
 
-  describe('testConnection edge cases', () => {
-    it('should handle connection timeout', async () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'key',
-        model: 'deepseek-chat',
-      };
+  it('deleteProfile：删除最后一个档案应清空配置', () => {
+    storedConfigState = buildState(
+      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
+      'p1'
+    );
+    useConfigStore.getState().loadConfig();
 
-      vi.mocked(AIFactory.createClient).mockReturnValue({
-        chat: vi.fn().mockImplementation(() => 
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 100)
-          )
-        ),
-      } as any);
+    useConfigStore.getState().deleteProfile('p1');
 
-      const { testConnection } = useConfigStore.getState();
-      const result = await testConnection(config);
-
-      expect(result).toBe(false);
-    }, 5000);
-
-    it('should handle network error', async () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'key',
-        model: 'deepseek-chat',
-      };
-
-      vi.mocked(AIFactory.createClient).mockReturnValue({
-        chat: vi.fn().mockRejectedValue(new Error('Network error')),
-      } as any);
-
-      const { testConnection } = useConfigStore.getState();
-      const result = await testConnection(config);
-
-      expect(result).toBe(false);
-    });
-
-    it('should handle 401 unauthorized error', async () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'invalid-key',
-        model: 'deepseek-chat',
-      };
-
-      vi.mocked(AIFactory.createClient).mockReturnValue({
-        chat: vi.fn().mockRejectedValue({ status: 401, message: 'Unauthorized' }),
-      } as any);
-
-      const { testConnection } = useConfigStore.getState();
-      const result = await testConnection(config);
-
-      expect(result).toBe(false);
-    });
-
-    it('should handle 429 rate limit error', async () => {
-      const config = {
-        provider: 'deepseek' as const,
-        apiKey: 'key',
-        model: 'deepseek-chat',
-      };
-
-      vi.mocked(AIFactory.createClient).mockReturnValue({
-        chat: vi.fn().mockRejectedValue({ status: 429, message: 'Rate limit exceeded' }),
-      } as any);
-
-      const { testConnection } = useConfigStore.getState();
-      const result = await testConnection(config);
-
-      expect(result).toBe(false);
-    });
+    expect(vi.mocked(storage.clearConfig)).toHaveBeenCalled();
+    expect(useConfigStore.getState().profiles).toEqual([]);
+    expect(useConfigStore.getState().config).toBeNull();
   });
 
-  describe('concurrent operations', () => {
-    it('should handle concurrent loadConfig and saveConfig', () => {
-      const mockConfig = {
-        provider: 'deepseek' as const,
-        apiKey: 'loaded-key',
-        model: 'deepseek-chat',
-      };
-      vi.mocked(storage.getConfig).mockReturnValue(mockConfig);
+  it('testConnection：成功时应记录 lastTest 并返回 true', async () => {
+    storedConfigState = buildState(
+      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
+      'p1'
+    );
+    useConfigStore.getState().loadConfig();
 
-      const { loadConfig, saveConfig } = useConfigStore.getState();
-      
-      loadConfig();
-      saveConfig({ provider: 'kimi', apiKey: 'saved-key', model: 'moonshot-v1' });
-
-      // The last operation should win
-      expect(useConfigStore.getState().config?.provider).toBe('kimi');
-      expect(useConfigStore.getState().config?.apiKey).toBe('saved-key');
+    const ok = await useConfigStore.getState().testConnection({
+      provider: 'deepseek',
+      apiKey: 'k1',
+      model: 'deepseek-chat',
     });
 
-    it('should handle multiple testConnection calls', async () => {
-      const config1 = { provider: 'deepseek' as const, apiKey: 'key1', model: 'model1' };
-      const config2 = { provider: 'kimi' as const, apiKey: 'key2', model: 'model2' };
-
-      vi.mocked(AIFactory.createClient).mockReturnValue({
-        chat: vi.fn().mockResolvedValue({ content: 'pong' }),
-      } as any);
-
-      const { testConnection } = useConfigStore.getState();
-      
-      const results = await Promise.all([
-        testConnection(config1),
-        testConnection(config2),
-      ]);
-
-      expect(results).toEqual([true, true]);
-      expect(AIFactory.createClient).toHaveBeenCalledTimes(2);
-    });
+    expect(ok).toBe(true);
+    const profile = useConfigStore.getState().profiles.find((p) => p.id === 'p1');
+    expect(profile?.lastTest?.status).toBe('success');
   });
 
-  describe('state synchronization', () => {
-    it('should update isConfigured immediately after saveConfig', () => {
-      const { saveConfig } = useConfigStore.getState();
-      expect(useConfigStore.getState().isConfigured).toBe(false);
+  it('testConnection：失败时应记录 lastTest 并返回 false', async () => {
+    storedConfigState = buildState(
+      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
+      'p1'
+    );
+    useConfigStore.getState().loadConfig();
 
-      saveConfig({ provider: 'deepseek', apiKey: 'key', model: 'model' });
-      expect(useConfigStore.getState().isConfigured).toBe(true);
+    vi.mocked(AIFactory.createClient).mockImplementationOnce(() => {
+      throw new Error('DeepSeek API error (401 Unauthorized) - Invalid API key');
     });
 
-    it('should update isConfigured immediately after clearConfig', () => {
-      const { saveConfig, clearConfig } = useConfigStore.getState();
-      saveConfig({ provider: 'deepseek', apiKey: 'key', model: 'model' });
-      expect(useConfigStore.getState().isConfigured).toBe(true);
-
-      clearConfig();
-      expect(useConfigStore.getState().isConfigured).toBe(false);
+    const ok = await useConfigStore.getState().testConnection({
+      provider: 'deepseek',
+      apiKey: 'bad',
+      model: 'deepseek-chat',
     });
 
-    it('should load config correctly on initialization', () => {
-      const mockConfig = {
-        provider: 'gemini' as const,
-        apiKey: 'init-key',
-        model: 'gemini-pro',
-      };
-      vi.mocked(storage.getConfig).mockReturnValue(mockConfig);
-
-      const { loadConfig } = useConfigStore.getState();
-      loadConfig();
-
-      expect(useConfigStore.getState().config).toEqual(mockConfig);
-      expect(useConfigStore.getState().isConfigured).toBe(true);
-    });
+    expect(ok).toBe(false);
+    const profile = useConfigStore.getState().profiles.find((p) => p.id === 'p1');
+    expect(profile?.lastTest?.status).toBe('error');
+    expect(profile?.lastTest?.httpStatus).toBe(401);
   });
 });

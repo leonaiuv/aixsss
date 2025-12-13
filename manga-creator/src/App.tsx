@@ -2,13 +2,14 @@ import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { useProjectStore } from './stores/projectStore';
 import { useConfigStore } from './stores/configStore';
 import { useThemeStore } from './stores/themeStore';
-import { initStorage } from './lib/storage';
+import { initStorage, flushScenePatchQueue } from './lib/storage';
 import { ProjectList } from './components/ProjectList';
 import { ThemeToggle } from './components/ThemeToggle';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { Toaster } from './components/ui/toaster';
 import { AIProgressToast, AIProgressIndicator } from './components/AIProgressToast';
 import { initProgressBridge } from './lib/ai/progressBridge';
+import { initAIUsageAnalytics } from './lib/ai/usageAnalytics';
 import { Settings, Search, Terminal, Loader2 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent } from './components/ui/dialog';
@@ -55,11 +56,38 @@ function App() {
     
     // 初始化AI进度桥接器
     const cleanupBridge = initProgressBridge();
+    const cleanupUsageAnalytics = initAIUsageAnalytics();
     
     return () => {
       cleanupBridge();
+      cleanupUsageAnalytics();
     };
   }, [loadProjects, loadConfig, initTheme]);
+
+  // 分镜编辑采用批量 patch 写入：在页面隐藏/退出时强制落盘，避免最后一段输入丢失
+  useEffect(() => {
+    const flush = () => {
+      try {
+        flushScenePatchQueue();
+      } catch {
+        // 忽略：避免影响页面卸载
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   // 全局搜索快捷键：Ctrl/Cmd + K
   useKeyboardShortcut(

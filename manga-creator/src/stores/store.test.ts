@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Project, Scene, UserConfig } from '@/types';
+import type { Project, Scene, UserConfig, UserConfigState } from '@/types';
 
 // ==========================================
 // Mock Storage State
@@ -8,7 +8,7 @@ import type { Project, Scene, UserConfig } from '@/types';
 const storageState = {
   projects: [] as Project[],
   scenes: {} as Record<string, Scene[]>,
-  config: null as UserConfig | null,
+  configState: null as UserConfigState | null,
 };
 
 const storageSpies = {
@@ -37,15 +37,23 @@ const storageSpies = {
     }
     storageState.scenes[projectId] = scenes;
   }),
+  saveScenePatchBatched: vi.fn((projectId: string, sceneId: string, updates: Partial<Scene>) => {
+    const scenes = storageState.scenes[projectId] ?? [];
+    const index = scenes.findIndex((s) => s.id === sceneId);
+    if (index >= 0) {
+      scenes[index] = { ...scenes[index], ...updates };
+      storageState.scenes[projectId] = scenes;
+    }
+  }),
   saveScenes: vi.fn((projectId: string, scenes: Scene[]) => {
     storageState.scenes[projectId] = [...scenes];
   }),
-  getConfig: vi.fn(() => storageState.config),
-  saveConfig: vi.fn((config: UserConfig) => {
-    storageState.config = config;
+  getConfigState: vi.fn(() => storageState.configState),
+  saveConfigState: vi.fn((state: UserConfigState) => {
+    storageState.configState = state;
   }),
   clearConfig: vi.fn(() => {
-    storageState.config = null;
+    storageState.configState = null;
   }),
 };
 
@@ -60,6 +68,20 @@ vi.mock('@/lib/ai/factory', () => ({
   },
 }));
 
+function createMockLocalStorage(): Storage {
+  const store: Record<string, string> = {};
+  return {
+    length: 0,
+    clear: () => Object.keys(store).forEach((k) => delete store[k]),
+    getItem: (key: string) => store[key] ?? null,
+    key: (index: number) => Object.keys(store)[index] ?? null,
+    removeItem: (key: string) => delete store[key],
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+  };
+}
+
 let useProjectStore: typeof import('@/stores/projectStore').useProjectStore;
 let useStoryboardStore: typeof import('@/stores/storyboardStore').useStoryboardStore;
 let useConfigStore: typeof import('@/stores/configStore').useConfigStore;
@@ -67,12 +89,18 @@ let useConfigStore: typeof import('@/stores/configStore').useConfigStore;
 beforeEach(async () => {
   storageState.projects = [];
   storageState.scenes = {};
-  storageState.config = null;
+  storageState.configState = null;
   Object.values(storageSpies).forEach((spy) => {
     if ('mockClear' in spy) {
       spy.mockClear();
     }
   });
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: createMockLocalStorage(),
+    writable: true,
+  });
+
   vi.resetModules();
   ({ useProjectStore } = await import('@/stores/projectStore'));
   ({ useStoryboardStore } = await import('@/stores/storyboardStore'));
@@ -567,7 +595,8 @@ describe('StoryboardStore', () => {
       useStoryboardStore.getState().updateScene(projectId, scene.id, { summary: 'Updated' });
 
       expect(useStoryboardStore.getState().scenes[0].summary).toBe('Updated');
-      expect(storageSpies.saveScene).toHaveBeenCalledTimes(2);
+      expect(storageSpies.saveScene).toHaveBeenCalledTimes(1);
+      expect(storageSpies.saveScenePatchBatched).toHaveBeenCalledTimes(1);
     });
 
     it('更新不存在的分镜应无操作', () => {
@@ -583,10 +612,10 @@ describe('StoryboardStore', () => {
         status: 'pending',
       });
 
-      const callCount = storageSpies.saveScene.mock.calls.length;
+      const callCount = storageSpies.saveScenePatchBatched.mock.calls.length;
       useStoryboardStore.getState().updateScene(projectId, 'non-existent', { summary: 'Updated' });
 
-      expect(storageSpies.saveScene).toHaveBeenCalledTimes(callCount);
+      expect(storageSpies.saveScenePatchBatched).toHaveBeenCalledTimes(callCount);
     });
 
     it('应能更新所有字段', () => {
@@ -776,20 +805,34 @@ describe('StoryboardStore', () => {
 describe('ConfigStore', () => {
   describe('loadConfig', () => {
     it('应从 storage 加载配置', () => {
-      storageState.config = {
+      const config: UserConfig = {
         provider: 'deepseek',
         apiKey: 'test-key',
         model: 'deepseek-chat',
       };
+      const now = new Date().toISOString();
+      storageState.configState = {
+        version: 1,
+        activeProfileId: 'p1',
+        profiles: [
+          {
+            id: 'p1',
+            name: '默认档案',
+            config,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+      };
 
       useConfigStore.getState().loadConfig();
 
-      expect(useConfigStore.getState().config).toEqual(storageState.config);
+      expect(useConfigStore.getState().config).toEqual(config);
       expect(useConfigStore.getState().isConfigured).toBe(true);
     });
 
     it('无配置时应设置 isConfigured 为 false', () => {
-      storageState.config = null;
+      storageState.configState = null;
 
       useConfigStore.getState().loadConfig();
 
@@ -808,7 +851,7 @@ describe('ConfigStore', () => {
 
       useConfigStore.getState().saveConfig(config);
 
-      expect(storageSpies.saveConfig).toHaveBeenCalledWith(config);
+      expect(storageSpies.saveConfigState).toHaveBeenCalled();
       expect(useConfigStore.getState().config).toEqual(config);
       expect(useConfigStore.getState().isConfigured).toBe(true);
     });

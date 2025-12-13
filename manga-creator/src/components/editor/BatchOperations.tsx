@@ -35,6 +35,7 @@ import {
   Play,
   Pause,
   SkipForward,
+  Square,
   Download,
   Trash2,
   Edit2,
@@ -66,7 +67,8 @@ export function BatchOperations({
     isBatchGenerating,
   } = useAIProgressStore();
   
-  const { selectedScenes, isProcessing, isPaused, progress, currentScene, operationType } = batchOperations;
+  const { selectedScenes, isProcessing, isPaused, cancelRequested, progress, currentScene, operationType } =
+    batchOperations;
 
   const toggleScene = (sceneId: string) => {
     const newSelected = new Set(selectedScenes);
@@ -131,7 +133,28 @@ export function BatchOperations({
   };
 
   const handlePauseToggle = () => {
+    if (cancelRequested) return;
     updateBatchOperations({ isPaused: !isPaused });
+  };
+
+  const handleCancel = async () => {
+    if (!isProcessing && !isBatchGenerating) return;
+    if (cancelRequested) return;
+
+    const ok = await confirm({
+      title: '确认停止批量生成？',
+      description: '会在当前AI请求完成后停止；已生成的内容会保留。',
+      confirmText: '停止',
+      cancelText: '继续',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    updateBatchOperations({
+      cancelRequested: true,
+      isPaused: false,
+      statusMessage: '正在取消...',
+    });
   };
 
   return (
@@ -222,6 +245,7 @@ export function BatchOperations({
           <Button
             variant="outline"
             onClick={handlePauseToggle}
+            disabled={cancelRequested}
           >
             {isPaused ? (
               <>
@@ -234,6 +258,17 @@ export function BatchOperations({
                 暂停
               </>
             )}
+          </Button>
+        )}
+
+        {(isProcessing || isBatchGenerating) && (
+          <Button
+            variant="destructive"
+            onClick={handleCancel}
+            disabled={cancelRequested}
+          >
+            <Square className="h-4 w-4 mr-2" />
+            {cancelRequested ? '取消中...' : '停止'}
           </Button>
         )}
       </div>
@@ -250,6 +285,11 @@ export function BatchOperations({
           <Progress value={progress} />
           {batchOperations.statusMessage && (
             <p className="text-sm text-muted-foreground">{batchOperations.statusMessage}</p>
+          )}
+          {cancelRequested && (
+            <p className="text-sm text-muted-foreground">
+              已发起取消请求，将在当前分镜处理完成后停止。
+            </p>
           )}
           {isPaused && (
             <p className="text-sm text-yellow-600">已暂停，点击继续按钮恢复</p>

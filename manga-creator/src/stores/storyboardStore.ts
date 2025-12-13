@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Scene, SceneStatus } from '@/types';
-import { getScenes, saveScene, saveScenes } from '@/lib/storage';
+import { getScenes, saveScene, saveScenePatchBatched, saveScenes } from '@/lib/storage';
 
 interface StoryboardStore {
   scenes: Scene[];
@@ -61,7 +61,7 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
     
     if (scene) {
       const updatedScene = { ...scene, ...updates };
-      saveScene(projectId, updatedScene);
+      saveScenePatchBatched(projectId, sceneId, updates);
       
       set({
         scenes: scenes.map(s => s.id === sceneId ? updatedScene : s),

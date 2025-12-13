@@ -109,6 +109,7 @@ export interface AICallLogEntry {
     provider: string;
     model: string;
     maxTokens?: number;
+    profileId?: string;
   };
   
   // 响应信息（可选，成功后填充）
@@ -279,6 +280,7 @@ export function logAICall(
       provider: string;
       model: string;
       maxTokens?: number;
+      profileId?: string;
     };
   }
 ): string {
