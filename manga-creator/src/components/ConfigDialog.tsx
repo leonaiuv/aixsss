@@ -630,7 +630,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>API配置</DialogTitle>
           <DialogDescription>
@@ -658,6 +658,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                   value={unlockPassword}
                   onChange={(e) => setUnlockPassword(e.target.value)}
                   placeholder="请输入密码以解锁"
+                  className="h-11"
                 />
               </div>
               {unlockError ? (
@@ -716,6 +717,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                       type="password"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="h-11"
                     />
                   </div>
                   <div className="space-y-2">
@@ -726,6 +728,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="至少6位字符"
+                      className="h-11"
                     />
                   </div>
                   {passwordError && (
@@ -775,6 +778,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                     value={encryptionPassword}
                     onChange={(e) => setEncryptionPassword(e.target.value)}
                     placeholder="至少6位字符"
+                    className="h-11"
                   />
                 </div>
                 <div className="space-y-2">
@@ -785,6 +789,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="再次输入密码"
+                    className="h-11"
                   />
                 </div>
                 {passwordError && (
@@ -830,7 +835,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             <div className="space-y-2">
               <Label>当前档案</Label>
               <Select value={activeProfileId || ''} onValueChange={(v) => void handleSwitchProfile(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="h-11 text-base md:text-sm">
                   <SelectValue placeholder="选择档案" />
                 </SelectTrigger>
                 <SelectContent>
@@ -850,6 +855,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
                 disabled={isLocked}
+                className="h-11"
               />
               {validationErrors.profileName ? (
                 <p className="text-sm text-destructive">{validationErrors.profileName}</p>
@@ -869,6 +875,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                     placeholder="例如 0.001"
                     value={pricingPromptPer1K}
                     onChange={(e) => setPricingPromptPer1K(e.target.value)}
+                    className="h-11"
                   />
                 </div>
                 <div className="space-y-2">
@@ -881,6 +888,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                     placeholder="例如 0.002"
                     value={pricingCompletionPer1K}
                     onChange={(e) => setPricingCompletionPer1K(e.target.value)}
+                    className="h-11"
                   />
                 </div>
               </div>
@@ -899,7 +907,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           <div className="space-y-2">
             <Label>供应商</Label>
             <Select value={provider} onValueChange={(v) => setProvider(v as ProviderType)}>
-              <SelectTrigger disabled={isLocked}>
+              <SelectTrigger disabled={isLocked} className="h-11 text-base md:text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -921,7 +929,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 setPresetId('');
               }}
             >
-              <SelectTrigger disabled={isLocked}>
+              <SelectTrigger disabled={isLocked} className="h-11 text-base md:text-sm">
                 <SelectValue placeholder="选择常用模型/默认 Base URL" />
               </SelectTrigger>
               <SelectContent>
@@ -937,15 +945,15 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           <div className="space-y-2">
             <Label htmlFor="apiKey">API Key</Label>
             <div className="relative">
-              <Input
-                id="apiKey"
-                type={showApiKey ? 'text' : 'password'}
-                placeholder="sk-..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="pr-10"
-                disabled={isLocked}
-              />
+                <Input
+                  id="apiKey"
+                  type={showApiKey ? 'text' : 'password'}
+                  placeholder="sk-..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="h-11 pr-10"
+                  disabled={isLocked}
+                />
               <Button
                 type="button"
                 variant="ghost"
@@ -971,6 +979,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 value={baseURL}
                 onChange={(e) => setBaseURL(e.target.value)}
                 disabled={isLocked}
+                className="h-11"
               />
               {baseURL.trim() && /\/(v1beta|v1)\/?$/.test(baseURL.trim()) ? (
                 <p className="text-xs text-muted-foreground">
@@ -996,6 +1005,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               value={model}
               onChange={(e) => setModel(e.target.value)}
               disabled={isLocked}
+              className="h-11"
             />
             {validationErrors.model ? (
               <p className="text-sm text-destructive">{validationErrors.model}</p>

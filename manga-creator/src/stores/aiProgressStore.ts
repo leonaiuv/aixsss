@@ -57,6 +57,7 @@ export interface AITask {
   projectId?: string;
   sceneId?: string;
   sceneOrder?: number;
+  characterId?: string;
   
   // 时间戳
   createdAt: number;

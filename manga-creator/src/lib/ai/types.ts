@@ -8,8 +8,12 @@ export interface AIProviderConfig {
   generationParams?: AIGenerationParams;
 }
 
+export interface AIRequestOptions {
+  signal?: AbortSignal;
+}
+
 export interface AIProvider {
   name: string;
-  chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse>;
-  streamChat(messages: ChatMessage[], config: AIProviderConfig): AsyncGenerator<string>;
+  chat(messages: ChatMessage[], config: AIProviderConfig, options?: AIRequestOptions): Promise<AIResponse>;
+  streamChat(messages: ChatMessage[], config: AIProviderConfig, options?: AIRequestOptions): AsyncGenerator<string>;
 }

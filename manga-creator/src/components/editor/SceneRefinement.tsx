@@ -27,17 +27,20 @@ import {
   Users,
   MessageSquare,
   Copy,
-  Trash2
+  Trash2,
+  Maximize2,
+  Square
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
 import { flushScenePatchQueue } from '@/lib/storage';
 import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
-import { logAICall, updateLogWithResponse, updateLogWithError, updateLogProgress } from '@/lib/ai/debugLogger';
+import { logAICall, updateLogWithResponse, updateLogWithError, updateLogWithCancelled, updateLogProgress } from '@/lib/ai/debugLogger';
 import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
 import { generateBGMPrompt, generateTransitionPrompt, BGMPrompt, TransitionPrompt } from '@/lib/ai/multiModalPrompts';
 import { checkTokenLimit, calculateTotalTokens, compressProjectEssence } from '@/lib/ai/contextCompressor';
 import { parseKeyframePromptText, parseMotionPromptText, parseSceneAnchorText } from '@/lib/ai/promptParsers';
+import { isStructuredOutput, mergeTokenUsage, requestFormatFix } from '@/lib/ai/outputFixer';
 import { SceneStep, migrateOldStyleToConfig, Project, DIALOGUE_TYPE_LABELS, DialogueLine } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -74,6 +77,21 @@ function getRecommendedAccordionValue(
   return 'dialogue';
 }
 
+type PromptEditorField = 'sceneDescription' | 'shotPrompt' | 'motionPrompt';
+
+type PromptEditorState =
+  | { kind: 'field'; field: PromptEditorField; title: string }
+  | { kind: 'preview'; title: string; value: string };
+
+function isAbortError(error: unknown): boolean {
+  if (!error) return false;
+  if (error instanceof Error && error.name === 'AbortError') return true;
+  if (typeof error === 'object' && 'name' in error && (error as { name?: unknown }).name === 'AbortError') {
+    return true;
+  }
+  return false;
+}
+
 export function SceneRefinement() {
   const { currentProject, updateProject } = useProjectStore();
   const { scenes, updateScene, loadScenes } = useStoryboardStore();
@@ -87,6 +105,21 @@ export function SceneRefinement() {
     stopBatchGenerating 
   } = useAIProgressStore();
   const { toast } = useToast();
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const cancelRequestedRef = useRef(false);
+
+  const requestCancel = useCallback(() => {
+    cancelRequestedRef.current = true;
+    abortControllerRef.current?.abort();
+    toast({ title: '已请求取消', description: '正在停止本次生成...' });
+  }, [toast]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -104,6 +137,7 @@ export function SceneRefinement() {
   const [sceneListQuery, setSceneListQuery] = useState('');
   const [sceneListFilter, setSceneListFilter] = useState<'all' | 'incomplete' | 'completed' | 'needs_update'>('all');
   const [activeAccordion, setActiveAccordion] = useState<string>('scene');
+  const [promptEditor, setPromptEditor] = useState<PromptEditorState | null>(null);
 
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -297,10 +331,19 @@ export function SceneRefinement() {
   }
 
   const currentScene = scenes[currentSceneIndex];
+  const promptEditorValue =
+    promptEditor?.kind === 'field'
+      ? (currentScene?.[promptEditor.field] ?? '')
+      : (promptEditor?.value ?? '');
 
   // 生成场景锚点
   const generateSceneDescription = async () => {
     if (!config || !currentScene) return;
+
+    cancelRequestedRef.current = false;
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     setIsGenerating(true);
     setGeneratingStep('scene_description');
@@ -372,30 +415,64 @@ export function SceneRefinement() {
       
       updateLogProgress(logId, 30, '正在生成场景锚点...');
 
-      const response = await client.chat([
-        { role: 'user', content: prompt }
-      ]);
-      
+      const response = await client.chat([{ role: 'user', content: prompt }], { signal: abortController.signal });
+
+      let finalContent = response.content.trim();
+      let mergedTokenUsage = response.tokenUsage;
+
+      updateLogProgress(logId, 60, '正在检查输出格式...');
+
+      if (finalContent && !isStructuredOutput('scene_anchor', finalContent)) {
+        updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
+        try {
+          const fixed = await requestFormatFix({
+            chat: (messages, options) => client.chat(messages, options),
+            type: 'scene_anchor',
+            raw: finalContent,
+            signal: abortController.signal,
+          });
+
+          mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
+
+          const fixedContent = fixed.content.trim();
+          if (fixedContent && isStructuredOutput('scene_anchor', fixedContent)) {
+            finalContent = fixedContent;
+            updateLogProgress(logId, 75, '纠偏完成，正在保存结果...');
+          } else {
+            updateLogProgress(logId, 75, '纠偏未生效，正在保存原始输出...');
+          }
+        } catch (fixError) {
+          if (isAbortError(fixError)) throw fixError;
+          console.warn('场景锚点输出纠偏失败，已回退到原始输出:', fixError);
+          updateLogProgress(logId, 75, '纠偏失败，正在保存原始输出...');
+        }
+      }
+
       updateLogProgress(logId, 80, '正在保存结果...');
 
-      // 更新日志响应
+      // 更新日志响应（Token 口径：若发生纠偏，则合并两次调用的 tokenUsage）
       updateLogWithResponse(logId, {
-        content: response.content,
-        tokenUsage: response.tokenUsage,
+        content: finalContent,
+        tokenUsage: mergedTokenUsage,
       });
 
       updateScene(currentProject.id, currentScene.id, {
-        sceneDescription: response.content.trim(),
+        sceneDescription: finalContent,
         status: 'scene_confirmed',
       });
       setActiveAccordion('keyframe');
 
     } catch (err) {
+      if (isAbortError(err)) {
+        if (logId) updateLogWithCancelled(logId);
+        return;
+      }
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
       console.error('生成场景锚点失败:', err);
       if (logId) updateLogWithError(logId, errorMsg);
     } finally {
+      abortControllerRef.current = null;
       setIsGenerating(false);
       setGeneratingStep(null);
     }
@@ -408,6 +485,11 @@ export function SceneRefinement() {
     const latestScene = latestScenes.find(s => s.id === currentScene?.id);
     
     if (!config || !latestScene || !latestScene.sceneDescription) return;
+
+    cancelRequestedRef.current = false;
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     setIsGenerating(true);
     setGeneratingStep('keyframe_prompt');
@@ -458,30 +540,64 @@ export function SceneRefinement() {
       
       updateLogProgress(logId, 30, '正在生成关键帧提示词（KF0/KF1/KF2）...');
 
-      const response = await client.chat([
-        { role: 'user', content: prompt }
-      ]);
-      
+      const response = await client.chat([{ role: 'user', content: prompt }], { signal: abortController.signal });
+
+      let finalContent = response.content.trim();
+      let mergedTokenUsage = response.tokenUsage;
+
+      updateLogProgress(logId, 60, '正在检查输出格式...');
+
+      if (finalContent && !isStructuredOutput('keyframe_prompt', finalContent)) {
+        updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
+        try {
+          const fixed = await requestFormatFix({
+            chat: (messages, options) => client.chat(messages, options),
+            type: 'keyframe_prompt',
+            raw: finalContent,
+            signal: abortController.signal,
+          });
+
+          mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
+
+          const fixedContent = fixed.content.trim();
+          if (fixedContent && isStructuredOutput('keyframe_prompt', fixedContent)) {
+            finalContent = fixedContent;
+            updateLogProgress(logId, 75, '纠偏完成，正在保存关键帧...');
+          } else {
+            updateLogProgress(logId, 75, '纠偏未生效，正在保存原始输出...');
+          }
+        } catch (fixError) {
+          if (isAbortError(fixError)) throw fixError;
+          console.warn('关键帧输出纠偏失败，已回退到原始输出:', fixError);
+          updateLogProgress(logId, 75, '纠偏失败，正在保存原始输出...');
+        }
+      }
+
       updateLogProgress(logId, 80, '正在保存关键帧...');
 
-      // 更新日志响应
+      // 更新日志响应（Token 口径：若发生纠偏，则合并两次调用的 tokenUsage）
       updateLogWithResponse(logId, {
-        content: response.content,
-        tokenUsage: response.tokenUsage,
+        content: finalContent,
+        tokenUsage: mergedTokenUsage,
       });
 
       updateScene(currentProject.id, latestScene.id, {
-        shotPrompt: response.content.trim(),
+        shotPrompt: finalContent,
         status: 'keyframe_confirmed',
       });
       setActiveAccordion('motion');
 
     } catch (err) {
+      if (isAbortError(err)) {
+        if (logId) updateLogWithCancelled(logId);
+        return;
+      }
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
       console.error('生成关键帧提示词（KF0/KF1/KF2）失败:', err);
       if (logId) updateLogWithError(logId, errorMsg);
     } finally {
+      abortControllerRef.current = null;
       setIsGenerating(false);
       setGeneratingStep(null);
     }
@@ -494,6 +610,11 @@ export function SceneRefinement() {
     const latestScene = latestScenes.find(s => s.id === currentScene?.id);
     
     if (!config || !latestScene || !latestScene.shotPrompt) return;
+
+    cancelRequestedRef.current = false;
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     setIsGenerating(true);
     setGeneratingStep('motion_prompt');
@@ -538,38 +659,64 @@ export function SceneRefinement() {
       
       updateLogProgress(logId, 30, '正在生成时空/运动提示词...');
 
-      const response = await client.chat([
-        { role: 'user', content: prompt }
-      ]);
-      
+      const response = await client.chat([{ role: 'user', content: prompt }], { signal: abortController.signal });
+
+      let finalContent = response.content.trim();
+      let mergedTokenUsage = response.tokenUsage;
+
+      updateLogProgress(logId, 60, '正在检查输出格式...');
+
+      if (finalContent && !isStructuredOutput('motion_prompt', finalContent)) {
+        updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
+        try {
+          const fixed = await requestFormatFix({
+            chat: (messages, options) => client.chat(messages, options),
+            type: 'motion_prompt',
+            raw: finalContent,
+            signal: abortController.signal,
+          });
+
+          mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
+
+          const fixedContent = fixed.content.trim();
+          if (fixedContent && isStructuredOutput('motion_prompt', fixedContent)) {
+            finalContent = fixedContent;
+            updateLogProgress(logId, 75, '纠偏完成，正在保存结果...');
+          } else {
+            updateLogProgress(logId, 75, '纠偏未生效，正在保存原始输出...');
+          }
+        } catch (fixError) {
+          if (isAbortError(fixError)) throw fixError;
+          console.warn('时空/运动提示词输出纠偏失败，已回退到原始输出:', fixError);
+          updateLogProgress(logId, 75, '纠偏失败，正在保存原始输出...');
+        }
+      }
+
       updateLogProgress(logId, 80, '正在保存结果...');
 
-      // 更新日志响应
+      // 更新日志响应（Token 口径：若发生纠偏，则合并两次调用的 tokenUsage）
       updateLogWithResponse(logId, {
-        content: response.content,
-        tokenUsage: response.tokenUsage,
+        content: finalContent,
+        tokenUsage: mergedTokenUsage,
       });
 
       updateScene(currentProject.id, latestScene.id, {
-        motionPrompt: response.content.trim(),
+        motionPrompt: finalContent,
         status: 'motion_generating',
       });
       setActiveAccordion('dialogue');
 
-      // 如果是最后一个分镜,更新项目状态
-      if (currentSceneIndex === scenes.length - 1) {
-        updateProject(currentProject.id, {
-          workflowState: 'ALL_SCENES_COMPLETE',
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
     } catch (err) {
+      if (isAbortError(err)) {
+        if (logId) updateLogWithCancelled(logId);
+        return;
+      }
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
       console.error('生成时空/运动提示词失败:', err);
       if (logId) updateLogWithError(logId, errorMsg);
     } finally {
+      abortControllerRef.current = null;
       setIsGenerating(false);
       setGeneratingStep(null);
     }
@@ -582,6 +729,11 @@ export function SceneRefinement() {
     const latestScene = latestScenes.find(s => s.id === currentScene?.id);
     
     if (!config || !latestScene || !latestScene.motionPrompt) return;
+
+    cancelRequestedRef.current = false;
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     setIsGenerating(true);
     setGeneratingStep('dialogue');
@@ -634,7 +786,7 @@ export function SceneRefinement() {
 
       const response = await client.chat([
         { role: 'user', content: prompt }
-      ]);
+      ], { signal: abortController.signal });
       
       updateLogProgress(logId, 80, '正在解析台词...');
 
@@ -653,8 +805,12 @@ export function SceneRefinement() {
       });
       setActiveAccordion('dialogue');
 
-      // 如果是最后一个分镜,更新项目状态
-      if (currentSceneIndex === scenes.length - 1) {
+      const { scenes: scenesAfter } = useStoryboardStore.getState();
+      const isAllScenesComplete = scenesAfter.every(
+        (scene) => scene.status === 'completed' && (scene.dialogues?.length ?? 0) > 0
+      );
+
+      if (isAllScenesComplete) {
         updateProject(currentProject.id, {
           workflowState: 'ALL_SCENES_COMPLETE',
           updatedAt: new Date().toISOString(),
@@ -662,11 +818,16 @@ export function SceneRefinement() {
       }
 
     } catch (err) {
+      if (isAbortError(err)) {
+        if (logId) updateLogWithCancelled(logId);
+        return;
+      }
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
       console.error('生成台词失败:', err);
       if (logId) updateLogWithError(logId, errorMsg);
     } finally {
+      abortControllerRef.current = null;
       setIsGenerating(false);
       setGeneratingStep(null);
     }
@@ -682,6 +843,7 @@ export function SceneRefinement() {
     setIsBatchGenerating(true);
     startBatchGenerating('scene_refinement');
     setError('');
+    cancelRequestedRef.current = false;
 
     try {
       // 如果是强制重新生成，先重置场景状态
@@ -696,6 +858,7 @@ export function SceneRefinement() {
         setActiveAccordion('scene');
         // 等待状态更新
         await new Promise(resolve => setTimeout(resolve, 100));
+        if (cancelRequestedRef.current) return;
       }
 
       // 第一阶段：生成场景锚点
@@ -704,7 +867,9 @@ export function SceneRefinement() {
       if (!scene0?.sceneDescription) {
         setGeneratingStep('scene_description');
         await generateSceneDescription();
+        if (cancelRequestedRef.current) return;
         await new Promise(resolve => setTimeout(resolve, 50));
+        if (cancelRequestedRef.current) return;
       }
 
       // 获取最新场景数据
@@ -719,7 +884,9 @@ export function SceneRefinement() {
       if (!latestScene1.shotPrompt) {
         setGeneratingStep('keyframe_prompt');
         await generateKeyframePrompt();
+        if (cancelRequestedRef.current) return;
         await new Promise(resolve => setTimeout(resolve, 50));
+        if (cancelRequestedRef.current) return;
       }
 
       // 获取最新场景数据
@@ -734,7 +901,9 @@ export function SceneRefinement() {
       if (!latestScene2.motionPrompt) {
         setGeneratingStep('motion_prompt');
         await generateMotionPrompt();
+        if (cancelRequestedRef.current) return;
         await new Promise(resolve => setTimeout(resolve, 50));
+        if (cancelRequestedRef.current) return;
       }
 
       // 获取最新场景数据
@@ -749,6 +918,7 @@ export function SceneRefinement() {
       if (!latestScene3.dialogues || latestScene3.dialogues.length === 0) {
         setGeneratingStep('dialogue');
         await generateDialogue();
+        if (cancelRequestedRef.current) return;
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
@@ -770,6 +940,9 @@ export function SceneRefinement() {
   const canGenerateDialogue = currentScene.motionPrompt && (!currentScene.dialogues || currentScene.dialogues.length === 0);
   const hasDialogues = currentScene.dialogues && currentScene.dialogues.length > 0;
   const isCompleted = currentScene.status === 'completed' && hasDialogues;
+  const isAllScenesComplete = scenes.every(
+    (scene) => scene.status === 'completed' && (scene.dialogues?.length ?? 0) > 0
+  );
   
   // 检查是否被外部批量操作禁用（如批量操作面板正在生成）
   const isExternallyBlocked = isGlobalBatchGenerating && batchGeneratingSource === 'batch_panel';
@@ -835,6 +1008,14 @@ export function SceneRefinement() {
     );
   };
 
+  const openPromptEditor = (field: PromptEditorField, title: string) => {
+    setPromptEditor({ kind: 'field', field, title });
+  };
+
+  const openPromptPreview = (title: string, value: string) => {
+    setPromptEditor({ kind: 'preview', title, value });
+  };
+
   // 应用模板
   const handleApplyTemplate = (template: string, variables: Record<string, string>) => {
     let content = template;
@@ -865,6 +1046,46 @@ export function SceneRefinement() {
   return (
     <div className="space-y-6">
       <ConfirmDialog />
+
+      {/* 全屏编辑器（提升长文本编辑体验） */}
+      <Dialog
+        open={Boolean(promptEditor)}
+        onOpenChange={(open) => {
+          if (!open) setPromptEditor(null);
+        }}
+      >
+        <DialogContent className="max-w-5xl w-[95vw] h-[90vh] grid-rows-[auto,1fr,auto] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>{promptEditor?.title || '编辑'}</DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0">
+            <Textarea
+              value={promptEditorValue}
+              onChange={(e) => {
+                if (!promptEditor || promptEditor.kind !== 'field' || !currentScene) return;
+                updateScene(currentProject.id, currentScene.id, { [promptEditor.field]: e.target.value } as any);
+              }}
+              readOnly={!promptEditor || promptEditor.kind !== 'field'}
+              className="h-full min-h-0 resize-none font-mono text-sm leading-relaxed"
+              spellCheck={false}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>字数：{promptEditorValue.length.toLocaleString()}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => copyToClipboard(promptEditorValue, '已复制内容')}
+              disabled={!promptEditorValue.trim()}
+              className="gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              <span>复制</span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Card className="p-8">
       {/* 头部导航 */}
         <div className="flex items-center justify-between mb-6">
@@ -914,7 +1135,8 @@ export function SceneRefinement() {
               variant="outline"
               size="sm"
               onClick={goToPrevScene}
-              disabled={currentSceneIndex === 0}
+              disabled={currentSceneIndex === 0 || isGenerating || isBatchGenerating || isExternallyBlocked}
+              title={isExternallyBlocked ? externalBlockMessage : isGenerating || isBatchGenerating ? '生成进行中，暂不可切换分镜' : ''}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -922,10 +1144,23 @@ export function SceneRefinement() {
               variant="outline"
               size="sm"
               onClick={goToNextScene}
-              disabled={currentSceneIndex === scenes.length - 1}
+              disabled={currentSceneIndex === scenes.length - 1 || isGenerating || isBatchGenerating || isExternallyBlocked}
+              title={isExternallyBlocked ? externalBlockMessage : isGenerating || isBatchGenerating ? '生成进行中，暂不可切换分镜' : ''}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
+            {(isGenerating || isBatchGenerating) && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={requestCancel}
+                className="gap-2"
+                title="取消当前AI生成"
+              >
+                <Square className="h-4 w-4" />
+                <span className="hidden sm:inline">取消生成</span>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -1032,6 +1267,14 @@ export function SceneRefinement() {
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  onClick={() => openPromptPreview(label, preview)}
+                                  title="全屏查看"
+                                >
+                                  <Maximize2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   disabled={!data.zh}
                                   onClick={() =>
                                     data.zh && copyToClipboard(data.zh, `已复制 ${label} 中文`)
@@ -1056,20 +1299,33 @@ export function SceneRefinement() {
                             <Textarea
                               value={preview}
                               readOnly
-                              className="min-h-[80px] resize-none font-mono text-xs bg-background/60"
+                              className="min-h-[160px] resize-y font-mono text-sm leading-relaxed bg-background/60"
                             />
                           </div>
                         );
                       })}
                     </div>
                   )}
-                  <Textarea
-                    value={currentScene.sceneDescription}
-                    onChange={(e) => updateScene(currentProject.id, currentScene.id, {
-                      sceneDescription: e.target.value
-                    })}
-                    className="min-h-[120px] resize-none"
-                  />
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-2 h-8 w-8"
+                      onClick={() => openPromptEditor('sceneDescription', '场景锚点（原文）')}
+                      title="全屏编辑"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
+                    <Textarea
+                      value={currentScene.sceneDescription}
+                      onChange={(e) =>
+                        updateScene(currentProject.id, currentScene.id, {
+                          sceneDescription: e.target.value,
+                        })
+                      }
+                      className="min-h-[240px] resize-y leading-relaxed pr-12"
+                    />
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1166,6 +1422,15 @@ export function SceneRefinement() {
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    onClick={() => openPromptPreview(label, hasAny ? preview : '')}
+                                    title="全屏查看"
+                                    disabled={!hasAny}
+                                  >
+                                    <Maximize2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
                                     disabled={!data.zh}
                                     onClick={() => data.zh && copyToClipboard(data.zh, `已复制 ${label} 中文`)}
                                     title={`复制 ${label} 中文`}
@@ -1186,7 +1451,7 @@ export function SceneRefinement() {
                               <Textarea
                                 value={hasAny ? preview : '（未解析到该关键帧，请检查 KF0/KF1/KF2 标签是否完整）'}
                                 readOnly
-                                className="min-h-[120px] resize-none font-mono text-xs bg-background/60"
+                                className="min-h-[220px] resize-y font-mono text-sm leading-relaxed bg-background/60"
                               />
                             </div>
                           );
@@ -1198,6 +1463,24 @@ export function SceneRefinement() {
                           <div className="flex items-center justify-between gap-2">
                             <div className="font-medium text-sm">AVOID（负面/避免项）</div>
                             <div className="flex items-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  openPromptPreview(
+                                    'AVOID（负面/避免项）',
+                                    [
+                                      parsedKeyframes.avoid?.zh ? `ZH: ${parsedKeyframes.avoid.zh}` : '',
+                                      parsedKeyframes.avoid?.en ? `EN: ${parsedKeyframes.avoid.en}` : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join('\n\n')
+                                  )
+                                }
+                                title="全屏查看"
+                              >
+                                <Maximize2 className="h-4 w-4" />
+                              </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -1232,21 +1515,34 @@ export function SceneRefinement() {
                               .filter(Boolean)
                               .join('\n\n')}
                             readOnly
-                            className="min-h-[80px] resize-none font-mono text-xs bg-background/60"
+                            className="min-h-[140px] resize-y font-mono text-sm leading-relaxed bg-background/60"
                           />
                         </div>
                       )}
                     </div>
                   )}
 
-                  <Textarea
-                    value={currentScene.shotPrompt}
-                    onChange={(e) => updateScene(currentProject.id, currentScene.id, {
-                      shotPrompt: e.target.value
-                    })}
-                    className="min-h-[150px] resize-none font-mono text-sm"
-                    placeholder="三关键帧提示词（KF0/KF1/KF2）..."
-                  />
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-2 h-8 w-8"
+                      onClick={() => openPromptEditor('shotPrompt', '关键帧提示词（KF0/KF1/KF2）')}
+                      title="全屏编辑"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
+                    <Textarea
+                      value={currentScene.shotPrompt}
+                      onChange={(e) =>
+                        updateScene(currentProject.id, currentScene.id, {
+                          shotPrompt: e.target.value,
+                        })
+                      }
+                      className="min-h-[320px] resize-y font-mono text-sm leading-relaxed pr-12"
+                      placeholder="三关键帧提示词（KF0/KF1/KF2）..."
+                    />
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1346,6 +1642,14 @@ export function SceneRefinement() {
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  onClick={() => openPromptPreview(label, preview)}
+                                  title="全屏查看"
+                                >
+                                  <Maximize2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   disabled={!data.zh}
                                   onClick={() =>
                                     data.zh && copyToClipboard(data.zh, `已复制 ${label} 中文`)
@@ -1370,21 +1674,34 @@ export function SceneRefinement() {
                             <Textarea
                               value={preview}
                               readOnly
-                              className="min-h-[80px] resize-none font-mono text-xs bg-background/60"
+                              className="min-h-[160px] resize-y font-mono text-sm leading-relaxed bg-background/60"
                             />
                           </div>
                         );
                       })}
                     </div>
                   )}
-                  <Textarea
-                    value={currentScene.motionPrompt}
-                    onChange={(e) => updateScene(currentProject.id, currentScene.id, {
-                      motionPrompt: e.target.value
-                    })}
-                    className="min-h-[100px] resize-none font-mono text-sm"
-                    placeholder="时空/运动提示词..."
-                  />
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-2 h-8 w-8"
+                      onClick={() => openPromptEditor('motionPrompt', '时空/运动提示词')}
+                      title="全屏编辑"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
+                    <Textarea
+                      value={currentScene.motionPrompt}
+                      onChange={(e) =>
+                        updateScene(currentProject.id, currentScene.id, {
+                          motionPrompt: e.target.value,
+                        })
+                      }
+                      className="min-h-[260px] resize-y font-mono text-sm leading-relaxed pr-12"
+                      placeholder="时空/运动提示词..."
+                    />
+                  </div>
                   <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
                     💡 建议包含：短版 + 分拍版(0-1s/1-2s/2-3s) + 强约束（保持人物/服装/场景锚点不漂）
                   </div>
@@ -1710,7 +2027,7 @@ export function SceneRefinement() {
           </div>
 
           <div className="flex gap-2">
-            {currentSceneIndex === scenes.length - 1 && isCompleted ? (
+            {isAllScenesComplete ? (
               <Button
                 onClick={() => {
                   updateProject(currentProject.id, {

@@ -51,6 +51,14 @@ export function initProgressBridge(): () => void {
   // 订阅调用开始事件
   unsubscribers.push(
     subscribeToAIEvents('call:start', (entry: AICallLogEntry) => {
+      const skipProgressBridge = Boolean((entry.context as { skipProgressBridge?: unknown }).skipProgressBridge);
+      if (skipProgressBridge) return;
+
+      const characterId =
+        typeof (entry.context as { characterId?: unknown }).characterId === 'string'
+          ? ((entry.context as { characterId?: unknown }).characterId as string)
+          : undefined;
+
       const taskId = store.addTask({
         type: entry.callType,
         title: callTypeToTitle[entry.callType] || entry.callType,
@@ -62,6 +70,7 @@ export function initProgressBridge(): () => void {
         projectId: entry.context.projectId,
         sceneId: entry.context.sceneId,
         sceneOrder: entry.context.sceneOrder,
+        characterId,
         maxRetries: 3,
       });
       
@@ -108,6 +117,17 @@ export function initProgressBridge(): () => void {
       }
     })
   );
+
+  // 订阅取消事件
+  unsubscribers.push(
+    subscribeToAIEvents('call:cancel', (entry: AICallLogEntry) => {
+      const taskId = logToTaskMap.get(entry.id);
+      if (taskId) {
+        store.cancelTask(taskId);
+        logToTaskMap.delete(entry.id);
+      }
+    })
+  );
   
   console.log('[Progress Bridge] 已初始化AI进度桥接器');
   
@@ -128,6 +148,7 @@ export function createProgressTask(
     projectId?: string;
     sceneId?: string;
     sceneOrder?: number;
+    characterId?: string;
   }
 ): {
   taskId: string;
@@ -148,6 +169,7 @@ export function createProgressTask(
     projectId: context?.projectId,
     sceneId: context?.sceneId,
     sceneOrder: context?.sceneOrder,
+    characterId: context?.characterId,
     maxRetries: 3,
   });
   

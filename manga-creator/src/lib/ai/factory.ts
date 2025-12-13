@@ -1,4 +1,4 @@
-import { AIProvider } from './types';
+import { AIProvider, type AIRequestOptions } from './types';
 import { ProviderType, UserConfig, ChatMessage, AIResponse } from '@/types';
 import { DeepSeekProvider } from './providers/deepseek';
 import { OpenAICompatibleProvider } from './providers/openai';
@@ -34,12 +34,12 @@ class AIClient {
     return this.provider.name;
   }
 
-  chat(messages: ChatMessage[]): Promise<AIResponse> {
-    return this.provider.chat(messages, this.config);
+  chat(messages: ChatMessage[], options?: AIRequestOptions): Promise<AIResponse> {
+    return this.provider.chat(messages, this.config, options);
   }
 
-  streamChat(messages: ChatMessage[]): AsyncGenerator<string> {
-    return this.provider.streamChat(messages, this.config);
+  streamChat(messages: ChatMessage[], options?: AIRequestOptions): AsyncGenerator<string> {
+    return this.provider.streamChat(messages, this.config, options);
   }
 }
 

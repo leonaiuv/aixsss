@@ -57,6 +57,22 @@ describe('promptParsers', () => {
       expect(parsed.keyframes[0].en).toBe('English content');
     });
 
+    it('应支持中文冒号与缩进（KF0_ZH：/ KF0_EN：）', () => {
+      const text = [
+        '  KF0_ZH：中文内容',
+        '\tKF0_EN：English content',
+        'AVOID_ZH：不要文字',
+        'AVOID_EN：no text',
+      ].join('\n');
+
+      const parsed = parseKeyframePromptText(text);
+      expect(parsed.isStructured).toBe(true);
+      expect(parsed.keyframes[0].zh).toBe('中文内容');
+      expect(parsed.keyframes[0].en).toBe('English content');
+      expect(parsed.avoid?.zh).toBe('不要文字');
+      expect(parsed.avoid?.en).toBe('no text');
+    });
+
     it('无法识别的内容应进入 rawUnlabeled', () => {
       const text = [
         '这是一段没有标签的旧格式提示词',
@@ -93,6 +109,21 @@ describe('promptParsers', () => {
       const parsed = parseSceneAnchorText('旧版场景描述一段话');
       expect(parsed.isStructured).toBe(false);
       expect(parsed.rawUnlabeled).toContain('旧版');
+    });
+
+    it('应支持中文冒号（SCENE_ANCHOR_ZH：）', () => {
+      const text = [
+        'SCENE_ANCHOR_ZH：地铁车厢内部',
+        'SCENE_ANCHOR_EN：interior of a subway car',
+        'LOCK_ZH：1) 灯管; 2) 车窗',
+        'LOCK_EN：1) light tubes; 2) windows',
+      ].join('\n');
+
+      const parsed = parseSceneAnchorText(text);
+      expect(parsed.isStructured).toBe(true);
+      expect(parsed.sceneAnchor.zh).toContain('地铁车厢');
+      expect(parsed.sceneAnchor.en).toContain('subway');
+      expect(parsed.lock?.zh).toContain('车窗');
     });
   });
 

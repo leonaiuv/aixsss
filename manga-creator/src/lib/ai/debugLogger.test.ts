@@ -3,6 +3,7 @@ import {
   logAICall,
   updateLogWithResponse,
   updateLogWithError,
+  updateLogWithCancelled,
   updateLogProgress,
   getLogHistory,
   clearLogHistory,
@@ -582,6 +583,23 @@ describe('debugLogger', () => {
       });
 
       updateLogWithError(id, '错误');
+
+      expect(callback).toHaveBeenCalled();
+    });
+
+    it('应该触发取消事件', () => {
+      const callback = vi.fn();
+      subscribeToAIEvents('call:cancel', callback);
+
+      const id = logAICall('scene_description', {
+        promptTemplate: '',
+        filledPrompt: '',
+        messages: [],
+        context: {},
+        config: { provider: 'test', model: 'test' },
+      });
+
+      updateLogWithCancelled(id, '用户取消');
 
       expect(callback).toHaveBeenCalled();
     });

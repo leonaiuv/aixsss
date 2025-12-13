@@ -1,4 +1,4 @@
-import { AIProvider, AIProviderConfig } from '../types';
+import { AIProvider, AIProviderConfig, type AIRequestOptions } from '../types';
 import { ChatMessage, AIResponse } from '@/types';
 
 export class DeepSeekProvider implements AIProvider {
@@ -26,7 +26,11 @@ export class DeepSeekProvider implements AIProvider {
     throw new Error(`DeepSeek API error (${response.status} ${response.statusText})${suffix}`);
   }
 
-  async chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse> {
+  async chat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions
+  ): Promise<AIResponse> {
     const url = this.buildURL(config.baseURL);
     const params = config.generationParams;
     
@@ -45,6 +49,7 @@ export class DeepSeekProvider implements AIProvider {
         ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
         ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
@@ -62,7 +67,11 @@ export class DeepSeekProvider implements AIProvider {
     };
   }
 
-  async *streamChat(messages: ChatMessage[], config: AIProviderConfig): AsyncGenerator<string> {
+  async *streamChat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions
+  ): AsyncGenerator<string> {
     const url = this.buildURL(config.baseURL);
     const params = config.generationParams;
     
@@ -82,6 +91,7 @@ export class DeepSeekProvider implements AIProvider {
         ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
         ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
+      signal: options?.signal,
     });
 
     if (!response.ok) {

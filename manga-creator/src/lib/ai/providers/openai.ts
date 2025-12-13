@@ -1,4 +1,4 @@
-import { AIProvider, AIProviderConfig } from '../types';
+import { AIProvider, AIProviderConfig, type AIRequestOptions } from '../types';
 import { ChatMessage, AIResponse } from '@/types';
 
 export class OpenAICompatibleProvider implements AIProvider {
@@ -21,7 +21,11 @@ export class OpenAICompatibleProvider implements AIProvider {
     throw new Error(`OpenAI API error (${response.status} ${response.statusText})${suffix}`);
   }
 
-  async chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse> {
+  async chat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions
+  ): Promise<AIResponse> {
     const url = `${config.baseURL || 'https://api.openai.com'}/v1/chat/completions`;
     const params = config.generationParams;
     
@@ -40,6 +44,7 @@ export class OpenAICompatibleProvider implements AIProvider {
         ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
         ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
@@ -57,7 +62,11 @@ export class OpenAICompatibleProvider implements AIProvider {
     };
   }
 
-  async *streamChat(messages: ChatMessage[], config: AIProviderConfig): AsyncGenerator<string> {
+  async *streamChat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions
+  ): AsyncGenerator<string> {
     const url = `${config.baseURL || 'https://api.openai.com'}/v1/chat/completions`;
     const params = config.generationParams;
     
@@ -77,6 +86,7 @@ export class OpenAICompatibleProvider implements AIProvider {
         ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
         ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
+      signal: options?.signal,
     });
 
     if (!response.ok) {

@@ -1,4 +1,4 @@
-import { AIProvider, AIProviderConfig } from '../types';
+import { AIProvider, AIProviderConfig, type AIRequestOptions } from '../types';
 import { ChatMessage, AIResponse } from '@/types';
 
 export class GeminiProvider implements AIProvider {
@@ -55,7 +55,11 @@ export class GeminiProvider implements AIProvider {
     throw new Error(`Gemini API error (${response.status} ${response.statusText})${suffix}`);
   }
 
-  async chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse> {
+  async chat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions
+  ): Promise<AIResponse> {
     const url = this.buildURL(config.baseURL, config.model);
     const params = config.generationParams;
     const requestBody: Record<string, unknown> = {
@@ -77,6 +81,7 @@ export class GeminiProvider implements AIProvider {
         'x-goog-api-key': config.apiKey,
       },
       body: JSON.stringify(requestBody),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
@@ -98,7 +103,11 @@ export class GeminiProvider implements AIProvider {
     };
   }
 
-  async *streamChat(messages: ChatMessage[], config: AIProviderConfig): AsyncGenerator<string> {
+  async *streamChat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions
+  ): AsyncGenerator<string> {
     const url = this.buildStreamURL(config.baseURL, config.model);
     const params = config.generationParams;
     const requestBody: Record<string, unknown> = {
@@ -120,6 +129,7 @@ export class GeminiProvider implements AIProvider {
         'x-goog-api-key': config.apiKey,
       },
       body: JSON.stringify(requestBody),
+      signal: options?.signal,
     });
 
     if (!response.ok) {

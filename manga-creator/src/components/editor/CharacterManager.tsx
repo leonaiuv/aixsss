@@ -9,16 +9,25 @@
 // 5. 级联更新影响分析
 // ==========================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useCharacterStore } from '@/stores/characterStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
-import { useAIProgressStore } from '@/stores/aiProgressStore';
+import { useAIProgressStore, type AITask } from '@/stores/aiProgressStore';
 import { useCustomStyleStore } from '@/stores/customStyleStore';
 import { useConfirm } from '@/hooks/use-confirm';
+import { useToast } from '@/hooks/use-toast';
 import { AIFactory } from '@/lib/ai/factory';
 import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
+import { parseFirstJSONObject } from '@/lib/ai/jsonExtractor';
+import {
+  clearCharacterCreateDraft,
+  isCharacterCreateDraftMeaningful,
+  loadCharacterCreateDraft,
+  saveCharacterCreateDraft,
+  type CharacterCreateDraft,
+} from '@/lib/characterCreateDraft';
 import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project, Character, isCustomStyleId } from '@/types';
 import {
   analyzeCharacterImpact,
@@ -31,6 +40,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -73,6 +83,8 @@ import {
 // AI生成状态类型
 type GeneratingState = 'idle' | 'generating_basic' | 'generating_portrait';
 
+type AbortReason = 'user' | 'timeout';
+
 // 角色生成任务接口
 interface CharacterGenerationTask {
   characterId?: string;  // 编辑时的角色ID
@@ -91,6 +103,32 @@ interface BatchGenerationState {
   completedIds: string[];
   failedIds: string[];
   queue: Array<{ characterId: string; briefDescription: string }>;
+}
+
+interface CharacterFormData {
+  name: string;
+  briefDescription: string;
+  appearance: string;
+  personality: string;
+  background: string;
+  themeColor: string;
+  primaryColor: string;
+  secondaryColor: string;
+  portraitPrompts?: PortraitPrompts;
+}
+
+function createEmptyFormData(): CharacterFormData {
+  return {
+    name: '',
+    briefDescription: '',
+    appearance: '',
+    personality: '',
+    background: '',
+    themeColor: '#6366f1',
+    primaryColor: '',
+    secondaryColor: '',
+    portraitPrompts: undefined,
+  };
 }
 
 /**
@@ -143,6 +181,39 @@ interface CharacterManagerProps {
   projectId: string;
 }
 
+function pickString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function buildProjectContext(project: Project | null, styleDesc: string): string {
+  if (!project) return '';
+
+  const lines = [
+    project.summary?.trim() ? `故事背景：${project.summary.trim()}` : null,
+    styleDesc?.trim() ? `视觉风格：${styleDesc.trim()}` : null,
+    project.protagonist?.trim() ? `主角特征：${project.protagonist.trim()}` : null,
+  ].filter(Boolean);
+
+  return lines.length ? `\n${lines.join('\n')}` : '';
+}
+
+function deriveNameFromBrief(briefDescription: string): string {
+  const trimmed = briefDescription.trim();
+  if (!trimmed) return '';
+  const first = trimmed.split(/[，,]/)[0]?.trim() || '';
+  return first || trimmed.slice(0, 8);
+}
+
+function isAbortError(error: unknown): boolean {
+  if (!error) return false;
+  if (error instanceof DOMException && error.name === 'AbortError') return true;
+  if (error instanceof Error && error.name === 'AbortError') return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /aborted|abort/i.test(message);
+}
+
 export function CharacterManager({ projectId }: CharacterManagerProps) {
   const { confirm, ConfirmDialog } = useConfirm();
   const { characters, addCharacter, updateCharacter, deleteCharacter, loadCharacters } =
@@ -158,26 +229,21 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   
   // AI进度追踪 Store
   const { 
+    tasks,
     addTask, 
     updateProgress, 
     completeTask, 
     failTask,
+    cancelTask,
+    updateTask,
     showPanel,
   } = useAIProgressStore();
   
+  const { toast } = useToast();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    briefDescription: '',
-    appearance: '',
-    personality: '',
-    background: '',
-    themeColor: '#6366f1',
-    primaryColor: '',
-    secondaryColor: '',
-    portraitPrompts: undefined as PortraitPrompts | undefined,
-  });
+  const [formData, setFormData] = useState<CharacterFormData>(() => createEmptyFormData());
   const [generatingState, setGeneratingState] = useState<GeneratingState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
@@ -196,6 +262,32 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   
   // 当前生成任务ID（用于追踪和取消）
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const currentTaskIdRef = useRef<string | null>(null);
+  const taskAbortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const taskAbortReasonsRef = useRef<Map<string, AbortReason>>(new Map());
+  const isMountedRef = useRef(true);
+  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dialogContextRef = useRef<{ isDialogOpen: boolean; editingCharacter: string | null }>({
+    isDialogOpen: false,
+    editingCharacter: null,
+  });
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [lastBasicTaskId, setLastBasicTaskId] = useState<string | null>(null);
+  const [lastPortraitTaskId, setLastPortraitTaskId] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    currentTaskIdRef.current = currentTaskId;
+  }, [currentTaskId]);
+
+  useEffect(() => {
+    dialogContextRef.current = { isDialogOpen, editingCharacter };
+  }, [editingCharacter, isDialogOpen]);
   
   // 级联更新相关状态
   const [cascadeDialogOpen, setCascadeDialogOpen] = useState(false);
@@ -204,6 +296,24 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     characterId: string;
     affectedSceneIds: string[];
   } | null>(null);
+
+  const [lastAIResponse, setLastAIResponse] = useState<string | null>(null);
+  const [lastAIDetails, setLastAIDetails] = useState<string | null>(null);
+
+  const resetForm = useCallback(() => {
+    setFormData(createEmptyFormData());
+    setEditingCharacter(null);
+    setError(null);
+    setDialogStep('basic');
+    setCopiedFormat(null);
+    setGeneratingState('idle');
+    setCurrentTaskId(null);
+    setLastAIResponse(null);
+    setLastAIDetails(null);
+    setDraftRestored(false);
+    setLastBasicTaskId(null);
+    setLastPortraitTaskId(null);
+  }, []);
   
   // 获取当前项目画风的完整描述（英文提示词）
   const getStyleDescription = () => {
@@ -216,6 +326,274 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   };
 
   const projectCharacters = characters.filter((c) => c.projectId === projectId);
+
+  const isInProgressTask = useCallback(
+    (task?: AITask | null) => task?.status === 'running' || task?.status === 'queued',
+    []
+  );
+
+  const portraitTaskByCharacterId = useMemo(() => {
+    const map = new Map<string, AITask>();
+    for (const task of tasks) {
+      if (task.type !== 'character_portrait') continue;
+      if (task.projectId !== projectId) continue;
+      if (!task.characterId) continue;
+
+      const existing = map.get(task.characterId);
+      if (!existing || task.createdAt > existing.createdAt) {
+        map.set(task.characterId, task);
+      }
+    }
+    return map;
+  }, [projectId, tasks]);
+
+  const batchPortraitCandidates = useMemo(
+    () =>
+      projectCharacters
+        .filter((c) => c.appearance && !c.portraitPrompts)
+        .filter((c) => !isInProgressTask(portraitTaskByCharacterId.get(c.id))),
+    [isInProgressTask, portraitTaskByCharacterId, projectCharacters]
+  );
+
+  const draftPortraitTask = useMemo(() => {
+    if (!lastPortraitTaskId) return null;
+    return tasks.find((t) => t.id === lastPortraitTaskId) ?? null;
+  }, [lastPortraitTaskId, tasks]);
+
+  const dialogPortraitTask = useMemo(() => {
+    if (editingCharacter) {
+      return portraitTaskByCharacterId.get(editingCharacter) ?? null;
+    }
+    return draftPortraitTask;
+  }, [draftPortraitTask, editingCharacter, portraitTaskByCharacterId]);
+
+  const isDialogPortraitGenerating = isInProgressTask(dialogPortraitTask);
+
+  const buildCreateDraft = useCallback(
+    (nextFormData: CharacterFormData): CharacterCreateDraft => ({
+      version: 1,
+      projectId,
+      formData: {
+        name: nextFormData.name,
+        briefDescription: nextFormData.briefDescription,
+        appearance: nextFormData.appearance,
+        personality: nextFormData.personality,
+        background: nextFormData.background,
+        themeColor: nextFormData.themeColor,
+        primaryColor: nextFormData.primaryColor,
+        secondaryColor: nextFormData.secondaryColor,
+        portraitPrompts: nextFormData.portraitPrompts,
+      },
+      dialogStep,
+      lastAIResponse,
+      lastAIDetails,
+      taskIds: {
+        basicInfoTaskId: lastBasicTaskId,
+        portraitTaskId: lastPortraitTaskId,
+      },
+      updatedAt: Date.now(),
+    }),
+    [dialogStep, lastAIDetails, lastAIResponse, lastBasicTaskId, lastPortraitTaskId, projectId]
+  );
+
+  const persistCreateDraft = useCallback(
+    (nextFormData: CharacterFormData) => {
+      const draft = buildCreateDraft(nextFormData);
+      if (isCharacterCreateDraftMeaningful(draft)) {
+        saveCharacterCreateDraft(projectId, draft);
+      } else {
+        clearCharacterCreateDraft(projectId);
+      }
+    },
+    [buildCreateDraft, projectId]
+  );
+
+  const flushCreateDraft = useCallback(
+    (nextFormData?: CharacterFormData) => {
+      if (draftSaveTimerRef.current) {
+        clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
+      persistCreateDraft(nextFormData ?? formData);
+    },
+    [formData, persistCreateDraft]
+  );
+
+  const hydrateCreateDraftFromTasks = useCallback((draft: CharacterCreateDraft): CharacterCreateDraft => {
+    const store = useAIProgressStore.getState();
+    let changed = false;
+
+    let nextFormData = draft.formData;
+    let nextDialogStep = draft.dialogStep;
+    let nextLastAIResponse = draft.lastAIResponse;
+    let nextLastAIDetails = draft.lastAIDetails;
+
+    const basicTaskId = draft.taskIds.basicInfoTaskId;
+    if (
+      basicTaskId &&
+      (!nextFormData.name.trim() ||
+        !nextFormData.appearance.trim() ||
+        !nextFormData.personality.trim() ||
+        !nextFormData.background.trim())
+    ) {
+      const task = store.getTask(basicTaskId);
+      const content = task?.status === 'success' ? task.response?.content : null;
+      if (content) {
+        const parsed = parseFirstJSONObject(content);
+        if (parsed.ok) {
+          const name = pickString(parsed.value.name);
+          const appearance = pickString(parsed.value.appearance);
+          const personality = pickString(parsed.value.personality);
+          const background = pickString(parsed.value.background);
+
+          const merged: CharacterFormData = {
+            ...nextFormData,
+            name: nextFormData.name.trim() ? nextFormData.name : name || deriveNameFromBrief(nextFormData.briefDescription),
+            appearance: nextFormData.appearance.trim() ? nextFormData.appearance : appearance || nextFormData.appearance,
+            personality: nextFormData.personality.trim() ? nextFormData.personality : personality || nextFormData.personality,
+            background: nextFormData.background.trim() ? nextFormData.background : background || nextFormData.background,
+          };
+
+          if (merged.appearance.trim()) {
+            nextFormData = merged;
+            nextLastAIResponse = nextLastAIResponse || content;
+            changed = true;
+          }
+        } else {
+          nextLastAIDetails = nextLastAIDetails || `解析任务响应失败：${parsed.reason}`;
+          changed = true;
+        }
+      }
+    }
+
+    const portraitTaskId = draft.taskIds.portraitTaskId;
+    const hasPortraitPrompts =
+      Boolean(nextFormData.portraitPrompts) &&
+      Boolean(
+        nextFormData.portraitPrompts?.midjourney.trim() ||
+          nextFormData.portraitPrompts?.stableDiffusion.trim() ||
+          nextFormData.portraitPrompts?.general.trim()
+      );
+
+    if (portraitTaskId && !hasPortraitPrompts) {
+      const task = store.getTask(portraitTaskId);
+      const content = task?.status === 'success' ? task.response?.content : null;
+      if (content) {
+        const parsed = parseFirstJSONObject(content);
+        if (parsed.ok) {
+          const midjourney = pickString(parsed.value.midjourney);
+          const stableDiffusion = pickString(parsed.value.stableDiffusion);
+          const general = pickString(parsed.value.general);
+
+          if (midjourney || stableDiffusion || general) {
+            nextFormData = {
+              ...nextFormData,
+              portraitPrompts: {
+                midjourney: midjourney || '',
+                stableDiffusion: stableDiffusion || '',
+                general: general || '',
+              },
+            };
+            nextDialogStep = 'portrait';
+            nextLastAIResponse = nextLastAIResponse || content;
+            changed = true;
+          }
+        } else {
+          nextLastAIDetails = nextLastAIDetails || `解析任务响应失败：${parsed.reason}`;
+          changed = true;
+        }
+      }
+    }
+
+    if (!changed) return draft;
+
+    return {
+      ...draft,
+      formData: nextFormData,
+      dialogStep: nextDialogStep,
+      lastAIResponse: nextLastAIResponse,
+      lastAIDetails: nextLastAIDetails,
+      updatedAt: Date.now(),
+    };
+  }, []);
+
+  // 创建角色：弹窗打开时恢复草稿（关闭/切换后仍能回填）
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    if (editingCharacter) return;
+
+    const draft = loadCharacterCreateDraft(projectId);
+    if (draft) {
+      const hydrated = hydrateCreateDraftFromTasks(draft);
+      if (hydrated !== draft) {
+        saveCharacterCreateDraft(projectId, hydrated);
+      }
+
+      setFormData(hydrated.formData);
+      setDialogStep(hydrated.dialogStep);
+      setLastAIResponse(hydrated.lastAIResponse);
+      setLastAIDetails(hydrated.lastAIDetails);
+      setLastBasicTaskId(hydrated.taskIds.basicInfoTaskId);
+      setLastPortraitTaskId(hydrated.taskIds.portraitTaskId);
+      setError(null);
+      setCopiedFormat(null);
+      setDraftRestored(true);
+      return;
+    }
+
+    resetForm();
+  }, [editingCharacter, hydrateCreateDraftFromTasks, isDialogOpen, projectId, resetForm]);
+
+  // 创建角色：输入与生成过程自动保存草稿（防止关闭弹窗导致丢失）
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    if (editingCharacter) return;
+
+    if (draftSaveTimerRef.current) {
+      clearTimeout(draftSaveTimerRef.current);
+    }
+
+    draftSaveTimerRef.current = setTimeout(() => {
+      persistCreateDraft(formData);
+    }, 400);
+
+    return () => {
+      if (draftSaveTimerRef.current) {
+        clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
+    };
+  }, [isDialogOpen, editingCharacter, formData, persistCreateDraft]);
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      if (editingCharacter) {
+        resetForm();
+      } else {
+        flushCreateDraft();
+      }
+    }
+    setIsDialogOpen(nextOpen);
+  };
+
+  const handleOpenCreateDialog = () => {
+    setEditingCharacter(null);
+  };
+
+  const handleDiscardCreateDraft = async () => {
+    const ok = await confirm({
+      title: '丢弃角色草稿？',
+      description: '这会清空当前未保存的角色创建内容（包括 AI 已生成的回填结果）。',
+      confirmText: '丢弃草稿',
+      cancelText: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    clearCharacterCreateDraft(projectId);
+    setDraftRestored(false);
+    resetForm();
+  };
 
   const handleSubmit = () => {
     if (!formData.name.trim()) return;
@@ -274,6 +652,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         relationships: [],
         appearances: [],
       });
+      clearCharacterCreateDraft(projectId);
     }
 
     resetForm();
@@ -316,7 +695,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         portraitPrompts: character.portraitPrompts,
       });
       setEditingCharacter(characterId);
-      setDialogStep(character.portraitPrompts ? 'portrait' : 'basic');
+      const portraitTask = portraitTaskByCharacterId.get(characterId);
+      const isPortraitGenerating = portraitTask?.status === 'running' || portraitTask?.status === 'queued';
+      setDialogStep(isPortraitGenerating || character.portraitPrompts ? 'portrait' : 'basic');
       setIsDialogOpen(true);
     }
   };
@@ -333,24 +714,6 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     deleteCharacter(projectId, characterId);
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      briefDescription: '',
-      appearance: '',
-      personality: '',
-      background: '',
-      themeColor: '#6366f1',
-      primaryColor: '',
-      secondaryColor: '',
-      portraitPrompts: undefined,
-    });
-    setEditingCharacter(null);
-    setError(null);
-    setDialogStep('basic');
-    setCopiedFormat(null);
-  };
-
   // 复制提示词到剪贴板
   const handleCopyPrompt = async (format: string, text: string) => {
     try {
@@ -362,19 +725,44 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     }
   };
 
+  const abortTask = useCallback((taskId: string, reason: AbortReason) => {
+    taskAbortReasonsRef.current.set(taskId, reason);
+    taskAbortControllersRef.current.get(taskId)?.abort();
+  }, []);
+
+  const abortCurrentTask = useCallback(
+    (reason: AbortReason) => {
+      const taskId = currentTaskIdRef.current;
+      if (!taskId) return;
+      abortTask(taskId, reason);
+    },
+    [abortTask]
+  );
+
+  const getAbortReason = useCallback((taskId: string) => taskAbortReasonsRef.current.get(taskId), []);
+  const isAbortableTask = useCallback((taskId: string) => taskAbortControllersRef.current.has(taskId), []);
+
   // 一键生成基础信息（外观+性格+背景）- 集成进度追踪
   const handleGenerateBasicInfo = async () => {
     if (!config) {
       setError('请先配置AI服务');
       return;
     }
-    if (!formData.briefDescription.trim()) {
+
+    const briefDescription = formData.briefDescription.trim();
+    if (!briefDescription) {
       setError('请先输入角色简短描述');
       return;
     }
 
+    const baseFormData: CharacterFormData = { ...formData };
+    const portraitTaskIdForDraft = lastPortraitTaskId;
+    const targetCharacterId = editingCharacter;
+
     setGeneratingState('generating_basic');
     setError(null);
+    setLastAIResponse(null);
+    setLastAIDetails(null);
     
     // 创建AI任务并显示开发者面板
     const taskId = addTask({
@@ -389,19 +777,38 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     });
     setCurrentTaskId(taskId);
     showPanel();
+
+    if (!editingCharacter) {
+      setLastBasicTaskId(taskId);
+      const draft: CharacterCreateDraft = {
+        version: 1,
+        projectId,
+        formData: baseFormData,
+        dialogStep: 'basic',
+        lastAIResponse: null,
+        lastAIDetails: null,
+        taskIds: {
+          basicInfoTaskId: taskId,
+          portraitTaskId: portraitTaskIdForDraft,
+        },
+        updatedAt: Date.now(),
+      };
+      saveCharacterCreateDraft(projectId, draft);
+    }
+
     let logId = '';
+    let firstResponseContent = '';
+    let parseDetails: string | null = null;
 
     try {
       const client = AIFactory.createClient(config);
       const styleDesc = getStyleDescription();
       
-      const projectContext = currentProject 
-        ? `\n故事背景：${currentProject.summary}\n视觉风格：${styleDesc}\n主角特征：${currentProject.protagonist}`
-        : '';
+      const projectContext = buildProjectContext(currentProject, styleDesc);
 
       const prompt = `你是一位专业的角色设计师。请根据以下简短描述，生成完整的角色设定。
 
-角色简述：${formData.briefDescription}
+角色简述：${briefDescription}
 ${projectContext}
 
 请按以下JSON格式输出（不要有任何其他内容）：
@@ -419,7 +826,9 @@ ${projectContext}
         messages: [{ role: 'user', content: prompt }],
         context: {
           projectId,
-          briefDescription: formData.briefDescription,
+          characterId: targetCharacterId ?? undefined,
+          skipProgressBridge: true,
+          briefDescription,
           style: styleDesc,
         },
         config: {
@@ -431,42 +840,193 @@ ${projectContext}
       
       updateProgress(taskId, 30, '正在调用AI生成...');
 
-      const response = await client.chat([
-        { role: 'user', content: prompt }
-      ]);
+      const controller = new AbortController();
+      taskAbortControllersRef.current.set(taskId, controller);
+      taskAbortReasonsRef.current.delete(taskId);
+      const timeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 60_000);
+
+      let response;
+      try {
+        response = await client.chat([{ role: 'user', content: prompt }], { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+        if (taskAbortControllersRef.current.get(taskId) === controller) {
+          taskAbortControllersRef.current.delete(taskId);
+        }
+      }
       
       updateProgress(taskId, 80, '正在解析响应...');
+      firstResponseContent = response.content || '';
+      if (isMountedRef.current) setLastAIResponse(firstResponseContent);
 
-      // 解析JSON响应
-      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        setFormData(prev => ({
-          ...prev,
-          name: parsed.name || prev.name || formData.briefDescription.split(/[，,]/)[0],
-          appearance: parsed.appearance || '',
-          personality: parsed.personality || '',
-          background: parsed.background || '',
-        }));
-        
-        // 更新日志和任务状态
-        updateLogWithResponse(logId, { content: response.content });
-        completeTask(taskId, { content: response.content });
-      } else {
-        throw new Error('AI返回格式错误，请重试');
+      // 记录原始响应（即便格式不正确，也方便排查）
+      updateLogWithResponse(logId, { content: firstResponseContent });
+
+      const attempt1 = parseFirstJSONObject(firstResponseContent);
+      const buildNextBasicInfo = (value: Record<string, unknown>) => {
+        const nextName =
+          pickString(value.name) || baseFormData.name.trim() || deriveNameFromBrief(briefDescription);
+        const nextAppearance = pickString(value.appearance) || baseFormData.appearance.trim();
+        const nextPersonality = pickString(value.personality) || baseFormData.personality.trim();
+        const nextBackground = pickString(value.background) || baseFormData.background.trim();
+        return {
+          name: nextName,
+          appearance: nextAppearance,
+          personality: nextPersonality,
+          background: nextBackground,
+        };
+      };
+
+      const commitBasicInfo = (next: {
+        name: string;
+        appearance: string;
+        personality: string;
+        background: string;
+      }, raw: string) => {
+        if (!targetCharacterId) {
+          const merged: CharacterFormData = {
+            ...baseFormData,
+            ...next,
+          };
+          const draft: CharacterCreateDraft = {
+            version: 1,
+            projectId,
+            formData: merged,
+            dialogStep: 'basic',
+            lastAIResponse: raw,
+            lastAIDetails: parseDetails,
+            taskIds: {
+              basicInfoTaskId: taskId,
+              portraitTaskId: portraitTaskIdForDraft,
+            },
+            updatedAt: Date.now(),
+          };
+          saveCharacterCreateDraft(projectId, draft);
+        }
+
+        const { isDialogOpen: isDialogVisible, editingCharacter: activeEditingCharacter } = dialogContextRef.current;
+        const shouldUpdateUI =
+          isMountedRef.current &&
+          isDialogVisible &&
+          (targetCharacterId ? activeEditingCharacter === targetCharacterId : activeEditingCharacter === null);
+
+        if (shouldUpdateUI) {
+          setFormData((prev) => ({
+            ...prev,
+            ...next,
+          }));
+          setDialogStep('basic');
+        }
+        completeTask(taskId, { content: raw });
+      };
+
+      if (attempt1.ok) {
+        const next = buildNextBasicInfo(attempt1.value);
+        if (next.appearance) {
+          commitBasicInfo(next, firstResponseContent);
+          return;
+        }
       }
+
+      // 第二次：尝试让模型“修复成严格JSON”
+      updateTask(taskId, { retryCount: 1 });
+      updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
+      if (!attempt1.ok) {
+        parseDetails = [
+          `解析失败原因：${attempt1.reason}`,
+          attempt1.error instanceof Error ? `错误信息：${attempt1.error.message}` : null,
+          attempt1.candidates?.length ? `候选片段：${attempt1.candidates.join('\n---\n')}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n');
+      } else {
+        parseDetails = '解析成功，但缺少「外观描述」字段';
+      }
+      if (isMountedRef.current) setLastAIDetails(parseDetails);
+
+      const repairPrompt = `你的上一条回复没有按要求输出严格 JSON（或包含了额外文字/Markdown）。
+请把下面内容转换为严格 JSON 对象，并且【只输出 JSON】，不要输出任何解释或代码块标记。
+必须包含并填充以下字段（均为非空字符串）：name / appearance / personality / background。
+
+【待转换内容】
+${firstResponseContent}`;
+
+      const repairLogId = logAICall('character_basic_info', {
+        promptTemplate: repairPrompt,
+        filledPrompt: repairPrompt,
+        messages: [{ role: 'user', content: repairPrompt }],
+        context: {
+          projectId,
+          characterId: targetCharacterId ?? undefined,
+          skipProgressBridge: true,
+          briefDescription,
+          style: styleDesc,
+          attempt: 2,
+        },
+        config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
+      });
+
+      const repairController = new AbortController();
+      taskAbortControllersRef.current.set(taskId, repairController);
+      taskAbortReasonsRef.current.delete(taskId);
+      const repairTimeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 60_000);
+
+      let repairResponse;
+      try {
+        repairResponse = await client.chat([{ role: 'user', content: repairPrompt }], {
+          signal: repairController.signal,
+        });
+      } finally {
+        clearTimeout(repairTimeoutId);
+        if (taskAbortControllersRef.current.get(taskId) === repairController) {
+          taskAbortControllersRef.current.delete(taskId);
+        }
+      }
+
+      const repairedContent = repairResponse.content || '';
+      if (isMountedRef.current) setLastAIResponse(repairedContent);
+      updateLogWithResponse(repairLogId, { content: repairedContent });
+
+      const attempt2 = parseFirstJSONObject(repairedContent);
+      if (attempt2.ok) {
+        const next = buildNextBasicInfo(attempt2.value);
+        if (next.appearance) {
+          commitBasicInfo(next, repairedContent);
+          return;
+        }
+      }
+
+      throw new Error('AI 返回缺少「外观描述」，请点击“一键生成”重试或手动补齐。');
     } catch (err) {
       console.error('生成角色信息失败:', err);
+
+      if (isAbortError(err)) {
+        const reason = getAbortReason(taskId);
+        const msg =
+          reason === 'timeout'
+            ? '请求超时（60秒），请检查网络或更换模型后重试。'
+            : '已取消生成';
+        if (isMountedRef.current) setError(msg);
+        cancelTask(taskId);
+        if (logId) updateLogWithError(logId, msg);
+        return;
+      }
+
       const errorMsg = err instanceof Error ? err.message : '生成角色信息失败，请重试';
-      setError(errorMsg);
+      if (isMountedRef.current) setError(errorMsg);
       if (logId) updateLogWithError(logId, errorMsg);
       failTask(taskId, {
         message: errorMsg,
+        details: parseDetails || undefined,
         retryable: true,
       });
     } finally {
-      setGeneratingState('idle');
-      setCurrentTaskId(null);
+      taskAbortControllersRef.current.delete(taskId);
+      taskAbortReasonsRef.current.delete(taskId);
+      if (isMountedRef.current) {
+        setGeneratingState('idle');
+        setCurrentTaskId(null);
+      }
     }
   };
 
@@ -481,8 +1041,26 @@ ${projectContext}
       return;
     }
 
+    const baseFormData: CharacterFormData = { ...formData };
+    const basicTaskIdForDraft = lastBasicTaskId;
+    const targetCharacterId = editingCharacter;
+
+    const existingRunningTask = targetCharacterId
+      ? portraitTaskByCharacterId.get(targetCharacterId)
+      : draftPortraitTask;
+    if (existingRunningTask && (existingRunningTask.status === 'running' || existingRunningTask.status === 'queued')) {
+      toast({
+        title: '定妆照正在生成中',
+        description: '当前角色已有定妆照提示词生成任务在执行，可前往进度面板查看。',
+      });
+      showPanel();
+      return;
+    }
+
     setGeneratingState('generating_portrait');
     setError(null);
+    setLastAIResponse(null);
+    setLastAIDetails(null);
     
     // 创建AI任务并显示开发者面板
     const taskId = addTask({
@@ -493,10 +1071,30 @@ ${projectContext}
       priority: 'normal',
       progress: 0,
       projectId,
+      characterId: editingCharacter ?? undefined,
       maxRetries: 3,
     });
     setCurrentTaskId(taskId);
     showPanel();
+
+    if (!editingCharacter) {
+      setLastPortraitTaskId(taskId);
+      const draft: CharacterCreateDraft = {
+        version: 1,
+        projectId,
+        formData: baseFormData,
+        dialogStep: 'portrait',
+        lastAIResponse: null,
+        lastAIDetails: null,
+        taskIds: {
+          basicInfoTaskId: basicTaskIdForDraft,
+          portraitTaskId: taskId,
+        },
+        updatedAt: Date.now(),
+      };
+      saveCharacterCreateDraft(projectId, draft);
+    }
+
     let logId = '';
 
     try {
@@ -532,6 +1130,8 @@ ${styleDesc}
         messages: [{ role: 'user', content: prompt }],
         context: {
           projectId,
+          characterId: targetCharacterId ?? undefined,
+          skipProgressBridge: true,
           characterName: formData.name,
           appearance: formData.appearance,
           style: styleDesc,
@@ -545,48 +1145,390 @@ ${styleDesc}
       
       updateProgress(taskId, 30, '正在调用AI生成提示词...');
 
-      const response = await client.chat([
-        { role: 'user', content: prompt }
-      ]);
+      const controller = new AbortController();
+      taskAbortControllersRef.current.set(taskId, controller);
+      taskAbortReasonsRef.current.delete(taskId);
+      const timeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+
+      let response;
+      try {
+        response = await client.chat([{ role: 'user', content: prompt }], { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+        if (taskAbortControllersRef.current.get(taskId) === controller) {
+          taskAbortControllersRef.current.delete(taskId);
+        }
+      }
       
       updateProgress(taskId, 80, '正在解析响应...');
+      const firstResponseContent = response.content || '';
+      if (isMountedRef.current) setLastAIResponse(firstResponseContent);
 
-      // 解析JSON响应
-      const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        setFormData(prev => ({
-          ...prev,
-          portraitPrompts: {
-            midjourney: parsed.midjourney || '',
-            stableDiffusion: parsed.stableDiffusion || '',
-            general: parsed.general || '',
-          },
-        }));
-        setDialogStep('portrait');
-        
-        // 更新日志和任务状态
-        updateLogWithResponse(logId, { content: response.content });
-        completeTask(taskId, { content: response.content });
-      } else {
-        throw new Error('AI返回格式错误，请重试');
+      updateLogWithResponse(logId, { content: firstResponseContent });
+
+      const attempt1 = parseFirstJSONObject(firstResponseContent);
+      const buildNextPortraitPrompts = (value: Record<string, unknown>) => {
+        const mj = pickString(value.midjourney);
+        const sd = pickString(value.stableDiffusion);
+        const general = pickString(value.general);
+        return { midjourney: mj, stableDiffusion: sd, general };
+      };
+
+      const commitPortraitPrompts = (
+        next: { midjourney?: string; stableDiffusion?: string; general?: string },
+        raw: string
+      ) => {
+        const mergedPortraitPrompts: PortraitPrompts = {
+          midjourney: next.midjourney || baseFormData.portraitPrompts?.midjourney || '',
+          stableDiffusion: next.stableDiffusion || baseFormData.portraitPrompts?.stableDiffusion || '',
+          general: next.general || baseFormData.portraitPrompts?.general || '',
+        };
+
+        if (targetCharacterId) {
+          updateCharacter(projectId, targetCharacterId, { portraitPrompts: mergedPortraitPrompts });
+        } else {
+          const merged: CharacterFormData = {
+            ...baseFormData,
+            portraitPrompts: mergedPortraitPrompts,
+          };
+          const draft: CharacterCreateDraft = {
+            version: 1,
+            projectId,
+            formData: merged,
+            dialogStep: 'portrait',
+            lastAIResponse: raw,
+            lastAIDetails: null,
+            taskIds: {
+              basicInfoTaskId: basicTaskIdForDraft,
+              portraitTaskId: taskId,
+            },
+            updatedAt: Date.now(),
+          };
+          saveCharacterCreateDraft(projectId, draft);
+        }
+
+        const { isDialogOpen: isDialogVisible, editingCharacter: activeEditingCharacter } =
+          dialogContextRef.current;
+        const shouldUpdateUI =
+          isMountedRef.current &&
+          isDialogVisible &&
+          (targetCharacterId ? activeEditingCharacter === targetCharacterId : activeEditingCharacter === null);
+
+        if (shouldUpdateUI) {
+          setFormData((prev) => ({
+            ...prev,
+            portraitPrompts: {
+              midjourney: mergedPortraitPrompts.midjourney || prev.portraitPrompts?.midjourney || '',
+              stableDiffusion: mergedPortraitPrompts.stableDiffusion || prev.portraitPrompts?.stableDiffusion || '',
+              general: mergedPortraitPrompts.general || prev.portraitPrompts?.general || '',
+            },
+          }));
+          setDialogStep('portrait');
+        }
+        completeTask(taskId, { content: raw });
+      };
+
+      if (attempt1.ok) {
+        const next = buildNextPortraitPrompts(attempt1.value);
+        if (next.midjourney || next.stableDiffusion || next.general) {
+          commitPortraitPrompts(next, firstResponseContent);
+          return;
+        }
       }
+
+      updateTask(taskId, { retryCount: 1 });
+      updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
+
+      const repairPrompt = `你的上一条回复没有按要求输出严格 JSON（或包含了额外文字/Markdown）。
+请把下面内容转换为严格 JSON 对象，并且【只输出 JSON】，不要输出任何解释或代码块标记。
+必须包含并填充以下字段（均为非空字符串）：midjourney / stableDiffusion / general。
+
+【待转换内容】
+${firstResponseContent}`;
+
+      const repairLogId = logAICall('character_portrait', {
+        promptTemplate: repairPrompt,
+        filledPrompt: repairPrompt,
+        messages: [{ role: 'user', content: repairPrompt }],
+        context: {
+          projectId,
+          characterId: targetCharacterId ?? undefined,
+          skipProgressBridge: true,
+          characterName: formData.name,
+          attempt: 2,
+        },
+        config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
+      });
+
+      const repairController = new AbortController();
+      taskAbortControllersRef.current.set(taskId, repairController);
+      taskAbortReasonsRef.current.delete(taskId);
+      const repairTimeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+
+      let repairResponse;
+      try {
+        repairResponse = await client.chat([{ role: 'user', content: repairPrompt }], {
+          signal: repairController.signal,
+        });
+      } finally {
+        clearTimeout(repairTimeoutId);
+        if (taskAbortControllersRef.current.get(taskId) === repairController) {
+          taskAbortControllersRef.current.delete(taskId);
+        }
+      }
+
+      const repairedContent = repairResponse.content || '';
+      if (isMountedRef.current) setLastAIResponse(repairedContent);
+      updateLogWithResponse(repairLogId, { content: repairedContent });
+
+      const attempt2 = parseFirstJSONObject(repairedContent);
+      if (attempt2.ok) {
+        const next = buildNextPortraitPrompts(attempt2.value);
+        if (next.midjourney || next.stableDiffusion || next.general) {
+          commitPortraitPrompts(next, repairedContent);
+          return;
+        }
+      }
+
+      throw new Error('AI 返回缺少定妆照提示词内容，请重试。');
     } catch (err) {
       console.error('生成定妆照提示词失败:', err);
+      if (isAbortError(err)) {
+        const reason = getAbortReason(taskId);
+        const msg =
+          reason === 'timeout'
+            ? '请求超时（90秒），请检查网络或更换模型后重试。'
+            : '已取消生成';
+        if (isMountedRef.current) setError(msg);
+        cancelTask(taskId);
+        if (logId) updateLogWithError(logId, msg);
+        return;
+      }
+
       const errorMsg = err instanceof Error ? err.message : '生成定妆照提示词失败，请重试';
-      setError(errorMsg);
+      if (isMountedRef.current) setError(errorMsg);
       if (logId) updateLogWithError(logId, errorMsg);
       failTask(taskId, {
         message: errorMsg,
         retryable: true,
       });
     } finally {
-      setGeneratingState('idle');
-      setCurrentTaskId(null);
+      taskAbortControllersRef.current.delete(taskId);
+      taskAbortReasonsRef.current.delete(taskId);
+      if (isMountedRef.current) {
+        setGeneratingState('idle');
+        setCurrentTaskId(null);
+      }
     }
   };
 
   // 批量生成多个角色的定妆照提示词
+  const handleGeneratePortraitPromptsForCharacter = async (character: Character) => {
+    if (!config) {
+      toast({ title: '请先配置AI服务' });
+      return;
+    }
+
+    const appearance = character.appearance?.trim() || '';
+    if (!appearance) {
+      toast({ title: '缺少外观描述', description: '请先为角色补充外观描述后再生成定妆照提示词。' });
+      return;
+    }
+
+    const existingTask = portraitTaskByCharacterId.get(character.id);
+    if (existingTask && (existingTask.status === 'running' || existingTask.status === 'queued')) {
+      toast({ title: '定妆照正在生成中', description: '该角色已有生成任务在执行，可前往进度面板查看。' });
+      showPanel();
+      return;
+    }
+
+    const taskId = addTask({
+      type: 'character_portrait',
+      title: `生成定妆照: ${character.name || '未命名角色'}`,
+      description: `为角色 ${character.name || '未命名角色'} 生成MJ/SD/通用格式的定妆照提示词`,
+      status: 'running',
+      priority: 'normal',
+      progress: 0,
+      projectId,
+      characterId: character.id,
+      maxRetries: 3,
+    });
+    showPanel();
+
+    let logId = '';
+
+    try {
+      const client = AIFactory.createClient(config);
+      const styleDesc = getStyleDescription();
+
+      const prompt = `你是一位专业的AI绘图提示词专家。请根据以下角色信息，生成「角色定妆照」提示词。
+
+## 角色信息
+名称：${character.name}
+外观：${appearance}
+性格：${character.personality || '未设定'}
+
+## 画风要求
+${styleDesc}
+
+## 定妆照要求
+- 全身照，纯白背景
+- 突出角色外观特征、服装细节、表情神态
+- 适合作为角色参考图，保持角色一致性
+
+请按以下JSON格式输出三种格式的提示词（不要有任何其他内容）：
+{
+  \"midjourney\": \"Midjourney格式提示词（英文，包含画风、角色描述、全身照、白色背景、画质参数，末尾加 --ar 2:3 --v 6）\",
+  \"stableDiffusion\": \"Stable Diffusion格式提示词（英文，正向提示词，包含画风、角色描述、全身照、白色背景、画质词如masterpiece, best quality等）\",
+  \"general\": \"通用中文描述（可用于其他AI绘图工具，包含画风、完整角色描述、全身照、纯白背景）\"
+}`;
+
+      logId = logAICall('character_portrait', {
+        promptTemplate: prompt,
+        filledPrompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
+        context: {
+          projectId,
+          characterId: character.id,
+          skipProgressBridge: true,
+          characterName: character.name,
+          appearance,
+          style: styleDesc,
+        },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          profileId: activeProfileId || undefined,
+        },
+      });
+
+      updateProgress(taskId, 30, '正在调用AI生成提示词...');
+
+      const controller = new AbortController();
+      taskAbortControllersRef.current.set(taskId, controller);
+      taskAbortReasonsRef.current.delete(taskId);
+      const timeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+
+      let response;
+      try {
+        response = await client.chat([{ role: 'user', content: prompt }], { signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+        if (taskAbortControllersRef.current.get(taskId) === controller) {
+          taskAbortControllersRef.current.delete(taskId);
+        }
+      }
+
+      updateProgress(taskId, 80, '正在解析响应...');
+      const firstResponseContent = response.content || '';
+      updateLogWithResponse(logId, { content: firstResponseContent });
+
+      const buildNextPortraitPrompts = (value: Record<string, unknown>) => {
+        const mj = pickString(value.midjourney);
+        const sd = pickString(value.stableDiffusion);
+        const general = pickString(value.general);
+        return { midjourney: mj, stableDiffusion: sd, general };
+      };
+
+      const commit = (next: { midjourney?: string; stableDiffusion?: string; general?: string }, raw: string) => {
+        const mergedPortraitPrompts: PortraitPrompts = {
+          midjourney: next.midjourney || character.portraitPrompts?.midjourney || '',
+          stableDiffusion: next.stableDiffusion || character.portraitPrompts?.stableDiffusion || '',
+          general: next.general || character.portraitPrompts?.general || '',
+        };
+
+        updateCharacter(projectId, character.id, { portraitPrompts: mergedPortraitPrompts });
+        completeTask(taskId, { content: raw });
+      };
+
+      const attempt1 = parseFirstJSONObject(firstResponseContent);
+      if (attempt1.ok) {
+        const next = buildNextPortraitPrompts(attempt1.value);
+        if (next.midjourney || next.stableDiffusion || next.general) {
+          commit(next, firstResponseContent);
+          return;
+        }
+      }
+
+      updateTask(taskId, { retryCount: 1 });
+      updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
+
+      const repairPrompt = `你的上一条回复没有按要求输出严格 JSON（或包含了额外文字/Markdown）。
+请把下面内容转换为严格JSON对象，并且【只输出JSON】，不要输出任何解释或代码块标记。
+必须包含并填充以下字段（均为非空字符串）：midjourney / stableDiffusion / general。
+
+【待转换内容】
+${firstResponseContent}`;
+
+      const repairLogId = logAICall('character_portrait', {
+        promptTemplate: repairPrompt,
+        filledPrompt: repairPrompt,
+        messages: [{ role: 'user', content: repairPrompt }],
+        context: {
+          projectId,
+          characterId: character.id,
+          skipProgressBridge: true,
+          characterName: character.name,
+          attempt: 2,
+        },
+        config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
+      });
+
+      const repairController = new AbortController();
+      taskAbortControllersRef.current.set(taskId, repairController);
+      taskAbortReasonsRef.current.delete(taskId);
+      const repairTimeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+
+      let repairResponse;
+      try {
+        repairResponse = await client.chat([{ role: 'user', content: repairPrompt }], {
+          signal: repairController.signal,
+        });
+      } finally {
+        clearTimeout(repairTimeoutId);
+        if (taskAbortControllersRef.current.get(taskId) === repairController) {
+          taskAbortControllersRef.current.delete(taskId);
+        }
+      }
+
+      const repairedContent = repairResponse.content || '';
+      updateLogWithResponse(repairLogId, { content: repairedContent });
+
+      const attempt2 = parseFirstJSONObject(repairedContent);
+      if (attempt2.ok) {
+        const next = buildNextPortraitPrompts(attempt2.value);
+        if (next.midjourney || next.stableDiffusion || next.general) {
+          commit(next, repairedContent);
+          return;
+        }
+      }
+
+      throw new Error('AI 返回缺少定妆照提示词内容，请重试。');
+    } catch (err) {
+      console.error('生成定妆照提示词失败:', err);
+      if (isAbortError(err)) {
+        const reason = getAbortReason(taskId);
+        const msg =
+          reason === 'timeout'
+            ? '请求超时（90秒），请检查网络或更换模型后重试。'
+            : '已取消生成';
+        cancelTask(taskId);
+        if (logId) updateLogWithError(logId, msg);
+        return;
+      }
+
+      const errorMsg = err instanceof Error ? err.message : '生成定妆照提示词失败，请重试';
+      if (logId) updateLogWithError(logId, errorMsg);
+      failTask(taskId, {
+        message: errorMsg,
+        retryable: true,
+      });
+    } finally {
+      taskAbortControllersRef.current.delete(taskId);
+      taskAbortReasonsRef.current.delete(taskId);
+    }
+  };
+
   const handleBatchGeneratePortraits = useCallback(async (characterIds: string[]) => {
     if (!config) {
       setError('请先配置AI服务');
@@ -595,10 +1537,10 @@ ${styleDesc}
     
     const charactersToProcess = projectCharacters.filter(
       c => characterIds.includes(c.id) && c.appearance && !c.portraitPrompts
-    );
+    ).filter(c => !isInProgressTask(portraitTaskByCharacterId.get(c.id)));
     
     if (charactersToProcess.length === 0) {
-      setError('没有需要生成定妆照的角色');
+      setError('没有可生成的角色（可能已有任务进行中、缺少外观描述或已生成提示词）');
       return;
     }
     
@@ -635,6 +1577,7 @@ ${styleDesc}
         priority: 'normal',
         progress: 0,
         projectId,
+        characterId: character.id,
         maxRetries: 2,
       });
       let logId = '';
@@ -664,7 +1607,12 @@ ${styleDesc}
           promptTemplate: prompt,
           filledPrompt: prompt,
           messages: [{ role: 'user', content: prompt }],
-          context: { projectId, characterName: character.name },
+          context: {
+            projectId,
+            characterId: character.id,
+            skipProgressBridge: true,
+            characterName: character.name,
+          },
           config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
         });
         
@@ -674,26 +1622,25 @@ ${styleDesc}
         
         updateProgress(taskId, 80, '正在解析...');
         
-        const jsonMatch = response.content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          const prompts: PortraitPrompts = {
-            midjourney: parsed.midjourney || '',
-            stableDiffusion: parsed.stableDiffusion || '',
-            general: parsed.general || '',
-          };
-          
-          updateCharacter(projectId, character.id, { portraitPrompts: prompts });
-          updateLogWithResponse(logId, { content: response.content });
-          completeTask(taskId, { content: response.content });
-          
-          setBatchGeneration(prev => ({
-            ...prev,
-            completedIds: [...prev.completedIds, character.id],
-          }));
-        } else {
-          throw new Error('AI返回格式错误');
-        }
+         const parsedResult = parseFirstJSONObject(response.content || '');
+         if (parsedResult.ok) {
+           const prompts: PortraitPrompts = {
+             midjourney: pickString(parsedResult.value.midjourney) || '',
+             stableDiffusion: pickString(parsedResult.value.stableDiffusion) || '',
+             general: pickString(parsedResult.value.general) || '',
+           };
+           
+           updateCharacter(projectId, character.id, { portraitPrompts: prompts });
+           updateLogWithResponse(logId, { content: response.content });
+           completeTask(taskId, { content: response.content });
+           
+           setBatchGeneration(prev => ({
+             ...prev,
+             completedIds: [...prev.completedIds, character.id],
+           }));
+         } else {
+           throw new Error('AI返回格式错误');
+         }
       } catch (err) {
         console.error(`批量生成失败 [${character.name}]:`, err);
         failTask(taskId, {
@@ -717,20 +1664,21 @@ ${styleDesc}
       ...prev,
       isProcessing: false,
     }));
-  }, [config, projectCharacters, projectId, addTask, updateProgress, completeTask, failTask, updateCharacter, showPanel]);
+  }, [config, isInProgressTask, portraitTaskByCharacterId, projectCharacters, projectId, addTask, updateProgress, completeTask, failTask, updateCharacter, showPanel]);
 
   // 为所有缺少定妆照的角色批量生成
   const handleBatchGenerateAllMissingPortraits = useCallback(() => {
     const missingPortraitIds = projectCharacters
       .filter(c => c.appearance && !c.portraitPrompts)
+      .filter(c => !isInProgressTask(portraitTaskByCharacterId.get(c.id)))
       .map(c => c.id);
     
     if (missingPortraitIds.length > 0) {
       handleBatchGeneratePortraits(missingPortraitIds);
     } else {
-      setError('所有角色都已有定妆照提示词');
+      setError('没有可批量生成的角色（可能已全部生成或已有任务进行中）');
     }
-  }, [projectCharacters, handleBatchGeneratePortraits]);
+  }, [handleBatchGeneratePortraits, isInProgressTask, portraitTaskByCharacterId, projectCharacters]);
 
   return (
     <div className="space-y-6">
@@ -749,35 +1697,35 @@ ${styleDesc}
           </div>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm}>
+            <Button onClick={handleOpenCreateDialog}>
               <Plus className="h-4 w-4 mr-2" />
               添加角色
             </Button>
           </DialogTrigger>
           
-          {/* 批量生成定妆照按钮 */}
-          {projectCharacters.filter(c => c.appearance && !c.portraitPrompts).length > 0 && (
-            <Button
-              variant="outline"
-              onClick={handleBatchGenerateAllMissingPortraits}
-              disabled={batchGeneration.isProcessing || !config}
-              className="ml-2"
-            >
+           {/* 批量生成定妆照按钮 */}
+           {batchPortraitCandidates.length > 0 && (
+             <Button
+               variant="outline"
+               onClick={handleBatchGenerateAllMissingPortraits}
+               disabled={batchGeneration.isProcessing || !config}
+               className="ml-2"
+             >
               {batchGeneration.isProcessing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   批量生成中 ({batchGeneration.currentIndex}/{batchGeneration.totalCount})
                 </>
-              ) : (
-                <>
-                  <Camera className="h-4 w-4 mr-2" />
-                  批量生成定妆照 ({projectCharacters.filter(c => c.appearance && !c.portraitPrompts).length})
-                </>
-              )}
-            </Button>
-          )}
+               ) : (
+                 <>
+                   <Camera className="h-4 w-4 mr-2" />
+                   批量生成定妆照 ({batchPortraitCandidates.length})
+                 </>
+               )}
+             </Button>
+           )}
           <DialogContent className="max-w-2xl max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>
@@ -790,6 +1738,20 @@ ${styleDesc}
                 }
               </DialogDescription>
             </DialogHeader>
+
+            {!editingCharacter && draftRestored && (
+              <div className="mt-3 flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                <div className="text-muted-foreground">已恢复上次未完成的角色草稿（自动保存）</div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleDiscardCreateDraft()}
+                  disabled={generatingState !== 'idle'}
+                >
+                  丢弃草稿
+                </Button>
+              </div>
+            )}
 
             {/* 步骤指示器 */}
             <div className="flex items-center gap-2 mb-4">
@@ -819,6 +1781,7 @@ ${styleDesc}
                         }
                         placeholder="例如：李明，30岁退役特种兵，沉默寡言"
                         className="flex-1"
+                        disabled={generatingState === 'generating_basic'}
                       />
                       <Button
                         onClick={handleGenerateBasicInfo}
@@ -832,10 +1795,31 @@ ${styleDesc}
                         ) : (
                           <>
                             <Wand2 className="h-4 w-4 mr-2" />
-                            一键生成
+                           一键生成
                           </>
                         )}
                       </Button>
+                      {generatingState === 'generating_basic' && currentTaskId ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => abortCurrentTask('user')}
+                        >
+                          取消
+                        </Button>
+                      ) : null}
+                      {isDialogPortraitGenerating && dialogPortraitTask?.id && generatingState !== 'generating_portrait' ? (
+                        <Button variant="outline" size="lg" onClick={showPanel}>
+                          查看进度
+                        </Button>
+                      ) : null}
+                      {isDialogPortraitGenerating &&
+                      dialogPortraitTask?.id &&
+                      generatingState !== 'generating_portrait' &&
+                      isAbortableTask(dialogPortraitTask.id) ? (
+                        <Button variant="outline" size="lg" onClick={() => abortTask(dialogPortraitTask.id, 'user')}>
+                          取消
+                        </Button>
+                      ) : null}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       输入角色名称和特征，AI将自动生成完整的外观、性格和背景
@@ -843,12 +1827,40 @@ ${styleDesc}
                   </div>
 
                   {/* 错误提示 */}
-                  {error && (
-                    <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
-                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                      <span className="text-sm">{error}</span>
-                    </div>
-                  )}
+                   {error && (
+                     <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
+                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                       <div className="flex-1 min-w-0">
+                         <div className="text-sm">{error}</div>
+                         {(lastAIResponse || lastAIDetails) && (
+                           <div className="mt-1 flex flex-wrap gap-2">
+                             {lastAIResponse ? (
+                               <Button
+                                 type="button"
+                                 variant="ghost"
+                                 size="sm"
+                                 className="h-7 px-2 text-xs"
+                                 onClick={() => void navigator.clipboard.writeText(lastAIResponse)}
+                               >
+                                 复制AI原始返回
+                               </Button>
+                             ) : null}
+                             {lastAIDetails ? (
+                               <Button
+                                 type="button"
+                                 variant="ghost"
+                                 size="sm"
+                                 className="h-7 px-2 text-xs"
+                                 onClick={() => void navigator.clipboard.writeText(lastAIDetails)}
+                               >
+                                 复制解析详情
+                               </Button>
+                             ) : null}
+                           </div>
+                         )}
+                       </div>
+                     </div>
+                   )}
 
                   {/* 画风提示 */}
                   {currentProject?.style && (
@@ -1020,35 +2032,82 @@ ${styleDesc}
                   </div>
 
                   {/* 错误提示 */}
-                  {error && (
-                    <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
-                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                      <span className="text-sm">{error}</span>
-                    </div>
-                  )}
+                   {error && (
+                     <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
+                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                       <div className="flex-1 min-w-0">
+                         <div className="text-sm">{error}</div>
+                         {lastAIResponse ? (
+                           <div className="mt-1 flex flex-wrap gap-2">
+                             <Button
+                               type="button"
+                               variant="ghost"
+                               size="sm"
+                               className="h-7 px-2 text-xs"
+                               onClick={() => void navigator.clipboard.writeText(lastAIResponse)}
+                             >
+                               复制AI原始返回
+                             </Button>
+                           </div>
+                         ) : null}
+                       </div>
+                     </div>
+                   )}
 
                   {/* 生成定妆照按钮 */}
-                  {!formData.portraitPrompts && (
-                    <div className="flex justify-center py-4">
-                      <Button
-                        onClick={handleGeneratePortraitPrompts}
-                        disabled={generatingState !== 'idle'}
-                        size="lg"
-                      >
-                        {generatingState === 'generating_portrait' ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            正在生成定妆照提示词...
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="h-4 w-4 mr-2" />
-                            生成定妆照提示词
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
+                   {!formData.portraitPrompts && (
+                     <div className="space-y-3">
+                       <div className="flex justify-center py-2 gap-2">
+                         <Button
+                           onClick={handleGeneratePortraitPrompts}
+                           disabled={generatingState !== 'idle' || isDialogPortraitGenerating}
+                           size="lg"
+                         >
+                           {generatingState === 'generating_portrait' || isDialogPortraitGenerating ? (
+                             <>
+                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                               正在生成定妆照提示词...
+                             </>
+                           ) : (
+                             <>
+                               <Camera className="h-4 w-4 mr-2" />
+                               生成定妆照提示词
+                             </>
+                           )}
+                         </Button>
+                         {generatingState === 'generating_portrait' && currentTaskId ? (
+                           <Button variant="outline" size="lg" onClick={() => abortCurrentTask('user')}>
+                             取消
+                           </Button>
+                         ) : isDialogPortraitGenerating && dialogPortraitTask && isAbortableTask(dialogPortraitTask.id) ? (
+                           <Button
+                             variant="outline"
+                             size="lg"
+                             onClick={() => abortTask(dialogPortraitTask.id, 'user')}
+                           >
+                             取消
+                           </Button>
+                         ) : null}
+                         {isDialogPortraitGenerating ? (
+                           <Button variant="outline" size="lg" onClick={showPanel}>
+                             查看进度
+                           </Button>
+                         ) : null}
+                       </div>
+ 
+                       {isDialogPortraitGenerating && dialogPortraitTask ? (
+                         <div className="space-y-1">
+                           <div className="flex items-center justify-between text-xs">
+                             <span className="text-muted-foreground truncate">
+                               {dialogPortraitTask.currentStep || '正在生成定妆照提示词...'}
+                             </span>
+                             <span className="text-muted-foreground">{dialogPortraitTask.progress}%</span>
+                           </div>
+                           <Progress value={dialogPortraitTask.progress} className="h-1.5" />
+                         </div>
+                       ) : null}
+                     </div>
+                   )}
 
                   {/* 定妆照提示词展示 */}
                   {formData.portraitPrompts && (
@@ -1129,16 +2188,30 @@ ${styleDesc}
 
                   {/* 重新生成按钮 */}
                   {formData.portraitPrompts && (
-                    <div className="flex justify-center">
+                    <div className="flex justify-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={handleGeneratePortraitPrompts}
-                        disabled={generatingState !== 'idle'}
+                        disabled={generatingState !== 'idle' || isDialogPortraitGenerating}
                       >
                         <Sparkles className="h-3 w-3 mr-1" />
                         重新生成
                       </Button>
+                      {isDialogPortraitGenerating ? (
+                        <Button variant="outline" size="sm" onClick={showPanel}>
+                          查看进度
+                        </Button>
+                      ) : null}
+                      {isDialogPortraitGenerating && dialogPortraitTask && isAbortableTask(dialogPortraitTask.id) ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => abortTask(dialogPortraitTask.id, 'user')}
+                        >
+                          取消
+                        </Button>
+                      ) : null}
                     </div>
                   )}
 
@@ -1165,8 +2238,7 @@ ${styleDesc}
                 <Button
                   variant="outline"
                   onClick={() => {
-                    resetForm();
-                    setIsDialogOpen(false);
+                    handleDialogOpenChange(false);
                   }}
                 >
                   取消
@@ -1206,7 +2278,12 @@ ${styleDesc}
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projectCharacters.map((character) => (
+          {projectCharacters.map((character) => {
+            const portraitTask = portraitTaskByCharacterId.get(character.id);
+            const isPortraitGenerating = portraitTask?.status === 'running' || portraitTask?.status === 'queued';
+            const isPortraitError = portraitTask?.status === 'error';
+
+            return (
             <div
               key={character.id}
               className="rounded-lg border bg-card p-4 hover:shadow-md transition-shadow"
@@ -1280,7 +2357,40 @@ ${styleDesc}
                   </p>
                 </TabsContent>
                 <TabsContent value="portrait" className="mt-2">
-                  {character.portraitPrompts ? (
+                  {isPortraitGenerating ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground truncate">
+                          {portraitTask?.currentStep || '正在生成定妆照提示词...'}
+                        </span>
+                        <span className="text-muted-foreground">{portraitTask?.progress ?? 0}%</span>
+                      </div>
+                      <Progress value={portraitTask?.progress ?? 0} className="h-1.5" />
+                      <div className="flex gap-1">
+                        <Button variant="outline" size="sm" className="text-xs h-7" onClick={showPanel}>
+                          查看进度
+                        </Button>
+                        {portraitTask && isAbortableTask(portraitTask.id) ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => abortTask(portraitTask.id, 'user')}
+                          >
+                            取消
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => handleEdit(character.id)}
+                        >
+                          编辑
+                        </Button>
+                      </div>
+                    </div>
+                  ) : character.portraitPrompts ? (
                     <div className="space-y-2">
                       <div className="flex gap-1">
                         <Button
@@ -1289,7 +2399,11 @@ ${styleDesc}
                           className="text-xs h-7"
                           onClick={() => handleCopyPrompt('mj-' + character.id, character.portraitPrompts!.midjourney)}
                         >
-                          {copiedFormat === 'mj-' + character.id ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                          {copiedFormat === 'mj-' + character.id ? (
+                            <Check className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Copy className="h-3 w-3 mr-1" />
+                          )}
                           MJ
                         </Button>
                         <Button
@@ -1298,7 +2412,11 @@ ${styleDesc}
                           className="text-xs h-7"
                           onClick={() => handleCopyPrompt('sd-' + character.id, character.portraitPrompts!.stableDiffusion)}
                         >
-                          {copiedFormat === 'sd-' + character.id ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                          {copiedFormat === 'sd-' + character.id ? (
+                            <Check className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Copy className="h-3 w-3 mr-1" />
+                          )}
                           SD
                         </Button>
                         <Button
@@ -1307,21 +2425,66 @@ ${styleDesc}
                           className="text-xs h-7"
                           onClick={() => handleCopyPrompt('general-' + character.id, character.portraitPrompts!.general)}
                         >
-                          {copiedFormat === 'general-' + character.id ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                          {copiedFormat === 'general-' + character.id ? (
+                            <Check className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Copy className="h-3 w-3 mr-1" />
+                          )}
                           通用
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {character.portraitPrompts.general}
+                      <p className="text-xs text-muted-foreground line-clamp-2">{character.portraitPrompts.general}</p>
+                    </div>
+                  ) : isPortraitError ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-destructive line-clamp-2">
+                        {portraitTask?.error?.message || '定妆照提示词生成失败'}
                       </p>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => void handleGeneratePortraitPromptsForCharacter(character)}
+                          disabled={!config || !character.appearance}
+                        >
+                          重试生成
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => handleEdit(character.id)}
+                        >
+                          编辑
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      暂无定妆照提示词，<button
-                        className="text-primary hover:underline"
-                        onClick={() => handleEdit(character.id)}
-                      >点击编辑生成</button>
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        {character.appearance ? '暂无定妆照提示词' : '请先填写外观描述'}
+                      </p>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => void handleGeneratePortraitPromptsForCharacter(character)}
+                          disabled={!config || !character.appearance}
+                        >
+                          生成
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() => handleEdit(character.id)}
+                        >
+                          编辑
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </TabsContent>
               </Tabs>
@@ -1338,7 +2501,8 @@ ${styleDesc}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

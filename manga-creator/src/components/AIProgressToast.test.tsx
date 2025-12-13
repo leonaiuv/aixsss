@@ -172,6 +172,35 @@ describe('AIProgressToast', () => {
       
       expect(screen.getByText('网络错误')).toBeInTheDocument();
     });
+
+    it('should show cancelled message when task is cancelled', () => {
+      const { addTask, cancelTask } = useAIProgressStore.getState();
+      const taskId = addTask({
+        type: 'scene_description',
+        title: '生成场景锚点',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
+
+      render(<AIProgressToast />);
+
+      const state = useAIProgressStore.getState();
+      const task = state.getTask(taskId)!;
+
+      act(() => {
+        state.emit('task:started', task);
+      });
+
+      act(() => {
+        cancelTask(taskId);
+        const updatedTask = useAIProgressStore.getState().getTask(taskId)!;
+        useAIProgressStore.getState().emit('task:cancelled', updatedTask);
+      });
+
+      expect(screen.getByText('已取消')).toBeInTheDocument();
+    });
   });
 });
 

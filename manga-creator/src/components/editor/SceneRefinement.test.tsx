@@ -182,22 +182,51 @@ describe('SceneRefinement - 一键生成全部功能', () => {
   });
 
   it('应该成功执行一键生成全部流程', async () => {
+    const structuredSceneAnchor = [
+      'SCENE_ANCHOR_ZH: 废墟内部，昏暗的光线，破碎钢梁，斑驳混凝土墙',
+      'SCENE_ANCHOR_EN: inside the ruins, dim light, broken steel beams, stained concrete walls',
+      'LOCK_ZH: 1) 破碎钢梁; 2) 斑驳混凝土墙; 3) 地面积水反光',
+      'LOCK_EN: 1) broken steel beams; 2) stained concrete walls; 3) reflective puddles on the floor',
+      'AVOID_ZH: 不要人物，不要文字，不要水印',
+      'AVOID_EN: no people, no text, no watermark',
+    ].join('\n');
+
+    const structuredKeyframes = [
+      'KF0_ZH: 同一背景，主角站在左侧前景，身体微侧（定格）',
+      'KF0_EN: same background, protagonist standing left foreground, slightly turned (frozen moment)',
+      'KF1_ZH: 主角移到画面中央，抬手握住道具（定格）',
+      'KF1_EN: protagonist at center, hand holding the prop (frozen moment)',
+      'KF2_ZH: 主角退到右侧，低头凝视道具（定格）',
+      'KF2_EN: protagonist right side, head lowered, looking at the prop (frozen moment)',
+      'AVOID_ZH: 不要文字，不要水印',
+      'AVOID_EN: no text, no watermark',
+    ].join('\n');
+
+    const structuredMotion = [
+      'MOTION_SHORT_ZH: 从KF0到KF2，主角姿态与位置由左到右变化，手部由空到持物，视线转向道具。',
+      'MOTION_SHORT_EN: from KF0 to KF2, the protagonist shifts left to right, hands go from empty to holding an item, gaze turns to the prop.',
+      'MOTION_BEATS_ZH: 0-1s 左侧站立定格; 1-2s 移到中间抬手持物; 2-3s 退到右侧低头凝视',
+      'MOTION_BEATS_EN: 0-1s frozen standing on the left; 1-2s move to center and hold the item; 2-3s move to right and look down at it',
+      'CONSTRAINTS_ZH: 保持同一背景锚点不变，不要新增物体，不要文字水印',
+      'CONSTRAINTS_EN: keep the same background anchors, do not add new objects, no text, no watermark',
+    ].join('\n');
+
     // 模拟 AI 返回内容，并在每次调用后更新 scenesState
     mockChatFn
       .mockImplementationOnce(async () => {
-        scenesState[0].sceneDescription = '废墟场景，昏暗的光线';
+        scenesState[0].sceneDescription = structuredSceneAnchor;
         scenesState[0].status = 'scene_confirmed';
-        return { content: '废墟场景，昏暗的光线' };
+        return { content: structuredSceneAnchor };
       })
       .mockImplementationOnce(async () => {
-        scenesState[0].shotPrompt = 'A cyberpunk warrior standing in ruins, masterpiece, --ar 16:9';
+        scenesState[0].shotPrompt = structuredKeyframes;
         scenesState[0].status = 'keyframe_confirmed';
-        return { content: 'A cyberpunk warrior standing in ruins, masterpiece, --ar 16:9' };
+        return { content: structuredKeyframes };
       })
       .mockImplementationOnce(async () => {
-        scenesState[0].motionPrompt = 'character slowly turns head, camera zooms in';
+        scenesState[0].motionPrompt = structuredMotion;
         scenesState[0].status = 'motion_generating';
-        return { content: 'character slowly turns head, camera zooms in' };
+        return { content: structuredMotion };
       })
       .mockImplementationOnce(async () => {
         scenesState[0].dialogues = [{ id: 'dl1', type: 'dialogue', characterName: '主角', content: '这里是什么地方？', order: 1 }];
@@ -227,19 +256,19 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     
     // 验证第一次调用（场景锚点）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(1, 'test-project-1', 'scene-1', {
-      sceneDescription: '废墟场景，昏暗的光线',
+      sceneDescription: structuredSceneAnchor,
       status: 'scene_confirmed',
     });
 
     // 验证第二次调用（关键帧提示词）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(2, 'test-project-1', 'scene-1', {
-      shotPrompt: 'A cyberpunk warrior standing in ruins, masterpiece, --ar 16:9',
+      shotPrompt: structuredKeyframes,
       status: 'keyframe_confirmed',
     });
 
     // 验证第三次调用（时空/运动提示词）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(3, 'test-project-1', 'scene-1', {
-      motionPrompt: 'character slowly turns head, camera zooms in',
+      motionPrompt: structuredMotion,
       status: 'motion_generating',
     });
 
@@ -252,22 +281,115 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     );
   }, 15000);
 
+  it('当输出未包含标签时应自动纠偏再问一次', async () => {
+    const rawSceneAnchor = '废墟场景，昏暗的光线';
+
+    const fixedSceneAnchor = [
+      'SCENE_ANCHOR_ZH: 废墟内部，昏暗的光线，破碎钢梁，斑驳混凝土墙',
+      'SCENE_ANCHOR_EN: inside the ruins, dim light, broken steel beams, stained concrete walls',
+      'LOCK_ZH: 1) 破碎钢梁; 2) 斑驳混凝土墙; 3) 地面积水反光',
+      'LOCK_EN: 1) broken steel beams; 2) stained concrete walls; 3) reflective puddles on the floor',
+      'AVOID_ZH: 不要人物，不要文字，不要水印',
+      'AVOID_EN: no people, no text, no watermark',
+    ].join('\n');
+
+    const structuredKeyframes = [
+      'KF0_ZH: KF0 测试',
+      'KF0_EN: KF0 test',
+      'KF1_ZH: KF1 测试',
+      'KF1_EN: KF1 test',
+      'KF2_ZH: KF2 测试',
+      'KF2_EN: KF2 test',
+      'AVOID_ZH: 不要文字',
+      'AVOID_EN: no text',
+    ].join('\n');
+
+    const structuredMotion = [
+      'MOTION_SHORT_ZH: 测试变化',
+      'MOTION_SHORT_EN: test changes',
+      'MOTION_BEATS_ZH: 0-1s ...; 1-2s ...; 2-3s ...',
+      'MOTION_BEATS_EN: 0-1s ...; 1-2s ...; 2-3s ...',
+      'CONSTRAINTS_ZH: 测试约束',
+      'CONSTRAINTS_EN: test constraints',
+    ].join('\n');
+
+    mockChatFn
+      .mockImplementationOnce(async () => ({ content: rawSceneAnchor }))
+      // 自动纠偏的第二次请求
+      .mockImplementationOnce(async () => ({ content: fixedSceneAnchor }))
+      .mockImplementationOnce(async () => ({ content: structuredKeyframes }))
+      .mockImplementationOnce(async () => ({ content: structuredMotion }))
+      .mockImplementationOnce(async () => ({ content: '[对白] 主角: 这里是什么地方？' }));
+
+    render(<SceneRefinement />);
+
+    const generateAllBtn = screen.getByRole('button', { name: /一键生成全部/i });
+
+    await act(async () => {
+      await userEvent.click(generateAllBtn);
+    });
+
+    await waitFor(
+      () => {
+        expect(mockChatFn).toHaveBeenCalledTimes(5);
+      },
+      { timeout: 10000 }
+    );
+
+    expect(mockUpdateScene).toHaveBeenNthCalledWith(1, 'test-project-1', 'scene-1', {
+      sceneDescription: fixedSceneAnchor,
+      status: 'scene_confirmed',
+    });
+  });
+
   it('应该防止重复点击触发多次生成', async () => {
+    const structuredSceneAnchor = [
+      'SCENE_ANCHOR_ZH: 测试场景锚点',
+      'SCENE_ANCHOR_EN: test scene anchor',
+      'LOCK_ZH: 1) 测试锚点A; 2) 测试锚点B',
+      'LOCK_EN: 1) anchor A; 2) anchor B',
+      'AVOID_ZH: 不要人物',
+      'AVOID_EN: no people',
+    ].join('\n');
+
+    const structuredKeyframes = [
+      'KF0_ZH: KF0 测试',
+      'KF0_EN: KF0 test',
+      'KF1_ZH: KF1 测试',
+      'KF1_EN: KF1 test',
+      'KF2_ZH: KF2 测试',
+      'KF2_EN: KF2 test',
+      'AVOID_ZH: 不要文字',
+      'AVOID_EN: no text',
+    ].join('\n');
+
+    const structuredMotion = [
+      'MOTION_SHORT_ZH: 测试变化',
+      'MOTION_SHORT_EN: test changes',
+      'MOTION_BEATS_ZH: 0-1s ...; 1-2s ...; 2-3s ...',
+      'MOTION_BEATS_EN: 0-1s ...; 1-2s ...; 2-3s ...',
+      'CONSTRAINTS_ZH: 测试约束',
+      'CONSTRAINTS_EN: test constraints',
+    ].join('\n');
+
     let callCount = 0;
     mockChatFn.mockImplementation(async () => {
       callCount++;
       // 模拟每次调用更新状态
       if (callCount === 1) {
-        scenesState[0].sceneDescription = 'test1';
+        scenesState[0].sceneDescription = structuredSceneAnchor;
       } else if (callCount === 2) {
-        scenesState[0].shotPrompt = 'test2';
+        scenesState[0].shotPrompt = structuredKeyframes;
       } else if (callCount === 3) {
-        scenesState[0].motionPrompt = 'test3';
+        scenesState[0].motionPrompt = structuredMotion;
       } else if (callCount === 4) {
         scenesState[0].dialogues = [{ id: 'dl1', type: 'dialogue', characterName: '主角', content: '台词', order: 1 }];
       }
       await new Promise(resolve => setTimeout(resolve, 100));
-      return { content: `test${callCount}` };
+      if (callCount === 1) return { content: structuredSceneAnchor };
+      if (callCount === 2) return { content: structuredKeyframes };
+      if (callCount === 3) return { content: structuredMotion };
+      return { content: '[对白] 主角: 台词' };
     });
 
     render(<SceneRefinement />);
@@ -295,8 +417,16 @@ describe('SceneRefinement - 一键生成全部功能', () => {
   it('当某个阶段失败时应该显示错误信息', async () => {
     mockChatFn
       .mockImplementationOnce(async () => {
-        scenesState[0].sceneDescription = '场景锚点成功';
-        return { content: '场景锚点成功' };
+        const structuredSceneAnchor = [
+          'SCENE_ANCHOR_ZH: 测试场景锚点',
+          'SCENE_ANCHOR_EN: test scene anchor',
+          'LOCK_ZH: 1) 锚点A; 2) 锚点B',
+          'LOCK_EN: 1) anchor A; 2) anchor B',
+          'AVOID_ZH: 不要人物',
+          'AVOID_EN: no people',
+        ].join('\n');
+        scenesState[0].sceneDescription = structuredSceneAnchor;
+        return { content: structuredSceneAnchor };
       })
       .mockRejectedValueOnce(new Error('API调用失败'));
 
@@ -358,19 +488,50 @@ describe('SceneRefinement - 一键生成全部功能', () => {
   });
 
   it('应该正确读取每个阶段后的最新状态', async () => {
+    const structuredSceneAnchor = [
+      'SCENE_ANCHOR_ZH: 阶段1场景锚点',
+      'SCENE_ANCHOR_EN: stage 1 scene anchor',
+      'LOCK_ZH: 1) 锚点A; 2) 锚点B',
+      'LOCK_EN: 1) anchor A; 2) anchor B',
+      'AVOID_ZH: 不要人物',
+      'AVOID_EN: no people',
+    ].join('\n');
+
+    const structuredKeyframes = [
+      'KF0_ZH: 阶段2 KF0',
+      'KF0_EN: stage 2 KF0',
+      'KF1_ZH: 阶段2 KF1',
+      'KF1_EN: stage 2 KF1',
+      'KF2_ZH: 阶段2 KF2',
+      'KF2_EN: stage 2 KF2',
+      'AVOID_ZH: 不要文字',
+      'AVOID_EN: no text',
+    ].join('\n');
+
+    const structuredMotion = [
+      'MOTION_SHORT_ZH: 阶段3变化',
+      'MOTION_SHORT_EN: stage 3 changes',
+      'MOTION_BEATS_ZH: 0-1s ...; 1-2s ...; 2-3s ...',
+      'MOTION_BEATS_EN: 0-1s ...; 1-2s ...; 2-3s ...',
+      'CONSTRAINTS_ZH: 阶段3约束',
+      'CONSTRAINTS_EN: stage 3 constraints',
+    ].join('\n');
+
     let callCount = 0;
     
     mockChatFn.mockImplementation(async () => {
       callCount++;
       // 模拟状态更新
       if (callCount === 1) {
-        scenesState[0].sceneDescription = `阶段${callCount}的内容`;
+        scenesState[0].sceneDescription = structuredSceneAnchor;
       } else if (callCount === 2) {
-        scenesState[0].shotPrompt = `阶段${callCount}的内容`;
+        scenesState[0].shotPrompt = structuredKeyframes;
       } else if (callCount === 3) {
-        scenesState[0].motionPrompt = `阶段${callCount}的内容`;
+        scenesState[0].motionPrompt = structuredMotion;
       }
-      return { content: `阶段${callCount}的内容` };
+      if (callCount === 1) return { content: structuredSceneAnchor };
+      if (callCount === 2) return { content: structuredKeyframes };
+      return { content: structuredMotion };
     });
 
     render(<SceneRefinement />);

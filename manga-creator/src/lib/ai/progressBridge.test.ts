@@ -55,6 +55,7 @@ describe('progressBridge', () => {
       expect(mockSubscribe).toHaveBeenCalledWith('call:success', expect.any(Function));
       expect(mockSubscribe).toHaveBeenCalledWith('call:error', expect.any(Function));
       expect(mockSubscribe).toHaveBeenCalledWith('call:progress', expect.any(Function));
+      expect(mockSubscribe).toHaveBeenCalledWith('call:cancel', expect.any(Function));
     });
 
     it('should return cleanup function', () => {
@@ -199,6 +200,35 @@ describe('progressBridge', () => {
       const tasks = useAIProgressStore.getState().tasks;
       expect(tasks[0].progress).toBe(75);
       expect(tasks[0].currentStep).toBe('Processing response...');
+    });
+
+    it('should cancel task when call:cancel event is received', () => {
+      const mockSubscribe = vi.mocked(debugLogger.subscribeToAIEvents);
+      let startCallback: ((entry: any) => void) | null = null;
+      let cancelCallback: ((entry: any, extra?: any) => void) | null = null;
+
+      mockSubscribe.mockImplementation((event, callback) => {
+        if (event === 'call:start') {
+          startCallback = callback;
+        } else if (event === 'call:cancel') {
+          cancelCallback = callback;
+        }
+        return () => {};
+      });
+
+      cleanupBridge = initProgressBridge();
+
+      const mockEntry = {
+        id: 'log_123',
+        callType: 'scene_description',
+        context: {},
+      };
+
+      startCallback!(mockEntry);
+      cancelCallback!(mockEntry, { message: '用户取消' });
+
+      const tasks = useAIProgressStore.getState().tasks;
+      expect(tasks[0].status).toBe('cancelled');
     });
   });
 

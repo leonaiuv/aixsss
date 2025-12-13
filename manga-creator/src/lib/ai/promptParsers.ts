@@ -47,7 +47,7 @@ function parseLabeledBlocks(
   let currentLabel: string | null = null;
 
   for (const line of lines) {
-    const match = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+    const match = line.match(/^\s*([A-Za-z0-9_]+)\s*[:：]\s*(.*)$/);
     if (match) {
       const label = match[1].toUpperCase();
       if (allowedLabels.has(label)) {

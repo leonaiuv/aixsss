@@ -80,6 +80,21 @@ export function AIProgressToast() {
         return updated;
       });
     };
+
+    const handleTaskCancelled = (task: AITask) => {
+      setNotifications((prev) => {
+        const updated = prev.map((n) => {
+          if (n.id === task.id) {
+            const timer = setTimeout(() => {
+              setNotifications((current) => current.filter((item) => item.id !== task.id));
+            }, 3000);
+            return { ...n, task, autoHideTimer: timer };
+          }
+          return n;
+        });
+        return updated;
+      });
+    };
     
     const handleTaskProgress = (task: AITask) => {
       setNotifications(prev => 
@@ -91,12 +106,14 @@ export function AIProgressToast() {
     const unsub2 = subscribe('task:completed', handleTaskCompleted);
     const unsub3 = subscribe('task:failed', handleTaskFailed);
     const unsub4 = subscribe('task:progress', handleTaskProgress);
+    const unsub5 = subscribe('task:cancelled', handleTaskCancelled);
     
     return () => {
       unsub1();
       unsub2();
       unsub3();
       unsub4();
+      unsub5();
       // 清理所有定时器
       notifications.forEach(n => {
         if (n.autoHideTimer) clearTimeout(n.autoHideTimer);
@@ -172,6 +189,7 @@ function NotificationCard({
   const isRunning = task.status === 'running';
   const isSuccess = task.status === 'success';
   const isError = task.status === 'error';
+  const isCancelled = task.status === 'cancelled';
   
   return (
     <div 
@@ -182,12 +200,14 @@ function NotificationCard({
           ? 'bg-red-50/95 dark:bg-red-950/95 border-red-200 dark:border-red-800' 
           : isSuccess 
             ? 'bg-green-50/95 dark:bg-green-950/95 border-green-200 dark:border-green-800'
+            : isCancelled
+              ? 'bg-muted/60 border-muted-foreground/20'
             : 'bg-background/95 border-border'
         }
       `}
     >
       <div className="flex items-start gap-3">
-        {/* 状态图标 */}
+        {/* 状态图标 */} 
         <div className="flex-shrink-0 mt-0.5">
           {isRunning && (
             <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
@@ -197,6 +217,9 @@ function NotificationCard({
           )}
           {isError && (
             <XCircle className="h-5 w-5 text-red-500" />
+          )}
+          {isCancelled && (
+            <XCircle className="h-5 w-5 text-muted-foreground" />
           )}
         </div>
         
@@ -234,7 +257,7 @@ function NotificationCard({
             </div>
           )}
           
-          {/* 成功提示 */}
+          {/* 成功提示 */} 
           {isSuccess && (
             <p className="mt-1 text-xs text-green-600 dark:text-green-400">
               已完成
@@ -244,6 +267,10 @@ function NotificationCard({
                 </span>
               )}
             </p>
+          )}
+
+          {isCancelled && (
+            <p className="mt-1 text-xs text-muted-foreground">已取消</p>
           )}
           
           {/* 错误提示 */}
@@ -262,8 +289,8 @@ function NotificationCard({
         </div>
       </div>
       
-      {/* 查看详情按钮 */}
-      {(isSuccess || isError) && (
+      {/* 查看详情按钮 */} 
+      {(isSuccess || isError || isCancelled) && (
         <div className="mt-2 pt-2 border-t border-current/10">
           <button
             className="text-xs text-primary hover:underline"

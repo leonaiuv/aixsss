@@ -27,7 +27,8 @@ export type AILogEvent =
   | 'call:start'
   | 'call:success'
   | 'call:error'
-  | 'call:progress';
+  | 'call:progress'
+  | 'call:cancel';
 
 type EventCallback = (entry: AICallLogEntry, extra?: unknown) => void;
 const eventListeners: Map<AILogEvent, EventCallback[]> = new Map();
@@ -123,7 +124,7 @@ export interface AICallLogEntry {
   };
   
   // 状态
-  status: 'pending' | 'success' | 'error';
+  status: 'pending' | 'success' | 'error' | 'cancelled';
   error?: string;
 }
 
@@ -373,6 +374,24 @@ export function updateLogWithError(logId: string, error: string): void {
 }
 
 /**
+ * 标记日志为已取消
+ */
+export function updateLogWithCancelled(logId: string, reason: string = '用户取消'): void {
+  const entry = logHistory.find((e) => e.id === logId);
+  if (entry) {
+    entry.status = 'cancelled';
+    entry.error = reason;
+
+    if (debugEnabled) {
+      console.warn(`%c⏹️ AI调用已取消 [${entry.id}]`, 'color: #64748b; font-weight: bold;');
+      console.warn('取消原因:', reason);
+    }
+
+    emitAIEvent('call:cancel', entry, { message: reason });
+  }
+}
+
+/**
  * 更新日志进度
  */
 export function updateLogProgress(logId: string, progress: number, step?: string): void {
@@ -419,6 +438,7 @@ export function printLogSummary(): void {
   console.log(`总调用次数: ${logHistory.length}`);
   console.log(`成功: ${logHistory.filter(e => e.status === 'success').length}`);
   console.log(`失败: ${logHistory.filter(e => e.status === 'error').length}`);
+  console.log(`取消: ${logHistory.filter(e => e.status === 'cancelled').length}`);
   console.log(`进行中: ${logHistory.filter(e => e.status === 'pending').length}`);
 }
 

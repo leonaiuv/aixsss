@@ -23,6 +23,7 @@ import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
 import { logAICall, updateLogProgress, updateLogWithError, updateLogWithResponse } from '@/lib/ai/debugLogger';
 import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
+import { isStructuredOutput, mergeTokenUsage, requestFormatFix } from '@/lib/ai/outputFixer';
 import { migrateOldStyleToConfig } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
@@ -245,15 +246,46 @@ export function Editor() {
 
               updateLogProgress(logId, 30, '正在生成场景锚点...');
               const response = await client.chat([...messages]);
+
+              let finalContent = response.content.trim();
+              let mergedTokenUsage = response.tokenUsage;
+
+              updateLogProgress(logId, 60, '正在检查输出格式...');
+
+              const cancelRequestedNow = useAIProgressStore.getState().batchOperations.cancelRequested;
+              if (!cancelRequestedNow && finalContent && !isStructuredOutput('scene_anchor', finalContent)) {
+                updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
+                try {
+                  const fixed = await requestFormatFix({
+                    chat: (messages2, options) => client.chat(messages2, options),
+                    type: 'scene_anchor',
+                    raw: finalContent,
+                  });
+
+                  mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
+
+                  const fixedContent = fixed.content.trim();
+                  if (fixedContent && isStructuredOutput('scene_anchor', fixedContent)) {
+                    finalContent = fixedContent;
+                    updateLogProgress(logId, 75, '纠偏完成，正在保存结果...');
+                  } else {
+                    updateLogProgress(logId, 75, '纠偏未生效，正在保存原始输出...');
+                  }
+                } catch (fixError) {
+                  console.warn('场景锚点输出纠偏失败，已回退到原始输出:', fixError);
+                  updateLogProgress(logId, 75, '纠偏失败，正在保存原始输出...');
+                }
+              }
+
               updateLogProgress(logId, 80, '正在保存结果...');
 
               updateLogWithResponse(logId, {
-                content: response.content,
-                tokenUsage: response.tokenUsage,
+                content: finalContent,
+                tokenUsage: mergedTokenUsage,
               });
 
               updateScene(currentProject.id, sceneId, {
-                sceneDescription: response.content.trim(),
+                sceneDescription: finalContent,
                 status: 'scene_confirmed',
               });
             } catch (error) {
@@ -319,15 +351,46 @@ export function Editor() {
 
               updateLogProgress(logId, 30, '正在生成关键帧提示词...');
               const response = await client.chat([...messages]);
+
+              let finalContent = response.content.trim();
+              let mergedTokenUsage = response.tokenUsage;
+
+              updateLogProgress(logId, 60, '正在检查输出格式...');
+
+              const cancelRequestedNow = useAIProgressStore.getState().batchOperations.cancelRequested;
+              if (!cancelRequestedNow && finalContent && !isStructuredOutput('keyframe_prompt', finalContent)) {
+                updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
+                try {
+                  const fixed = await requestFormatFix({
+                    chat: (messages2, options) => client.chat(messages2, options),
+                    type: 'keyframe_prompt',
+                    raw: finalContent,
+                  });
+
+                  mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
+
+                  const fixedContent = fixed.content.trim();
+                  if (fixedContent && isStructuredOutput('keyframe_prompt', fixedContent)) {
+                    finalContent = fixedContent;
+                    updateLogProgress(logId, 75, '纠偏完成，正在保存结果...');
+                  } else {
+                    updateLogProgress(logId, 75, '纠偏未生效，正在保存原始输出...');
+                  }
+                } catch (fixError) {
+                  console.warn('关键帧输出纠偏失败，已回退到原始输出:', fixError);
+                  updateLogProgress(logId, 75, '纠偏失败，正在保存原始输出...');
+                }
+              }
+
               updateLogProgress(logId, 80, '正在保存结果...');
 
               updateLogWithResponse(logId, {
-                content: response.content,
-                tokenUsage: response.tokenUsage,
+                content: finalContent,
+                tokenUsage: mergedTokenUsage,
               });
 
               updateScene(currentProject.id, sceneId, {
-                shotPrompt: response.content.trim(),
+                shotPrompt: finalContent,
                 status: 'keyframe_confirmed',
               });
             } catch (error) {
@@ -391,15 +454,46 @@ export function Editor() {
 
                updateLogProgress(logId, 30, '正在生成时空/运动提示词...');
                const response = await client.chat([...messages]);
+
+               let finalContent = response.content.trim();
+               let mergedTokenUsage = response.tokenUsage;
+
+               updateLogProgress(logId, 60, '正在检查输出格式...');
+
+               const cancelRequestedNow = useAIProgressStore.getState().batchOperations.cancelRequested;
+               if (!cancelRequestedNow && finalContent && !isStructuredOutput('motion_prompt', finalContent)) {
+                 updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
+                 try {
+                   const fixed = await requestFormatFix({
+                     chat: (messages2, options) => client.chat(messages2, options),
+                     type: 'motion_prompt',
+                     raw: finalContent,
+                   });
+
+                   mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
+
+                   const fixedContent = fixed.content.trim();
+                   if (fixedContent && isStructuredOutput('motion_prompt', fixedContent)) {
+                     finalContent = fixedContent;
+                     updateLogProgress(logId, 75, '纠偏完成，正在保存结果...');
+                   } else {
+                     updateLogProgress(logId, 75, '纠偏未生效，正在保存原始输出...');
+                   }
+                 } catch (fixError) {
+                   console.warn('时空/运动提示词输出纠偏失败，已回退到原始输出:', fixError);
+                   updateLogProgress(logId, 75, '纠偏失败，正在保存原始输出...');
+                 }
+               }
+
                updateLogProgress(logId, 80, '正在保存结果...');
 
                updateLogWithResponse(logId, {
-                 content: response.content,
-                 tokenUsage: response.tokenUsage,
+                 content: finalContent,
+                 tokenUsage: mergedTokenUsage,
                });
 
                updateScene(currentProject.id, sceneId, {
-                 motionPrompt: response.content.trim(),
+                 motionPrompt: finalContent,
                  status: 'motion_generating',
                });
              } catch (error) {
@@ -815,7 +909,7 @@ ${dialoguesText}
 
       {/* 分镜对比对话框 */}
       <Dialog open={activeDialog === 'compare'} onOpenChange={(open) => setActiveDialog(open ? 'compare' : 'none')}>
-        <DialogContent className="max-w-5xl max-h-[80vh] overflow-auto">
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>分镜对比</DialogTitle>
           </DialogHeader>

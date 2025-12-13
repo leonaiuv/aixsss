@@ -6,6 +6,7 @@ import { useCharacterStore } from '@/stores/characterStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { AIFactory } from '@/lib/ai/factory';
+import { getCharacterCreateDraftKey } from '@/lib/characterCreateDraft';
 
 // Mock stores
 vi.mock('@/stores/characterStore');
@@ -396,6 +397,54 @@ describe('CharacterManager', () => {
       await waitFor(() => {
         const appearanceTextarea = screen.getByLabelText(/外观描述/) as HTMLTextAreaElement;
         expect(appearanceTextarea.value).toBe('身高180cm，黑色长发，锐利的眼神');
+      });
+    });
+
+    it('退出弹窗/离开页面后仍能恢复AI回填', async () => {
+      const user = userEvent.setup();
+      let resolveChat: ((value: { content: string }) => void) | undefined;
+
+      mockChat.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveChat = resolve as (value: { content: string }) => void;
+          })
+      );
+
+      const { unmount } = render(<CharacterManager projectId="test-project-1" />);
+
+      await user.click(screen.getByText('添加角色'));
+      await user.type(screen.getByLabelText(/角色简短描述/), '李明，30岁退役特种兵');
+
+      await user.click(screen.getByRole('button', { name: /一键生成/ }));
+      expect(resolveChat).toBeDefined();
+
+      // 模拟离开该功能（组件卸载）
+      unmount();
+
+      await act(async () => {
+        resolveChat?.({
+          content: JSON.stringify({
+            name: '李明',
+            appearance: '外观A',
+            personality: '性格A',
+            background: '背景A',
+          }),
+        });
+      });
+
+      await waitFor(() => {
+        const raw = localStorage.getItem(getCharacterCreateDraftKey('test-project-1'));
+        expect(raw).toBeTruthy();
+        expect(raw!).toContain('外观A');
+      });
+
+      render(<CharacterManager projectId="test-project-1" />);
+      await user.click(screen.getByText('添加角色'));
+
+      await waitFor(() => {
+        const appearanceTextarea = screen.getByLabelText(/外观描述/) as HTMLTextAreaElement;
+        expect(appearanceTextarea.value).toBe('外观A');
       });
     });
 

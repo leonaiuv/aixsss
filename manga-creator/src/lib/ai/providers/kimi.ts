@@ -1,4 +1,4 @@
-import { AIProvider, AIProviderConfig } from '../types';
+import { AIProvider, AIProviderConfig, type AIRequestOptions } from '../types';
 import { ChatMessage, AIResponse } from '@/types';
 
 const KIMI_BASE_URL = 'https://api.moonshot.cn';
@@ -6,7 +6,11 @@ const KIMI_BASE_URL = 'https://api.moonshot.cn';
 export class KimiProvider implements AIProvider {
   name = 'Kimi';
 
-  async chat(messages: ChatMessage[], config: AIProviderConfig): Promise<AIResponse> {
+  async chat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions
+  ): Promise<AIResponse> {
     const url = `${KIMI_BASE_URL}/v1/chat/completions`;
     const model = config.model || 'moonshot-v1-8k';
     const isThinkingModel = model.includes('thinking');
@@ -39,6 +43,7 @@ export class KimiProvider implements AIProvider {
         ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
         ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
@@ -62,7 +67,11 @@ export class KimiProvider implements AIProvider {
     };
   }
 
-  async *streamChat(messages: ChatMessage[], config: AIProviderConfig): AsyncGenerator<string> {
+  async *streamChat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions
+  ): AsyncGenerator<string> {
     const url = `${KIMI_BASE_URL}/v1/chat/completions`;
     const model = config.model || 'moonshot-v1-8k';
     const isThinkingModel = model.includes('thinking');
@@ -96,6 +105,7 @@ export class KimiProvider implements AIProvider {
         ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
         ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
       }),
+      signal: options?.signal,
     });
 
     if (!response.ok) {

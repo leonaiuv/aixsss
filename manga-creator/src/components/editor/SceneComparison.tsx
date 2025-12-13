@@ -81,7 +81,7 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
       <div className="flex items-center gap-4">
         <div className="flex-1">
           <Select value={leftSceneId} onValueChange={setLeftSceneId}>
-            <SelectTrigger>
+            <SelectTrigger className="h-11 text-base md:text-sm">
               <SelectValue placeholder="选择左侧分镜" />
             </SelectTrigger>
             <SelectContent>
@@ -100,7 +100,7 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
 
         <div className="flex-1">
           <Select value={rightSceneId} onValueChange={setRightSceneId}>
-            <SelectTrigger>
+            <SelectTrigger className="h-11 text-base md:text-sm">
               <SelectValue placeholder="选择右侧分镜" />
             </SelectTrigger>
             <SelectContent>
