@@ -276,6 +276,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const [lastPortraitTaskId, setLastPortraitTaskId] = useState<string | null>(null);
 
   useEffect(() => {
+    // 在 React Fast Refresh / 重新挂载场景下，effect 会被重新执行；
+    // 若仅在 cleanup 里置 false，会导致 isMountedRef 永远为 false，从而跳过 setState（表现为 UI 卡在“生成中”）。
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };
@@ -284,6 +287,24 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   useEffect(() => {
     currentTaskIdRef.current = currentTaskId;
   }, [currentTaskId]);
+
+  // 兜底：当任务已经结束（success/error/cancelled），但本地 UI 状态仍处于 generating_* 时，自动清理。
+  // 这样即便发生热更新导致 isMountedRef 失真，也不会出现“面板显示结束但按钮仍生成中”的卡死状态。
+  useEffect(() => {
+    if (!currentTaskId) return;
+
+    const task = tasks.find((t) => t.id === currentTaskId);
+    if (!task) {
+      setGeneratingState('idle');
+      setCurrentTaskId(null);
+      return;
+    }
+
+    if (task.status === 'running' || task.status === 'queued') return;
+
+    setGeneratingState('idle');
+    setCurrentTaskId(null);
+  }, [currentTaskId, tasks]);
 
   useEffect(() => {
     dialogContextRef.current = { isDialogOpen, editingCharacter };
