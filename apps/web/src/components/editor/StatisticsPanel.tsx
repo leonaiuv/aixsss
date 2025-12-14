@@ -45,12 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   AlertTriangle,
   BarChart3,
@@ -158,33 +153,22 @@ function getBadgeStyle(severity: 'ok' | 'warn' | 'danger'): {
   if (severity === 'danger') {
     return {
       label: '高风险',
-      className:
-        'text-red-700 bg-red-50 dark:text-red-200 dark:bg-red-950',
+      className: 'text-red-700 bg-red-50 dark:text-red-200 dark:bg-red-950',
     };
   }
   if (severity === 'warn') {
     return {
       label: '偏高',
-      className:
-        'text-amber-700 bg-amber-50 dark:text-amber-200 dark:bg-amber-950',
+      className: 'text-amber-700 bg-amber-50 dark:text-amber-200 dark:bg-amber-950',
     };
   }
   return {
     label: '良好',
-    className:
-      'text-green-700 bg-green-50 dark:text-green-200 dark:bg-green-950',
+    className: 'text-green-700 bg-green-50 dark:text-green-200 dark:bg-green-950',
   };
 }
 
-function MetricRow({
-  label,
-  value,
-  tooltip,
-}: {
-  label: string;
-  value: string;
-  tooltip?: string;
-}) {
+function MetricRow({ label, value, tooltip }: { label: string; value: string; tooltip?: string }) {
   return (
     <div className="flex items-center justify-between text-sm">
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -193,10 +177,7 @@ function MetricRow({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                <button type="button" className="text-muted-foreground hover:text-foreground">
                   <Info className="h-3.5 w-3.5" />
                 </button>
               </TooltipTrigger>
@@ -236,15 +217,11 @@ function StatCard({
       <div className="text-2xl font-bold">{value}</div>
       {subtitle || trend ? (
         <div className="flex items-center gap-2 mt-2">
-          {subtitle ? (
-            <span className="text-xs text-muted-foreground">{subtitle}</span>
-          ) : null}
+          {subtitle ? <span className="text-xs text-muted-foreground">{subtitle}</span> : null}
           {trend ? (
             <Badge
               variant="secondary"
-              className={
-                trendUp ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'
-              }
+              className={trendUp ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}
             >
               {trend}
             </Badge>
@@ -341,9 +318,7 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
   const aiTabAvailableCallTypes = useMemo(() => {
     const set = new Set<AIUsageEvent['callType']>();
     for (const e of aiTabBaseEvents) set.add(e.callType);
-    return [...set].sort((a, b) =>
-      getCallTypeLabel(a).localeCompare(getCallTypeLabel(b), 'zh-CN')
-    );
+    return [...set].sort((a, b) => getCallTypeLabel(a).localeCompare(getCallTypeLabel(b), 'zh-CN'));
   }, [aiTabBaseEvents]);
 
   const aiTabAvailableProviders = useMemo(() => {
@@ -371,27 +346,17 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
     });
   }, [aiCallTypeFilter, aiModelFilter, aiProviderFilter, aiStatusFilter, aiTabBaseEvents]);
 
-  const aiStats = useMemo(
-    () => calculateUsageStats(scopedAIEvents),
-    [scopedAIEvents]
-  );
+  const aiStats = useMemo(() => calculateUsageStats(scopedAIEvents), [scopedAIEvents]);
 
-  const aiTabStats = useMemo(
-    () => calculateUsageStats(aiTabFilteredEvents),
-    [aiTabFilteredEvents]
-  );
+  const aiTabStats = useMemo(() => calculateUsageStats(aiTabFilteredEvents), [aiTabFilteredEvents]);
 
   const costEstimateUSD = useMemo(() => {
-    const pricingByProfileId = Object.fromEntries(
-      pricingProfiles.map((p) => [p.id, p.pricing])
-    );
+    const pricingByProfileId = Object.fromEntries(pricingProfiles.map((p) => [p.id, p.pricing]));
     return estimateUsageCostUSD(scopedAIEvents, pricingByProfileId);
   }, [pricingProfiles, scopedAIEvents]);
 
   const aiTabCostEstimateUSD = useMemo(() => {
-    const pricingByProfileId = Object.fromEntries(
-      pricingProfiles.map((p) => [p.id, p.pricing])
-    );
+    const pricingByProfileId = Object.fromEntries(pricingProfiles.map((p) => [p.id, p.pricing]));
     return estimateUsageCostUSD(aiTabFilteredEvents, pricingByProfileId);
   }, [aiTabFilteredEvents, pricingProfiles]);
 
@@ -444,17 +409,12 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
 
     const now = Date.now();
     const rangeStart =
-      typeof aiFrom === 'number'
-        ? aiFrom
-        : Math.min(...aiTabBaseEvents.map((e) => e.completedAt));
+      typeof aiFrom === 'number' ? aiFrom : Math.min(...aiTabBaseEvents.map((e) => e.completedAt));
 
     const startBucketDate = getBucketDate(rangeStart, granularity);
     const endBucketDate = getBucketDate(now, granularity);
 
-    const map = new Map<
-      number,
-      { name: string; calls: number; errors: number; tokens: number }
-    >();
+    const map = new Map<number, { name: string; calls: number; errors: number; tokens: number }>();
 
     for (
       let cursor = startBucketDate;
@@ -481,9 +441,7 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
       if (event.tokenUsage) row.tokens += event.tokenUsage.total;
     }
 
-    return [...map.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, row]) => row);
+    return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([, row]) => row);
   }, [aiFrom, aiRange, aiTabBaseEvents, aiTabFilteredEvents]);
 
   const aiRecentErrors = useMemo(() => {
@@ -515,7 +473,7 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
         });
       }
     },
-    [toast]
+    [toast],
   );
 
   const buildAIUsageExportPayload = useCallback(() => {
@@ -556,9 +514,7 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
 
   const handleCopyAIUsage = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(
-        JSON.stringify(buildAIUsageExportPayload(), null, 2)
-      );
+      await navigator.clipboard.writeText(JSON.stringify(buildAIUsageExportPayload(), null, 2));
       toast({
         title: '已复制 AI 使用数据（JSON）',
         description: `${aiTabFilteredEvents.length} 条`,
@@ -678,7 +634,7 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
         window.location.reload();
       }, 800);
     },
-    [confirm, toast]
+    [confirm, toast],
   );
 
   const handleDeleteBackup = useCallback(
@@ -695,7 +651,7 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
       refreshStorage();
       toast({ title: '已删除备份' });
     },
-    [confirm, refreshStorage, toast]
+    [confirm, refreshStorage, toast],
   );
 
   const handleDeleteAllBackups = useCallback(async () => {
@@ -807,12 +763,36 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
               </div>
 
               <div className="space-y-3">
-                <MetricRow label="调用次数" value={aiStats.totalCalls.toLocaleString()} tooltip="按完成时刻计入（成功/失败各算一次）" />
-                <MetricRow label="成功率" value={`${aiStats.successRate.toFixed(1)}%`} tooltip="成功次数 /（成功+失败）" />
-                <MetricRow label="平均耗时" value={formatDuration(aiStats.avgDurationMs)} tooltip="口径：call:start 到 call:success/error 的时间差" />
-                <MetricRow label="P95 耗时" value={formatDuration(aiStats.p95DurationMs)} tooltip="95 分位耗时（更能反映尾部卡顿）" />
-                <MetricRow label="Token 覆盖率" value={`${aiStats.tokenizedCalls}/${aiStats.totalCalls}`} tooltip="部分供应商/模型不返回 tokenUsage；这里只统计有返回的调用" />
-                <MetricRow label="费用估算（$）" value={`$${costEstimateUSD.toFixed(4)}`} tooltip={`优先使用「配置档案」中填写的价格；未配置时按 $${DEFAULT_COST_PER_1K_TOKENS_USD}/1K tokens 粗略估算`} />
+                <MetricRow
+                  label="调用次数"
+                  value={aiStats.totalCalls.toLocaleString()}
+                  tooltip="按完成时刻计入（成功/失败各算一次）"
+                />
+                <MetricRow
+                  label="成功率"
+                  value={`${aiStats.successRate.toFixed(1)}%`}
+                  tooltip="成功次数 /（成功+失败）"
+                />
+                <MetricRow
+                  label="平均耗时"
+                  value={formatDuration(aiStats.avgDurationMs)}
+                  tooltip="口径：call:start 到 call:success/error 的时间差"
+                />
+                <MetricRow
+                  label="P95 耗时"
+                  value={formatDuration(aiStats.p95DurationMs)}
+                  tooltip="95 分位耗时（更能反映尾部卡顿）"
+                />
+                <MetricRow
+                  label="Token 覆盖率"
+                  value={`${aiStats.tokenizedCalls}/${aiStats.totalCalls}`}
+                  tooltip="部分供应商/模型不返回 tokenUsage；这里只统计有返回的调用"
+                />
+                <MetricRow
+                  label="费用估算（$）"
+                  value={`$${costEstimateUSD.toFixed(4)}`}
+                  tooltip={`优先使用「配置档案」中填写的价格；未配置时按 $${DEFAULT_COST_PER_1K_TOKENS_USD}/1K tokens 粗略估算`}
+                />
               </div>
 
               <div className="pt-4">
@@ -1009,93 +989,93 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
                 </Button>
               </div>
             </div>
-           </Card>
+          </Card>
 
-           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-             <StatCard
-               title="调用次数"
-               value={aiTabStats.totalCalls.toLocaleString()}
-               icon={<Zap className="h-4 w-4" />}
-               subtitle={`成功 ${aiTabStats.successCount} / 失败 ${aiTabStats.errorCount}`}
-             />
-             <StatCard
-               title="成功率"
-               value={`${aiTabStats.successRate.toFixed(1)}%`}
-               icon={<CheckCircle className="h-4 w-4" />}
-               subtitle={`Token 覆盖 ${aiTabStats.tokenizedCalls}/${aiTabStats.totalCalls}`}
-             />
-             <StatCard
-               title="平均耗时"
-               value={formatDuration(aiTabStats.avgDurationMs)}
-               icon={<Clock className="h-4 w-4" />}
-               subtitle={`P95 ${formatDuration(aiTabStats.p95DurationMs)}`}
-             />
-             <StatCard
-               title="费用估算（$）"
-               value={`$${aiTabCostEstimateUSD.toFixed(4)}`}
-               icon={<Zap className="h-4 w-4" />}
-               subtitle={`未配置价格时按 $${DEFAULT_COST_PER_1K_TOKENS_USD}/1K tokens（仅参考）`}
-             />
-           </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="调用次数"
+              value={aiTabStats.totalCalls.toLocaleString()}
+              icon={<Zap className="h-4 w-4" />}
+              subtitle={`成功 ${aiTabStats.successCount} / 失败 ${aiTabStats.errorCount}`}
+            />
+            <StatCard
+              title="成功率"
+              value={`${aiTabStats.successRate.toFixed(1)}%`}
+              icon={<CheckCircle className="h-4 w-4" />}
+              subtitle={`Token 覆盖 ${aiTabStats.tokenizedCalls}/${aiTabStats.totalCalls}`}
+            />
+            <StatCard
+              title="平均耗时"
+              value={formatDuration(aiTabStats.avgDurationMs)}
+              icon={<Clock className="h-4 w-4" />}
+              subtitle={`P95 ${formatDuration(aiTabStats.p95DurationMs)}`}
+            />
+            <StatCard
+              title="费用估算（$）"
+              value={`$${aiTabCostEstimateUSD.toFixed(4)}`}
+              icon={<Zap className="h-4 w-4" />}
+              subtitle={`未配置价格时按 $${DEFAULT_COST_PER_1K_TOKENS_USD}/1K tokens（仅参考）`}
+            />
+          </div>
 
-           <Card className="p-6">
-             <div className="flex items-center justify-between mb-4">
-               <h3 className="text-lg font-semibold">调用与 Token 趋势</h3>
-               <Badge variant="secondary">{aiTrendData.length} 点</Badge>
-             </div>
-             {aiTrendData.length === 0 ? (
-               <div className="text-sm text-muted-foreground">暂无数据</div>
-             ) : (
-               <ResponsiveContainer width="100%" height={320}>
-                 <LineChart data={aiTrendData}>
-                   <CartesianGrid strokeDasharray="3 3" />
-                   <XAxis dataKey="name" minTickGap={24} />
-                   <YAxis yAxisId="left" allowDecimals={false} />
-                   <YAxis
-                     yAxisId="right"
-                     orientation="right"
-                     tickFormatter={(v) =>
-                       typeof v === 'number' && v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`
-                     }
-                   />
-                   <RechartsTooltip />
-                   <Legend />
-                   <Line
-                     yAxisId="left"
-                     type="monotone"
-                     dataKey="calls"
-                     stroke="#6366f1"
-                     name="调用次数"
-                     dot={false}
-                     strokeWidth={2}
-                   />
-                   <Line
-                     yAxisId="left"
-                     type="monotone"
-                     dataKey="errors"
-                     stroke="#ef4444"
-                     name="错误次数"
-                     dot={false}
-                     strokeWidth={2}
-                   />
-                   <Line
-                     yAxisId="right"
-                     type="monotone"
-                     dataKey="tokens"
-                     stroke="#22c55e"
-                     name="Token（total）"
-                     dot={false}
-                     strokeWidth={2}
-                   />
-                 </LineChart>
-               </ResponsiveContainer>
-             )}
-             <p className="text-xs text-muted-foreground mt-2">
-               说明：Token 仅统计供应商返回的 tokenUsage.total；成本仍为参考估算。
-             </p>
-           </Card>
- 
-           <div className="grid gap-4 md:grid-cols-2">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">调用与 Token 趋势</h3>
+              <Badge variant="secondary">{aiTrendData.length} 点</Badge>
+            </div>
+            {aiTrendData.length === 0 ? (
+              <div className="text-sm text-muted-foreground">暂无数据</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={aiTrendData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" minTickGap={24} />
+                  <YAxis yAxisId="left" allowDecimals={false} />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tickFormatter={(v) =>
+                      typeof v === 'number' && v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`
+                    }
+                  />
+                  <RechartsTooltip />
+                  <Legend />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="calls"
+                    stroke="#6366f1"
+                    name="调用次数"
+                    dot={false}
+                    strokeWidth={2}
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="errors"
+                    stroke="#ef4444"
+                    name="错误次数"
+                    dot={false}
+                    strokeWidth={2}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="tokens"
+                    stroke="#22c55e"
+                    name="Token（total）"
+                    dot={false}
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              说明：Token 仅统计供应商返回的 tokenUsage.total；成本仍为参考估算。
+            </p>
+          </Card>
+
+          <div className="grid gap-4 md:grid-cols-2">
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4">调用类型分布</h3>
               <ResponsiveContainer width="100%" height={320}>
@@ -1130,7 +1110,7 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
               <p className="text-xs text-muted-foreground mt-2">
                 口径：耗时=call:start 到 call:success/error 的时间差。
               </p>
-           </Card>
+            </Card>
           </div>
 
           <Card className="p-6">
@@ -1156,9 +1136,13 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
                           >
                             错误
                           </Badge>
-                          <span className="text-sm font-medium">{getCallTypeLabel(e.callType)}</span>
+                          <span className="text-sm font-medium">
+                            {getCallTypeLabel(e.callType)}
+                          </span>
                           {typeof e.sceneOrder === 'number' ? (
-                            <span className="text-xs text-muted-foreground">分镜 #{e.sceneOrder}</span>
+                            <span className="text-xs text-muted-foreground">
+                              分镜 #{e.sceneOrder}
+                            </span>
                           ) : null}
                           <span className="text-xs text-muted-foreground">
                             {format(new Date(e.completedAt), 'MM-dd HH:mm', { locale: zhCN })}
@@ -1245,14 +1229,20 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
                 <span>本地备份</span>
               </h3>
               <p className="text-xs text-muted-foreground">
-                本地备份存储在 LocalStorage 中（创建很快，但会占用空间）。更推荐“导出数据”做文件备份。
+                本地备份存储在 LocalStorage
+                中（创建很快，但会占用空间）。更推荐“导出数据”做文件备份。
               </p>
 
               <div className="flex gap-2 mt-4">
                 <Button size="sm" onClick={handleCreateBackup}>
                   创建备份
                 </Button>
-                <Button size="sm" variant="outline" onClick={onOpenDataExport} disabled={!onOpenDataExport}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onOpenDataExport}
+                  disabled={!onOpenDataExport}
+                >
                   打开导出数据
                 </Button>
                 <Button
@@ -1305,10 +1295,18 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => handleRestoreBackup(b.id)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRestoreBackup(b.id)}
+                            >
                               恢复
                             </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleDeleteBackup(b.id)}>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteBackup(b.id)}
+                            >
                               删除
                             </Button>
                           </div>
@@ -1341,7 +1339,9 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
               ) : (
                 largestKeys.map((row) => (
                   <div key={row.key} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground truncate max-w-[70%] font-mono">{row.key}</span>
+                    <span className="text-muted-foreground truncate max-w-[70%] font-mono">
+                      {row.key}
+                    </span>
                     <span className="font-medium">{formatBytes(row.size)}</span>
                   </div>
                 ))

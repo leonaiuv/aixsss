@@ -9,7 +9,11 @@
 // ==========================================
 
 import { useState, useEffect } from 'react';
-import { useKeyboardShortcut, GLOBAL_SHORTCUTS, getPlatformShortcut } from '@/hooks/useKeyboardShortcut';
+import {
+  useKeyboardShortcut,
+  GLOBAL_SHORTCUTS,
+  getPlatformShortcut,
+} from '@/hooks/useKeyboardShortcut';
 import {
   Dialog,
   DialogContent,
@@ -135,9 +139,8 @@ export function KeyboardShortcuts() {
   const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
 
   // 监听快捷键提示 (Ctrl+/)
-  useKeyboardShortcut(
-    getPlatformShortcut(GLOBAL_SHORTCUTS.HELP, GLOBAL_SHORTCUTS.HELP_MAC),
-    () => setIsOpen(true)
+  useKeyboardShortcut(getPlatformShortcut(GLOBAL_SHORTCUTS.HELP, GLOBAL_SHORTCUTS.HELP_MAC), () =>
+    setIsOpen(true),
   );
 
   // 录制快捷键
@@ -146,14 +149,14 @@ export function KeyboardShortcuts() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
-      
+
       const key = e.key === ' ' ? 'Space' : e.key;
       const modifiers = [];
-      
+
       if (e.ctrlKey || e.metaKey) modifiers.push('Ctrl');
       if (e.shiftKey) modifiers.push('Shift');
       if (e.altKey) modifiers.push('Alt');
-      
+
       // 只记录非修饰键
       if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
         setRecordedKeys([...modifiers, key]);
@@ -173,9 +176,7 @@ export function KeyboardShortcuts() {
   const saveShortcut = () => {
     if (editingShortcut && recordedKeys.length > 0) {
       setShortcuts((prev) =>
-        prev.map((s) =>
-          s.id === editingShortcut ? { ...s, keys: recordedKeys } : s
-        )
+        prev.map((s) => (s.id === editingShortcut ? { ...s, keys: recordedKeys } : s)),
       );
     }
     setEditingShortcut(null);
@@ -191,7 +192,7 @@ export function KeyboardShortcuts() {
 
   const toggleShortcut = (shortcutId: string) => {
     setShortcuts((prev) =>
-      prev.map((s) => (s.id === shortcutId ? { ...s, enabled: !s.enabled } : s))
+      prev.map((s) => (s.id === shortcutId ? { ...s, enabled: !s.enabled } : s)),
     );
   };
 
@@ -200,13 +201,16 @@ export function KeyboardShortcuts() {
   };
 
   // 按类别分组
-  const groupedShortcuts = shortcuts.reduce((acc, shortcut) => {
-    if (!acc[shortcut.category]) {
-      acc[shortcut.category] = [];
-    }
-    acc[shortcut.category].push(shortcut);
-    return acc;
-  }, {} as Record<string, ShortcutConfig[]>);
+  const groupedShortcuts = shortcuts.reduce(
+    (acc, shortcut) => {
+      if (!acc[shortcut.category]) {
+        acc[shortcut.category] = [];
+      }
+      acc[shortcut.category].push(shortcut);
+      return acc;
+    },
+    {} as Record<string, ShortcutConfig[]>,
+  );
 
   const categoryNames = {
     navigation: '导航',
@@ -228,9 +232,7 @@ export function KeyboardShortcuts() {
             <Keyboard className="h-5 w-5" />
             键盘快捷键
           </DialogTitle>
-          <DialogDescription>
-            查看和自定义键盘快捷键，按 Ctrl+/ 随时打开此面板
-          </DialogDescription>
+          <DialogDescription>查看和自定义键盘快捷键，按 Ctrl+/ 随时打开此面板</DialogDescription>
         </DialogHeader>
 
         <div className="flex justify-end gap-2 mb-4">
@@ -261,9 +263,7 @@ export function KeyboardShortcuts() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {shortcut.description}
-                        </p>
+                        <p className="text-sm text-muted-foreground">{shortcut.description}</p>
                       </div>
 
                       <div className="flex items-center gap-3 ml-4">
@@ -273,11 +273,7 @@ export function KeyboardShortcuts() {
                             ? recordedKeys
                             : shortcut.keys
                           ).map((key, index) => (
-                            <Badge
-                              key={index}
-                              variant="outline"
-                              className="font-mono text-xs px-2"
-                            >
+                            <Badge key={index} variant="outline" className="font-mono text-xs px-2">
                               {key}
                             </Badge>
                           ))}
@@ -294,11 +290,7 @@ export function KeyboardShortcuts() {
                             >
                               保存
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={cancelRecording}
-                            >
+                            <Button variant="ghost" size="sm" onClick={cancelRecording}>
                               取消
                             </Button>
                           </div>

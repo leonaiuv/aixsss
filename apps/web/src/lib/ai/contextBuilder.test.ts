@@ -51,7 +51,8 @@ describe('上下文构建器', () => {
     technique: 'flat color blocking, sharp outlines',
     colorPalette: 'vibrant saturated colors',
     culturalFeature: 'Japanese animation aesthetics',
-    fullPrompt: 'anime style, cel shaded, clean lineart, flat color blocking, sharp outlines, vibrant saturated colors, Japanese animation aesthetics',
+    fullPrompt:
+      'anime style, cel shaded, clean lineart, flat color blocking, sharp outlines, vibrant saturated colors, Japanese animation aesthetics',
   };
 
   const mockWorldViewElements: WorldViewElement[] = [

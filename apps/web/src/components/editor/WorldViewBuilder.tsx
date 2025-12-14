@@ -8,26 +8,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import {
-  Globe,
-  Plus,
-  Trash2,
-  Sparkles,
-  Edit2,
-  Check,
-  X,
-  Loader2,
-  Settings2
-} from 'lucide-react';
+import { Globe, Plus, Trash2, Sparkles, Edit2, Check, X, Loader2, Settings2 } from 'lucide-react';
 import { WorldViewElement } from '@/types';
 import { AIFactory } from '@/lib/ai/factory';
 import {
   getInjectionSettings,
   saveInjectionSettings,
-  WorldViewInjectionSettings
+  WorldViewInjectionSettings,
 } from '@/lib/ai/worldViewInjection';
 import { useConfirm } from '@/hooks/use-confirm';
 
@@ -42,11 +38,19 @@ const ELEMENT_TYPES = [
 
 export function WorldViewBuilder() {
   const { currentProject } = useProjectStore();
-  const { elements, loadElements, addElement, updateElement, deleteElement, currentElementId, setCurrentElement } = useWorldViewStore();
+  const {
+    elements,
+    loadElements,
+    addElement,
+    updateElement,
+    deleteElement,
+    currentElementId,
+    setCurrentElement,
+  } = useWorldViewStore();
   const { scenes, loadScenes, updateScene } = useStoryboardStore();
   const { config } = useConfigStore();
   const { confirm, ConfirmDialog } = useConfirm();
-  
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -78,7 +82,8 @@ export function WorldViewBuilder() {
     if (!currentProject) return;
 
     const affectedScenes = scenes.filter(
-      (s) => s.projectId === currentProject.id && s.status !== 'pending' && s.status !== 'needs_update',
+      (s) =>
+        s.projectId === currentProject.id && s.status !== 'pending' && s.status !== 'needs_update',
     );
 
     if (affectedScenes.length === 0) return;
@@ -99,7 +104,7 @@ export function WorldViewBuilder() {
 
   useEffect(() => {
     if (currentElementId) {
-      const element = elements.find(e => e.id === currentElementId);
+      const element = elements.find((e) => e.id === currentElementId);
       if (element) {
         setFormData({
           type: element.type,
@@ -114,7 +119,7 @@ export function WorldViewBuilder() {
     return null;
   }
 
-  const currentElement = elements.find(e => e.id === currentElementId);
+  const currentElement = elements.find((e) => e.id === currentElementId);
 
   // AI生成世界观要素
   const handleGenerate = async () => {
@@ -124,13 +129,15 @@ export function WorldViewBuilder() {
     try {
       const client = AIFactory.createClient(config);
       const styleFullPrompt =
-        (typeof currentProject.artStyleConfig?.fullPrompt === 'string' ? currentProject.artStyleConfig.fullPrompt : '') || '';
+        (typeof currentProject.artStyleConfig?.fullPrompt === 'string'
+          ? currentProject.artStyleConfig.fullPrompt
+          : '') || '';
 
       const existingContext = elements
         .filter((e) => e.projectId === currentProject.id)
         .map((e) => `- [${e.type}] ${e.title}：${(e.content || '').trim().slice(0, 80)}`)
         .join('\n');
-      
+
       const typeLabels: Record<string, string> = {
         era: '时代背景',
         geography: '地理环境',
@@ -156,11 +163,9 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
 
 请直接输出设定内容：`;
 
-      const response = await client.chat([
-        { role: 'user', content: prompt }
-      ]);
+      const response = await client.chat([{ role: 'user', content: prompt }]);
 
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         content: response.content.trim(),
       }));
@@ -266,15 +271,13 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
             {elements.length === 0 ? (
               <div className="text-center py-12">
                 <Globe className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground mb-4">
-                  还没有世界观要素，开始构建吧
-                </p>
+                <p className="text-muted-foreground mb-4">还没有世界观要素，开始构建吧</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
                 {elements.map((element) => {
-                  const type = ELEMENT_TYPES.find(t => t.value === element.type);
-                  
+                  const type = ELEMENT_TYPES.find((t) => t.value === element.type);
+
                   return (
                     <Card
                       key={element.id}
@@ -329,7 +332,7 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
               <Card className="p-6 bg-muted/30 mt-6">
                 <h3 className="font-semibold mb-2 flex items-center gap-2">
                   <span className="text-2xl">
-                    {ELEMENT_TYPES.find(t => t.value === currentElement.type)?.icon}
+                    {ELEMENT_TYPES.find((t) => t.value === currentElement.type)?.icon}
                   </span>
                   {currentElement.title}
                 </h3>
@@ -344,7 +347,9 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
                 <Label htmlFor="element-type">要素类型</Label>
                 <Select
                   value={formData.type}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, type: value as WorldViewElement['type'] }))}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, type: value as WorldViewElement['type'] }))
+                  }
                 >
                   <SelectTrigger id="element-type">
                     <SelectValue />
@@ -371,7 +376,7 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
                   id="element-title"
                   placeholder="如：赛博都市、古代王国、星际联邦..."
                   value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
                 />
               </div>
 
@@ -402,7 +407,7 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
                   id="element-content"
                   placeholder="详细描述这个世界观要素..."
                   value={formData.content}
-                  onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
                   className="min-h-[200px] resize-none"
                 />
               </div>
@@ -438,12 +443,14 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
               <p className="text-sm text-muted-foreground mb-6">
                 控制世界观要素在AI生成过程中的注入时机
               </p>
-              
+
               <div className="space-y-6">
                 {/* 总开关 */}
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <div className="space-y-0.5">
-                    <Label htmlFor="injection-enabled" className="font-medium">启用世界观注入</Label>
+                    <Label htmlFor="injection-enabled" className="font-medium">
+                      启用世界观注入
+                    </Label>
                     <p className="text-sm text-muted-foreground">
                       开启后，世界观要素将自动注入到AI提示词中
                     </p>
@@ -456,47 +463,59 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
                 </div>
 
                 {/* 分镜列表生成时注入 */}
-                <div className={`flex items-center justify-between p-4 rounded-lg border ${
-                  injectionSettings.enabled ? '' : 'opacity-50'
-                }`}>
+                <div
+                  className={`flex items-center justify-between p-4 rounded-lg border ${
+                    injectionSettings.enabled ? '' : 'opacity-50'
+                  }`}
+                >
                   <div className="space-y-0.5">
-                    <Label htmlFor="inject-scene-list" className="font-medium">分镜列表生成时注入</Label>
-                    <p className="text-sm text-muted-foreground">
-                      在生成分镜列表时考虑世界观设定
-                    </p>
+                    <Label htmlFor="inject-scene-list" className="font-medium">
+                      分镜列表生成时注入
+                    </Label>
+                    <p className="text-sm text-muted-foreground">在生成分镜列表时考虑世界观设定</p>
                   </div>
                   <Switch
                     id="inject-scene-list"
                     checked={injectionSettings.injectAtSceneList}
-                    onCheckedChange={(checked) => handleInjectionSettingChange('injectAtSceneList', checked)}
+                    onCheckedChange={(checked) =>
+                      handleInjectionSettingChange('injectAtSceneList', checked)
+                    }
                     disabled={!injectionSettings.enabled}
                   />
                 </div>
 
                 {/* 场景锚点生成时注入 */}
-                <div className={`flex items-center justify-between p-4 rounded-lg border ${
-                  injectionSettings.enabled ? '' : 'opacity-50'
-                }`}>
+                <div
+                  className={`flex items-center justify-between p-4 rounded-lg border ${
+                    injectionSettings.enabled ? '' : 'opacity-50'
+                  }`}
+                >
                   <div className="space-y-0.5">
-                    <Label htmlFor="inject-scene-desc" className="font-medium">场景锚点生成时注入</Label>
-                    <p className="text-sm text-muted-foreground">
-                      在生成场景锚点时考虑世界观设定
-                    </p>
+                    <Label htmlFor="inject-scene-desc" className="font-medium">
+                      场景锚点生成时注入
+                    </Label>
+                    <p className="text-sm text-muted-foreground">在生成场景锚点时考虑世界观设定</p>
                   </div>
                   <Switch
                     id="inject-scene-desc"
                     checked={injectionSettings.injectAtSceneDescription}
-                    onCheckedChange={(checked) => handleInjectionSettingChange('injectAtSceneDescription', checked)}
+                    onCheckedChange={(checked) =>
+                      handleInjectionSettingChange('injectAtSceneDescription', checked)
+                    }
                     disabled={!injectionSettings.enabled}
                   />
                 </div>
 
                 {/* 角色设定生成时注入 */}
-                <div className={`flex items-center justify-between p-4 rounded-lg border ${
-                  injectionSettings.enabled ? '' : 'opacity-50'
-                }`}>
+                <div
+                  className={`flex items-center justify-between p-4 rounded-lg border ${
+                    injectionSettings.enabled ? '' : 'opacity-50'
+                  }`}
+                >
                   <div className="space-y-0.5">
-                    <Label htmlFor="inject-character" className="font-medium">角色设定生成时注入</Label>
+                    <Label htmlFor="inject-character" className="font-medium">
+                      角色设定生成时注入
+                    </Label>
                     <p className="text-sm text-muted-foreground">
                       在“角色管理 → 一键生成角色卡”时考虑世界观设定
                     </p>
@@ -504,7 +523,9 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
                   <Switch
                     id="inject-character"
                     checked={injectionSettings.injectAtCharacter}
-                    onCheckedChange={(checked) => handleInjectionSettingChange('injectAtCharacter', checked)}
+                    onCheckedChange={(checked) =>
+                      handleInjectionSettingChange('injectAtCharacter', checked)
+                    }
                     disabled={!injectionSettings.enabled}
                   />
                 </div>
@@ -518,7 +539,8 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
                     <span className="text-muted-foreground"> 世界观注入已禁用</span>
                   ) : (
                     <span className="text-primary">
-                      {' '}将在
+                      {' '}
+                      将在
                       {[
                         injectionSettings.injectAtSceneList ? '分镜列表生成' : null,
                         injectionSettings.injectAtSceneDescription ? '场景锚点生成' : null,
@@ -542,10 +564,18 @@ ${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${exist
           <span>世界观构建提示</span>
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
-          <li>• <strong>完整性</strong>: 覆盖时代、地理、社会、科技等多个维度</li>
-          <li>• <strong>一致性</strong>: 各要素之间逻辑自洽，不能互相矛盾</li>
-          <li>• <strong>可视化</strong>: 描述要具体，方便后续转化为画面</li>
-          <li>• <strong>关联性</strong>: 世界观要素会在分镜生成时自动引用</li>
+          <li>
+            • <strong>完整性</strong>: 覆盖时代、地理、社会、科技等多个维度
+          </li>
+          <li>
+            • <strong>一致性</strong>: 各要素之间逻辑自洽，不能互相矛盾
+          </li>
+          <li>
+            • <strong>可视化</strong>: 描述要具体，方便后续转化为画面
+          </li>
+          <li>
+            • <strong>关联性</strong>: 世界观要素会在分镜生成时自动引用
+          </li>
         </ul>
       </Card>
     </div>

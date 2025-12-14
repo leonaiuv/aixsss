@@ -5,7 +5,7 @@
 // 1. 智能压缩对话历史，保留关键信息
 // 2. 动态调整token预算，避免超出API限制
 // 3. 支持多种压缩策略（激进/平衡/保守）
-// 
+//
 // 支持两种模式：
 // - 规则引擎：快速、零延迟
 // - AI智能生成：语义理解、智能摘要（带fallback）
@@ -23,11 +23,14 @@ function estimateTokens(text: string): number {
 }
 
 // 压缩策略配置
-const STRATEGY_CONFIG: Record<CompressionStrategy, {
-  maxProjectTokens: number;
-  maxSceneTokens: number;
-  maxHistoryItems: number;
-}> = {
+const STRATEGY_CONFIG: Record<
+  CompressionStrategy,
+  {
+    maxProjectTokens: number;
+    maxSceneTokens: number;
+    maxHistoryItems: number;
+  }
+> = {
   aggressive: {
     maxProjectTokens: 200,
     maxSceneTokens: 150,
@@ -50,7 +53,7 @@ const STRATEGY_CONFIG: Record<CompressionStrategy, {
  */
 export function compressProjectEssence(
   project: Project,
-  strategy: CompressionStrategy = 'balanced'
+  strategy: CompressionStrategy = 'balanced',
 ): {
   style: string;
   protagonistCore: string;
@@ -58,29 +61,29 @@ export function compressProjectEssence(
   tokens: number;
 } {
   const config = STRATEGY_CONFIG[strategy];
-  
+
   // 风格直接保留
   const style = project.style;
-  
+
   // 压缩主角描述
   let protagonistCore = project.protagonist;
   let protagonistTokens = estimateTokens(protagonistCore);
   if (protagonistTokens > config.maxProjectTokens * 0.3) {
     // 提取关键特征（前N个字符）
-    const targetLength = Math.floor(config.maxProjectTokens * 0.3 / 2);
+    const targetLength = Math.floor((config.maxProjectTokens * 0.3) / 2);
     protagonistCore = protagonistCore.slice(0, targetLength) + '...';
     protagonistTokens = estimateTokens(protagonistCore);
   }
-  
+
   // 压缩故事梗概
   let storyCore = project.summary;
   let storyTokens = estimateTokens(storyCore);
   if (storyTokens > config.maxProjectTokens * 0.7) {
-    const targetLength = Math.floor(config.maxProjectTokens * 0.7 / 2);
+    const targetLength = Math.floor((config.maxProjectTokens * 0.7) / 2);
     storyCore = storyCore.slice(0, targetLength) + '...';
     storyTokens = estimateTokens(storyCore);
   }
-  
+
   return {
     style,
     protagonistCore,
@@ -94,7 +97,7 @@ export function compressProjectEssence(
  */
 export function compressSceneSummary(
   scene: Scene,
-  strategy: CompressionStrategy = 'balanced'
+  strategy: CompressionStrategy = 'balanced',
 ): {
   summary: string;
   mood?: string;
@@ -102,20 +105,20 @@ export function compressSceneSummary(
   tokens: number;
 } {
   const config = STRATEGY_CONFIG[strategy];
-  
+
   let summary = scene.summary;
   let summaryTokens = estimateTokens(summary);
-  
+
   if (summaryTokens > config.maxSceneTokens) {
     const targetLength = Math.floor(config.maxSceneTokens / 2);
     summary = summary.slice(0, targetLength) + '...';
     summaryTokens = estimateTokens(summary);
   }
-  
+
   // 提取情绪和关键元素（简化版）
   const mood = extractMood(scene.summary);
   const keyElement = extractKeyElement(scene.summary);
-  
+
   return {
     summary,
     mood,
@@ -130,31 +133,28 @@ export function compressSceneSummary(
 export function compressSceneHistory(
   scenes: Scene[],
   currentIndex: number,
-  strategy: CompressionStrategy = 'balanced'
+  strategy: CompressionStrategy = 'balanced',
 ): {
   compressed: string;
   tokens: number;
 } {
   const config = STRATEGY_CONFIG[strategy];
   const historyCount = config.maxHistoryItems;
-  
+
   // 只保留前N个分镜的摘要
-  const relevantScenes = scenes.slice(
-    Math.max(0, currentIndex - historyCount),
-    currentIndex
-  );
-  
+  const relevantScenes = scenes.slice(Math.max(0, currentIndex - historyCount), currentIndex);
+
   if (relevantScenes.length === 0) {
     return { compressed: '', tokens: 0 };
   }
-  
+
   const compressed = relevantScenes
     .map((scene, idx) => {
       const relative = currentIndex - historyCount + idx + 1;
       return `分镜${relative}: ${scene.summary.slice(0, 30)}${scene.summary.length > 30 ? '...' : ''}`;
     })
     .join('\n');
-  
+
   return {
     compressed,
     tokens: estimateTokens(compressed),
@@ -185,7 +185,7 @@ export function calculateTotalTokens(components: {
  */
 export function checkTokenLimit(
   totalTokens: number,
-  maxTokens: number = 4000
+  maxTokens: number = 4000,
 ): {
   withinLimit: boolean;
   usage: number;
@@ -207,20 +207,20 @@ export function checkTokenLimit(
  */
 function extractMood(text: string): string {
   const moodKeywords: Record<string, string[]> = {
-    '紧张': ['紧张', '危险', '追击', '逃亡', '危机'],
-    '平静': ['平静', '宁静', '安详', '祥和', '和平'],
-    '激动': ['激动', '兴奋', '热血', '激昂', '振奋'],
-    '悲伤': ['悲伤', '哀伤', '痛苦', '失落', '绝望'],
-    '欢乐': ['欢乐', '快乐', '愉快', '幸福', '开心'],
-    '神秘': ['神秘', '诡异', '奇怪', '未知', '隐秘'],
+    紧张: ['紧张', '危险', '追击', '逃亡', '危机'],
+    平静: ['平静', '宁静', '安详', '祥和', '和平'],
+    激动: ['激动', '兴奋', '热血', '激昂', '振奋'],
+    悲伤: ['悲伤', '哀伤', '痛苦', '失落', '绝望'],
+    欢乐: ['欢乐', '快乐', '愉快', '幸福', '开心'],
+    神秘: ['神秘', '诡异', '奇怪', '未知', '隐秘'],
   };
-  
+
   for (const [mood, keywords] of Object.entries(moodKeywords)) {
-    if (keywords.some(keyword => text.includes(keyword))) {
+    if (keywords.some((keyword) => text.includes(keyword))) {
       return mood;
     }
   }
-  
+
   return '中性';
 }
 
@@ -249,9 +249,9 @@ export function buildOptimizedContext(options: {
 } {
   const strategy = options.strategy || 'balanced';
   const breakdown: Record<string, number> = {};
-  
+
   let context = '';
-  
+
   // 1. 项目核心信息
   const projectEssence = compressProjectEssence(options.project, strategy);
   const projectContext = `# 项目信息
@@ -261,7 +261,7 @@ export function buildOptimizedContext(options: {
 `;
   context += projectContext + '\n';
   breakdown.project = projectEssence.tokens;
-  
+
   // 2. 历史上下文
   if (options.scenes && typeof options.currentIndex === 'number') {
     const history = compressSceneHistory(options.scenes, options.currentIndex, strategy);
@@ -270,7 +270,7 @@ export function buildOptimizedContext(options: {
       breakdown.history = history.tokens;
     }
   }
-  
+
   // 3. 当前分镜
   if (options.currentScene) {
     const sceneSummary = compressSceneSummary(options.currentScene, strategy);
@@ -282,13 +282,13 @@ ${sceneSummary.keyElement ? `关键元素: ${sceneSummary.keyElement}` : ''}
     context += sceneContext + '\n';
     breakdown.scene = sceneSummary.tokens;
   }
-  
+
   const totalTokens = calculateTotalTokens({
     project: projectContext,
     history: breakdown.history ? context : undefined,
     current: breakdown.scene ? context : undefined,
   });
-  
+
   return {
     context,
     tokens: totalTokens,
@@ -371,10 +371,7 @@ interface SimpleAIClient {
 /**
  * AI智能提取情绪（带fallback）
  */
-export async function extractMoodWithAI(
-  client: SimpleAIClient,
-  text: string
-): Promise<string> {
+export async function extractMoodWithAI(client: SimpleAIClient, text: string): Promise<string> {
   try {
     const prompt = MoodExtractionSkill.promptTemplate.replace('{text}', text);
     const response = await client.chat([{ role: 'user', content: prompt }]);
@@ -392,7 +389,7 @@ export async function extractMoodWithAI(
  */
 export async function extractKeyElementWithAI(
   client: SimpleAIClient,
-  text: string
+  text: string,
 ): Promise<string> {
   try {
     const prompt = KeyElementExtractionSkill.promptTemplate.replace('{text}', text);
@@ -412,7 +409,7 @@ export async function extractKeyElementWithAI(
 export async function compressTextWithAI(
   client: SimpleAIClient,
   text: string,
-  targetLength: number
+  targetLength: number,
 ): Promise<string> {
   try {
     const prompt = SmartSummarySkill.promptTemplate
@@ -434,7 +431,7 @@ export async function compressTextWithAI(
 export async function compressProjectEssenceWithAI(
   client: SimpleAIClient,
   project: Project,
-  strategy: CompressionStrategy = 'balanced'
+  strategy: CompressionStrategy = 'balanced',
 ): Promise<{
   style: string;
   protagonistCore: string;
@@ -442,25 +439,25 @@ export async function compressProjectEssenceWithAI(
   tokens: number;
 }> {
   const config = STRATEGY_CONFIG[strategy];
-  
+
   try {
     // 风格保留
     const style = project.style;
-    
+
     // AI压缩主角描述
     const protagonistCore = await compressTextWithAI(
       client,
       project.protagonist,
-      Math.floor(config.maxProjectTokens * 0.3 / 2)
+      Math.floor((config.maxProjectTokens * 0.3) / 2),
     );
-    
+
     // AI压缩故事梗概
     const storyCore = await compressTextWithAI(
       client,
       project.summary,
-      Math.floor(config.maxProjectTokens * 0.7 / 2)
+      Math.floor((config.maxProjectTokens * 0.7) / 2),
     );
-    
+
     return {
       style,
       protagonistCore,
@@ -481,7 +478,7 @@ export async function compressProjectEssenceWithAI(
 export async function compressSceneSummaryWithAI(
   client: SimpleAIClient,
   scene: Scene,
-  strategy: CompressionStrategy = 'balanced'
+  strategy: CompressionStrategy = 'balanced',
 ): Promise<{
   summary: string;
   mood?: string;
@@ -489,19 +486,19 @@ export async function compressSceneSummaryWithAI(
   tokens: number;
 }> {
   const config = STRATEGY_CONFIG[strategy];
-  
+
   try {
     // AI压缩摘要
     const summary = await compressTextWithAI(
       client,
       scene.summary,
-      Math.floor(config.maxSceneTokens / 2)
+      Math.floor(config.maxSceneTokens / 2),
     );
-    
+
     // AI提取情绪和关键元素
     const mood = await extractMoodWithAI(client, scene.summary);
     const keyElement = await extractKeyElementWithAI(client, scene.summary);
-    
+
     return {
       summary,
       mood,

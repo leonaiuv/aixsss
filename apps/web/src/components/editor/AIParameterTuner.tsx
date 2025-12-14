@@ -15,13 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -61,10 +55,7 @@ const PRESETS: Record<string, AIGenerationParams> = {
   },
 };
 
-export function AIParameterTuner({
-  params,
-  onParamsChange,
-}: AIParameterTunerProps) {
+export function AIParameterTuner({ params, onParamsChange }: AIParameterTunerProps) {
   const [preset, setPreset] = useState<string>('balanced');
 
   const handlePresetChange = (presetName: string) => {
@@ -91,9 +82,7 @@ export function AIParameterTuner({
           </div>
           <div>
             <h2 className="text-xl font-bold">AI参数调优</h2>
-            <p className="text-sm text-muted-foreground">
-              调整AI生成参数以控制输出效果
-            </p>
+            <p className="text-sm text-muted-foreground">调整AI生成参数以控制输出效果</p>
           </div>
         </div>
 
@@ -215,22 +204,10 @@ export function AIParameterTuner({
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <EffectIndicator
-              label="创意度"
-              value={calculateCreativity(params)}
-            />
-            <EffectIndicator
-              label="稳定性"
-              value={calculateStability(params)}
-            />
-            <EffectIndicator
-              label="多样性"
-              value={calculateDiversity(params)}
-            />
-            <EffectIndicator
-              label="长度倾向"
-              value={(params.maxTokens / 4000) * 100}
-            />
+            <EffectIndicator label="创意度" value={calculateCreativity(params)} />
+            <EffectIndicator label="稳定性" value={calculateStability(params)} />
+            <EffectIndicator label="多样性" value={calculateDiversity(params)} />
+            <EffectIndicator label="长度倾向" value={(params.maxTokens / 4000) * 100} />
           </div>
         </CardContent>
       </Card>
@@ -340,24 +317,19 @@ function EffectIndicator({ label, value }: { label: string; value: number }) {
 function calculateCreativity(params: AIGenerationParams): number {
   return Math.min(
     100,
-    (params.temperature * 50 + (params.topP - 0.5) * 100 + (params.presencePenalty || 0) * 25)
+    params.temperature * 50 + (params.topP - 0.5) * 100 + (params.presencePenalty || 0) * 25,
   );
 }
 
 // 计算稳定性
 function calculateStability(params: AIGenerationParams): number {
-  return Math.min(
-    100,
-    100 - params.temperature * 40 - (params.frequencyPenalty || 0) * 20
-  );
+  return Math.min(100, 100 - params.temperature * 40 - (params.frequencyPenalty || 0) * 20);
 }
 
 // 计算多样性
 function calculateDiversity(params: AIGenerationParams): number {
   return Math.min(
     100,
-    params.topP * 100 +
-      (params.presencePenalty || 0) * 20 +
-      (params.frequencyPenalty || 0) * 20
+    params.topP * 100 + (params.presencePenalty || 0) * 20 + (params.frequencyPenalty || 0) * 20,
   );
 }

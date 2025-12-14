@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { JsonValue } from '@prisma/client/runtime/library';
 import type { GenerationParams, ProviderChatConfig } from '../providers/types.js';
 
 export type TokenUsage = {
@@ -20,7 +20,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-export function styleFullPrompt(project: { style: string; artStyleConfig: Prisma.JsonValue | null }): string {
+export function styleFullPrompt(project: { style: string; artStyleConfig: JsonValue | null }): string {
   if (project.artStyleConfig && isRecord(project.artStyleConfig)) {
     const fullPrompt = project.artStyleConfig['fullPrompt'];
     if (typeof fullPrompt === 'string' && fullPrompt.trim()) return fullPrompt.trim();
@@ -28,7 +28,7 @@ export function styleFullPrompt(project: { style: string; artStyleConfig: Prisma
   return project.style || '';
 }
 
-function extractGenerationParams(raw: Prisma.JsonValue | null): GenerationParams | undefined {
+function extractGenerationParams(raw: JsonValue | null): GenerationParams | undefined {
   if (!raw || !isRecord(raw)) return undefined;
   return {
     ...(typeof raw.temperature === 'number' ? { temperature: raw.temperature } : {}),
@@ -58,7 +58,7 @@ export function toProviderChatConfig(profile: {
   provider: 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible';
   model: string;
   baseURL: string | null;
-  generationParams: Prisma.JsonValue | null;
+  generationParams: JsonValue | null;
 }): ProviderChatConfig {
   const params = extractGenerationParams(profile.generationParams);
 

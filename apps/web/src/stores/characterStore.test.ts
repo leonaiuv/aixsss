@@ -167,7 +167,7 @@ describe('CharacterStore', () => {
   describe('updatePortraitPrompts', () => {
     it('应该能够更新角色的定妆照提示词', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试角色',
@@ -181,19 +181,22 @@ describe('CharacterStore', () => {
       const characterId = useCharacterStore.getState().characters[0].id;
       const prompts = {
         midjourney: 'anime style, black hair young man, full body, white background --ar 2:3 --v 6',
-        stableDiffusion: 'anime style, black hair young man, full body, white background, masterpiece, best quality',
+        stableDiffusion:
+          'anime style, black hair young man, full body, white background, masterpiece, best quality',
         general: '日式动漫风格，黑发青年，全身照，纯白背景',
       };
 
       useCharacterStore.getState().updatePortraitPrompts('project-1', characterId, prompts);
 
-      const updatedCharacter = useCharacterStore.getState().characters.find(c => c.id === characterId);
+      const updatedCharacter = useCharacterStore
+        .getState()
+        .characters.find((c) => c.id === characterId);
       expect(updatedCharacter?.portraitPrompts).toEqual(prompts);
     });
 
     it('更新定妆照提示词应该更新updatedAt时间戳', async () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试角色',
@@ -208,7 +211,7 @@ describe('CharacterStore', () => {
       const originalUpdatedAt = useCharacterStore.getState().characters[0].updatedAt;
 
       // 等待一小段时间确保时间戳不同
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       const prompts = {
         midjourney: 'test prompt',
@@ -218,13 +221,15 @@ describe('CharacterStore', () => {
 
       useCharacterStore.getState().updatePortraitPrompts('project-1', characterId, prompts);
 
-      const updatedCharacter = useCharacterStore.getState().characters.find(c => c.id === characterId);
+      const updatedCharacter = useCharacterStore
+        .getState()
+        .characters.find((c) => c.id === characterId);
       expect(updatedCharacter?.updatedAt).not.toBe(originalUpdatedAt);
     });
 
     it('更新定妆照提示词应该持久化到localStorage', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试角色',
@@ -251,7 +256,7 @@ describe('CharacterStore', () => {
 
     it('更新不存在的角色ID应该无效果', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试角色',
@@ -281,7 +286,7 @@ describe('CharacterStore', () => {
   describe('getCharactersByProject', () => {
     it('应该返回指定项目的所有角色', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '角色A',
@@ -314,7 +319,7 @@ describe('CharacterStore', () => {
 
       const project1Chars = useCharacterStore.getState().getCharactersByProject('project-1');
       expect(project1Chars).toHaveLength(2);
-      expect(project1Chars.every(c => c.projectId === 'project-1')).toBe(true);
+      expect(project1Chars.every((c) => c.projectId === 'project-1')).toBe(true);
     });
 
     it('项目没有角色时应返回空数组', () => {
@@ -330,7 +335,7 @@ describe('CharacterStore', () => {
   describe('新字段存储', () => {
     it('应该能够存储briefDescription字段', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '李明',
@@ -353,7 +358,7 @@ describe('CharacterStore', () => {
         stableDiffusion: 'SD prompt text',
         general: '通用提示词文本',
       };
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试',
@@ -371,7 +376,7 @@ describe('CharacterStore', () => {
 
     it('应该能够存储customStyle字段', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试',
@@ -389,7 +394,7 @@ describe('CharacterStore', () => {
 
     it('更新时应该能够保留新字段', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试',
@@ -448,7 +453,7 @@ describe('CharacterStore', () => {
 
     it('加载时应该设置isLoading状态', () => {
       useCharacterStore.getState().loadCharacters('project-1');
-      
+
       // 加载完成后isLoading应为false
       expect(useCharacterStore.getState().isLoading).toBe(false);
     });
@@ -460,7 +465,7 @@ describe('CharacterStore', () => {
   describe('recordAppearance', () => {
     it('应该能够记录角色出场', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试角色',
@@ -486,7 +491,7 @@ describe('CharacterStore', () => {
 
     it('同一场景重复记录应该更新而不是添加', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '测试角色',
@@ -531,7 +536,7 @@ describe('CharacterStore', () => {
   describe('角色主题色扩展', () => {
     it('应该能够存储角色主色(primaryColor)', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '主色测试角色',
@@ -549,7 +554,7 @@ describe('CharacterStore', () => {
 
     it('应该能够存储角色辅色(secondaryColor)', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '辅色测试角色',
@@ -567,7 +572,7 @@ describe('CharacterStore', () => {
 
     it('应该能够同时存储主色和辅色', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '双色测试角色',
@@ -587,7 +592,7 @@ describe('CharacterStore', () => {
 
     it('主色和辅色应该都是可选字段', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '无色彩角色',
@@ -605,7 +610,7 @@ describe('CharacterStore', () => {
 
     it('更新时应该能够单独更新主色', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '更新主色测试',
@@ -629,7 +634,7 @@ describe('CharacterStore', () => {
 
     it('更新时应该能够单独更新辅色', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '更新辅色测试',
@@ -654,7 +659,7 @@ describe('CharacterStore', () => {
 
     it('主色辅色应该持久化到localStorage', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '持久化测试',
@@ -674,7 +679,7 @@ describe('CharacterStore', () => {
 
     it('旧版themeColor字段应该保持兼容', () => {
       const store = useCharacterStore.getState();
-      
+
       store.addCharacter('project-1', {
         projectId: 'project-1',
         name: '兼容性测试',

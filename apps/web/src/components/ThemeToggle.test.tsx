@@ -24,7 +24,7 @@ describe('ThemeToggle', () => {
   describe('rendering', () => {
     it('should render the theme toggle button', () => {
       render(<ThemeToggle />);
-      
+
       const button = screen.getByRole('button');
       expect(button).toBeInTheDocument();
     });
@@ -38,7 +38,7 @@ describe('ThemeToggle', () => {
       });
 
       render(<ThemeToggle />);
-      
+
       // Check for the presence of a button (icon is inside)
       expect(screen.getByRole('button')).toBeInTheDocument();
     });
@@ -52,7 +52,7 @@ describe('ThemeToggle', () => {
       });
 
       render(<ThemeToggle />);
-      
+
       expect(screen.getByRole('button')).toBeInTheDocument();
     });
   });
@@ -60,14 +60,14 @@ describe('ThemeToggle', () => {
   describe('interaction', () => {
     it('should render dropdown trigger button', () => {
       render(<ThemeToggle />);
-      
+
       const button = screen.getByRole('button');
       expect(button).toBeInTheDocument();
     });
 
     it('should open dropdown on click', () => {
       render(<ThemeToggle />);
-      
+
       const button = screen.getByRole('button');
       fireEvent.click(button);
 
@@ -79,7 +79,7 @@ describe('ThemeToggle', () => {
   describe('accessibility', () => {
     it('should have accessible button', () => {
       render(<ThemeToggle />);
-      
+
       const button = screen.getByRole('button');
       expect(button).toBeInTheDocument();
     });
@@ -95,7 +95,7 @@ describe('ThemeToggle', () => {
       });
 
       render(<ThemeToggle />);
-      
+
       expect(screen.getByRole('button')).toBeInTheDocument();
     });
   });

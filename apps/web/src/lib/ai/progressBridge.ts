@@ -2,11 +2,7 @@
  * AI进度桥接器
  * 连接debugLogger和aiProgressStore，实现实时进度追踪
  */
-import { 
-  subscribeToAIEvents, 
-  type AICallLogEntry,
-  type AICallType,
-} from './debugLogger';
+import { subscribeToAIEvents, type AICallLogEntry, type AICallType } from './debugLogger';
 import { useAIProgressStore, type AITask } from '@/stores/aiProgressStore';
 
 // 日志ID到任务ID的映射
@@ -47,11 +43,13 @@ const callTypeToDesc: Record<AICallType, string> = {
 export function initProgressBridge(): () => void {
   const store = useAIProgressStore.getState();
   const unsubscribers: (() => void)[] = [];
-  
+
   // 订阅调用开始事件
   unsubscribers.push(
     subscribeToAIEvents('call:start', (entry: AICallLogEntry) => {
-      const skipProgressBridge = Boolean((entry.context as { skipProgressBridge?: unknown }).skipProgressBridge);
+      const skipProgressBridge = Boolean(
+        (entry.context as { skipProgressBridge?: unknown }).skipProgressBridge,
+      );
       if (skipProgressBridge) return;
 
       const characterId =
@@ -73,11 +71,11 @@ export function initProgressBridge(): () => void {
         characterId,
         maxRetries: 3,
       });
-      
+
       logToTaskMap.set(entry.id, taskId);
-    })
+    }),
   );
-  
+
   // 订阅调用成功事件
   unsubscribers.push(
     subscribeToAIEvents('call:success', (entry: AICallLogEntry, extra?: unknown) => {
@@ -87,9 +85,9 @@ export function initProgressBridge(): () => void {
         store.completeTask(taskId, response);
         logToTaskMap.delete(entry.id);
       }
-    })
+    }),
   );
-  
+
   // 订阅调用失败事件
   unsubscribers.push(
     subscribeToAIEvents('call:error', (entry: AICallLogEntry, extra?: unknown) => {
@@ -102,9 +100,9 @@ export function initProgressBridge(): () => void {
         });
         logToTaskMap.delete(entry.id);
       }
-    })
+    }),
   );
-  
+
   // 订阅进度更新事件
   unsubscribers.push(
     subscribeToAIEvents('call:progress', (entry: AICallLogEntry, extra?: unknown) => {
@@ -115,7 +113,7 @@ export function initProgressBridge(): () => void {
           store.updateProgress(taskId, progressData.progress, progressData.step);
         }
       }
-    })
+    }),
   );
 
   // 订阅取消事件
@@ -126,14 +124,14 @@ export function initProgressBridge(): () => void {
         store.cancelTask(taskId);
         logToTaskMap.delete(entry.id);
       }
-    })
+    }),
   );
-  
+
   console.log('[Progress Bridge] 已初始化AI进度桥接器');
-  
+
   // 返回清理函数
   return () => {
-    unsubscribers.forEach(unsub => unsub());
+    unsubscribers.forEach((unsub) => unsub());
     logToTaskMap.clear();
     console.log('[Progress Bridge] 已清理AI进度桥接器');
   };
@@ -149,7 +147,7 @@ export function createProgressTask(
     sceneId?: string;
     sceneOrder?: number;
     characterId?: string;
-  }
+  },
 ): {
   taskId: string;
   updateProgress: (progress: number, step?: string) => void;
@@ -157,7 +155,7 @@ export function createProgressTask(
   fail: (error: string) => void;
 } {
   const store = useAIProgressStore.getState();
-  
+
   const taskId = store.addTask({
     type,
     title: callTypeToTitle[type] || type,
@@ -172,7 +170,7 @@ export function createProgressTask(
     characterId: context?.characterId,
     maxRetries: 3,
   });
-  
+
   return {
     taskId,
     updateProgress: (progress: number, step?: string) => {
@@ -192,20 +190,20 @@ export function createProgressTask(
 // ==========================================
 
 // Fallback通知类型
-export type FallbackReason = 
-  | 'api_error'        // API调用失败
-  | 'timeout'          // 超时
-  | 'parse_error'      // 解析失败
-  | 'network_error'    // 网络错误
-  | 'unknown';         // 未知错误
+export type FallbackReason =
+  | 'api_error' // API调用失败
+  | 'timeout' // 超时
+  | 'parse_error' // 解析失败
+  | 'network_error' // 网络错误
+  | 'unknown'; // 未知错误
 
 // Fallback通知项
 export interface FallbackNotification {
   id: string;
-  feature: string;        // 功能名称
+  feature: string; // 功能名称
   reason: FallbackReason; // 降级原因
-  message: string;        // 错误信息
-  fallbackTo: string;     // 降级到什么
+  message: string; // 错误信息
+  fallbackTo: string; // 降级到什么
   timestamp: number;
 }
 
@@ -224,11 +222,11 @@ const fallbackListeners: FallbackEventCallback[] = [];
 export function notifyAIFallback(
   feature: string,
   error: Error | string,
-  fallbackTo: string = '规则引擎'
+  fallbackTo: string = '规则引擎',
 ): void {
   const message = error instanceof Error ? error.message : error;
   const reason = detectFallbackReason(message);
-  
+
   const notification: FallbackNotification = {
     id: `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     feature,
@@ -237,22 +235,22 @@ export function notifyAIFallback(
     fallbackTo,
     timestamp: Date.now(),
   };
-  
+
   // 添加到历史
   fallbackHistory.unshift(notification);
   if (fallbackHistory.length > MAX_FALLBACK_HISTORY) {
     fallbackHistory.pop();
   }
-  
+
   // 发射事件
-  fallbackListeners.forEach(callback => {
+  fallbackListeners.forEach((callback) => {
     try {
       callback(notification);
     } catch (err) {
       console.error('[Fallback] Event listener error:', err);
     }
   });
-  
+
   // 通过aiProgressStore发送警告任务
   const store = useAIProgressStore.getState();
   const taskId = store.addTask({
@@ -265,17 +263,17 @@ export function notifyAIFallback(
     currentStep: `原因: ${message}`,
     maxRetries: 0,
   });
-  
+
   // 5秒后自动删除警告任务
   setTimeout(() => {
     store.removeTask(taskId);
   }, 8000);
-  
+
   // 控制台警告
   console.warn(
     `%c⚠️ AI Fallback: ${feature}`,
     'color: #f59e0b; font-weight: bold;',
-    `\n原因: ${message}\n降级到: ${fallbackTo}`
+    `\n原因: ${message}\n降级到: ${fallbackTo}`,
   );
 }
 
@@ -284,29 +282,35 @@ export function notifyAIFallback(
  */
 function detectFallbackReason(message: string): FallbackReason {
   const lowerMessage = message.toLowerCase();
-  
+
   if (lowerMessage.includes('timeout') || lowerMessage.includes('超时')) {
     return 'timeout';
   }
   if (lowerMessage.includes('network') || lowerMessage.includes('网络')) {
     return 'network_error';
   }
-  if (lowerMessage.includes('parse') || lowerMessage.includes('json') || lowerMessage.includes('解析')) {
+  if (
+    lowerMessage.includes('parse') ||
+    lowerMessage.includes('json') ||
+    lowerMessage.includes('解析')
+  ) {
     return 'parse_error';
   }
-  if (lowerMessage.includes('api') || lowerMessage.includes('request') || lowerMessage.includes('请求')) {
+  if (
+    lowerMessage.includes('api') ||
+    lowerMessage.includes('request') ||
+    lowerMessage.includes('请求')
+  ) {
     return 'api_error';
   }
-  
+
   return 'unknown';
 }
 
 /**
  * 订阅Fallback事件
  */
-export function subscribeToFallbackEvents(
-  callback: FallbackEventCallback
-): () => void {
+export function subscribeToFallbackEvents(callback: FallbackEventCallback): () => void {
   fallbackListeners.push(callback);
   return () => {
     const index = fallbackListeners.indexOf(callback);

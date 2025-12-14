@@ -40,12 +40,10 @@ import {
   FileJson,
   FileText,
   AlertCircle,
-
   Users,
   Film,
   FolderOpen,
   Eye,
-
   Info,
 } from 'lucide-react';
 
@@ -91,7 +89,7 @@ interface DataExporterProps {
 
 export function DataExporter({ projects, onImport }: DataExporterProps) {
   const { toast } = useToast();
-  
+
   // 状态管理
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -166,7 +164,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
         const customStyle = useCustomStyleStore.getState().getCustomStyleById(presetId);
         if (customStyle) return customStyle.name;
       }
-      const preset = ART_STYLE_PRESETS.find(p => p.id === presetId);
+      const preset = ART_STYLE_PRESETS.find((p) => p.id === presetId);
       if (preset) return preset.label;
     }
     return project.style || '未设置';
@@ -356,8 +354,10 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
     const exportData = buildExportData();
 
     if (exportFormat === 'json') {
-      return JSON.stringify(exportData, null, 2).slice(0, 2000) + 
-        (JSON.stringify(exportData).length > 2000 ? '\n...（内容已截断）' : '');
+      return (
+        JSON.stringify(exportData, null, 2).slice(0, 2000) +
+        (JSON.stringify(exportData).length > 2000 ? '\n...（内容已截断）' : '')
+      );
     } else {
       const md = generateMarkdown(exportData);
       return md.slice(0, 2000) + (md.length > 2000 ? '\n...（内容已截断）' : '');
@@ -374,9 +374,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
           </div>
           <div>
             <h2 className="text-xl font-bold">数据导出</h2>
-            <p className="text-sm text-muted-foreground">
-              导出项目数据为多种格式
-            </p>
+            <p className="text-sm text-muted-foreground">导出项目数据为多种格式</p>
           </div>
         </div>
 
@@ -412,7 +410,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {exportFormat === 'json' 
+                {exportFormat === 'json'
                   ? 'JSON格式适合备份和数据迁移，可完整保留所有数据'
                   : 'Markdown格式适合阅读和分享，人类可读性更好'}
               </p>
@@ -425,7 +423,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
                 <Info className="h-4 w-4" />
                 导出内容选项
               </Label>
-              
+
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -443,7 +441,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
                   </Label>
                   <span className="text-xs text-muted-foreground">(统计信息)</span>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="scenes"
@@ -463,7 +461,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
                     {selectedStats.totalScenes}个
                   </Badge>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="characters"
@@ -496,7 +494,10 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
                         })
                       }
                     />
-                    <Label htmlFor="dialogues" className="text-sm cursor-pointer text-muted-foreground">
+                    <Label
+                      htmlFor="dialogues"
+                      className="text-sm cursor-pointer text-muted-foreground"
+                    >
                       包含台词对白
                     </Label>
                   </div>
@@ -520,9 +521,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
             <ScrollArea className="h-[200px] border rounded-lg">
               <div className="p-3 space-y-2">
                 {projects.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    暂无项目
-                  </p>
+                  <p className="text-sm text-muted-foreground text-center py-8">暂无项目</p>
                 ) : (
                   projects.map((project) => {
                     const sceneCount = getProjectScenes(project.id).length;
@@ -537,8 +536,8 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
                         }`}
                         onClick={() => toggleProject(project.id)}
                       >
-                        <Checkbox 
-                          checked={selectedProjects.has(project.id)} 
+                        <Checkbox
+                          checked={selectedProjects.has(project.id)}
                           onCheckedChange={() => toggleProject(project.id)}
                         />
                         <div className="flex-1 min-w-0">
@@ -574,19 +573,27 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
             <div className="flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-primary" />
-                <span><strong>{selectedStats.projectCount}</strong> 个项目</span>
+                <span>
+                  <strong>{selectedStats.projectCount}</strong> 个项目
+                </span>
               </div>
               {exportOptions.includeScenes && (
                 <div className="flex items-center gap-2">
                   <Film className="h-4 w-4 text-primary" />
-                  <span><strong>{selectedStats.totalScenes}</strong> 个分镜</span>
-                  <span className="text-muted-foreground">({selectedStats.completedScenes} 已完成)</span>
+                  <span>
+                    <strong>{selectedStats.totalScenes}</strong> 个分镜
+                  </span>
+                  <span className="text-muted-foreground">
+                    ({selectedStats.completedScenes} 已完成)
+                  </span>
                 </div>
               )}
               {exportOptions.includeCharacters && selectedStats.totalCharacters > 0 && (
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary" />
-                  <span><strong>{selectedStats.totalCharacters}</strong> 个角色</span>
+                  <span>
+                    <strong>{selectedStats.totalCharacters}</strong> 个角色
+                  </span>
                 </div>
               )}
             </div>
@@ -599,7 +606,7 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
             <AccordionItem value="preview" className="border rounded-lg">
               <AccordionTrigger className="px-4 hover:no-underline">
                 <div className="flex items-center gap-2">
-                                    <Eye className="h-4 w-4" />
+                  <Eye className="h-4 w-4" />
                   <span>导出预览</span>
                 </div>
               </AccordionTrigger>
@@ -643,20 +650,14 @@ export function DataExporter({ projects, onImport }: DataExporterProps) {
           </div>
           <div>
             <h2 className="text-xl font-bold">数据导入</h2>
-            <p className="text-sm text-muted-foreground">
-              从JSON文件导入项目数据
-            </p>
+            <p className="text-sm text-muted-foreground">从JSON文件导入项目数据</p>
           </div>
         </div>
 
         <div className="p-8 border-2 border-dashed rounded-lg text-center hover:border-primary/50 transition-colors">
           <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground mb-4">
-            点击选择文件或拖拽文件到此处
-          </p>
-          <p className="text-xs text-muted-foreground mb-4">
-            支持 .json 格式的导出文件
-          </p>
+          <p className="text-sm text-muted-foreground mb-4">点击选择文件或拖拽文件到此处</p>
+          <p className="text-xs text-muted-foreground mb-4">支持 .json 格式的导出文件</p>
           <input
             type="file"
             accept=".json"
@@ -728,17 +729,17 @@ function generateMarkdown(data: ExportData): string {
   data.projects.forEach((project, index) => {
     const projectScenes = data.scenes?.[project.id] || [];
     const projectCharacters = data.characters?.[project.id] || [];
-    
+
     // 获取画风标签
     let styleLabel = project.style || '未设置';
     if (project.artStyleConfig?.presetId) {
-      const preset = ART_STYLE_PRESETS.find(p => p.id === project.artStyleConfig?.presetId);
+      const preset = ART_STYLE_PRESETS.find((p) => p.id === project.artStyleConfig?.presetId);
       if (preset) styleLabel = preset.label;
     }
 
     markdown += `## ${index + 1}. ${project.title}\n\n`;
     markdown += `**画风:** ${styleLabel}\n\n`;
-    
+
     if (project.artStyleConfig?.fullPrompt) {
       markdown += `**画风提示词:**
 \`\`\`
@@ -747,7 +748,7 @@ ${project.artStyleConfig.fullPrompt}
 
 `;
     }
-    
+
     markdown += `**主角:** ${project.protagonist}\n\n`;
     markdown += `**剧情简介:**\n${project.summary}\n\n`;
 

@@ -31,15 +31,21 @@ export async function apiUpdateProject(projectId: string, updates: Partial<ApiPr
     ...(typeof updates.style === 'string' ? { style: updates.style } : {}),
     ...(updates.artStyleConfig !== undefined ? { artStyleConfig: updates.artStyleConfig } : {}),
     ...(typeof updates.workflowState === 'string' ? { workflowState: updates.workflowState } : {}),
-    ...(typeof updates.currentSceneOrder === 'number' ? { currentSceneOrder: updates.currentSceneOrder } : {}),
-    ...(typeof updates.currentSceneStep === 'string' ? { currentSceneStep: updates.currentSceneStep } : {}),
+    ...(typeof updates.currentSceneOrder === 'number'
+      ? { currentSceneOrder: updates.currentSceneOrder }
+      : {}),
+    ...(typeof updates.currentSceneStep === 'string'
+      ? { currentSceneStep: updates.currentSceneStep }
+      : {}),
   };
-  return apiRequest<ApiProject>(`/projects/${encodeURIComponent(projectId)}`, { method: 'PATCH', body });
+  return apiRequest<ApiProject>(`/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body,
+  });
 }
 
 export async function apiDeleteProject(projectId: string) {
-  return apiRequest<{ ok: true }>(`/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' });
+  return apiRequest<{ ok: true }>(`/projects/${encodeURIComponent(projectId)}`, {
+    method: 'DELETE',
+  });
 }
-
-
-

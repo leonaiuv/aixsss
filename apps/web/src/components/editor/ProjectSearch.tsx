@@ -18,11 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -39,12 +35,8 @@ interface ProjectSearchProps {
   onSelect?: (project: Project) => void;
 }
 
-export function ProjectSearch({
-  projects,
-  onSelect,
-}: ProjectSearchProps) {
-  const { addSearchHistory, getSearchHistory, clearSearchHistory } =
-    useSearchStore();
+export function ProjectSearch({ projects, onSelect }: ProjectSearchProps) {
+  const { addSearchHistory, getSearchHistory, clearSearchHistory } = useSearchStore();
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'status'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -67,15 +59,13 @@ export function ProjectSearch({
           project.title.toLowerCase().includes(lowerQuery) ||
           project.summary.toLowerCase().includes(lowerQuery) ||
           project.style.toLowerCase().includes(lowerQuery) ||
-          project.protagonist.toLowerCase().includes(lowerQuery)
+          project.protagonist.toLowerCase().includes(lowerQuery),
       );
     }
 
     // 状态过滤
     if (statusFilter.length > 0) {
-      results = results.filter((project) =>
-        statusFilter.includes(project.workflowState)
-      );
+      results = results.filter((project) => statusFilter.includes(project.workflowState));
     }
 
     // 排序
@@ -84,8 +74,7 @@ export function ProjectSearch({
 
       switch (sortBy) {
         case 'date':
-          comparison =
-            new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+          comparison = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
           break;
         case 'name':
           comparison = a.title.localeCompare(b.title, 'zh-CN');
@@ -116,9 +105,7 @@ export function ProjectSearch({
 
   const toggleStatusFilter = (status: string) => {
     setStatusFilter((prev) =>
-      prev.includes(status)
-        ? prev.filter((s) => s !== status)
-        : [...prev, status]
+      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
     );
   };
 
@@ -156,9 +143,7 @@ export function ProjectSearch({
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                setHighlightIndex((i) =>
-                  Math.min(i + 1, Math.max(0, filteredProjects.length - 1))
-                );
+                setHighlightIndex((i) => Math.min(i + 1, Math.max(0, filteredProjects.length - 1)));
                 return;
               }
               if (e.key === 'ArrowUp') {
@@ -247,11 +232,7 @@ export function ProjectSearch({
                   ].map((status) => (
                     <Badge
                       key={status.value}
-                      variant={
-                        statusFilter.includes(status.value)
-                          ? 'default'
-                          : 'outline'
-                      }
+                      variant={statusFilter.includes(status.value) ? 'default' : 'outline'}
                       className="cursor-pointer"
                       onClick={() => toggleStatusFilter(status.value)}
                     >
@@ -278,10 +259,7 @@ export function ProjectSearch({
                       </SelectContent>
                     </Select>
 
-                    <Select
-                      value={sortOrder}
-                      onValueChange={(v: any) => setSortOrder(v)}
-                    >
+                    <Select value={sortOrder} onValueChange={(v: any) => setSortOrder(v)}>
                       <SelectTrigger className="w-28">
                         <SelectValue />
                       </SelectTrigger>
@@ -309,10 +287,8 @@ export function ProjectSearch({
       {/* 结果统计 */}
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">
-          找到 <span className="font-semibold">{filteredProjects.length}</span>{' '}
-          个项目
-          {projects.length !== filteredProjects.length &&
-            ` (共 ${projects.length} 个)`}
+          找到 <span className="font-semibold">{filteredProjects.length}</span> 个项目
+          {projects.length !== filteredProjects.length && ` (共 ${projects.length} 个)`}
         </span>
 
         {statusFilter.length > 0 && (
@@ -336,9 +312,7 @@ export function ProjectSearch({
       {/* 结果列表 */}
       <ScrollArea className="max-h-[360px] pr-2">
         {filteredProjects.length === 0 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            没有找到匹配的项目
-          </div>
+          <div className="py-10 text-center text-sm text-muted-foreground">没有找到匹配的项目</div>
         ) : (
           <div className="space-y-2">
             {filteredProjects.slice(0, 50).map((project, index) => (
@@ -346,9 +320,7 @@ export function ProjectSearch({
                 key={project.id}
                 type="button"
                 className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                  index === highlightIndex
-                    ? 'border-primary bg-primary/5'
-                    : 'hover:bg-muted'
+                  index === highlightIndex ? 'border-primary bg-primary/5' : 'hover:bg-muted'
                 }`}
                 onMouseEnter={() => setHighlightIndex(index)}
                 onClick={() => selectProject(project)}

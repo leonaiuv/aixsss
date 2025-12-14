@@ -14,13 +14,13 @@ describe('templates', () => {
     });
 
     it('should have unique IDs for all templates', () => {
-      const ids = BUILT_IN_TEMPLATES.map(t => t.id);
+      const ids = BUILT_IN_TEMPLATES.map((t) => t.id);
       const uniqueIds = new Set(ids);
       expect(uniqueIds.size).toBe(ids.length);
     });
 
     it('should have all required fields', () => {
-      BUILT_IN_TEMPLATES.forEach(template => {
+      BUILT_IN_TEMPLATES.forEach((template) => {
         expect(template.id).toBeDefined();
         expect(template.name).toBeDefined();
         expect(template.category).toBeDefined();
@@ -32,22 +32,22 @@ describe('templates', () => {
     });
 
     it('should have templates for different categories', () => {
-      const categories = new Set(BUILT_IN_TEMPLATES.map(t => t.category));
+      const categories = new Set(BUILT_IN_TEMPLATES.map((t) => t.category));
       expect(categories.size).toBeGreaterThan(1);
     });
 
     it('should include scene anchor templates', () => {
-      const sceneTemplates = BUILT_IN_TEMPLATES.filter(t => t.category === '场景锚点');
+      const sceneTemplates = BUILT_IN_TEMPLATES.filter((t) => t.category === '场景锚点');
       expect(sceneTemplates.length).toBeGreaterThan(0);
     });
 
     it('should include action description templates', () => {
-      const actionTemplates = BUILT_IN_TEMPLATES.filter(t => t.category === '动作描述');
+      const actionTemplates = BUILT_IN_TEMPLATES.filter((t) => t.category === '动作描述');
       expect(actionTemplates.length).toBeGreaterThan(0);
     });
 
     it('should include prompt templates', () => {
-      const promptTemplates = BUILT_IN_TEMPLATES.filter(t => t.category === '镜头提示词');
+      const promptTemplates = BUILT_IN_TEMPLATES.filter((t) => t.category === '镜头提示词');
       expect(promptTemplates.length).toBeGreaterThan(0);
     });
   });
@@ -87,13 +87,13 @@ describe('templates', () => {
     it('should return templates for scene anchor category', () => {
       const templates = getTemplatesByCategory('场景锚点');
       expect(templates.length).toBeGreaterThan(0);
-      expect(templates.every(t => t.category === '场景锚点')).toBe(true);
+      expect(templates.every((t) => t.category === '场景锚点')).toBe(true);
     });
 
     it('should return templates for action description category', () => {
       const templates = getTemplatesByCategory('动作描述');
       expect(templates.length).toBeGreaterThan(0);
-      expect(templates.every(t => t.category === '动作描述')).toBe(true);
+      expect(templates.every((t) => t.category === '动作描述')).toBe(true);
     });
 
     it('should return empty array for non-existent category', () => {
@@ -199,26 +199,26 @@ describe('templates', () => {
 
   describe('template content validation', () => {
     it('should have variables matching template placeholders', () => {
-      BUILT_IN_TEMPLATES.forEach(template => {
+      BUILT_IN_TEMPLATES.forEach((template) => {
         const placeholderMatches = template.template.match(/\{\{(\w+)\}\}/g) || [];
-        const placeholders = placeholderMatches.map(p => p.replace(/\{\{|\}\}/g, ''));
+        const placeholders = placeholderMatches.map((p) => p.replace(/\{\{|\}\}/g, ''));
         const uniquePlaceholders = [...new Set(placeholders)];
-        
+
         // Each declared variable should appear in the template
-        template.variables.forEach(variable => {
+        template.variables.forEach((variable) => {
           expect(uniquePlaceholders).toContain(variable);
         });
       });
     });
 
     it('should have meaningful descriptions', () => {
-      BUILT_IN_TEMPLATES.forEach(template => {
+      BUILT_IN_TEMPLATES.forEach((template) => {
         expect(template.description.length).toBeGreaterThan(5);
       });
     });
 
     it('should have non-empty templates', () => {
-      BUILT_IN_TEMPLATES.forEach(template => {
+      BUILT_IN_TEMPLATES.forEach((template) => {
         expect(template.template.length).toBeGreaterThan(50);
       });
     });

@@ -109,7 +109,8 @@ describe('MultiModalPrompts - 多模态提示词生成', () => {
     });
 
     it('应该正确解析音频提示词文本', () => {
-      const promptText = '[voice: energetic, excited] [style: young male] 我一定要成为最强的冒险者！';
+      const promptText =
+        '[voice: energetic, excited] [style: young male] 我一定要成为最强的冒险者！';
       const parsed = parseAudioPrompt(promptText);
 
       expect(parsed.voiceTone).toBe('energetic');
@@ -169,7 +170,8 @@ describe('MultiModalPrompts - 多模态提示词生成', () => {
     });
 
     it('应该正确解析BGM提示词文本', () => {
-      const promptText = '[mood: hopeful] [genre: orchestral] [tempo: moderate] [instruments: strings, brass] [sfx: birds, wind]';
+      const promptText =
+        '[mood: hopeful] [genre: orchestral] [tempo: moderate] [instruments: strings, brass] [sfx: birds, wind]';
       const parsed = parseBGMPrompt(promptText);
 
       expect(parsed.mood).toBe('hopeful');
@@ -254,7 +256,8 @@ describe('MultiModalPrompts - 多模态提示词生成', () => {
     });
 
     it('应该正确解析转场指令文本', () => {
-      const promptText = '[transition: dissolve] [duration: 1.5s] [direction: left] [easing: ease-in-out]';
+      const promptText =
+        '[transition: dissolve] [duration: 1.5s] [direction: left] [easing: ease-in-out]';
       const parsed = parseTransitionPrompt(promptText);
 
       expect(parsed.type).toBe('dissolve');
@@ -355,7 +358,7 @@ describe('MultiModalPrompts - 多模态提示词生成', () => {
       mockAIClient.chat.mockResolvedValueOnce({
         content: JSON.stringify({
           voiceTone: 'energetic',
-          emotion: 'excited', 
+          emotion: 'excited',
           voiceStyle: 'young heroic male',
         }),
       });
@@ -369,7 +372,7 @@ describe('MultiModalPrompts - 多模态提示词生成', () => {
       const result = await generateAudioPromptWithAI(
         mockAIClient as any,
         mockDialogue,
-        mockCharacter as Character
+        mockCharacter as Character,
       );
 
       expect(mockAIClient.chat).toHaveBeenCalledTimes(1);
@@ -388,11 +391,7 @@ describe('MultiModalPrompts - 多模态提示词生成', () => {
         }),
       });
 
-      const result = await generateBGMPromptWithAI(
-        mockAIClient as any,
-        mockScene,
-        '奇幻冒险风格'
-      );
+      const result = await generateBGMPromptWithAI(mockAIClient as any, mockScene, '奇幻冒险风格');
 
       expect(mockAIClient.chat).toHaveBeenCalledTimes(1);
       expect(result.mood).toBe('hopeful');
@@ -412,7 +411,7 @@ describe('MultiModalPrompts - 多模态提示词生成', () => {
       const result = await generateTransitionPromptWithAI(
         mockAIClient as any,
         mockPrevScene,
-        mockScene
+        mockScene,
       );
 
       expect(mockAIClient.chat).toHaveBeenCalledTimes(1);
@@ -423,11 +422,7 @@ describe('MultiModalPrompts - 多模态提示词生成', () => {
     it('AI生成失败时应回退到规则引擎', async () => {
       mockAIClient.chat.mockRejectedValueOnce(new Error('API Error'));
 
-      const result = await generateBGMPromptWithAI(
-        mockAIClient as any,
-        mockScene,
-        '奇幻风格'
-      );
+      const result = await generateBGMPromptWithAI(mockAIClient as any, mockScene, '奇幻风格');
 
       // 应该回退到规则引擎结果
       expect(result.mood).toBeDefined();

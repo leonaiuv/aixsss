@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parseKeyframePromptText, parseMotionPromptText, parseSceneAnchorText } from './promptParsers';
+import {
+  parseKeyframePromptText,
+  parseMotionPromptText,
+  parseSceneAnchorText,
+} from './promptParsers';
 
 describe('promptParsers', () => {
   describe('parseKeyframePromptText', () => {
@@ -46,10 +50,7 @@ describe('promptParsers', () => {
     });
 
     it('大小写不敏感（kf0_zh/kf0_en 也可解析）', () => {
-      const text = [
-        'kf0_zh: 中文内容',
-        'kf0_en: English content',
-      ].join('\n');
+      const text = ['kf0_zh: 中文内容', 'kf0_en: English content'].join('\n');
 
       const parsed = parseKeyframePromptText(text);
       expect(parsed.isStructured).toBe(true);
@@ -74,10 +75,7 @@ describe('promptParsers', () => {
     });
 
     it('无法识别的内容应进入 rawUnlabeled', () => {
-      const text = [
-        '这是一段没有标签的旧格式提示词',
-        'another unlabeled line',
-      ].join('\n');
+      const text = ['这是一段没有标签的旧格式提示词', 'another unlabeled line'].join('\n');
 
       const parsed = parseKeyframePromptText(text);
       expect(parsed.isStructured).toBe(false);

@@ -1,9 +1,20 @@
 import { create } from 'zustand';
-import { ChatMessage, UserConfig, type ConfigProfile, type ConnectionTestResult, type UserConfigState } from '@/types';
+import {
+  ChatMessage,
+  UserConfig,
+  type ConfigProfile,
+  type ConnectionTestResult,
+  type UserConfigState,
+} from '@/types';
 import { getConfigState, saveConfigState, clearConfig as clearConfigStorage } from '@/lib/storage';
 import { AIFactory } from '@/lib/ai/factory';
 import { isApiMode } from '@/lib/runtime/mode';
-import { apiCreateAIProfile, apiDeleteAIProfile, apiListAIProfiles, apiUpdateAIProfile } from '@/lib/api/aiProfiles';
+import {
+  apiCreateAIProfile,
+  apiDeleteAIProfile,
+  apiListAIProfiles,
+  apiUpdateAIProfile,
+} from '@/lib/api/aiProfiles';
 import { apiLlmChat } from '@/lib/api/llm';
 
 interface ConfigStore {
@@ -11,7 +22,7 @@ interface ConfigStore {
   isConfigured: boolean; // 是否已具备可用配置
   profiles: ConfigProfile[];
   activeProfileId: string | null;
-  
+
   // 操作方法
   loadConfig: () => void;
   saveConfig: (config: UserConfig) => void;
@@ -21,7 +32,10 @@ interface ConfigStore {
   // 多档案操作
   setActiveProfile: (profileId: string) => void;
   createProfile: (profile?: Partial<Pick<ConfigProfile, 'name' | 'config' | 'pricing'>>) => string;
-  updateProfile: (profileId: string, updates: Partial<Pick<ConfigProfile, 'name' | 'config' | 'pricing' | 'lastTest'>>) => void;
+  updateProfile: (
+    profileId: string,
+    updates: Partial<Pick<ConfigProfile, 'name' | 'config' | 'pricing' | 'lastTest'>>,
+  ) => void;
   deleteProfile: (profileId: string) => void;
 }
 
@@ -58,7 +72,7 @@ function pickActiveProfile(state: UserConfigState): ConfigProfile {
 function buildConnectionTestResult(
   config: UserConfig,
   error: unknown,
-  durationMs: number
+  durationMs: number,
 ): ConnectionTestResult {
   const message = error instanceof Error ? error.message : String(error);
 
@@ -90,12 +104,16 @@ function buildConnectionTestResult(
   }
 
   if (config.provider === 'gemini') {
-    suggestions.push('Gemini 默认 Base URL：`https://generativelanguage.googleapis.com`（可留空使用默认值）。');
+    suggestions.push(
+      'Gemini 默认 Base URL：`https://generativelanguage.googleapis.com`（可留空使用默认值）。',
+    );
     suggestions.push('模型示例：`gemini-1.5-flash`、`gemini-1.5-pro`、`gemini-pro`。');
   }
 
   if (config.provider === 'openai-compatible') {
-    suggestions.push('OpenAI 兼容：Base URL 填域名根（不要包含 /v1），系统会拼接 `/v1/chat/completions`。');
+    suggestions.push(
+      'OpenAI 兼容：Base URL 填域名根（不要包含 /v1），系统会拼接 `/v1/chat/completions`。',
+    );
     suggestions.push('模型示例：`gpt-4o-mini`、`gpt-4o`、`gpt-3.5-turbo`。');
   }
 
@@ -127,7 +145,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   isConfigured: false,
   profiles: [],
   activeProfileId: null,
-  
+
   loadConfig: () => {
     if (isApiMode()) {
       // 后端模式：从服务端拉取 AI Profiles，前端不落盘 apiKey
@@ -153,9 +171,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           }));
 
           const savedActive =
-            typeof localStorage !== 'undefined' ? localStorage.getItem(ACTIVE_AI_PROFILE_KEY) : null;
+            typeof localStorage !== 'undefined'
+              ? localStorage.getItem(ACTIVE_AI_PROFILE_KEY)
+              : null;
           const activeId =
-            savedActive && profiles.some((p) => p.id === savedActive) ? savedActive : profiles[0]?.id ?? null;
+            savedActive && profiles.some((p) => p.id === savedActive)
+              ? savedActive
+              : (profiles[0]?.id ?? null);
 
           const active = activeId ? profiles.find((p) => p.id === activeId) : undefined;
           set({
@@ -176,7 +198,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     const storedState = getConfigState();
 
     // 重要：如果本地已有加密配置但当前无法解密（锁定态），不要覆盖写入
-    const hasStoredEncryptedConfig = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('aixs_config'));
+    const hasStoredEncryptedConfig =
+      typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('aixs_config'));
 
     if (!storedState) {
       if (hasStoredEncryptedConfig) {
@@ -220,7 +243,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       isConfigured: isUsableConfig(active.config),
     });
   },
-  
+
   saveConfig: (config: UserConfig) => {
     const storedState = getConfigState();
     const now = new Date().toISOString();
@@ -252,7 +275,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
     const activeProfileId = storedState.activeProfileId;
     const profiles = storedState.profiles.map((p) =>
-      p.id === activeProfileId ? { ...p, config, updatedAt: now } : p
+      p.id === activeProfileId ? { ...p, config, updatedAt: now } : p,
     );
     const next: UserConfigState = { ...storedState, profiles };
     saveConfigState(next);
@@ -264,17 +287,17 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       isConfigured: isUsableConfig(config),
     });
   },
-  
+
   clearConfig: () => {
     clearConfigStorage();
-    set({ 
-      config: null, 
+    set({
+      config: null,
       isConfigured: false,
       profiles: [],
       activeProfileId: null,
     });
   },
-  
+
   testConnection: async (config: UserConfig): Promise<boolean> => {
     if (isApiMode()) {
       const startedAt = Date.now();
@@ -282,7 +305,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
       const activeProfileId = get().activeProfileId;
       const existingServerId =
-        typeof activeProfileId === 'string' && !activeProfileId.startsWith('draft_') ? activeProfileId : null;
+        typeof activeProfileId === 'string' && !activeProfileId.startsWith('draft_')
+          ? activeProfileId
+          : null;
 
       const provider = config.provider;
       const model = config.model;
@@ -315,7 +340,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           });
           aiProfileId = created.id;
 
-          if (typeof localStorage !== 'undefined') localStorage.setItem(ACTIVE_AI_PROFILE_KEY, aiProfileId);
+          if (typeof localStorage !== 'undefined')
+            localStorage.setItem(ACTIVE_AI_PROFILE_KEY, aiProfileId);
           set({ activeProfileId: aiProfileId });
           // 追加到 profiles（避免必须手动 reload）
           set((state) => ({
@@ -339,7 +365,10 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           }));
         }
 
-        const response = await apiLlmChat({ aiProfileId: aiProfileId!, messages: [{ role: 'user', content: 'ping' }] });
+        const response = await apiLlmChat({
+          aiProfileId: aiProfileId!,
+          messages: [{ role: 'user', content: 'ping' }],
+        });
         const ok = Boolean(response?.content);
 
         // 更新 lastTest（仅写入内存态）
@@ -362,7 +391,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         const lastTest = buildConnectionTestResult(config, error, duration());
         if (activeProfileId) {
           set((state) => ({
-            profiles: state.profiles.map((p) => (p.id === activeProfileId ? { ...p, lastTest } : p)),
+            profiles: state.profiles.map((p) =>
+              p.id === activeProfileId ? { ...p, lastTest } : p,
+            ),
           }));
         }
         return false;
@@ -373,7 +404,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     try {
       const client = AIFactory.createClient(config);
       const pingMessage: ChatMessage[] = [{ role: 'user', content: 'ping' }];
-      
+
       const response = await client.chat(pingMessage);
       const durationMs = Math.max(0, Date.now() - startedAt);
       const ok = Boolean(response?.content);
@@ -573,7 +604,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
             set((state) => {
               const replaced = state.profiles.map((p) => (p.id === profileId ? nextProfile : p));
-              if (typeof localStorage !== 'undefined') localStorage.setItem(ACTIVE_AI_PROFILE_KEY, created.id);
+              if (typeof localStorage !== 'undefined')
+                localStorage.setItem(ACTIVE_AI_PROFILE_KEY, created.id);
               return {
                 profiles: replaced,
                 activeProfileId: created.id,
@@ -588,8 +620,12 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             ...(typeof target.name === 'string' ? { name: target.name } : {}),
             ...(cfg.provider ? { provider: cfg.provider } : {}),
             ...(typeof cfg.model === 'string' ? { model: cfg.model } : {}),
-            ...(cfg.provider !== 'kimi' && normalizedBaseURL !== null ? { baseURL: normalizedBaseURL } : {}),
-            ...(cfg.generationParams !== undefined ? { generationParams: cfg.generationParams as any } : {}),
+            ...(cfg.provider !== 'kimi' && normalizedBaseURL !== null
+              ? { baseURL: normalizedBaseURL }
+              : {}),
+            ...(cfg.generationParams !== undefined
+              ? { generationParams: cfg.generationParams as any }
+              : {}),
             ...(cfg.apiKey?.trim() ? { apiKey: cfg.apiKey.trim() } : {}),
             pricing: (target.pricing ?? null) as any,
           };
@@ -614,8 +650,10 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
           set((state) => {
             const replaced = state.profiles.map((p) => (p.id === profileId ? nextProfile : p));
-            const activeId2 = state.activeProfileId === profileId ? updated.id : state.activeProfileId;
-            if (typeof localStorage !== 'undefined' && activeId2) localStorage.setItem(ACTIVE_AI_PROFILE_KEY, activeId2);
+            const activeId2 =
+              state.activeProfileId === profileId ? updated.id : state.activeProfileId;
+            if (typeof localStorage !== 'undefined' && activeId2)
+              localStorage.setItem(ACTIVE_AI_PROFILE_KEY, activeId2);
             const active2 = replaced.find((p) => p.id === activeId2) || replaced[0];
             return {
               profiles: replaced,
@@ -663,7 +701,10 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     if (isApiMode()) {
       if (profileId.startsWith('draft_')) {
         const nextProfiles = get().profiles.filter((p) => p.id !== profileId);
-        const nextActiveId = get().activeProfileId === profileId ? nextProfiles[0]?.id ?? null : get().activeProfileId;
+        const nextActiveId =
+          get().activeProfileId === profileId
+            ? (nextProfiles[0]?.id ?? null)
+            : get().activeProfileId;
         const active = nextActiveId ? nextProfiles.find((p) => p.id === nextActiveId) : undefined;
         set({
           profiles: nextProfiles,
@@ -674,10 +715,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         return;
       }
 
-      void apiDeleteAIProfile(profileId).catch((err) => console.error('Failed to delete AI profile (api):', err));
+      void apiDeleteAIProfile(profileId).catch((err) =>
+        console.error('Failed to delete AI profile (api):', err),
+      );
 
       const nextProfiles = get().profiles.filter((p) => p.id !== profileId);
-      const nextActiveId = get().activeProfileId === profileId ? nextProfiles[0]?.id ?? null : get().activeProfileId;
+      const nextActiveId =
+        get().activeProfileId === profileId ? (nextProfiles[0]?.id ?? null) : get().activeProfileId;
       if (typeof localStorage !== 'undefined') {
         if (nextActiveId) localStorage.setItem(ACTIVE_AI_PROFILE_KEY, nextActiveId);
         else localStorage.removeItem(ACTIVE_AI_PROFILE_KEY);

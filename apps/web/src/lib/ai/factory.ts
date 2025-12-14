@@ -50,7 +50,9 @@ export class AIFactory {
     // 后端模式：浏览器不持有 apiKey，通过 aiProfileId 走服务端调用
     if (isApiMode()) {
       if (!config?.aiProfileId) {
-        throw new Error('AI配置未绑定到服务端档案（aiProfileId 缺失）。请在「设置」中保存配置后再试。');
+        throw new Error(
+          'AI配置未绑定到服务端档案（aiProfileId 缺失）。请在「设置」中保存配置后再试。',
+        );
       }
       return new AIClient(new BackendProvider(), config);
     }

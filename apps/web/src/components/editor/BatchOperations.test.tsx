@@ -15,7 +15,10 @@ function createMockScenes(count: number): Scene[] {
     sceneDescription: i % 2 === 0 ? `场景 ${i + 1} 锚点` : '',
     shotPrompt: i % 3 === 0 ? `关键帧提示词 ${i + 1}` : '',
     motionPrompt: i % 4 === 0 ? `时空/运动提示词 ${i + 1}` : '',
-    dialogues: i === 0 ? [{ id: 'd1', type: 'dialogue' as const, content: '测试台词', characterName: '角色A' }] : [],
+    dialogues:
+      i === 0
+        ? [{ id: 'd1', type: 'dialogue' as const, content: '测试台词', characterName: '角色A' }]
+        : [],
     status: i === 0 ? 'completed' : 'pending',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -193,15 +196,15 @@ describe('BatchOperations', () => {
 
       expect(mockOnBatchGenerate).toHaveBeenCalledWith(
         expect.arrayContaining(['scene-1', 'scene-2', 'scene-3', 'scene-4', 'scene-5']),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
     it('应该在全局批量生成中禁用批量生成按钮', async () => {
       const user = userEvent.setup();
-      
+
       // 设置全局批量生成状态
-      useAIProgressStore.setState({ 
+      useAIProgressStore.setState({
         isBatchGenerating: true,
         batchGeneratingSource: 'scene_refinement',
       });
@@ -263,7 +266,7 @@ describe('BatchOperations', () => {
   describe('批量删除', () => {
     it('应该在选择分镜后能够执行批量删除', async () => {
       const user = userEvent.setup();
-      
+
       render(<BatchOperations {...defaultProps} />);
 
       await user.click(screen.getByRole('button', { name: '全选' }));
@@ -273,13 +276,13 @@ describe('BatchOperations', () => {
       await user.click(within(dialog).getByRole('button', { name: '确认删除' }));
 
       expect(mockOnBatchDelete).toHaveBeenCalledWith(
-        expect.arrayContaining(['scene-1', 'scene-2', 'scene-3', 'scene-4', 'scene-5'])
+        expect.arrayContaining(['scene-1', 'scene-2', 'scene-3', 'scene-4', 'scene-5']),
       );
     });
 
     it('应该在用户取消确认时不执行删除', async () => {
       const user = userEvent.setup();
-      
+
       render(<BatchOperations {...defaultProps} />);
 
       await user.click(screen.getByRole('button', { name: '全选' }));
@@ -371,7 +374,7 @@ describe('BatchOperations', () => {
 
     it('应该能够切换暂停状态', async () => {
       const user = userEvent.setup();
-      
+
       useAIProgressStore.setState({
         batchOperations: {
           selectedScenes: new Set(['scene-1', 'scene-2']),
@@ -443,7 +446,7 @@ describe('BatchOperations', () => {
     it('应该显示已完成分镜的标识', () => {
       const scenes = createMockScenes(3);
       scenes[0].status = 'completed';
-      
+
       render(<BatchOperations {...defaultProps} scenes={scenes} />);
 
       // 检查已完成的分镜是否有特殊标识
@@ -523,7 +526,7 @@ describe('BatchOperations', () => {
       await user.click(screen.getByRole('button', { name: '全选' }));
 
       const checkboxes = screen.getAllByRole('checkbox');
-      checkboxes.forEach(checkbox => {
+      checkboxes.forEach((checkbox) => {
         expect(checkbox).toBeChecked();
       });
     });

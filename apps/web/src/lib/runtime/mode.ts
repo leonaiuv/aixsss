@@ -21,9 +21,9 @@ export function isApiMode(): boolean {
 }
 
 export function getApiBasePath(): string {
-  const base = typeof import.meta.env.VITE_API_BASE_PATH === 'string' ? import.meta.env.VITE_API_BASE_PATH : '';
+  const base =
+    typeof import.meta.env.VITE_API_BASE_PATH === 'string'
+      ? import.meta.env.VITE_API_BASE_PATH
+      : '';
   return base?.trim() ? base.trim().replace(/\/$/, '') : '/api';
 }
-
-
-

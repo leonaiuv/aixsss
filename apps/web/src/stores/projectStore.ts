@@ -1,8 +1,19 @@
 import { create } from 'zustand';
 import { Project, migrateOldStyleToConfig } from '@/types';
-import { getProjects, saveProject, deleteProject as deleteProjectStorage, getProject } from '@/lib/storage';
+import {
+  getProjects,
+  saveProject,
+  deleteProject as deleteProjectStorage,
+  getProject,
+} from '@/lib/storage';
 import { isApiMode } from '@/lib/runtime/mode';
-import { apiCreateProject, apiDeleteProject, apiGetProject, apiListProjects, apiUpdateProject } from '@/lib/api/projects';
+import {
+  apiCreateProject,
+  apiDeleteProject,
+  apiGetProject,
+  apiListProjects,
+  apiUpdateProject,
+} from '@/lib/api/projects';
 
 /**
  * 迁移旧版项目到新版画风配置
@@ -22,7 +33,7 @@ interface ProjectStore {
   projects: Project[];
   currentProject: Project | null;
   isLoading: boolean;
-  
+
   // 操作方法
   loadProjects: () => void;
   loadProject: (projectId: string) => void;
@@ -36,7 +47,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   projects: [],
   currentProject: null,
   isLoading: false,
-  
+
   loadProjects: () => {
     set({ isLoading: true });
     if (isApiMode()) {
@@ -57,8 +68,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       // 迁移旧版项目
       const migratedProjects = projects.map(migrateProjectStyle);
       // 保存迁移后的项目
-      migratedProjects.forEach(p => {
-        if (p !== projects.find(op => op.id === p.id)) {
+      migratedProjects.forEach((p) => {
+        if (p !== projects.find((op) => op.id === p.id)) {
           saveProject(p);
         }
       });
@@ -68,7 +79,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       set({ isLoading: false });
     }
   },
-  
+
   loadProject: (projectId: string) => {
     if (isApiMode()) {
       void (async () => {
@@ -93,7 +104,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       set({ currentProject: project });
     }
   },
-  
+
   createProject: (projectData) => {
     const now = new Date().toISOString();
     const newProject: Project = {
@@ -114,23 +125,23 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       });
     }
 
-    set(state => ({
+    set((state) => ({
       projects: [...state.projects, newProject],
       currentProject: newProject,
     }));
-    
+
     return newProject;
   },
-  
+
   updateProject: (projectId, updates) => {
     const projects = get().projects;
-    const project = projects.find(p => p.id === projectId);
-    
+    const project = projects.find((p) => p.id === projectId);
+
     if (project) {
-      const updatedProject = { 
-        ...project, 
+      const updatedProject = {
+        ...project,
         ...updates,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
 
       if (!isApiMode()) {
@@ -140,14 +151,15 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           console.error('Failed to update project (api):', error);
         });
       }
-      
-      set(state => ({
-        projects: state.projects.map(p => p.id === projectId ? updatedProject : p),
-        currentProject: state.currentProject?.id === projectId ? updatedProject : state.currentProject,
+
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === projectId ? updatedProject : p)),
+        currentProject:
+          state.currentProject?.id === projectId ? updatedProject : state.currentProject,
       }));
     }
   },
-  
+
   deleteProject: (projectId) => {
     if (!isApiMode()) {
       deleteProjectStorage(projectId);
@@ -156,12 +168,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         console.error('Failed to delete project (api):', error);
       });
     }
-    set(state => ({
-      projects: state.projects.filter(p => p.id !== projectId),
+    set((state) => ({
+      projects: state.projects.filter((p) => p.id !== projectId),
       currentProject: state.currentProject?.id === projectId ? null : state.currentProject,
     }));
   },
-  
+
   setCurrentProject: (project) => {
     set({ currentProject: project });
   },

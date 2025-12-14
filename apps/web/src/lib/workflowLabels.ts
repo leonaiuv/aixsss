@@ -15,4 +15,3 @@ export const WORKFLOW_STATE_LABELS: Record<string, string> = {
 export function getWorkflowStateLabel(state: string): string {
   return WORKFLOW_STATE_LABELS[state] || state;
 }
-

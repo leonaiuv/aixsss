@@ -1,11 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { initProgressBridge, createProgressTask, notifyAIFallback, subscribeToFallbackEvents, getFallbackHistory, clearFallbackHistory } from './progressBridge';
+import {
+  initProgressBridge,
+  createProgressTask,
+  notifyAIFallback,
+  subscribeToFallbackEvents,
+  getFallbackHistory,
+  clearFallbackHistory,
+} from './progressBridge';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
 import * as debugLogger from './debugLogger';
 
 // Mock debugLogger
 vi.mock('./debugLogger', async () => {
-  const actual = await vi.importActual('./debugLogger') as typeof debugLogger;
+  const actual = (await vi.importActual('./debugLogger')) as typeof debugLogger;
   return {
     ...actual,
     subscribeToAIEvents: vi.fn(),
@@ -129,7 +136,10 @@ describe('progressBridge', () => {
       startCallback!(mockEntry);
 
       // Simulate success
-      const response = { content: 'AI Response', tokenUsage: { prompt: 100, completion: 50, total: 150 } };
+      const response = {
+        content: 'AI Response',
+        tokenUsage: { prompt: 100, completion: 50, total: 150 },
+      };
       successCallback!(mockEntry, response);
 
       const tasks = useAIProgressStore.getState().tasks;
@@ -291,10 +301,10 @@ describe('progressBridge', () => {
 
       types.forEach(({ type, title }) => {
         useAIProgressStore.setState({ tasks: [] });
-        
+
         const result = createProgressTask(type);
         const task = useAIProgressStore.getState().getTask(result.taskId);
-        
+
         expect(task?.title).toBe(title);
       });
     });
@@ -397,11 +407,13 @@ describe('progressBridge', () => {
       notifyAIFallback('测试功能', 'error', '规则');
 
       expect(callback).toHaveBeenCalledTimes(1);
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({
-        feature: '测试功能',
-        message: 'error',
-        fallbackTo: '规则',
-      }));
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          feature: '测试功能',
+          message: 'error',
+          fallbackTo: '规则',
+        }),
+      );
 
       unsubscribe();
     });

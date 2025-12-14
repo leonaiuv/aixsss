@@ -65,9 +65,7 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename }: ProjectCa
             <CardTitle className="text-lg line-clamp-1 group-hover:text-primary transition-colors">
               {project.title}
             </CardTitle>
-            <CardDescription className="mt-1 text-xs">
-              创建于 {formattedDate}
-            </CardDescription>
+            <CardDescription className="mt-1 text-xs">创建于 {formattedDate}</CardDescription>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -80,10 +78,7 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename }: ProjectCa
                 <Edit3 className="mr-2 h-4 w-4" />
                 重命名
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleDelete}
-                className="text-destructive"
-              >
+              <DropdownMenuItem onClick={handleDelete} className="text-destructive">
                 <Trash2 className="mr-2 h-4 w-4" />
                 删除
               </DropdownMenuItem>
@@ -98,14 +93,14 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename }: ProjectCa
               {project.style || '未设置风格'}
             </div>
           </div>
-          
+
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>进度</span>
               <span>{progressPercentage}%</span>
             </div>
             <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-500"
                 style={{ width: `${progressPercentage}%` }}
               />

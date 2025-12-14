@@ -24,16 +24,16 @@ export class OpenAICompatibleProvider implements AIProvider {
   async chat(
     messages: ChatMessage[],
     config: AIProviderConfig,
-    options?: AIRequestOptions
+    options?: AIRequestOptions,
   ): Promise<AIResponse> {
     const url = `${config.baseURL || 'https://api.openai.com'}/v1/chat/completions`;
     const params = config.generationParams;
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
         model: config.model,
@@ -41,8 +41,12 @@ export class OpenAICompatibleProvider implements AIProvider {
         ...(typeof params?.temperature === 'number' ? { temperature: params.temperature } : {}),
         ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
         ...(typeof params?.maxTokens === 'number' ? { max_tokens: params.maxTokens } : {}),
-        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
-        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
+        ...(typeof params?.presencePenalty === 'number'
+          ? { presence_penalty: params.presencePenalty }
+          : {}),
+        ...(typeof params?.frequencyPenalty === 'number'
+          ? { frequency_penalty: params.frequencyPenalty }
+          : {}),
       }),
       signal: options?.signal,
     });
@@ -54,27 +58,29 @@ export class OpenAICompatibleProvider implements AIProvider {
     const data = await response.json();
     return {
       content: data.choices[0].message.content,
-      tokenUsage: data.usage ? {
-        prompt: data.usage.prompt_tokens,
-        completion: data.usage.completion_tokens,
-        total: data.usage.total_tokens,
-      } : undefined,
+      tokenUsage: data.usage
+        ? {
+            prompt: data.usage.prompt_tokens,
+            completion: data.usage.completion_tokens,
+            total: data.usage.total_tokens,
+          }
+        : undefined,
     };
   }
 
   async *streamChat(
     messages: ChatMessage[],
     config: AIProviderConfig,
-    options?: AIRequestOptions
+    options?: AIRequestOptions,
   ): AsyncGenerator<string> {
     const url = `${config.baseURL || 'https://api.openai.com'}/v1/chat/completions`;
     const params = config.generationParams;
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
         model: config.model,
@@ -83,8 +89,12 @@ export class OpenAICompatibleProvider implements AIProvider {
         ...(typeof params?.temperature === 'number' ? { temperature: params.temperature } : {}),
         ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
         ...(typeof params?.maxTokens === 'number' ? { max_tokens: params.maxTokens } : {}),
-        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
-        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
+        ...(typeof params?.presencePenalty === 'number'
+          ? { presence_penalty: params.presencePenalty }
+          : {}),
+        ...(typeof params?.frequencyPenalty === 'number'
+          ? { frequency_penalty: params.frequencyPenalty }
+          : {}),
       }),
       signal: options?.signal,
     });
@@ -111,7 +121,7 @@ export class OpenAICompatibleProvider implements AIProvider {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (data === '[DONE]') return;
-          
+
           try {
             const json = JSON.parse(data);
             const content = json.choices[0]?.delta?.content;

@@ -69,7 +69,7 @@ describe('ProjectList', () => {
     render(
       <MemoryRouter>
         <ProjectList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     expect(screen.getByText('测试项目1')).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe('ProjectList', () => {
     render(
       <MemoryRouter>
         <ProjectList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     expect(screen.getByText('我的项目')).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe('ProjectList', () => {
     render(
       <MemoryRouter>
         <ProjectList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     expect(screen.getByText('还没有项目')).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('ProjectList', () => {
     render(
       <MemoryRouter>
         <ProjectList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     // 找到第一个项目的更多选项按钮
@@ -145,7 +145,7 @@ describe('ProjectList', () => {
     render(
       <MemoryRouter>
         <ProjectList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     // 找到第一个项目的更多选项按钮
@@ -170,7 +170,7 @@ describe('ProjectList', () => {
     render(
       <MemoryRouter>
         <ProjectList />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     // 找到第一个项目的更多选项按钮

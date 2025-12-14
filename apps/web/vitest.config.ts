@@ -1,13 +1,13 @@
 /// <reference types="vitest" />
-import path from "path"
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
+import path from 'path';
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()] as any,
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   test: {
@@ -33,10 +33,10 @@ export default defineConfig({
         'src/**/*.spec.tsx',
         'src/tests/**',
         'src/main.tsx',
-        'src/vite-env.d.ts'
-      ]
+        'src/vite-env.d.ts',
+      ],
     },
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
-    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', 'e2e/**']
-  }
-})
+    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache', 'e2e/**'],
+  },
+});

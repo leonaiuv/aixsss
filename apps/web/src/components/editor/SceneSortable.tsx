@@ -45,7 +45,7 @@ export function SceneSortable({ scenes, onReorder }: SceneSortableProps) {
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -95,11 +95,7 @@ export function SceneSortable({ scenes, onReorder }: SceneSortableProps) {
       )}
 
       {/* 拖拽列表 */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={items} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
             {items.map((scene, index) => (
@@ -114,14 +110,9 @@ export function SceneSortable({ scenes, onReorder }: SceneSortableProps) {
 
 // 可排序的分镜卡片
 function SortableSceneCard({ scene, index }: { scene: Scene; index: number }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: scene.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: scene.id,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -133,17 +124,11 @@ function SortableSceneCard({ scene, index }: { scene: Scene; index: number }) {
     <Card
       ref={setNodeRef}
       style={style}
-      className={`p-4 ${
-        isDragging ? 'shadow-lg z-50' : ''
-      } hover:shadow-md transition-shadow`}
+      className={`p-4 ${isDragging ? 'shadow-lg z-50' : ''} hover:shadow-md transition-shadow`}
     >
       <div className="flex items-center gap-3">
         {/* 拖拽手柄 */}
-        <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing"
-        >
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
           <GripVertical className="h-5 w-5 text-muted-foreground" />
         </div>
 
@@ -157,7 +142,13 @@ function SortableSceneCard({ scene, index }: { scene: Scene; index: number }) {
           <p className="font-medium truncate">{scene.summary}</p>
           <div className="flex items-center gap-2 mt-1">
             <Badge
-              variant={scene.status === 'completed' ? 'default' : scene.status === 'needs_update' ? 'destructive' : 'secondary'}
+              variant={
+                scene.status === 'completed'
+                  ? 'default'
+                  : scene.status === 'needs_update'
+                    ? 'destructive'
+                    : 'secondary'
+              }
               className={`text-xs ${scene.status === 'needs_update' ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
             >
               {getStatusText(scene.status)}
@@ -168,9 +159,7 @@ function SortableSceneCard({ scene, index }: { scene: Scene; index: number }) {
             {scene.actionDescription && (
               <span className="text-xs text-muted-foreground">有动作描述</span>
             )}
-            {scene.shotPrompt && (
-              <span className="text-xs text-muted-foreground">有提示词</span>
-            )}
+            {scene.shotPrompt && <span className="text-xs text-muted-foreground">有提示词</span>}
           </div>
         </div>
       </div>

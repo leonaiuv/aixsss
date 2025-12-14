@@ -9,7 +9,7 @@ export class KimiProvider implements AIProvider {
   async chat(
     messages: ChatMessage[],
     config: AIProviderConfig,
-    options?: AIRequestOptions
+    options?: AIRequestOptions,
   ): Promise<AIResponse> {
     const url = `${KIMI_BASE_URL}/v1/chat/completions`;
     const model = config.model || 'moonshot-v1-8k';
@@ -19,20 +19,20 @@ export class KimiProvider implements AIProvider {
     const temperature = isThinkingModel
       ? 1.0
       : typeof params?.temperature === 'number'
-      ? params.temperature
-      : 0.6;
+        ? params.temperature
+        : 0.6;
 
     const maxTokens = isThinkingModel
       ? Math.max(16000, typeof params?.maxTokens === 'number' ? params.maxTokens : 16000)
       : typeof params?.maxTokens === 'number'
-      ? params.maxTokens
-      : 4096;
-    
+        ? params.maxTokens
+        : 4096;
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
         model,
@@ -40,8 +40,12 @@ export class KimiProvider implements AIProvider {
         temperature,
         max_tokens: maxTokens,
         ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
-        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
-        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
+        ...(typeof params?.presencePenalty === 'number'
+          ? { presence_penalty: params.presencePenalty }
+          : {}),
+        ...(typeof params?.frequencyPenalty === 'number'
+          ? { frequency_penalty: params.frequencyPenalty }
+          : {}),
       }),
       signal: options?.signal,
     });
@@ -59,18 +63,20 @@ export class KimiProvider implements AIProvider {
     const data = await response.json();
     return {
       content: data.choices[0].message.content,
-      tokenUsage: data.usage ? {
-        prompt: data.usage.prompt_tokens,
-        completion: data.usage.completion_tokens,
-        total: data.usage.total_tokens,
-      } : undefined,
+      tokenUsage: data.usage
+        ? {
+            prompt: data.usage.prompt_tokens,
+            completion: data.usage.completion_tokens,
+            total: data.usage.total_tokens,
+          }
+        : undefined,
     };
   }
 
   async *streamChat(
     messages: ChatMessage[],
     config: AIProviderConfig,
-    options?: AIRequestOptions
+    options?: AIRequestOptions,
   ): AsyncGenerator<string> {
     const url = `${KIMI_BASE_URL}/v1/chat/completions`;
     const model = config.model || 'moonshot-v1-8k';
@@ -80,20 +86,20 @@ export class KimiProvider implements AIProvider {
     const temperature = isThinkingModel
       ? 1.0
       : typeof params?.temperature === 'number'
-      ? params.temperature
-      : 0.6;
+        ? params.temperature
+        : 0.6;
 
     const maxTokens = isThinkingModel
       ? Math.max(16000, typeof params?.maxTokens === 'number' ? params.maxTokens : 16000)
       : typeof params?.maxTokens === 'number'
-      ? params.maxTokens
-      : 4096;
-    
+        ? params.maxTokens
+        : 4096;
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
         model,
@@ -102,8 +108,12 @@ export class KimiProvider implements AIProvider {
         temperature,
         max_tokens: maxTokens,
         ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
-        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
-        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
+        ...(typeof params?.presencePenalty === 'number'
+          ? { presence_penalty: params.presencePenalty }
+          : {}),
+        ...(typeof params?.frequencyPenalty === 'number'
+          ? { frequency_penalty: params.frequencyPenalty }
+          : {}),
       }),
       signal: options?.signal,
     });
@@ -136,7 +146,7 @@ export class KimiProvider implements AIProvider {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (data === '[DONE]') return;
-          
+
           try {
             const json = JSON.parse(data);
             const delta = json.choices[0]?.delta;

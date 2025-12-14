@@ -13,7 +13,9 @@ const storageState = {
 
 const storageSpies = {
   getProjects: vi.fn(() => storageState.projects),
-  getProject: vi.fn((projectId: string) => storageState.projects.find((p) => p.id === projectId) ?? null),
+  getProject: vi.fn(
+    (projectId: string) => storageState.projects.find((p) => p.id === projectId) ?? null,
+  ),
   saveProject: vi.fn((project: Project) => {
     const index = storageState.projects.findIndex((p) => p.id === project.id);
     if (index >= 0) {

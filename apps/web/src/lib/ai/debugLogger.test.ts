@@ -56,7 +56,7 @@ describe('debugLogger', () => {
       });
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
 
       expect(entry).toBeDefined();
       expect(entry?.callType).toBe('keyframe_prompt');
@@ -74,7 +74,7 @@ describe('debugLogger', () => {
       });
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
 
       expect(entry?.timestamp).toBeDefined();
       expect(typeof entry?.timestamp).toBe('string');
@@ -94,7 +94,7 @@ describe('debugLogger', () => {
         'custom',
       ];
 
-      types.forEach(type => {
+      types.forEach((type) => {
         const logId = logAICall(type, {
           promptTemplate: '模板',
           filledPrompt: '内容',
@@ -104,7 +104,7 @@ describe('debugLogger', () => {
         });
 
         const history = getLogHistory();
-        const entry = history.find(e => e.id === logId);
+        const entry = history.find((e) => e.id === logId);
         expect(entry?.callType).toBe(type);
       });
     });
@@ -130,7 +130,7 @@ describe('debugLogger', () => {
       });
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
 
       expect(entry?.context.projectId).toBe('proj-1');
       expect(entry?.context.style).toBe('赛博朋克');
@@ -171,7 +171,7 @@ describe('debugLogger', () => {
       });
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
 
       expect(entry?.status).toBe('success');
       expect(entry?.response?.content).toBe('AI响应内容');
@@ -192,7 +192,7 @@ describe('debugLogger', () => {
       });
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
 
       expect(entry?.status).toBe('success');
       expect(entry?.response?.content).toBe('仅内容响应');
@@ -220,7 +220,7 @@ describe('debugLogger', () => {
       updateLogWithError(logId, '网络请求失败');
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
 
       expect(entry?.status).toBe('error');
       expect(entry?.error).toBe('网络请求失败');
@@ -248,10 +248,10 @@ describe('debugLogger', () => {
 
       updateLogProgress(logId, 50, '处理中...');
 
-      expect(callback).toHaveBeenCalledWith(
-        expect.any(Object),
-        { progress: 50, step: '处理中...' }
-      );
+      expect(callback).toHaveBeenCalledWith(expect.any(Object), {
+        progress: 50,
+        step: '处理中...',
+      });
 
       unsubscribe();
     });
@@ -415,7 +415,7 @@ describe('debugLogger', () => {
 
       const errors = getRecentErrors(5);
       expect(errors.length).toBe(5);
-      errors.forEach(e => expect(e.status).toBe('error'));
+      errors.forEach((e) => expect(e.status).toBe('error'));
     });
 
     it('应该返回空数组当没有错误时', () => {
@@ -474,7 +474,7 @@ describe('debugLogger', () => {
       }
 
       const suggestions = getOptimizationSuggestions();
-      const hasWarning = suggestions.some(s => s.includes('⚠️') || s.includes('错误率'));
+      const hasWarning = suggestions.some((s) => s.includes('⚠️') || s.includes('错误率'));
       expect(hasWarning).toBe(true);
     });
 
@@ -494,7 +494,7 @@ describe('debugLogger', () => {
       }
 
       const suggestions = getOptimizationSuggestions();
-      const hasTokenWarning = suggestions.some(s => s.includes('Token') || s.includes('💡'));
+      const hasTokenWarning = suggestions.some((s) => s.includes('Token') || s.includes('💡'));
       expect(hasTokenWarning).toBe(true);
     });
   });
@@ -659,13 +659,13 @@ describe('debugLogger', () => {
       });
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
       expect(entry?.messages).toEqual([]);
     });
 
     it('应该处理非常长的提示词', () => {
       const longPrompt = 'x'.repeat(100000);
-      
+
       const logId = logAICall('scene_description', {
         promptTemplate: longPrompt,
         filledPrompt: longPrompt,
@@ -675,13 +675,13 @@ describe('debugLogger', () => {
       });
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
       expect(entry?.promptTemplate.length).toBe(100000);
     });
 
     it('应该处理特殊字符', () => {
       const specialContent = '测试 <script>alert("XSS")</script> 特殊字符 \n\t\r';
-      
+
       const logId = logAICall('scene_description', {
         promptTemplate: specialContent,
         filledPrompt: specialContent,
@@ -691,7 +691,7 @@ describe('debugLogger', () => {
       });
 
       const history = getLogHistory();
-      const entry = history.find(e => e.id === logId);
+      const entry = history.find((e) => e.id === logId);
       expect(entry?.promptTemplate).toBe(specialContent);
     });
 
@@ -704,8 +704,8 @@ describe('debugLogger', () => {
             messages: [],
             context: { index: i },
             config: { provider: 'test', model: 'test' },
-          })
-        )
+          }),
+        ),
       );
 
       await Promise.all(promises);

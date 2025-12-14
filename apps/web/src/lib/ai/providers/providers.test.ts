@@ -109,8 +109,9 @@ describe('DeepSeekProvider', () => {
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      await expect(provider.chat([{ role: 'user', content: 'test' }], defaultConfig))
-        .rejects.toThrow('DeepSeek API error (401 Unauthorized) - Invalid API key');
+      await expect(
+        provider.chat([{ role: 'user', content: 'test' }], defaultConfig),
+      ).rejects.toThrow('DeepSeek API error (401 Unauthorized) - Invalid API key');
     });
 
     it('应处理 JSON 解析失败的错误响应', async () => {
@@ -126,8 +127,9 @@ describe('DeepSeekProvider', () => {
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      await expect(provider.chat([{ role: 'user', content: 'test' }], defaultConfig))
-        .rejects.toThrow('DeepSeek API error (500 Internal Server Error) - Server Error Text');
+      await expect(
+        provider.chat([{ role: 'user', content: 'test' }], defaultConfig),
+      ).rejects.toThrow('DeepSeek API error (500 Internal Server Error) - Server Error Text');
     });
 
     it('应处理文本解析也失败的错误响应', async () => {
@@ -145,15 +147,17 @@ describe('DeepSeekProvider', () => {
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      await expect(provider.chat([{ role: 'user', content: 'test' }], defaultConfig))
-        .rejects.toThrow('DeepSeek API error (500 Internal Server Error)');
+      await expect(
+        provider.chat([{ role: 'user', content: 'test' }], defaultConfig),
+      ).rejects.toThrow('DeepSeek API error (500 Internal Server Error)');
     });
   });
 
   describe('streamChat 方法', () => {
     it('应返回 AsyncGenerator 并正确解析流数据', async () => {
       const mockReader = {
-        read: vi.fn()
+        read: vi
+          .fn()
           .mockResolvedValueOnce({
             done: false,
             value: new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n'),
@@ -206,10 +210,13 @@ describe('DeepSeekProvider', () => {
 
     it('应正确处理跨块的数据', async () => {
       const mockReader = {
-        read: vi.fn()
+        read: vi
+          .fn()
           .mockResolvedValueOnce({
             done: false,
-            value: new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Part1"}}]}\ndata: {"choices":'),
+            value: new TextEncoder().encode(
+              'data: {"choices":[{"delta":{"content":"Part1"}}]}\ndata: {"choices":',
+            ),
           })
           .mockResolvedValueOnce({
             done: false,
@@ -238,10 +245,13 @@ describe('DeepSeekProvider', () => {
     it('应忽略无效的 JSON 行', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const mockReader = {
-        read: vi.fn()
+        read: vi
+          .fn()
           .mockResolvedValueOnce({
             done: false,
-            value: new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Valid"}}]}\ndata: invalid-json\n'),
+            value: new TextEncoder().encode(
+              'data: {"choices":[{"delta":{"content":"Valid"}}]}\ndata: invalid-json\n',
+            ),
           })
           .mockResolvedValueOnce({ done: true, value: undefined }),
       };
@@ -348,15 +358,17 @@ describe('OpenAICompatibleProvider', () => {
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      await expect(provider.chat([{ role: 'user', content: 'test' }], defaultConfig))
-        .rejects.toThrow('OpenAI API error');
+      await expect(
+        provider.chat([{ role: 'user', content: 'test' }], defaultConfig),
+      ).rejects.toThrow('OpenAI API error');
     });
   });
 
   describe('streamChat 方法', () => {
     it('应正确解析流数据', async () => {
       const mockReader = {
-        read: vi.fn()
+        read: vi
+          .fn()
           .mockResolvedValueOnce({
             done: false,
             value: new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Stream"}}]}\n'),
@@ -537,22 +549,28 @@ describe('GeminiProvider', () => {
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      await expect(provider.chat([{ role: 'user', content: 'test' }], defaultConfig))
-        .rejects.toThrow('Gemini API error (403 Forbidden) - API key invalid');
+      await expect(
+        provider.chat([{ role: 'user', content: 'test' }], defaultConfig),
+      ).rejects.toThrow('Gemini API error (403 Forbidden) - API key invalid');
     });
   });
 
   describe('streamChat 方法', () => {
     it('应正确解析 Gemini 流数据格式', async () => {
       const mockReader = {
-        read: vi.fn()
+        read: vi
+          .fn()
           .mockResolvedValueOnce({
             done: false,
-            value: new TextEncoder().encode('data: {"candidates":[{"content":{"parts":[{"text":"Hello"}]}}]}\n'),
+            value: new TextEncoder().encode(
+              'data: {"candidates":[{"content":{"parts":[{"text":"Hello"}]}}]}\n',
+            ),
           })
           .mockResolvedValueOnce({
             done: false,
-            value: new TextEncoder().encode('data: {"candidates":[{"content":{"parts":[{"text":" World"}]}}]}\n'),
+            value: new TextEncoder().encode(
+              'data: {"candidates":[{"content":{"parts":[{"text":" World"}]}}]}\n',
+            ),
           })
           .mockResolvedValueOnce({ done: true, value: undefined }),
       };
@@ -599,10 +617,13 @@ describe('GeminiProvider', () => {
 
     it('应忽略空数据行', async () => {
       const mockReader = {
-        read: vi.fn()
+        read: vi
+          .fn()
           .mockResolvedValueOnce({
             done: false,
-            value: new TextEncoder().encode('data: \ndata: {"candidates":[{"content":{"parts":[{"text":"Valid"}]}}]}\n'),
+            value: new TextEncoder().encode(
+              'data: \ndata: {"candidates":[{"content":{"parts":[{"text":"Valid"}]}}]}\n',
+            ),
           })
           .mockResolvedValueOnce({ done: true, value: undefined }),
       };
@@ -632,9 +653,21 @@ describe('GeminiProvider', () => {
 
 describe('跨 Provider 边界情况', () => {
   const providers = [
-    { name: 'DeepSeek', instance: new DeepSeekProvider(), config: { provider: 'deepseek' as const, apiKey: 'key', model: 'model' } },
-    { name: 'OpenAI', instance: new OpenAICompatibleProvider(), config: { provider: 'openai-compatible' as const, apiKey: 'key', model: 'model' } },
-    { name: 'Gemini', instance: new GeminiProvider(), config: { provider: 'gemini' as const, apiKey: 'key', model: 'model' } },
+    {
+      name: 'DeepSeek',
+      instance: new DeepSeekProvider(),
+      config: { provider: 'deepseek' as const, apiKey: 'key', model: 'model' },
+    },
+    {
+      name: 'OpenAI',
+      instance: new OpenAICompatibleProvider(),
+      config: { provider: 'openai-compatible' as const, apiKey: 'key', model: 'model' },
+    },
+    {
+      name: 'Gemini',
+      instance: new GeminiProvider(),
+      config: { provider: 'gemini' as const, apiKey: 'key', model: 'model' },
+    },
   ];
 
   afterEach(() => {
@@ -646,9 +679,13 @@ describe('跨 Provider 边界情况', () => {
       it('应处理空消息数组', async () => {
         const mockResponse = {
           ok: true,
-          json: async () => name === 'Gemini'
-            ? { candidates: [{ content: { parts: [{ text: '' }] } }] }
-            : { choices: [{ message: { content: '' } }], usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } },
+          json: async () =>
+            name === 'Gemini'
+              ? { candidates: [{ content: { parts: [{ text: '' }] } }] }
+              : {
+                  choices: [{ message: { content: '' } }],
+                  usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+                },
         } as Response;
 
         vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
@@ -660,15 +697,17 @@ describe('跨 Provider 边界情况', () => {
       it('应处理网络错误', async () => {
         vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network failure'));
 
-        await expect(instance.chat([{ role: 'user', content: 'test' }], config))
-          .rejects.toThrow('Network failure');
+        await expect(instance.chat([{ role: 'user', content: 'test' }], config)).rejects.toThrow(
+          'Network failure',
+        );
       });
 
       it('应处理超时', async () => {
         vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Timeout'));
 
-        await expect(instance.chat([{ role: 'user', content: 'test' }], config))
-          .rejects.toThrow('Timeout');
+        await expect(instance.chat([{ role: 'user', content: 'test' }], config)).rejects.toThrow(
+          'Timeout',
+        );
       });
     });
   });

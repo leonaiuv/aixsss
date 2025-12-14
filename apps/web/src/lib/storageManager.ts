@@ -28,7 +28,7 @@ export function getStorageUsage(): {
   available: number;
 } {
   let used = 0;
-  
+
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key) {
@@ -36,7 +36,7 @@ export function getStorageUsage(): {
       used += key.length + item.length;
     }
   }
-  
+
   return {
     used,
     quota: STORAGE_QUOTA,
@@ -89,42 +89,48 @@ export function decompressData(compressed: string): string {
  */
 export function saveLargeData(key: string, data: string, compress = false): void {
   let processedData = data;
-  
+
   // 压缩
   if (compress) {
     processedData = compressData(data);
   }
-  
+
   // 检查是否需要分片
   if (processedData.length <= CHUNK_SIZE) {
     localStorage.setItem(key, processedData);
-    localStorage.setItem(`${key}_meta`, JSON.stringify({
-      compressed: compress,
-      chunked: false,
-      version: CURRENT_VERSION,
-      timestamp: Date.now(),
-    }));
+    localStorage.setItem(
+      `${key}_meta`,
+      JSON.stringify({
+        compressed: compress,
+        chunked: false,
+        version: CURRENT_VERSION,
+        timestamp: Date.now(),
+      }),
+    );
     return;
   }
-  
+
   // 分片存储
   const chunks = [];
   for (let i = 0; i < processedData.length; i += CHUNK_SIZE) {
     chunks.push(processedData.slice(i, i + CHUNK_SIZE));
   }
-  
+
   chunks.forEach((chunk, index) => {
     localStorage.setItem(`${key}_chunk_${index}`, chunk);
   });
-  
+
   // 保存元数据
-  localStorage.setItem(`${key}_meta`, JSON.stringify({
-    compressed: compress,
-    chunked: true,
-    chunkCount: chunks.length,
-    version: CURRENT_VERSION,
-    timestamp: Date.now(),
-  }));
+  localStorage.setItem(
+    `${key}_meta`,
+    JSON.stringify({
+      compressed: compress,
+      chunked: true,
+      chunkCount: chunks.length,
+      version: CURRENT_VERSION,
+      timestamp: Date.now(),
+    }),
+  );
 }
 
 /**
@@ -132,17 +138,17 @@ export function saveLargeData(key: string, data: string, compress = false): void
  */
 export function loadLargeData(key: string): string | null {
   const metaStr = localStorage.getItem(`${key}_meta`);
-  
+
   if (!metaStr) {
     // 兼容旧版本（无元数据）
     return localStorage.getItem(key);
   }
-  
+
   try {
     const meta = JSON.parse(metaStr);
-    
+
     let data: string;
-    
+
     if (meta.chunked) {
       // 合并分片
       const chunks: string[] = [];
@@ -159,12 +165,12 @@ export function loadLargeData(key: string): string | null {
     } else {
       data = localStorage.getItem(key) || '';
     }
-    
+
     // 解压
     if (meta.compressed) {
       data = decompressData(data);
     }
-    
+
     return data;
   } catch (error) {
     console.error('Failed to load large data:', error);
@@ -177,24 +183,24 @@ export function loadLargeData(key: string): string | null {
  */
 export function removeLargeData(key: string): void {
   const metaStr = localStorage.getItem(`${key}_meta`);
-  
+
   if (metaStr) {
     try {
       const meta = JSON.parse(metaStr);
-      
+
       if (meta.chunked) {
         // 删除所有分片
         for (let i = 0; i < meta.chunkCount; i++) {
           localStorage.removeItem(`${key}_chunk_${i}`);
         }
       }
-      
+
       localStorage.removeItem(`${key}_meta`);
     } catch (error) {
       console.error('Failed to remove large data:', error);
     }
   }
-  
+
   localStorage.removeItem(key);
 }
 
@@ -204,16 +210,16 @@ export function removeLargeData(key: string): void {
 export function cleanupOldData(days: number = 90): number {
   const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
   let cleaned = 0;
-  
+
   const keysToRemove: string[] = [];
-  
+
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    
+
     if (key && key.endsWith('_meta')) {
       try {
         const meta = JSON.parse(localStorage.getItem(key) || '{}');
-        
+
         if (meta.timestamp && meta.timestamp < cutoffTime) {
           const dataKey = key.replace('_meta', '');
           keysToRemove.push(dataKey);
@@ -223,12 +229,12 @@ export function cleanupOldData(days: number = 90): number {
       }
     }
   }
-  
-  keysToRemove.forEach(key => {
+
+  keysToRemove.forEach((key) => {
     removeLargeData(key);
     cleaned++;
   });
-  
+
   return cleaned;
 }
 
@@ -237,14 +243,14 @@ export function cleanupOldData(days: number = 90): number {
  */
 export function getAllKeys(): string[] {
   const keys: string[] = [];
-  
+
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key && !key.endsWith('_meta') && !key.includes('_chunk_')) {
       keys.push(key);
     }
   }
-  
+
   return keys;
 }
 
@@ -254,8 +260,8 @@ export function getAllKeys(): string[] {
 export function exportAllData(): Record<string, unknown> {
   const data: Record<string, unknown> = {};
   const keys = getAllKeys();
-  
-  keys.forEach(key => {
+
+  keys.forEach((key) => {
     const value = loadLargeData(key);
     if (value) {
       try {
@@ -265,7 +271,7 @@ export function exportAllData(): Record<string, unknown> {
       }
     }
   });
-  
+
   return data;
 }
 
@@ -284,14 +290,14 @@ export function importAllData(data: Record<string, unknown>): void {
  */
 export function verifyDataIntegrity(key: string): boolean {
   const metaStr = localStorage.getItem(`${key}_meta`);
-  
+
   if (!metaStr) {
     return true; // 无元数据，假设正常
   }
-  
+
   try {
     const meta = JSON.parse(metaStr);
-    
+
     if (meta.chunked) {
       // 检查所有分片是否存在
       for (let i = 0; i < meta.chunkCount; i++) {
@@ -304,7 +310,7 @@ export function verifyDataIntegrity(key: string): boolean {
         return false;
       }
     }
-    
+
     return true;
   } catch (error) {
     return false;
@@ -318,7 +324,7 @@ export function repairCorruptedData(key: string): boolean {
   if (verifyDataIntegrity(key)) {
     return true; // 无需修复
   }
-  
+
   // 尝试从备份恢复或清除损坏数据
   console.warn(`Data corrupted for key: ${key}, removing...`);
   removeLargeData(key);
@@ -331,17 +337,17 @@ export function repairCorruptedData(key: string): boolean {
 export function initStorageManager(): void {
   // 设置版本号
   const storedVersion = localStorage.getItem('aixs_storage_version');
-  
+
   if (!storedVersion || storedVersion !== CURRENT_VERSION) {
     console.log(`Upgrading storage from ${storedVersion} to ${CURRENT_VERSION}`);
     localStorage.setItem('aixs_storage_version', CURRENT_VERSION);
-    
+
     // 执行数据迁移（如需要）
     if (storedVersion && storedVersion < '2.0.0') {
       migrateFromV1toV2();
     }
   }
-  
+
   // 检查并清理过期数据
   const usage = getStorageUsage();
   if (usage.percentage > 80) {
@@ -356,7 +362,7 @@ export function initStorageManager(): void {
 function migrateFromV1toV2(): void {
   // V1到V2的迁移逻辑
   console.log('Migrating data from V1 to V2...');
-  
+
   // 这里可以添加具体的迁移逻辑
   // 例如：重新压缩数据、更新数据结构等
 }

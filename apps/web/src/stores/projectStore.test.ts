@@ -85,7 +85,7 @@ describe('projectStore', () => {
       });
 
       const { loadProjects } = useProjectStore.getState();
-      
+
       expect(() => loadProjects()).not.toThrow();
       expect(useProjectStore.getState().isLoading).toBe(false);
     });
@@ -223,7 +223,7 @@ describe('projectStore', () => {
       const { updateProject } = useProjectStore.getState();
       updateProject('proj_1', { title: 'Updated Title' });
 
-      const updated = useProjectStore.getState().projects.find(p => p.id === 'proj_1');
+      const updated = useProjectStore.getState().projects.find((p) => p.id === 'proj_1');
       expect(updated?.title).toBe('Updated Title');
     });
 
@@ -232,7 +232,7 @@ describe('projectStore', () => {
       const beforeUpdate = new Date().toISOString();
       updateProject('proj_1', { title: 'Updated' });
 
-      const updated = useProjectStore.getState().projects.find(p => p.id === 'proj_1');
+      const updated = useProjectStore.getState().projects.find((p) => p.id === 'proj_1');
       expect(updated?.updatedAt >= beforeUpdate).toBe(true);
     });
 
@@ -265,7 +265,7 @@ describe('projectStore', () => {
         workflowState: 'SCENE_PROCESSING',
       });
 
-      const updated = useProjectStore.getState().projects.find(p => p.id === 'proj_1');
+      const updated = useProjectStore.getState().projects.find((p) => p.id === 'proj_1');
       expect(updated?.title).toBe('New Title');
       expect(updated?.summary).toBe('New Summary');
       expect(updated?.workflowState).toBe('SCENE_PROCESSING');
@@ -383,11 +383,11 @@ describe('projectStore', () => {
       const ids = new Set<string>();
 
       for (let i = 0; i < 1000; i++) {
-        const project = createProject({ 
-          title: `Project ${i}`, 
-          summary: 'Test', 
-          style: 'anime', 
-          protagonist: 'Hero' 
+        const project = createProject({
+          title: `Project ${i}`,
+          summary: 'Test',
+          style: 'anime',
+          protagonist: 'Hero',
         });
         ids.add(project.id);
       }
@@ -399,7 +399,7 @@ describe('projectStore', () => {
   describe('boundary conditions', () => {
     it('should handle updateProject with non-existent ID gracefully', () => {
       const { updateProject } = useProjectStore.getState();
-      
+
       expect(() => updateProject('nonexistent-id', { title: 'New Title' })).not.toThrow();
       expect(storage.saveProject).not.toHaveBeenCalled();
     });
@@ -430,7 +430,7 @@ describe('projectStore', () => {
     it('should handle empty projects list gracefully', () => {
       useProjectStore.setState({ projects: [], currentProject: null });
       const { updateProject, deleteProject } = useProjectStore.getState();
-      
+
       expect(() => updateProject('any-id', { title: 'Test' })).not.toThrow();
       expect(() => deleteProject('any-id')).not.toThrow();
     });
@@ -443,12 +443,14 @@ describe('projectStore', () => {
         throw error;
       });
 
-      expect(() => createProject({
-        title: 'Test',
-        summary: 'Test',
-        style: 'anime',
-        protagonist: 'Hero',
-      })).toThrow();
+      expect(() =>
+        createProject({
+          title: 'Test',
+          summary: 'Test',
+          style: 'anime',
+          protagonist: 'Hero',
+        }),
+      ).toThrow();
     });
   });
 

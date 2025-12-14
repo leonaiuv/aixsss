@@ -209,11 +209,10 @@ describe('cn 函数', () => {
     });
 
     it('应支持卡片组件场景', () => {
-      const result = cn(
-        'rounded-lg shadow-md',
-        'p-6',
-        { 'border border-red-500': false, 'border border-gray-200': true }
-      );
+      const result = cn('rounded-lg shadow-md', 'p-6', {
+        'border border-red-500': false,
+        'border border-gray-200': true,
+      });
 
       expect(result).toContain('rounded-lg');
       expect(result).toContain('shadow-md');
@@ -243,7 +242,7 @@ describe('cn 函数', () => {
         'base-class',
         isActive && 'active-class',
         isDisabled && 'disabled-class',
-        isLoading && 'loading-class'
+        isLoading && 'loading-class',
       );
 
       expect(result).toContain('base-class');

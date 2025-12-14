@@ -63,7 +63,11 @@ function normalizeAIResponseFromJob(job: ApiAIJob): AIResponse {
     typeof tokenUsageRaw.prompt === 'number' &&
     typeof tokenUsageRaw.completion === 'number' &&
     typeof tokenUsageRaw.total === 'number'
-      ? { prompt: tokenUsageRaw.prompt, completion: tokenUsageRaw.completion, total: tokenUsageRaw.total }
+      ? {
+          prompt: tokenUsageRaw.prompt,
+          completion: tokenUsageRaw.completion,
+          total: tokenUsageRaw.total,
+        }
       : undefined;
 
   return {
@@ -83,7 +87,7 @@ export async function apiLlmChat(
     timeoutMs?: number;
     /** abort 时是否向服务端发送 cancel（默认 true） */
     cancelOnAbort?: boolean;
-  }
+  },
 ) {
   const signal = options?.signal;
   const pollIntervalMs = options?.pollIntervalMs ?? 800;
@@ -145,6 +149,3 @@ export async function apiLlmChat(
     throw err;
   }
 }
-
-
-

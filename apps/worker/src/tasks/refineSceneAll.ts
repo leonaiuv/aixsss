@@ -302,8 +302,11 @@ export async function refineSceneAll(args: {
 
   // best-effort: mark project complete if all scenes are completed
   try {
-    const scenes = await prisma.scene.findMany({ where: { projectId }, select: { status: true } });
-    const allDone = scenes.length > 0 && scenes.every((s) => s.status === 'completed');
+    const scenes: Array<{ status: string }> = await prisma.scene.findMany({
+      where: { projectId },
+      select: { status: true },
+    });
+    const allDone = scenes.length > 0 && scenes.every((scene) => scene.status === 'completed');
     if (allDone) {
       await prisma.project.update({ where: { id: projectId }, data: { workflowState: 'ALL_SCENES_COMPLETE' } });
     }

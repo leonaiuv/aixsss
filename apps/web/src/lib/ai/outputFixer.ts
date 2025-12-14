@@ -1,5 +1,9 @@
 import type { AIResponse, ChatMessage } from '@/types';
-import { parseKeyframePromptText, parseMotionPromptText, parseSceneAnchorText } from './promptParsers';
+import {
+  parseKeyframePromptText,
+  parseMotionPromptText,
+  parseSceneAnchorText,
+} from './promptParsers';
 
 export type FixableOutputType = 'scene_anchor' | 'keyframe_prompt' | 'motion_prompt';
 export type TokenUsage = NonNullable<AIResponse['tokenUsage']>;
@@ -107,4 +111,3 @@ export async function requestFormatFix(options: {
   const prompt = buildFormatFixPrompt(options.type, options.raw);
   return options.chat([{ role: 'user', content: prompt }], { signal: options.signal });
 }
-

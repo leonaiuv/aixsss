@@ -61,7 +61,8 @@ export async function apiRequest<T>(
 
   if (!res.ok) {
     const detail = await readErrorDetail(res);
-    const message = typeof detail === 'string' && detail ? detail : `API ${res.status} ${res.statusText}`;
+    const message =
+      typeof detail === 'string' && detail ? detail : `API ${res.status} ${res.statusText}`;
     throw new ApiError(message, res.status, detail);
   }
 
@@ -70,6 +71,3 @@ export async function apiRequest<T>(
 
   return (await res.json()) as T;
 }
-
-
-

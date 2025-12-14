@@ -50,13 +50,19 @@ export function loadCharacterCreateDraft(projectId: string): CharacterCreateDraf
       projectId,
       formData: {
         name: String((parsed.formData as CharacterCreateDraftFormData).name ?? ''),
-        briefDescription: String((parsed.formData as CharacterCreateDraftFormData).briefDescription ?? ''),
+        briefDescription: String(
+          (parsed.formData as CharacterCreateDraftFormData).briefDescription ?? '',
+        ),
         appearance: String((parsed.formData as CharacterCreateDraftFormData).appearance ?? ''),
         personality: String((parsed.formData as CharacterCreateDraftFormData).personality ?? ''),
         background: String((parsed.formData as CharacterCreateDraftFormData).background ?? ''),
-        themeColor: String((parsed.formData as CharacterCreateDraftFormData).themeColor ?? '#6366f1'),
+        themeColor: String(
+          (parsed.formData as CharacterCreateDraftFormData).themeColor ?? '#6366f1',
+        ),
         primaryColor: String((parsed.formData as CharacterCreateDraftFormData).primaryColor ?? ''),
-        secondaryColor: String((parsed.formData as CharacterCreateDraftFormData).secondaryColor ?? ''),
+        secondaryColor: String(
+          (parsed.formData as CharacterCreateDraftFormData).secondaryColor ?? '',
+        ),
         portraitPrompts: (parsed.formData as CharacterCreateDraftFormData).portraitPrompts,
       },
       dialogStep: parsed.dialogStep,
@@ -96,15 +102,14 @@ export function isCharacterCreateDraftMeaningful(draft: CharacterCreateDraft): b
   const f = draft.formData;
   return Boolean(
     f.briefDescription.trim() ||
-      f.name.trim() ||
-      f.appearance.trim() ||
-      f.personality.trim() ||
-      f.background.trim() ||
-      f.portraitPrompts ||
-      draft.lastAIResponse ||
-      draft.lastAIDetails ||
-      draft.taskIds.basicInfoTaskId ||
-      draft.taskIds.portraitTaskId
+    f.name.trim() ||
+    f.appearance.trim() ||
+    f.personality.trim() ||
+    f.background.trim() ||
+    f.portraitPrompts ||
+    draft.lastAIResponse ||
+    draft.lastAIDetails ||
+    draft.taskIds.basicInfoTaskId ||
+    draft.taskIds.portraitTaskId,
   );
 }
-

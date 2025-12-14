@@ -5,7 +5,7 @@
 // 1. 追踪分镜之间的依赖关系
 // 2. 当基础设定修改时，自动标记受影响的分镜
 // 3. 提供批量更新和选择性更新选项
-// 
+//
 // 支持两种模式：
 // - 规则引擎：快速、零延迟
 // - AI智能分析：语义理解、更精准影响评估（带fallback）
@@ -71,16 +71,16 @@ export interface SceneSnapshot {
 export function analyzeProjectSettingsImpact(
   project: Project,
   scenes: Scene[],
-  modifiedFields: ('summary' | 'style' | 'protagonist')[]
+  modifiedFields: ('summary' | 'style' | 'protagonist')[],
 ): UpdateImpact {
   const affectedScenes: Scene[] = [];
   const updatePlan: UpdateAction[] = [];
-  
-  scenes.forEach(scene => {
+
+  scenes.forEach((scene) => {
     // 如果分镜已经有内容，则标记为需要更新
     if (scene.status !== 'pending' && scene.status !== 'needs_update') {
       affectedScenes.push(scene);
-      
+
       // 根据修改的字段确定需要更新的内容
       if (modifiedFields.includes('style')) {
         // 风格修改影响场景锚点和提示词
@@ -101,7 +101,7 @@ export function analyzeProjectSettingsImpact(
           });
         }
       }
-      
+
       if (modifiedFields.includes('protagonist')) {
         // 主角修改影响所有内容
         if (scene.sceneDescription) {
@@ -129,7 +129,7 @@ export function analyzeProjectSettingsImpact(
           });
         }
       }
-      
+
       if (modifiedFields.includes('summary')) {
         // 故事梗概修改影响场景锚点
         if (scene.sceneDescription) {
@@ -143,10 +143,10 @@ export function analyzeProjectSettingsImpact(
       }
     }
   });
-  
+
   // 估算更新时间（每个操作约30秒）
   const estimatedTime = updatePlan.length * 30;
-  
+
   return {
     affectedScenes,
     updatePlan,
@@ -160,17 +160,17 @@ export function analyzeProjectSettingsImpact(
 export function analyzeSceneImpact(
   modifiedScene: Scene,
   allScenes: Scene[],
-  modifiedField: 'summary' | 'sceneDescription' | 'actionDescription'
+  modifiedField: 'summary' | 'sceneDescription' | 'actionDescription',
 ): UpdateImpact {
   const affectedScenes: Scene[] = [];
   const updatePlan: UpdateAction[] = [];
-  
-  const modifiedIndex = allScenes.findIndex(s => s.id === modifiedScene.id);
-  
+
+  const modifiedIndex = allScenes.findIndex((s) => s.id === modifiedScene.id);
+
   if (modifiedIndex === -1) {
     return { affectedScenes, updatePlan, estimatedTime: 0 };
   }
-  
+
   // 1. 同一分镜的后续步骤需要更新
   if (modifiedField === 'summary' || modifiedField === 'sceneDescription') {
     if (modifiedScene.actionDescription) {
@@ -190,7 +190,7 @@ export function analyzeSceneImpact(
       });
     }
   }
-  
+
   if (modifiedField === 'actionDescription' && modifiedScene.shotPrompt) {
     updatePlan.push({
       sceneId: modifiedScene.id,
@@ -199,7 +199,7 @@ export function analyzeSceneImpact(
       priority: 'high',
     });
   }
-  
+
   // 2. 下一个分镜可能需要更新（因为上下文变了）
   const nextScene = allScenes[modifiedIndex + 1];
   if (nextScene && nextScene.sceneDescription) {
@@ -211,9 +211,9 @@ export function analyzeSceneImpact(
       priority: 'low',
     });
   }
-  
+
   const estimatedTime = updatePlan.length * 30;
-  
+
   return {
     affectedScenes,
     updatePlan,
@@ -224,11 +224,8 @@ export function analyzeSceneImpact(
 /**
  * 标记受影响的分镜为needs_update状态
  */
-export function markScenesNeedUpdate(
-  scenes: Scene[],
-  affectedSceneIds: string[]
-): Scene[] {
-  return scenes.map(scene => {
+export function markScenesNeedUpdate(scenes: Scene[], affectedSceneIds: string[]): Scene[] {
+  return scenes.map((scene) => {
     if (affectedSceneIds.includes(scene.id)) {
       return {
         ...scene,
@@ -243,7 +240,7 @@ export function markScenesNeedUpdate(
  * 获取需要更新的分镜列表
  */
 export function getScenesNeedingUpdate(scenes: Scene[]): Scene[] {
-  return scenes.filter(scene => scene.status === 'needs_update');
+  return scenes.filter((scene) => scene.status === 'needs_update');
 }
 
 /**
@@ -251,17 +248,17 @@ export function getScenesNeedingUpdate(scenes: Scene[]): Scene[] {
  */
 export function generateUpdateSummary(impact: UpdateImpact): string {
   const { affectedScenes, updatePlan, estimatedTime } = impact;
-  
+
   if (updatePlan.length === 0) {
     return '无需更新';
   }
-  
-  const highPriority = updatePlan.filter(a => a.priority === 'high').length;
-  const mediumPriority = updatePlan.filter(a => a.priority === 'medium').length;
-  const lowPriority = updatePlan.filter(a => a.priority === 'low').length;
-  
+
+  const highPriority = updatePlan.filter((a) => a.priority === 'high').length;
+  const mediumPriority = updatePlan.filter((a) => a.priority === 'medium').length;
+  const lowPriority = updatePlan.filter((a) => a.priority === 'low').length;
+
   const minutes = Math.ceil(estimatedTime / 60);
-  
+
   return `
 共${affectedScenes.length}个分镜受影响，需要执行${updatePlan.length}个更新操作
 - 高优先级: ${highPriority}个
@@ -276,7 +273,7 @@ export function generateUpdateSummary(impact: UpdateImpact): string {
  */
 export function sortUpdateActions(actions: UpdateAction[]): UpdateAction[] {
   const priorityOrder = { high: 0, medium: 1, low: 2 };
-  
+
   return [...actions].sort((a, b) => {
     return priorityOrder[a.priority] - priorityOrder[b.priority];
   });
@@ -300,7 +297,7 @@ export function clearUpdateFlag(scene: Scene, updatedField: string): Scene {
     shotPrompt: 'keyframe_confirmed',
     motionPrompt: 'completed',
   };
-  
+
   return {
     ...scene,
     status: fieldStatusMap[updatedField] || scene.status,
@@ -310,11 +307,8 @@ export function clearUpdateFlag(scene: Scene, updatedField: string): Scene {
 /**
  * 批量清除更新标记
  */
-export function clearUpdateFlags(
-  scenes: Scene[],
-  sceneIds: string[]
-): Scene[] {
-  return scenes.map(scene => {
+export function clearUpdateFlags(scenes: Scene[], sceneIds: string[]): Scene[] {
+  return scenes.map((scene) => {
     if (sceneIds.includes(scene.id) && scene.status === 'needs_update') {
       // 恢复到完成状态
       return {
@@ -336,22 +330,22 @@ export function clearUpdateFlags(
 export function analyzeCharacterImpact(
   change: CharacterChange,
   scenes: Scene[],
-  appearances: CharacterAppearance[]
+  appearances: CharacterAppearance[],
 ): UpdateImpact {
   const affectedSceneIds = appearances
-    .filter(a => a.characterId === change.characterId)
-    .map(a => a.sceneId);
+    .filter((a) => a.characterId === change.characterId)
+    .map((a) => a.sceneId);
 
   const affectedScenes = scenes.filter(
-    scene => 
+    (scene) =>
       affectedSceneIds.includes(scene.id) &&
       scene.status !== 'pending' &&
-      scene.status !== 'needs_update'
+      scene.status !== 'needs_update',
   );
 
   const updatePlan: UpdateAction[] = [];
 
-  affectedScenes.forEach(scene => {
+  affectedScenes.forEach((scene) => {
     // 根据变更的字段决定需要更新的内容
     switch (change.field) {
       case 'appearance':
@@ -408,18 +402,15 @@ export function analyzeCharacterImpact(
 /**
  * 分析世界观变更的影响
  */
-export function analyzeWorldViewImpact(
-  change: WorldViewChange,
-  scenes: Scene[]
-): UpdateImpact {
+export function analyzeWorldViewImpact(change: WorldViewChange, scenes: Scene[]): UpdateImpact {
   // 世界观修改影响所有已完成的分镜
   const affectedScenes = scenes.filter(
-    scene => scene.status !== 'pending' && scene.status !== 'needs_update'
+    (scene) => scene.status !== 'pending' && scene.status !== 'needs_update',
   );
 
   const updatePlan: UpdateAction[] = [];
 
-  affectedScenes.forEach(scene => {
+  affectedScenes.forEach((scene) => {
     // 世界观主要影响场景锚点
     if (scene.sceneDescription) {
       updatePlan.push({
@@ -463,16 +454,13 @@ export function createSceneSnapshot(scene: Scene): SceneSnapshot {
  * 批量创建分镜快照
  */
 export function createBatchSnapshot(scenes: Scene[]): SceneSnapshot[] {
-  return scenes.map(scene => createSceneSnapshot(scene));
+  return scenes.map((scene) => createSceneSnapshot(scene));
 }
 
 /**
  * 从快照恢复分镜
  */
-export function restoreFromSnapshot(
-  scene: Scene,
-  snapshot: SceneSnapshot
-): Scene {
+export function restoreFromSnapshot(scene: Scene, snapshot: SceneSnapshot): Scene {
   return {
     ...scene,
     ...snapshot.data,
@@ -495,17 +483,13 @@ export function generateUpdateOptions(impact: UpdateImpact): string[] {
   options.unshift('all');
 
   // 检查是否有场景锚点更新
-  const hasSceneUpdates = impact.updatePlan.some(
-    action => action.field === 'sceneDescription'
-  );
+  const hasSceneUpdates = impact.updatePlan.some((action) => action.field === 'sceneDescription');
   if (hasSceneUpdates) {
     options.splice(1, 0, 'scene_only');
   }
 
   // 检查是否有提示词更新
-  const hasPromptUpdates = impact.updatePlan.some(
-    action => action.field === 'shotPrompt'
-  );
+  const hasPromptUpdates = impact.updatePlan.some((action) => action.field === 'shotPrompt');
   if (hasPromptUpdates) {
     options.splice(options.indexOf('skip'), 0, 'prompt_only');
   }
@@ -591,18 +575,18 @@ export async function analyzeCharacterImpactWithAI(
   characterName: string,
   changeDescription: string,
   scenes: Scene[],
-  appearances: CharacterAppearance[]
+  appearances: CharacterAppearance[],
 ): Promise<UpdateImpact> {
   try {
     const affectedSceneIds = appearances
-      .filter(a => a.characterId === change.characterId)
-      .map(a => a.sceneId);
+      .filter((a) => a.characterId === change.characterId)
+      .map((a) => a.sceneId);
 
     const candidateScenes = scenes.filter(
-      scene => 
+      (scene) =>
         affectedSceneIds.includes(scene.id) &&
         scene.status !== 'pending' &&
-        scene.status !== 'needs_update'
+        scene.status !== 'needs_update',
     );
 
     const updatePlan: UpdateAction[] = [];
@@ -614,7 +598,10 @@ export async function analyzeCharacterImpactWithAI(
         .replace('{character_name}', characterName)
         .replace('{changed_field}', change.field)
         .replace('{change_description}', changeDescription)
-        .replace('{scene_content}', `概要: ${scene.summary}\n描述: ${scene.sceneDescription || '无'}`);
+        .replace(
+          '{scene_content}',
+          `概要: ${scene.summary}\n描述: ${scene.sceneDescription || '无'}`,
+        );
 
       const response = await client.chat([{ role: 'user', content: prompt }]);
       const analysis = JSON.parse(response.content);
@@ -652,11 +639,11 @@ export async function analyzeWorldViewImpactWithAI(
   client: SimpleAIClient,
   change: WorldViewChange,
   changeDescription: string,
-  scenes: Scene[]
+  scenes: Scene[],
 ): Promise<UpdateImpact> {
   try {
     const candidateScenes = scenes.filter(
-      scene => scene.status !== 'pending' && scene.status !== 'needs_update'
+      (scene) => scene.status !== 'pending' && scene.status !== 'needs_update',
     );
 
     const updatePlan: UpdateAction[] = [];
@@ -667,7 +654,10 @@ export async function analyzeWorldViewImpactWithAI(
       const prompt = WorldViewImpactAnalysisSkill.promptTemplate
         .replace('{worldview_type}', change.type)
         .replace('{change_description}', changeDescription)
-        .replace('{scene_content}', `概要: ${scene.summary}\n描述: ${scene.sceneDescription || '无'}`);
+        .replace(
+          '{scene_content}',
+          `概要: ${scene.summary}\n描述: ${scene.sceneDescription || '无'}`,
+        );
 
       const response = await client.chat([{ role: 'user', content: prompt }]);
       const analysis = JSON.parse(response.content);

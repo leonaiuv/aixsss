@@ -30,9 +30,7 @@ describe('TemplateStore', () => {
         isBuiltIn: false,
       });
 
-      expect(useTemplateStore.getState().templates).toHaveLength(
-        initialCount + 1
-      );
+      expect(useTemplateStore.getState().templates).toHaveLength(initialCount + 1);
     });
 
     it('应该自动生成ID和默认值', () => {
@@ -113,9 +111,7 @@ describe('TemplateStore', () => {
 
       deleteTemplate(created.id);
 
-      expect(useTemplateStore.getState().templates).toHaveLength(
-        afterAddCount - 1
-      );
+      expect(useTemplateStore.getState().templates).toHaveLength(afterAddCount - 1);
     });
 
     it('不应该删除内置模板', () => {
@@ -139,9 +135,7 @@ describe('TemplateStore', () => {
       expect(sceneTemplates.every((t) => t.category === 'scene')).toBe(true);
 
       const characterTemplates = getTemplatesByCategory('character');
-      expect(characterTemplates.every((t) => t.category === 'character')).toBe(
-        true
-      );
+      expect(characterTemplates.every((t) => t.category === 'character')).toBe(true);
     });
   });
 
@@ -161,10 +155,7 @@ describe('TemplateStore', () => {
       const results = searchTemplates('赛博朋克');
       expect(results.length).toBeGreaterThan(0);
       expect(
-        results.some(
-          (t) =>
-            t.name.includes('赛博朋克') || t.description.includes('赛博朋克')
-        )
+        results.some((t) => t.name.includes('赛博朋克') || t.description.includes('赛博朋克')),
       ).toBe(true);
     });
 
@@ -187,8 +178,7 @@ describe('TemplateStore', () => {
 
   describe('getPopularTemplates', () => {
     it('应该按使用次数排序', () => {
-      const { getPopularTemplates, templates, updateTemplate } =
-        useTemplateStore.getState();
+      const { getPopularTemplates, templates, updateTemplate } = useTemplateStore.getState();
 
       // 更新使用次数
       if (templates.length >= 3) {
@@ -202,9 +192,7 @@ describe('TemplateStore', () => {
 
       // 验证是按使用次数降序排列
       for (let i = 1; i < popular.length; i++) {
-        expect(popular[i - 1].usageCount).toBeGreaterThanOrEqual(
-          popular[i].usageCount
-        );
+        expect(popular[i - 1].usageCount).toBeGreaterThanOrEqual(popular[i].usageCount);
       }
     });
   });

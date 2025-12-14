@@ -54,7 +54,7 @@ describe('versionStore', () => {
       localStorage.setItem('aixs_versions_proj_1', 'invalid json');
 
       const { loadVersions } = useVersionStore.getState();
-      
+
       expect(() => loadVersions('proj_1')).not.toThrow();
     });
   });
@@ -101,13 +101,15 @@ describe('versionStore', () => {
 
     it('should limit versions to maxVersions', () => {
       const { createVersion } = useVersionStore.getState();
-      
+
       // Create 51 versions
       for (let i = 0; i < 51; i++) {
         createVersion('proj_1', 'project', 'proj_1', { index: i });
       }
 
-      const projectVersions = useVersionStore.getState().versions.filter(v => v.projectId === 'proj_1');
+      const projectVersions = useVersionStore
+        .getState()
+        .versions.filter((v) => v.projectId === 'proj_1');
       expect(projectVersions.length).toBeLessThanOrEqual(50);
     });
 
@@ -151,8 +153,24 @@ describe('versionStore', () => {
 
   describe('deleteVersion', () => {
     const versions = [
-      { id: 'ver_1', projectId: 'proj_1', type: 'project' as const, targetId: 'proj_1', snapshot: {}, createdAt: '2024-01-01T00:00:00Z', createdBy: '我' },
-      { id: 'ver_2', projectId: 'proj_1', type: 'project' as const, targetId: 'proj_1', snapshot: {}, createdAt: '2024-01-02T00:00:00Z', createdBy: '我' },
+      {
+        id: 'ver_1',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'proj_1',
+        snapshot: {},
+        createdAt: '2024-01-01T00:00:00Z',
+        createdBy: '我',
+      },
+      {
+        id: 'ver_2',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'proj_1',
+        snapshot: {},
+        createdAt: '2024-01-02T00:00:00Z',
+        createdBy: '我',
+      },
     ];
 
     beforeEach(() => {
@@ -177,9 +195,33 @@ describe('versionStore', () => {
 
   describe('clearOldVersions', () => {
     const versions = [
-      { id: 'ver_1', projectId: 'proj_1', type: 'project' as const, targetId: 'proj_1', snapshot: {}, createdAt: '2024-01-01T00:00:00Z', createdBy: '我' },
-      { id: 'ver_2', projectId: 'proj_1', type: 'project' as const, targetId: 'proj_1', snapshot: {}, createdAt: '2024-01-02T00:00:00Z', createdBy: '我' },
-      { id: 'ver_3', projectId: 'proj_1', type: 'project' as const, targetId: 'proj_1', snapshot: {}, createdAt: '2024-01-03T00:00:00Z', createdBy: '我' },
+      {
+        id: 'ver_1',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'proj_1',
+        snapshot: {},
+        createdAt: '2024-01-01T00:00:00Z',
+        createdBy: '我',
+      },
+      {
+        id: 'ver_2',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'proj_1',
+        snapshot: {},
+        createdAt: '2024-01-02T00:00:00Z',
+        createdBy: '我',
+      },
+      {
+        id: 'ver_3',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'proj_1',
+        snapshot: {},
+        createdAt: '2024-01-03T00:00:00Z',
+        createdBy: '我',
+      },
     ];
 
     beforeEach(() => {
@@ -190,7 +232,9 @@ describe('versionStore', () => {
       const { clearOldVersions } = useVersionStore.getState();
       clearOldVersions('proj_1', 2);
 
-      const projectVersions = useVersionStore.getState().versions.filter(v => v.projectId === 'proj_1');
+      const projectVersions = useVersionStore
+        .getState()
+        .versions.filter((v) => v.projectId === 'proj_1');
       expect(projectVersions).toHaveLength(2);
     });
 
@@ -198,16 +242,40 @@ describe('versionStore', () => {
       const { clearOldVersions } = useVersionStore.getState();
       clearOldVersions('proj_1', 1);
 
-      const remaining = useVersionStore.getState().versions.filter(v => v.projectId === 'proj_1');
+      const remaining = useVersionStore.getState().versions.filter((v) => v.projectId === 'proj_1');
       expect(remaining[0].id).toBe('ver_3');
     });
   });
 
   describe('getVersionHistory', () => {
     const versions = [
-      { id: 'ver_1', projectId: 'proj_1', type: 'project' as const, targetId: 'target_1', snapshot: {}, createdAt: '2024-01-01T00:00:00Z', createdBy: '我' },
-      { id: 'ver_2', projectId: 'proj_1', type: 'project' as const, targetId: 'target_1', snapshot: {}, createdAt: '2024-01-02T00:00:00Z', createdBy: '我' },
-      { id: 'ver_3', projectId: 'proj_1', type: 'project' as const, targetId: 'target_2', snapshot: {}, createdAt: '2024-01-03T00:00:00Z', createdBy: '我' },
+      {
+        id: 'ver_1',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'target_1',
+        snapshot: {},
+        createdAt: '2024-01-01T00:00:00Z',
+        createdBy: '我',
+      },
+      {
+        id: 'ver_2',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'target_1',
+        snapshot: {},
+        createdAt: '2024-01-02T00:00:00Z',
+        createdBy: '我',
+      },
+      {
+        id: 'ver_3',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'target_2',
+        snapshot: {},
+        createdAt: '2024-01-03T00:00:00Z',
+        createdBy: '我',
+      },
     ];
 
     beforeEach(() => {
@@ -232,8 +300,24 @@ describe('versionStore', () => {
 
   describe('getProjectVersions', () => {
     const versions = [
-      { id: 'ver_1', projectId: 'proj_1', type: 'project' as const, targetId: 'proj_1', snapshot: {}, createdAt: '2024-01-01T00:00:00Z', createdBy: '我' },
-      { id: 'ver_2', projectId: 'proj_1', type: 'scene' as const, targetId: 'scene_1', snapshot: {}, createdAt: '2024-01-02T00:00:00Z', createdBy: '我' },
+      {
+        id: 'ver_1',
+        projectId: 'proj_1',
+        type: 'project' as const,
+        targetId: 'proj_1',
+        snapshot: {},
+        createdAt: '2024-01-01T00:00:00Z',
+        createdBy: '我',
+      },
+      {
+        id: 'ver_2',
+        projectId: 'proj_1',
+        type: 'scene' as const,
+        targetId: 'scene_1',
+        snapshot: {},
+        createdAt: '2024-01-02T00:00:00Z',
+        createdBy: '我',
+      },
     ];
 
     beforeEach(() => {
@@ -251,8 +335,24 @@ describe('versionStore', () => {
 
   describe('getSceneVersions', () => {
     const versions = [
-      { id: 'ver_1', projectId: 'proj_1', type: 'scene' as const, targetId: 'scene_1', snapshot: {}, createdAt: '2024-01-01T00:00:00Z', createdBy: '我' },
-      { id: 'ver_2', projectId: 'proj_1', type: 'scene' as const, targetId: 'scene_2', snapshot: {}, createdAt: '2024-01-02T00:00:00Z', createdBy: '我' },
+      {
+        id: 'ver_1',
+        projectId: 'proj_1',
+        type: 'scene' as const,
+        targetId: 'scene_1',
+        snapshot: {},
+        createdAt: '2024-01-01T00:00:00Z',
+        createdBy: '我',
+      },
+      {
+        id: 'ver_2',
+        projectId: 'proj_1',
+        type: 'scene' as const,
+        targetId: 'scene_2',
+        snapshot: {},
+        createdAt: '2024-01-02T00:00:00Z',
+        createdBy: '我',
+      },
     ];
 
     beforeEach(() => {
@@ -287,7 +387,7 @@ describe('versionStore', () => {
       const { addLabel } = useVersionStore.getState();
       addLabel('ver_1', 'v1.0');
 
-      const updated = useVersionStore.getState().versions.find(v => v.id === 'ver_1');
+      const updated = useVersionStore.getState().versions.find((v) => v.id === 'ver_1');
       expect(updated?.label).toBe('v1.0');
     });
 
@@ -295,7 +395,7 @@ describe('versionStore', () => {
       const { addLabel } = useVersionStore.getState();
       addLabel('ver_1', 'v1.0', 'Important release');
 
-      const updated = useVersionStore.getState().versions.find(v => v.id === 'ver_1');
+      const updated = useVersionStore.getState().versions.find((v) => v.id === 'ver_1');
       expect(updated?.notes).toBe('Important release');
     });
 
@@ -307,7 +407,7 @@ describe('versionStore', () => {
       const { addLabel } = useVersionStore.getState();
       addLabel('ver_1', 'v1.0');
 
-      const updated = useVersionStore.getState().versions.find(v => v.id === 'ver_1');
+      const updated = useVersionStore.getState().versions.find((v) => v.id === 'ver_1');
       expect(updated?.notes).toBe('Original notes');
     });
   });

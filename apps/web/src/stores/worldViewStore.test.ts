@@ -70,7 +70,7 @@ describe('worldViewStore', () => {
       localStorage.setItem('aixs_worldview_proj_1', 'invalid json');
 
       const { loadElements } = useWorldViewStore.getState();
-      
+
       expect(() => loadElements('proj_1')).not.toThrow();
       expect(useWorldViewStore.getState().isLoading).toBe(false);
     });
@@ -154,7 +154,7 @@ describe('worldViewStore', () => {
       const { updateElement } = useWorldViewStore.getState();
       updateElement('proj_1', 'wv_1', { title: 'Updated' });
 
-      const updated = useWorldViewStore.getState().elements.find(e => e.id === 'wv_1');
+      const updated = useWorldViewStore.getState().elements.find((e) => e.id === 'wv_1');
       expect(updated?.title).toBe('Updated');
     });
 
@@ -163,7 +163,7 @@ describe('worldViewStore', () => {
       const beforeUpdate = new Date().toISOString();
       updateElement('proj_1', 'wv_1', { title: 'Updated' });
 
-      const updated = useWorldViewStore.getState().elements.find(e => e.id === 'wv_1');
+      const updated = useWorldViewStore.getState().elements.find((e) => e.id === 'wv_1');
       expect(updated?.updatedAt >= beforeUpdate).toBe(true);
     });
 
@@ -178,15 +178,33 @@ describe('worldViewStore', () => {
       const { updateElement } = useWorldViewStore.getState();
       updateElement('proj_1', 'wv_1', { content: 'New content' });
 
-      const updated = useWorldViewStore.getState().elements.find(e => e.id === 'wv_1');
+      const updated = useWorldViewStore.getState().elements.find((e) => e.id === 'wv_1');
       expect(updated?.content).toBe('New content');
     });
   });
 
   describe('deleteElement', () => {
     const elements: WorldViewElement[] = [
-      { id: 'wv_1', projectId: 'proj_1', type: 'era', title: 'Era 1', content: '', order: 1, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
-      { id: 'wv_2', projectId: 'proj_1', type: 'geography', title: 'Geography', content: '', order: 2, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+      {
+        id: 'wv_1',
+        projectId: 'proj_1',
+        type: 'era',
+        title: 'Era 1',
+        content: '',
+        order: 1,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+      {
+        id: 'wv_2',
+        projectId: 'proj_1',
+        type: 'geography',
+        title: 'Geography',
+        content: '',
+        order: 2,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
     ];
 
     beforeEach(() => {
@@ -210,9 +228,36 @@ describe('worldViewStore', () => {
 
   describe('reorderElements', () => {
     const elements: WorldViewElement[] = [
-      { id: 'wv_1', projectId: 'proj_1', type: 'era', title: 'Era 1', content: '', order: 1, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
-      { id: 'wv_2', projectId: 'proj_1', type: 'geography', title: 'Geography', content: '', order: 2, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
-      { id: 'wv_3', projectId: 'proj_1', type: 'society', title: 'Society', content: '', order: 3, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z' },
+      {
+        id: 'wv_1',
+        projectId: 'proj_1',
+        type: 'era',
+        title: 'Era 1',
+        content: '',
+        order: 1,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+      {
+        id: 'wv_2',
+        projectId: 'proj_1',
+        type: 'geography',
+        title: 'Geography',
+        content: '',
+        order: 2,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
+      {
+        id: 'wv_3',
+        projectId: 'proj_1',
+        type: 'society',
+        title: 'Society',
+        content: '',
+        order: 3,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+      },
     ];
 
     beforeEach(() => {
@@ -266,7 +311,14 @@ describe('worldViewStore', () => {
 
   describe('edge cases', () => {
     it('should handle all element types', () => {
-      const types: WorldViewElement['type'][] = ['era', 'geography', 'society', 'technology', 'magic', 'custom'];
+      const types: WorldViewElement['type'][] = [
+        'era',
+        'geography',
+        'society',
+        'technology',
+        'magic',
+        'custom',
+      ];
       const { addElement } = useWorldViewStore.getState();
 
       types.forEach((type, index) => {
@@ -285,8 +337,20 @@ describe('worldViewStore', () => {
     it('should handle multiple projects independently', () => {
       const { addElement, loadElements } = useWorldViewStore.getState();
 
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: 'Era 1', content: '', order: 1 });
-      addElement('proj_2', { projectId: 'proj_2', type: 'era', title: 'Era 2', content: '', order: 1 });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: 'Era 1',
+        content: '',
+        order: 1,
+      });
+      addElement('proj_2', {
+        projectId: 'proj_2',
+        type: 'era',
+        title: 'Era 2',
+        content: '',
+        order: 1,
+      });
 
       loadElements('proj_1');
       const proj1Elements = useWorldViewStore.getState().elements;
@@ -308,31 +372,79 @@ describe('worldViewStore', () => {
       const { addElement } = useWorldViewStore.getState();
 
       // 添加多个“时代背景”类型的条目
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '中世纪时代', content: '封建社会', order: 1 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '蒸汽朵克时代', content: '工业革命', order: 2 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '赛博朴克时代', content: '高科技低生活', order: 3 });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '中世纪时代',
+        content: '封建社会',
+        order: 1,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '蒸汽朵克时代',
+        content: '工业革命',
+        order: 2,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '赛博朴克时代',
+        content: '高科技低生活',
+        order: 3,
+      });
 
       expect(useWorldViewStore.getState().elements).toHaveLength(3);
-      expect(useWorldViewStore.getState().elements.every(e => e.type === 'era')).toBe(true);
+      expect(useWorldViewStore.getState().elements.every((e) => e.type === 'era')).toBe(true);
     });
 
     it('应该能够按类型筛选世界观要素', () => {
       const { addElement, getElementsByType } = useWorldViewStore.getState();
 
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代1', content: '', order: 1 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代2', content: '', order: 2 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'geography', title: '地理1', content: '', order: 3 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'society', title: '社会1', content: '', order: 4 });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代1',
+        content: '',
+        order: 1,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代2',
+        content: '',
+        order: 2,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'geography',
+        title: '地理1',
+        content: '',
+        order: 3,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'society',
+        title: '社会1',
+        content: '',
+        order: 4,
+      });
 
       const eraElements = useWorldViewStore.getState().getElementsByType('era');
       expect(eraElements).toHaveLength(2);
-      expect(eraElements.every(e => e.type === 'era')).toBe(true);
+      expect(eraElements.every((e) => e.type === 'era')).toBe(true);
     });
 
     it('按类型筛选不存在的类型应返回空数组', () => {
       const { addElement, getElementsByType } = useWorldViewStore.getState();
 
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代1', content: '', order: 1 });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代1',
+        content: '',
+        order: 1,
+      });
 
       const magicElements = useWorldViewStore.getState().getElementsByType('magic');
       expect(magicElements).toHaveLength(0);
@@ -342,9 +454,27 @@ describe('worldViewStore', () => {
     it('应该能够获取所有类型的分组数据', () => {
       const { addElement, getElementsByTypeGrouped } = useWorldViewStore.getState();
 
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代1', content: '', order: 1 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代2', content: '', order: 2 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'geography', title: '地理1', content: '', order: 3 });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代1',
+        content: '',
+        order: 1,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代2',
+        content: '',
+        order: 2,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'geography',
+        title: '地理1',
+        content: '',
+        order: 3,
+      });
 
       const grouped = useWorldViewStore.getState().getElementsByTypeGrouped();
 
@@ -359,8 +489,20 @@ describe('worldViewStore', () => {
     it('应该能够合并所有世界观要素为上下文字符串', () => {
       const { addElement, getWorldViewContext } = useWorldViewStore.getState();
 
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '中世纪', content: '封建社会，骑士与魔法并存', order: 1 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'geography', title: '大陆', content: '广阔的大陆，有高山大海', order: 2 });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '中世纪',
+        content: '封建社会，骑士与魔法并存',
+        order: 1,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'geography',
+        title: '大陆',
+        content: '广阔的大陆，有高山大海',
+        order: 2,
+      });
 
       const context = useWorldViewStore.getState().getWorldViewContext();
 
@@ -380,8 +522,20 @@ describe('worldViewStore', () => {
     it('应该能够独立编辑同类型下的不同条目', () => {
       const { addElement, updateElement } = useWorldViewStore.getState();
 
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代1', content: '原始内容', order: 1 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代2', content: '原始内容', order: 2 });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代1',
+        content: '原始内容',
+        order: 1,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代2',
+        content: '原始内容',
+        order: 2,
+      });
 
       const elements = useWorldViewStore.getState().elements;
       const firstId = elements[0].id;
@@ -396,9 +550,27 @@ describe('worldViewStore', () => {
     it('应该能够独立删除同类型下的某一条目', () => {
       const { addElement, deleteElement } = useWorldViewStore.getState();
 
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代1', content: '', order: 1 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代2', content: '', order: 2 });
-      addElement('proj_1', { projectId: 'proj_1', type: 'era', title: '时代3', content: '', order: 3 });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代1',
+        content: '',
+        order: 1,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代2',
+        content: '',
+        order: 2,
+      });
+      addElement('proj_1', {
+        projectId: 'proj_1',
+        type: 'era',
+        title: '时代3',
+        content: '',
+        order: 3,
+      });
 
       const elements = useWorldViewStore.getState().elements;
       const secondId = elements[1].id;
@@ -407,7 +579,7 @@ describe('worldViewStore', () => {
 
       const remaining = useWorldViewStore.getState().elements;
       expect(remaining).toHaveLength(2);
-      expect(remaining.find(e => e.id === secondId)).toBeUndefined();
+      expect(remaining.find((e) => e.id === secondId)).toBeUndefined();
       expect(remaining[0].title).toBe('时代1');
       expect(remaining[1].title).toBe('时代3');
     });

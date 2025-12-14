@@ -1,7 +1,7 @@
-import path from "path"
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { visualizer } from 'rollup-plugin-visualizer'
+import path from 'path';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -18,7 +18,7 @@ export default defineConfig({
   ].filter(Boolean) as any,
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   server: {
@@ -60,13 +60,13 @@ export default defineConfig({
             '@radix-ui/react-tooltip',
           ],
           // 图表库
-          'charts': ['recharts'],
+          charts: ['recharts'],
           // 拖拽库
-          'dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+          dnd: ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
           // 工具库
-          'utils': ['date-fns', 'clsx', 'class-variance-authority', 'immer', 'zustand'],
+          utils: ['date-fns', 'clsx', 'class-variance-authority', 'immer', 'zustand'],
           // 加密和压缩
-          'crypto': ['crypto-js', 'pako'],
+          crypto: ['crypto-js', 'pako'],
         },
       },
     },
@@ -83,18 +83,11 @@ export default defineConfig({
   },
   // 优化依赖预构建
   optimizeDeps: {
-    include: [
-      'react',
-      'react-dom',
-      'zustand',
-      'immer',
-      'lucide-react',
-      'date-fns',
-    ],
+    include: ['react', 'react-dom', 'zustand', 'immer', 'lucide-react', 'date-fns'],
   },
   // esbuild 优化
   esbuild: {
     // 移除 console.log (生产环境)
     drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
-})
+});

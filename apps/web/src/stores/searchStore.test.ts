@@ -222,7 +222,7 @@ describe('searchStore', () => {
       search(mockProjects, mockScenesMap);
 
       const results = useSearchStore.getState().results;
-      expect(results.scenes.every(s => s.status === 'completed')).toBe(true);
+      expect(results.scenes.every((s) => s.status === 'completed')).toBe(true);
     });
 
     it('should set isSearching to false after search', () => {
@@ -320,7 +320,7 @@ describe('searchStore', () => {
 
     it('should limit history to 10 entries', () => {
       const { addSearchHistory } = useSearchStore.getState();
-      
+
       for (let i = 0; i < 15; i++) {
         addSearchHistory(`query ${i}`);
       }
@@ -340,9 +340,7 @@ describe('searchStore', () => {
   describe('getSearchHistory', () => {
     it('should return search history', () => {
       useSearchStore.setState({
-        searchHistory: [
-          { id: 'sh_1', query: 'test', timestamp: '2024-01-01T00:00:00Z' },
-        ],
+        searchHistory: [{ id: 'sh_1', query: 'test', timestamp: '2024-01-01T00:00:00Z' }],
       });
 
       const { getSearchHistory } = useSearchStore.getState();

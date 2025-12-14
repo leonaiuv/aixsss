@@ -40,7 +40,14 @@ import {
   saveCharacterCreateDraft,
   type CharacterCreateDraft,
 } from '@/lib/characterCreateDraft';
-import { PortraitPrompts, ART_STYLE_PRESETS, migrateOldStyleToConfig, Project, Character, isCustomStyleId } from '@/types';
+import {
+  PortraitPrompts,
+  ART_STYLE_PRESETS,
+  migrateOldStyleToConfig,
+  Project,
+  Character,
+  isCustomStyleId,
+} from '@/types';
 import {
   analyzeCharacterImpact,
   CharacterChange,
@@ -99,9 +106,9 @@ type AbortReason = 'user' | 'timeout';
 
 // 角色生成任务接口
 interface CharacterGenerationTask {
-  characterId?: string;  // 编辑时的角色ID
+  characterId?: string; // 编辑时的角色ID
   briefDescription: string;
-  taskId?: string;  // aiProgressStore 中的任务ID
+  taskId?: string; // aiProgressStore 中的任务ID
   status: GeneratingState;
   error?: string;
 }
@@ -148,18 +155,18 @@ function createEmptyFormData(): CharacterFormData {
  */
 function getProjectStylePrompt(currentProject: Project | null): string {
   if (!currentProject) return '';
-  
+
   // 优先使用新版 artStyleConfig
   if (currentProject.artStyleConfig?.fullPrompt) {
     return currentProject.artStyleConfig.fullPrompt;
   }
-  
+
   // 回退：从旧版 style 迁移
   if (currentProject.style) {
     const migratedConfig = migrateOldStyleToConfig(currentProject.style);
     return migratedConfig.fullPrompt;
   }
-  
+
   return '';
 }
 
@@ -168,7 +175,7 @@ function getProjectStylePrompt(currentProject: Project | null): string {
  */
 function getStyleLabel(currentProject: Project | null): string {
   if (!currentProject) return '';
-  
+
   if (currentProject.artStyleConfig) {
     const presetId = currentProject.artStyleConfig.presetId;
     // 检查是否为自定义画风
@@ -176,16 +183,16 @@ function getStyleLabel(currentProject: Project | null): string {
       const customStyle = useCustomStyleStore.getState().getCustomStyleById(presetId);
       return customStyle ? customStyle.name : '自定义画风';
     }
-    const preset = ART_STYLE_PRESETS.find(p => p.id === presetId);
+    const preset = ART_STYLE_PRESETS.find((p) => p.id === presetId);
     return preset ? preset.label : '自定义画风';
   }
-  
+
   if (currentProject.style) {
     const migratedConfig = migrateOldStyleToConfig(currentProject.style);
-    const preset = ART_STYLE_PRESETS.find(p => p.id === migratedConfig.presetId);
+    const preset = ART_STYLE_PRESETS.find((p) => p.id === migratedConfig.presetId);
     return preset ? preset.label : currentProject.style;
   }
-  
+
   return '';
 }
 
@@ -231,7 +238,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const { characters, addCharacter, updateCharacter, deleteCharacter, loadCharacters } =
     useCharacterStore();
   const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
-  
+
   // 加载角色数据
   useEffect(() => {
     loadCharacters(projectId);
@@ -248,21 +255,21 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   useEffect(() => {
     loadScenes(projectId);
   }, [loadScenes, projectId]);
-  
+
   // AI进度追踪 Store
-  const { 
+  const {
     tasks,
-    addTask, 
-    updateProgress, 
-    completeTask, 
+    addTask,
+    updateProgress,
+    completeTask,
     failTask,
     cancelTask,
     updateTask,
     showPanel,
   } = useAIProgressStore();
-  
+
   const { toast } = useToast();
-  
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState<string | null>(null);
   const [formData, setFormData] = useState<CharacterFormData>(() => createEmptyFormData());
@@ -270,7 +277,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const [error, setError] = useState<string | null>(null);
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
   const [dialogStep, setDialogStep] = useState<'basic' | 'portrait'>('basic');
-  
+
   // 批量生成状态
   const [batchGeneration, setBatchGeneration] = useState<BatchGenerationState>({
     isProcessing: false,
@@ -281,7 +288,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     failedIds: [],
     queue: [],
   });
-  
+
   // 当前生成任务ID（用于追踪和取消）
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const currentTaskIdRef = useRef<string | null>(null);
@@ -331,7 +338,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   useEffect(() => {
     dialogContextRef.current = { isDialogOpen, editingCharacter };
   }, [editingCharacter, isDialogOpen]);
-  
+
   // 级联更新相关状态
   const [cascadeDialogOpen, setCascadeDialogOpen] = useState(false);
   const [cascadeImpactSummary, setCascadeImpactSummary] = useState('');
@@ -357,12 +364,12 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     setLastBasicTaskId(null);
     setLastPortraitTaskId(null);
   }, []);
-  
+
   // 获取当前项目画风的完整描述（英文提示词）
   const getStyleDescription = () => {
     return getProjectStylePrompt(currentProject);
   };
-  
+
   // 获取画风标签（中文名称）
   const getStyleLabelText = () => {
     return getStyleLabel(currentProject);
@@ -376,7 +383,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
   const isInProgressTask = useCallback(
     (task?: AITask | null) => task?.status === 'running' || task?.status === 'queued',
-    []
+    [],
   );
 
   const portraitTaskByCharacterId = useMemo(() => {
@@ -399,7 +406,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       projectCharacters
         .filter((c) => c.appearance && !c.portraitPrompts)
         .filter((c) => !isInProgressTask(portraitTaskByCharacterId.get(c.id))),
-    [isInProgressTask, portraitTaskByCharacterId, projectCharacters]
+    [isInProgressTask, portraitTaskByCharacterId, projectCharacters],
   );
 
   const draftPortraitTask = useMemo(() => {
@@ -440,7 +447,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       },
       updatedAt: Date.now(),
     }),
-    [dialogStep, lastAIDetails, lastAIResponse, lastBasicTaskId, lastPortraitTaskId, projectId]
+    [dialogStep, lastAIDetails, lastAIResponse, lastBasicTaskId, lastPortraitTaskId, projectId],
   );
 
   const persistCreateDraft = useCallback(
@@ -452,7 +459,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         clearCharacterCreateDraft(projectId);
       }
     },
-    [buildCreateDraft, projectId]
+    [buildCreateDraft, projectId],
   );
 
   const flushCreateDraft = useCallback(
@@ -463,106 +470,117 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       }
       persistCreateDraft(nextFormData ?? formData);
     },
-    [formData, persistCreateDraft]
+    [formData, persistCreateDraft],
   );
 
-  const hydrateCreateDraftFromTasks = useCallback((draft: CharacterCreateDraft): CharacterCreateDraft => {
-    const store = useAIProgressStore.getState();
-    let changed = false;
+  const hydrateCreateDraftFromTasks = useCallback(
+    (draft: CharacterCreateDraft): CharacterCreateDraft => {
+      const store = useAIProgressStore.getState();
+      let changed = false;
 
-    let nextFormData = draft.formData;
-    let nextDialogStep = draft.dialogStep;
-    let nextLastAIResponse = draft.lastAIResponse;
-    let nextLastAIDetails = draft.lastAIDetails;
+      let nextFormData = draft.formData;
+      let nextDialogStep = draft.dialogStep;
+      let nextLastAIResponse = draft.lastAIResponse;
+      let nextLastAIDetails = draft.lastAIDetails;
 
-    const basicTaskId = draft.taskIds.basicInfoTaskId;
-    if (
-      basicTaskId &&
-      (!nextFormData.name.trim() ||
-        !nextFormData.appearance.trim() ||
-        !nextFormData.personality.trim() ||
-        !nextFormData.background.trim())
-    ) {
-      const task = store.getTask(basicTaskId);
-      const content = task?.status === 'success' ? task.response?.content : null;
-      if (content) {
-        const parsed = parseFirstJSONObject(content);
-        if (parsed.ok) {
-          const name = pickString(parsed.value.name);
-          const appearance = pickString(parsed.value.appearance);
-          const personality = pickString(parsed.value.personality);
-          const background = pickString(parsed.value.background);
+      const basicTaskId = draft.taskIds.basicInfoTaskId;
+      if (
+        basicTaskId &&
+        (!nextFormData.name.trim() ||
+          !nextFormData.appearance.trim() ||
+          !nextFormData.personality.trim() ||
+          !nextFormData.background.trim())
+      ) {
+        const task = store.getTask(basicTaskId);
+        const content = task?.status === 'success' ? task.response?.content : null;
+        if (content) {
+          const parsed = parseFirstJSONObject(content);
+          if (parsed.ok) {
+            const name = pickString(parsed.value.name);
+            const appearance = pickString(parsed.value.appearance);
+            const personality = pickString(parsed.value.personality);
+            const background = pickString(parsed.value.background);
 
-          const merged: CharacterFormData = {
-            ...nextFormData,
-            name: nextFormData.name.trim() ? nextFormData.name : name || deriveNameFromBrief(nextFormData.briefDescription),
-            appearance: nextFormData.appearance.trim() ? nextFormData.appearance : appearance || nextFormData.appearance,
-            personality: nextFormData.personality.trim() ? nextFormData.personality : personality || nextFormData.personality,
-            background: nextFormData.background.trim() ? nextFormData.background : background || nextFormData.background,
-          };
-
-          if (merged.appearance.trim()) {
-            nextFormData = merged;
-            nextLastAIResponse = nextLastAIResponse || content;
-            changed = true;
-          }
-        } else {
-          nextLastAIDetails = nextLastAIDetails || `解析任务响应失败：${parsed.reason}`;
-          changed = true;
-        }
-      }
-    }
-
-    const portraitTaskId = draft.taskIds.portraitTaskId;
-    const hasPortraitPrompts =
-      Boolean(nextFormData.portraitPrompts) &&
-      Boolean(
-        nextFormData.portraitPrompts?.midjourney.trim() ||
-          nextFormData.portraitPrompts?.stableDiffusion.trim() ||
-          nextFormData.portraitPrompts?.general.trim()
-      );
-
-    if (portraitTaskId && !hasPortraitPrompts) {
-      const task = store.getTask(portraitTaskId);
-      const content = task?.status === 'success' ? task.response?.content : null;
-      if (content) {
-        const parsed = parseFirstJSONObject(content);
-        if (parsed.ok) {
-          const midjourney = pickString(parsed.value.midjourney);
-          const stableDiffusion = pickString(parsed.value.stableDiffusion);
-          const general = pickString(parsed.value.general);
-
-          if (midjourney || stableDiffusion || general) {
-            nextFormData = {
+            const merged: CharacterFormData = {
               ...nextFormData,
-              portraitPrompts: {
-                midjourney: midjourney || '',
-                stableDiffusion: stableDiffusion || '',
-                general: general || '',
-              },
+              name: nextFormData.name.trim()
+                ? nextFormData.name
+                : name || deriveNameFromBrief(nextFormData.briefDescription),
+              appearance: nextFormData.appearance.trim()
+                ? nextFormData.appearance
+                : appearance || nextFormData.appearance,
+              personality: nextFormData.personality.trim()
+                ? nextFormData.personality
+                : personality || nextFormData.personality,
+              background: nextFormData.background.trim()
+                ? nextFormData.background
+                : background || nextFormData.background,
             };
-            nextDialogStep = 'portrait';
-            nextLastAIResponse = nextLastAIResponse || content;
+
+            if (merged.appearance.trim()) {
+              nextFormData = merged;
+              nextLastAIResponse = nextLastAIResponse || content;
+              changed = true;
+            }
+          } else {
+            nextLastAIDetails = nextLastAIDetails || `解析任务响应失败：${parsed.reason}`;
             changed = true;
           }
-        } else {
-          nextLastAIDetails = nextLastAIDetails || `解析任务响应失败：${parsed.reason}`;
-          changed = true;
         }
       }
-    }
 
-    if (!changed) return draft;
+      const portraitTaskId = draft.taskIds.portraitTaskId;
+      const hasPortraitPrompts =
+        Boolean(nextFormData.portraitPrompts) &&
+        Boolean(
+          nextFormData.portraitPrompts?.midjourney.trim() ||
+          nextFormData.portraitPrompts?.stableDiffusion.trim() ||
+          nextFormData.portraitPrompts?.general.trim(),
+        );
 
-    return {
-      ...draft,
-      formData: nextFormData,
-      dialogStep: nextDialogStep,
-      lastAIResponse: nextLastAIResponse,
-      lastAIDetails: nextLastAIDetails,
-      updatedAt: Date.now(),
-    };
-  }, []);
+      if (portraitTaskId && !hasPortraitPrompts) {
+        const task = store.getTask(portraitTaskId);
+        const content = task?.status === 'success' ? task.response?.content : null;
+        if (content) {
+          const parsed = parseFirstJSONObject(content);
+          if (parsed.ok) {
+            const midjourney = pickString(parsed.value.midjourney);
+            const stableDiffusion = pickString(parsed.value.stableDiffusion);
+            const general = pickString(parsed.value.general);
+
+            if (midjourney || stableDiffusion || general) {
+              nextFormData = {
+                ...nextFormData,
+                portraitPrompts: {
+                  midjourney: midjourney || '',
+                  stableDiffusion: stableDiffusion || '',
+                  general: general || '',
+                },
+              };
+              nextDialogStep = 'portrait';
+              nextLastAIResponse = nextLastAIResponse || content;
+              changed = true;
+            }
+          } else {
+            nextLastAIDetails = nextLastAIDetails || `解析任务响应失败：${parsed.reason}`;
+            changed = true;
+          }
+        }
+      }
+
+      if (!changed) return draft;
+
+      return {
+        ...draft,
+        formData: nextFormData,
+        dialogStep: nextDialogStep,
+        lastAIResponse: nextLastAIResponse,
+        lastAIDetails: nextLastAIDetails,
+        updatedAt: Date.now(),
+      };
+    },
+    [],
+  );
 
   // 创建角色：弹窗打开时恢复草稿（关闭/切换后仍能回填）
   useEffect(() => {
@@ -647,8 +665,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
     if (editingCharacter) {
       // 获取原角色数据，用于比较变更
-      const originalCharacter = projectCharacters.find(c => c.id === editingCharacter);
-      
+      const originalCharacter = projectCharacters.find((c) => c.id === editingCharacter);
+
       updateCharacter(projectId, editingCharacter, {
         ...formData,
         briefDescription: formData.briefDescription,
@@ -659,14 +677,17 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       if (originalCharacter && scenes.length > 0) {
         const changedFields: CharacterChange['field'][] = [];
         if (originalCharacter.appearance !== formData.appearance) changedFields.push('appearance');
-        if (originalCharacter.personality !== formData.personality) changedFields.push('personality');
+        if (originalCharacter.personality !== formData.personality)
+          changedFields.push('personality');
         if (originalCharacter.name !== formData.name) changedFields.push('name');
-        if (originalCharacter.primaryColor !== formData.primaryColor) changedFields.push('primaryColor');
-        if (originalCharacter.secondaryColor !== formData.secondaryColor) changedFields.push('secondaryColor');
+        if (originalCharacter.primaryColor !== formData.primaryColor)
+          changedFields.push('primaryColor');
+        if (originalCharacter.secondaryColor !== formData.secondaryColor)
+          changedFields.push('secondaryColor');
 
         if (changedFields.length > 0) {
           // 构建角色出场关系（简化版：假设角色在所有分镜中可能出现）
-          const appearances: CharacterAppearance[] = scenes.map(s => ({
+          const appearances: CharacterAppearance[] = scenes.map((s) => ({
             sceneId: s.id,
             characterId: editingCharacter,
           }));
@@ -684,7 +705,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
             setCascadeImpactSummary(summary);
             setPendingCascadeUpdate({
               characterId: editingCharacter,
-              affectedSceneIds: impact.affectedScenes.map(s => s.id),
+              affectedSceneIds: impact.affectedScenes.map((s) => s.id),
             });
             setCascadeDialogOpen(true);
           }
@@ -711,7 +732,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     if (pendingCascadeUpdate) {
       // 标记受影响的分镜为需要更新
       const updatedScenes = markScenesNeedUpdate(scenes, pendingCascadeUpdate.affectedSceneIds);
-      updatedScenes.forEach(scene => {
+      updatedScenes.forEach((scene) => {
         if (pendingCascadeUpdate.affectedSceneIds.includes(scene.id)) {
           updateSceneInStore(projectId, scene.id, { status: 'needs_update' });
         }
@@ -743,7 +764,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       });
       setEditingCharacter(characterId);
       const portraitTask = portraitTaskByCharacterId.get(characterId);
-      const isPortraitGenerating = portraitTask?.status === 'running' || portraitTask?.status === 'queued';
+      const isPortraitGenerating =
+        portraitTask?.status === 'running' || portraitTask?.status === 'queued';
       setDialogStep(isPortraitGenerating || character.portraitPrompts ? 'portrait' : 'basic');
       setIsDialogOpen(true);
     }
@@ -783,11 +805,17 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       if (!taskId) return;
       abortTask(taskId, reason);
     },
-    [abortTask]
+    [abortTask],
   );
 
-  const getAbortReason = useCallback((taskId: string) => taskAbortReasonsRef.current.get(taskId), []);
-  const isAbortableTask = useCallback((taskId: string) => taskAbortControllersRef.current.has(taskId), []);
+  const getAbortReason = useCallback(
+    (taskId: string) => taskAbortReasonsRef.current.get(taskId),
+    [],
+  );
+  const isAbortableTask = useCallback(
+    (taskId: string) => taskAbortControllersRef.current.has(taskId),
+    [],
+  );
 
   // 一键生成基础信息（外观+性格+背景）- 集成进度追踪
   const handleGenerateBasicInfo = async () => {
@@ -810,7 +838,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     setError(null);
     setLastAIResponse(null);
     setLastAIDetails(null);
-    
+
     // 创建AI任务并显示开发者面板
     const taskId = addTask({
       type: 'character_basic_info',
@@ -854,7 +882,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
       const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
 
-      const existingCharacters = projectCharacters.filter((c) => (targetCharacterId ? c.id !== targetCharacterId : true));
+      const existingCharacters = projectCharacters.filter((c) =>
+        targetCharacterId ? c.id !== targetCharacterId : true,
+      );
 
       const colorHints = [
         baseFormData.primaryColor?.trim() ? `主色 ${baseFormData.primaryColor.trim()}` : null,
@@ -863,14 +893,17 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         .filter(Boolean)
         .join('，');
 
-      const briefForPrompt = colorHints ? `${briefDescription}\n（色彩偏好：${colorHints}）` : briefDescription;
+      const briefForPrompt = colorHints
+        ? `${briefDescription}\n（色彩偏好：${colorHints}）`
+        : briefDescription;
 
       const prompt = buildCharacterBasicInfoPrompt({
         briefDescription: briefForPrompt,
         summary: (currentProject?.summary ?? '').trim(),
         protagonist: (currentProject?.protagonist ?? '').trim(),
         artStyle:
-          currentProject?.artStyleConfig ?? (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined),
+          currentProject?.artStyleConfig ??
+          (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined),
         worldViewElements: worldViewForPrompt,
         existingCharacters,
       });
@@ -895,7 +928,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           profileId: activeProfileId || undefined,
         },
       });
-      
+
       updateProgress(taskId, 30, '正在调用AI生成...');
 
       const controller = new AbortController();
@@ -905,14 +938,16 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
       let response;
       try {
-        response = await client.chat([{ role: 'user', content: prompt }], { signal: controller.signal });
+        response = await client.chat([{ role: 'user', content: prompt }], {
+          signal: controller.signal,
+        });
       } finally {
         clearTimeout(timeoutId);
         if (taskAbortControllersRef.current.get(taskId) === controller) {
           taskAbortControllersRef.current.delete(taskId);
         }
       }
-      
+
       updateProgress(taskId, 80, '正在解析响应...');
       firstResponseContent = response.content || '';
       if (isMountedRef.current) setLastAIResponse(firstResponseContent);
@@ -921,20 +956,28 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       let mergedTokenUsage = response.tokenUsage;
       updateLogWithResponse(logId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
 
-      const commitBasicInfo = (next: {
-        name: string;
-        appearance: string;
-        personality: string;
-        background: string;
-        primaryColor?: string;
-        secondaryColor?: string;
-      }, raw: string, tokenUsage?: { prompt: number; completion: number; total: number }) => {
+      const commitBasicInfo = (
+        next: {
+          name: string;
+          appearance: string;
+          personality: string;
+          background: string;
+          primaryColor?: string;
+          secondaryColor?: string;
+        },
+        raw: string,
+        tokenUsage?: { prompt: number; completion: number; total: number },
+      ) => {
         if (!targetCharacterId) {
           const merged: CharacterFormData = {
             ...baseFormData,
-            name: baseFormData.name.trim() ? baseFormData.name : next.name || deriveNameFromBrief(briefDescription),
+            name: baseFormData.name.trim()
+              ? baseFormData.name
+              : next.name || deriveNameFromBrief(briefDescription),
             appearance: baseFormData.appearance.trim() ? baseFormData.appearance : next.appearance,
-            personality: baseFormData.personality.trim() ? baseFormData.personality : next.personality,
+            personality: baseFormData.personality.trim()
+              ? baseFormData.personality
+              : next.personality,
             background: baseFormData.background.trim() ? baseFormData.background : next.background,
             primaryColor: baseFormData.primaryColor.trim()
               ? baseFormData.primaryColor
@@ -959,11 +1002,14 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           saveCharacterCreateDraft(projectId, draft);
         }
 
-        const { isDialogOpen: isDialogVisible, editingCharacter: activeEditingCharacter } = dialogContextRef.current;
+        const { isDialogOpen: isDialogVisible, editingCharacter: activeEditingCharacter } =
+          dialogContextRef.current;
         const shouldUpdateUI =
           isMountedRef.current &&
           isDialogVisible &&
-          (targetCharacterId ? activeEditingCharacter === targetCharacterId : activeEditingCharacter === null);
+          (targetCharacterId
+            ? activeEditingCharacter === targetCharacterId
+            : activeEditingCharacter === null);
 
         if (shouldUpdateUI) {
           setFormData((prev) => ({
@@ -972,7 +1018,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
             appearance: prev.appearance.trim() ? prev.appearance : next.appearance,
             personality: prev.personality.trim() ? prev.personality : next.personality,
             background: prev.background.trim() ? prev.background : next.background,
-            primaryColor: prev.primaryColor.trim() ? prev.primaryColor : next.primaryColor || prev.primaryColor,
+            primaryColor: prev.primaryColor.trim()
+              ? prev.primaryColor
+              : next.primaryColor || prev.primaryColor,
             secondaryColor: prev.secondaryColor.trim()
               ? prev.secondaryColor
               : next.secondaryColor || prev.secondaryColor,
@@ -991,13 +1039,23 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       // 第二次：尝试让模型“修复成严格JSON”
       updateTask(taskId, { retryCount: 1 });
       updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
-      parseDetails = [attempt1.error.reason, attempt1.error.details ? `详情：\n${attempt1.error.details}` : null]
+      parseDetails = [
+        attempt1.error.reason,
+        attempt1.error.details ? `详情：\n${attempt1.error.details}` : null,
+      ]
         .filter(Boolean)
         .join('\n');
       if (isMountedRef.current) setLastAIDetails(parseDetails);
 
       const repairPrompt = buildJsonRepairPrompt({
-        requiredKeys: ['name', 'appearance', 'personality', 'background', 'primaryColor', 'secondaryColor'],
+        requiredKeys: [
+          'name',
+          'appearance',
+          'personality',
+          'background',
+          'primaryColor',
+          'secondaryColor',
+        ],
         raw: firstResponseContent,
         extraRules: ['primaryColor/secondaryColor 必须是 #RRGGBB（可不带 #，系统会自动补齐）'],
       });
@@ -1016,7 +1074,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           attempt: 2,
           worldViewInjected: shouldInjectWorldView,
         },
-        config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          profileId: activeProfileId || undefined,
+        },
       });
 
       const repairController = new AbortController();
@@ -1039,7 +1101,10 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       const repairedContent = repairResponse.content || '';
       if (isMountedRef.current) setLastAIResponse(repairedContent);
       mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
-      updateLogWithResponse(repairLogId, { content: repairedContent, tokenUsage: repairResponse.tokenUsage });
+      updateLogWithResponse(repairLogId, {
+        content: repairedContent,
+        tokenUsage: repairResponse.tokenUsage,
+      });
 
       const attempt2 = parseCharacterBasicInfo(repairedContent);
       if (attempt2.ok) {
@@ -1063,9 +1128,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       if (isAbortError(err)) {
         const reason = getAbortReason(taskId);
         const msg =
-          reason === 'timeout'
-            ? '请求超时（60秒），请检查网络或更换模型后重试。'
-            : '已取消生成';
+          reason === 'timeout' ? '请求超时（60秒），请检查网络或更换模型后重试。' : '已取消生成';
         if (isMountedRef.current) setError(msg);
         cancelTask(taskId);
         if (logId) updateLogWithError(logId, msg);
@@ -1108,7 +1171,10 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     const existingRunningTask = targetCharacterId
       ? portraitTaskByCharacterId.get(targetCharacterId)
       : draftPortraitTask;
-    if (existingRunningTask && (existingRunningTask.status === 'running' || existingRunningTask.status === 'queued')) {
+    if (
+      existingRunningTask &&
+      (existingRunningTask.status === 'running' || existingRunningTask.status === 'queued')
+    ) {
       toast({
         title: '定妆照正在生成中',
         description: '当前角色已有定妆照提示词生成任务在执行，可前往进度面板查看。',
@@ -1121,7 +1187,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     setError(null);
     setLastAIResponse(null);
     setLastAIDetails(null);
-    
+
     // 创建AI任务并显示开发者面板
     const taskId = addTask({
       type: 'character_portrait',
@@ -1171,7 +1237,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         primaryColor: formData.primaryColor?.trim() || undefined,
         secondaryColor: formData.secondaryColor?.trim() || undefined,
         artStyle:
-          currentProject?.artStyleConfig ?? (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined),
+          currentProject?.artStyleConfig ??
+          (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined),
         worldViewElements: worldViewForPrompt,
       });
 
@@ -1196,7 +1263,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           profileId: activeProfileId || undefined,
         },
       });
-      
+
       updateProgress(taskId, 30, '正在调用AI生成提示词...');
 
       const controller = new AbortController();
@@ -1206,14 +1273,16 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
       let response;
       try {
-        response = await client.chat([{ role: 'user', content: prompt }], { signal: controller.signal });
+        response = await client.chat([{ role: 'user', content: prompt }], {
+          signal: controller.signal,
+        });
       } finally {
         clearTimeout(timeoutId);
         if (taskAbortControllersRef.current.get(taskId) === controller) {
           taskAbortControllersRef.current.delete(taskId);
         }
       }
-      
+
       updateProgress(taskId, 80, '正在解析响应...');
       const firstResponseContent = response.content || '';
       if (isMountedRef.current) setLastAIResponse(firstResponseContent);
@@ -1221,7 +1290,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       let mergedTokenUsage = response.tokenUsage;
       updateLogWithResponse(logId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
 
-      const commitPortraitPrompts = (next: PortraitPrompts, raw: string, tokenUsage?: { prompt: number; completion: number; total: number }) => {
+      const commitPortraitPrompts = (
+        next: PortraitPrompts,
+        raw: string,
+        tokenUsage?: { prompt: number; completion: number; total: number },
+      ) => {
         const mergedPortraitPrompts: PortraitPrompts = {
           midjourney: next.midjourney,
           stableDiffusion: next.stableDiffusion,
@@ -1256,14 +1329,20 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         const shouldUpdateUI =
           isMountedRef.current &&
           isDialogVisible &&
-          (targetCharacterId ? activeEditingCharacter === targetCharacterId : activeEditingCharacter === null);
+          (targetCharacterId
+            ? activeEditingCharacter === targetCharacterId
+            : activeEditingCharacter === null);
 
         if (shouldUpdateUI) {
           setFormData((prev) => ({
             ...prev,
             portraitPrompts: {
-              midjourney: mergedPortraitPrompts.midjourney || prev.portraitPrompts?.midjourney || '',
-              stableDiffusion: mergedPortraitPrompts.stableDiffusion || prev.portraitPrompts?.stableDiffusion || '',
+              midjourney:
+                mergedPortraitPrompts.midjourney || prev.portraitPrompts?.midjourney || '',
+              stableDiffusion:
+                mergedPortraitPrompts.stableDiffusion ||
+                prev.portraitPrompts?.stableDiffusion ||
+                '',
               general: mergedPortraitPrompts.general || prev.portraitPrompts?.general || '',
             },
           }));
@@ -1299,7 +1378,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           attempt: 2,
           worldViewInjected: shouldInjectWorldView,
         },
-        config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          profileId: activeProfileId || undefined,
+        },
       });
 
       const repairController = new AbortController();
@@ -1322,7 +1405,10 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       const repairedContent = repairResponse.content || '';
       if (isMountedRef.current) setLastAIResponse(repairedContent);
       mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
-      updateLogWithResponse(repairLogId, { content: repairedContent, tokenUsage: repairResponse.tokenUsage });
+      updateLogWithResponse(repairLogId, {
+        content: repairedContent,
+        tokenUsage: repairResponse.tokenUsage,
+      });
 
       const attempt2 = parseCharacterPortraitPrompts(repairedContent);
       if (attempt2.ok) {
@@ -1336,9 +1422,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       if (isAbortError(err)) {
         const reason = getAbortReason(taskId);
         const msg =
-          reason === 'timeout'
-            ? '请求超时（90秒），请检查网络或更换模型后重试。'
-            : '已取消生成';
+          reason === 'timeout' ? '请求超时（90秒），请检查网络或更换模型后重试。' : '已取消生成';
         if (isMountedRef.current) setError(msg);
         cancelTask(taskId);
         if (logId) updateLogWithError(logId, msg);
@@ -1377,7 +1461,10 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
     const existingTask = portraitTaskByCharacterId.get(character.id);
     if (existingTask && (existingTask.status === 'running' || existingTask.status === 'queued')) {
-      toast({ title: '定妆照正在生成中', description: '该角色已有生成任务在执行，可前往进度面板查看。' });
+      toast({
+        title: '定妆照正在生成中',
+        description: '该角色已有生成任务在执行，可前往进度面板查看。',
+      });
       showPanel();
       return;
     }
@@ -1404,7 +1491,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
       const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
       const artStyleForPrompt =
-        currentProject?.artStyleConfig ?? (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
+        currentProject?.artStyleConfig ??
+        (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
 
       const prompt = buildCharacterPortraitPrompt({
         characterName: character.name,
@@ -1445,7 +1533,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
       let response;
       try {
-        response = await client.chat([{ role: 'user', content: prompt }], { signal: controller.signal });
+        response = await client.chat([{ role: 'user', content: prompt }], {
+          signal: controller.signal,
+        });
       } finally {
         clearTimeout(timeoutId);
         if (taskAbortControllersRef.current.get(taskId) === controller) {
@@ -1458,7 +1548,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       let mergedTokenUsage = response.tokenUsage;
       updateLogWithResponse(logId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
 
-      const commit = (next: PortraitPrompts, raw: string, tokenUsage?: { prompt: number; completion: number; total: number }) => {
+      const commit = (
+        next: PortraitPrompts,
+        raw: string,
+        tokenUsage?: { prompt: number; completion: number; total: number },
+      ) => {
         updateCharacter(projectId, character.id, { portraitPrompts: next });
         completeTask(taskId, { content: raw, tokenUsage });
       };
@@ -1490,7 +1584,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           attempt: 2,
           worldViewInjected: shouldInjectWorldView,
         },
-        config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
+        config: {
+          provider: config.provider,
+          model: config.model,
+          profileId: activeProfileId || undefined,
+        },
       });
 
       const repairController = new AbortController();
@@ -1512,7 +1610,10 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
       const repairedContent = repairResponse.content || '';
       mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
-      updateLogWithResponse(repairLogId, { content: repairedContent, tokenUsage: repairResponse.tokenUsage });
+      updateLogWithResponse(repairLogId, {
+        content: repairedContent,
+        tokenUsage: repairResponse.tokenUsage,
+      });
 
       const attempt2 = parseCharacterPortraitPrompts(repairedContent);
       if (attempt2.ok) {
@@ -1526,9 +1627,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       if (isAbortError(err)) {
         const reason = getAbortReason(taskId);
         const msg =
-          reason === 'timeout'
-            ? '请求超时（90秒），请检查网络或更换模型后重试。'
-            : '已取消生成';
+          reason === 'timeout' ? '请求超时（90秒），请检查网络或更换模型后重试。' : '已取消生成';
         cancelTask(taskId);
         if (logId) updateLogWithError(logId, msg);
         return;
@@ -1546,233 +1645,260 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     }
   };
 
-  const handleBatchGeneratePortraits = useCallback(async (characterIds: string[]) => {
-    if (!config) {
-      setError('请先配置AI服务');
-      return;
-    }
-    
-    const charactersToProcess = projectCharacters.filter(
-      c => characterIds.includes(c.id) && c.appearance && !c.portraitPrompts
-    ).filter(c => !isInProgressTask(portraitTaskByCharacterId.get(c.id)));
-    
-    if (charactersToProcess.length === 0) {
-      setError('没有可生成的角色（可能已有任务进行中、缺少外观描述或已生成提示词）');
-      return;
-    }
-    
-    setBatchGeneration({
-      isProcessing: true,
-      isPaused: false,
-      currentIndex: 0,
-      totalCount: charactersToProcess.length,
-      completedIds: [],
-      failedIds: [],
-      queue: charactersToProcess.map(c => ({
-        characterId: c.id,
-        briefDescription: c.briefDescription || c.name,
-      })),
-    });
-    showPanel();
-    
-    const client = AIFactory.createClient(config);
-    const styleDesc = getStyleDescription();
-    const injectionSettings = getInjectionSettings(projectId);
-    const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
-    const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
-    const artStyleForPrompt =
-      currentProject?.artStyleConfig ?? (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
-    
-    for (let i = 0; i < charactersToProcess.length; i++) {
-      const character = charactersToProcess[i];
-      
-      setBatchGeneration(prev => ({
-        ...prev,
-        currentIndex: i + 1,
-      }));
-      
-      const taskId = addTask({
-        type: 'character_portrait',
-        title: `批量生成定妆照 [${i + 1}/${charactersToProcess.length}]: ${character.name}`,
-        description: `为角色 ${character.name} 生成定妆照提示词`,
-        status: 'running',
-        priority: 'normal',
-        progress: 0,
-        projectId,
-        characterId: character.id,
-        maxRetries: 2,
+  const handleBatchGeneratePortraits = useCallback(
+    async (characterIds: string[]) => {
+      if (!config) {
+        setError('请先配置AI服务');
+        return;
+      }
+
+      const charactersToProcess = projectCharacters
+        .filter((c) => characterIds.includes(c.id) && c.appearance && !c.portraitPrompts)
+        .filter((c) => !isInProgressTask(portraitTaskByCharacterId.get(c.id)));
+
+      if (charactersToProcess.length === 0) {
+        setError('没有可生成的角色（可能已有任务进行中、缺少外观描述或已生成提示词）');
+        return;
+      }
+
+      setBatchGeneration({
+        isProcessing: true,
+        isPaused: false,
+        currentIndex: 0,
+        totalCount: charactersToProcess.length,
+        completedIds: [],
+        failedIds: [],
+        queue: charactersToProcess.map((c) => ({
+          characterId: c.id,
+          briefDescription: c.briefDescription || c.name,
+        })),
       });
-      let logId = '';
-      try {
-        const prompt = buildCharacterPortraitPrompt({
-          characterName: character.name,
-          characterAppearance: character.appearance,
-          primaryColor: character.primaryColor?.trim() || undefined,
-          secondaryColor: character.secondaryColor?.trim() || undefined,
-          artStyle: artStyleForPrompt,
-          worldViewElements: worldViewForPrompt,
-        });
-        
-        logId = logAICall('character_portrait', {
-          skillName: CharacterPortraitSkill.name,
-          promptTemplate: CharacterPortraitSkill.promptTemplate,
-          filledPrompt: prompt,
-          messages: [{ role: 'user', content: prompt }],
-          context: {
-            projectId,
-            characterId: character.id,
-            skipProgressBridge: true,
-            characterName: character.name,
-            style: styleDesc,
-            worldViewInjected: shouldInjectWorldView,
-          },
-          config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
-        });
-        
-        updateProgress(taskId, 30, '正在调用AI...');
+      showPanel();
 
-        const controller = new AbortController();
-        taskAbortControllersRef.current.set(taskId, controller);
-        taskAbortReasonsRef.current.delete(taskId);
-        const timeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+      const client = AIFactory.createClient(config);
+      const styleDesc = getStyleDescription();
+      const injectionSettings = getInjectionSettings(projectId);
+      const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
+      const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
+      const artStyleForPrompt =
+        currentProject?.artStyleConfig ??
+        (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
 
-        let response;
+      for (let i = 0; i < charactersToProcess.length; i++) {
+        const character = charactersToProcess[i];
+
+        setBatchGeneration((prev) => ({
+          ...prev,
+          currentIndex: i + 1,
+        }));
+
+        const taskId = addTask({
+          type: 'character_portrait',
+          title: `批量生成定妆照 [${i + 1}/${charactersToProcess.length}]: ${character.name}`,
+          description: `为角色 ${character.name} 生成定妆照提示词`,
+          status: 'running',
+          priority: 'normal',
+          progress: 0,
+          projectId,
+          characterId: character.id,
+          maxRetries: 2,
+        });
+        let logId = '';
         try {
-          response = await client.chat([{ role: 'user', content: prompt }], { signal: controller.signal });
-        } finally {
-          clearTimeout(timeoutId);
-          if (taskAbortControllersRef.current.get(taskId) === controller) {
-            taskAbortControllersRef.current.delete(taskId);
+          const prompt = buildCharacterPortraitPrompt({
+            characterName: character.name,
+            characterAppearance: character.appearance,
+            primaryColor: character.primaryColor?.trim() || undefined,
+            secondaryColor: character.secondaryColor?.trim() || undefined,
+            artStyle: artStyleForPrompt,
+            worldViewElements: worldViewForPrompt,
+          });
+
+          logId = logAICall('character_portrait', {
+            skillName: CharacterPortraitSkill.name,
+            promptTemplate: CharacterPortraitSkill.promptTemplate,
+            filledPrompt: prompt,
+            messages: [{ role: 'user', content: prompt }],
+            context: {
+              projectId,
+              characterId: character.id,
+              skipProgressBridge: true,
+              characterName: character.name,
+              style: styleDesc,
+              worldViewInjected: shouldInjectWorldView,
+            },
+            config: {
+              provider: config.provider,
+              model: config.model,
+              profileId: activeProfileId || undefined,
+            },
+          });
+
+          updateProgress(taskId, 30, '正在调用AI...');
+
+          const controller = new AbortController();
+          taskAbortControllersRef.current.set(taskId, controller);
+          taskAbortReasonsRef.current.delete(taskId);
+          const timeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+
+          let response;
+          try {
+            response = await client.chat([{ role: 'user', content: prompt }], {
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+            if (taskAbortControllersRef.current.get(taskId) === controller) {
+              taskAbortControllersRef.current.delete(taskId);
+            }
           }
-        }
-        
-        updateProgress(taskId, 80, '正在解析...');
 
-        const firstResponseContent = response.content || '';
-        let mergedTokenUsage = response.tokenUsage;
-        updateLogWithResponse(logId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
+          updateProgress(taskId, 80, '正在解析...');
 
-        const attempt1 = parseCharacterPortraitPrompts(firstResponseContent);
-        if (attempt1.ok) {
-          updateCharacter(projectId, character.id, { portraitPrompts: attempt1.value });
-          completeTask(taskId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
+          const firstResponseContent = response.content || '';
+          let mergedTokenUsage = response.tokenUsage;
+          updateLogWithResponse(logId, {
+            content: firstResponseContent,
+            tokenUsage: mergedTokenUsage,
+          });
+
+          const attempt1 = parseCharacterPortraitPrompts(firstResponseContent);
+          if (attempt1.ok) {
+            updateCharacter(projectId, character.id, { portraitPrompts: attempt1.value });
+            completeTask(taskId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
+            setBatchGeneration((prev) => ({
+              ...prev,
+              completedIds: [...prev.completedIds, character.id],
+            }));
+            continue;
+          }
+
+          updateTask(taskId, { retryCount: 1 });
+          updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
+
+          const repairPrompt = buildJsonRepairPrompt({
+            requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
+            raw: firstResponseContent,
+          });
+
+          const repairLogId = logAICall('character_portrait', {
+            skillName: CharacterPortraitSkill.name,
+            promptTemplate: CharacterPortraitSkill.promptTemplate,
+            filledPrompt: repairPrompt,
+            messages: [{ role: 'user', content: repairPrompt }],
+            context: {
+              projectId,
+              characterId: character.id,
+              skipProgressBridge: true,
+              characterName: character.name,
+              attempt: 2,
+              style: styleDesc,
+              worldViewInjected: shouldInjectWorldView,
+            },
+            config: {
+              provider: config.provider,
+              model: config.model,
+              profileId: activeProfileId || undefined,
+            },
+          });
+
+          const repairController = new AbortController();
+          taskAbortControllersRef.current.set(taskId, repairController);
+          taskAbortReasonsRef.current.delete(taskId);
+          const repairTimeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+
+          let repairResponse;
+          try {
+            repairResponse = await client.chat([{ role: 'user', content: repairPrompt }], {
+              signal: repairController.signal,
+            });
+          } finally {
+            clearTimeout(repairTimeoutId);
+            if (taskAbortControllersRef.current.get(taskId) === repairController) {
+              taskAbortControllersRef.current.delete(taskId);
+            }
+          }
+
+          const repairedContent = repairResponse.content || '';
+          mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
+          updateLogWithResponse(repairLogId, {
+            content: repairedContent,
+            tokenUsage: repairResponse.tokenUsage,
+          });
+
+          const attempt2 = parseCharacterPortraitPrompts(repairedContent);
+          if (!attempt2.ok) {
+            throw new Error(`AI返回格式错误：${attempt2.error.reason}`);
+          }
+
+          updateCharacter(projectId, character.id, { portraitPrompts: attempt2.value });
+          completeTask(taskId, { content: repairedContent, tokenUsage: mergedTokenUsage });
           setBatchGeneration((prev) => ({
             ...prev,
             completedIds: [...prev.completedIds, character.id],
           }));
-          continue;
+        } catch (err) {
+          console.error(`批量生成失败 [${character.name}]:`, err);
+          failTask(taskId, {
+            message: err instanceof Error ? err.message : '生成失败',
+            retryable: true,
+          });
+          if (logId) updateLogWithError(logId, err instanceof Error ? err.message : '生成失败');
+          setBatchGeneration((prev) => ({
+            ...prev,
+            failedIds: [...prev.failedIds, character.id],
+          }));
         }
 
-        updateTask(taskId, { retryCount: 1 });
-        updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
-
-        const repairPrompt = buildJsonRepairPrompt({
-          requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
-          raw: firstResponseContent,
-        });
-
-        const repairLogId = logAICall('character_portrait', {
-          skillName: CharacterPortraitSkill.name,
-          promptTemplate: CharacterPortraitSkill.promptTemplate,
-          filledPrompt: repairPrompt,
-          messages: [{ role: 'user', content: repairPrompt }],
-          context: {
-            projectId,
-            characterId: character.id,
-            skipProgressBridge: true,
-            characterName: character.name,
-            attempt: 2,
-            style: styleDesc,
-            worldViewInjected: shouldInjectWorldView,
-          },
-          config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
-        });
-
-        const repairController = new AbortController();
-        taskAbortControllersRef.current.set(taskId, repairController);
-        taskAbortReasonsRef.current.delete(taskId);
-        const repairTimeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
-
-        let repairResponse;
-        try {
-          repairResponse = await client.chat([{ role: 'user', content: repairPrompt }], { signal: repairController.signal });
-        } finally {
-          clearTimeout(repairTimeoutId);
-          if (taskAbortControllersRef.current.get(taskId) === repairController) {
-            taskAbortControllersRef.current.delete(taskId);
-          }
+        // 批量操作间添加短暂延迟，避免请求过快
+        if (i < charactersToProcess.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
-
-        const repairedContent = repairResponse.content || '';
-        mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
-        updateLogWithResponse(repairLogId, { content: repairedContent, tokenUsage: repairResponse.tokenUsage });
-
-        const attempt2 = parseCharacterPortraitPrompts(repairedContent);
-        if (!attempt2.ok) {
-          throw new Error(`AI返回格式错误：${attempt2.error.reason}`);
-        }
-
-        updateCharacter(projectId, character.id, { portraitPrompts: attempt2.value });
-        completeTask(taskId, { content: repairedContent, tokenUsage: mergedTokenUsage });
-        setBatchGeneration((prev) => ({
-          ...prev,
-          completedIds: [...prev.completedIds, character.id],
-        }));
-      } catch (err) {
-        console.error(`批量生成失败 [${character.name}]:`, err);
-        failTask(taskId, {
-          message: err instanceof Error ? err.message : '生成失败',
-          retryable: true,
-        });
-        if (logId) updateLogWithError(logId, err instanceof Error ? err.message : '生成失败');
-        setBatchGeneration(prev => ({
-          ...prev,
-          failedIds: [...prev.failedIds, character.id],
-        }));
       }
-      
-      // 批量操作间添加短暂延迟，避免请求过快
-      if (i < charactersToProcess.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
-    
-    setBatchGeneration(prev => ({
-      ...prev,
-      isProcessing: false,
-    }));
-  }, [
-    activeProfileId,
-    addTask,
-    abortTask,
-    completeTask,
-    config,
-    currentProject,
-    failTask,
-    isInProgressTask,
-    portraitTaskByCharacterId,
-    projectCharacters,
-    projectId,
-    projectWorldViewElements,
-    showPanel,
-    updateCharacter,
-    updateProgress,
-    updateTask,
-  ]);
+
+      setBatchGeneration((prev) => ({
+        ...prev,
+        isProcessing: false,
+      }));
+    },
+    [
+      activeProfileId,
+      addTask,
+      abortTask,
+      completeTask,
+      config,
+      currentProject,
+      failTask,
+      isInProgressTask,
+      portraitTaskByCharacterId,
+      projectCharacters,
+      projectId,
+      projectWorldViewElements,
+      showPanel,
+      updateCharacter,
+      updateProgress,
+      updateTask,
+    ],
+  );
 
   // 为所有缺少定妆照的角色批量生成
   const handleBatchGenerateAllMissingPortraits = useCallback(() => {
     const missingPortraitIds = projectCharacters
-      .filter(c => c.appearance && !c.portraitPrompts)
-      .filter(c => !isInProgressTask(portraitTaskByCharacterId.get(c.id)))
-      .map(c => c.id);
-    
+      .filter((c) => c.appearance && !c.portraitPrompts)
+      .filter((c) => !isInProgressTask(portraitTaskByCharacterId.get(c.id)))
+      .map((c) => c.id);
+
     if (missingPortraitIds.length > 0) {
       handleBatchGeneratePortraits(missingPortraitIds);
     } else {
       setError('没有可批量生成的角色（可能已全部生成或已有任务进行中）');
     }
-  }, [handleBatchGeneratePortraits, isInProgressTask, portraitTaskByCharacterId, projectCharacters]);
+  }, [
+    handleBatchGeneratePortraits,
+    isInProgressTask,
+    portraitTaskByCharacterId,
+    projectCharacters,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -1785,9 +1911,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           </div>
           <div>
             <h2 className="text-xl font-bold">角色管理</h2>
-            <p className="text-sm text-muted-foreground">
-              管理项目中的所有角色
-            </p>
+            <p className="text-sm text-muted-foreground">管理项目中的所有角色</p>
           </div>
         </div>
 
@@ -1798,38 +1922,35 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
               添加角色
             </Button>
           </DialogTrigger>
-          
-           {/* 批量生成定妆照按钮 */}
-           {batchPortraitCandidates.length > 0 && (
-             <Button
-               variant="outline"
-               onClick={handleBatchGenerateAllMissingPortraits}
-               disabled={batchGeneration.isProcessing || !config}
-               className="ml-2"
-             >
+
+          {/* 批量生成定妆照按钮 */}
+          {batchPortraitCandidates.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleBatchGenerateAllMissingPortraits}
+              disabled={batchGeneration.isProcessing || !config}
+              className="ml-2"
+            >
               {batchGeneration.isProcessing ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   批量生成中 ({batchGeneration.currentIndex}/{batchGeneration.totalCount})
                 </>
-               ) : (
-                 <>
-                   <Camera className="h-4 w-4 mr-2" />
-                   批量生成定妆照 ({batchPortraitCandidates.length})
-                 </>
-               )}
-             </Button>
-           )}
+              ) : (
+                <>
+                  <Camera className="h-4 w-4 mr-2" />
+                  批量生成定妆照 ({batchPortraitCandidates.length})
+                </>
+              )}
+            </Button>
+          )}
           <DialogContent className="max-w-2xl max-h-[90vh]">
             <DialogHeader>
-              <DialogTitle>
-                {editingCharacter ? '编辑角色' : '添加新角色'}
-              </DialogTitle>
+              <DialogTitle>{editingCharacter ? '编辑角色' : '添加新角色'}</DialogTitle>
               <DialogDescription>
-                {dialogStep === 'basic' 
+                {dialogStep === 'basic'
                   ? '输入角色简短描述，AI将自动生成完整角色卡'
-                  : '查看并复制定妆照提示词'
-                }
+                  : '查看并复制定妆照提示词'}
               </DialogDescription>
             </DialogHeader>
 
@@ -1849,12 +1970,16 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
             {/* 步骤指示器 */}
             <div className="flex items-center gap-2 mb-4">
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${dialogStep === 'basic' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${dialogStep === 'basic' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+              >
                 <Wand2 className="h-3 w-3" />
                 1. 基础信息
               </div>
               <div className="h-px w-4 bg-border" />
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${dialogStep === 'portrait' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              <div
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${dialogStep === 'portrait' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+              >
                 <Camera className="h-3 w-3" />
                 2. 定妆照提示词
               </div>
@@ -1889,19 +2014,18 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                         ) : (
                           <>
                             <Wand2 className="h-4 w-4 mr-2" />
-                           一键生成
+                            一键生成
                           </>
                         )}
                       </Button>
                       {generatingState === 'generating_basic' && currentTaskId ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => abortCurrentTask('user')}
-                        >
+                        <Button variant="outline" onClick={() => abortCurrentTask('user')}>
                           取消
                         </Button>
                       ) : null}
-                      {isDialogPortraitGenerating && dialogPortraitTask?.id && generatingState !== 'generating_portrait' ? (
+                      {isDialogPortraitGenerating &&
+                      dialogPortraitTask?.id &&
+                      generatingState !== 'generating_portrait' ? (
                         <Button variant="outline" size="lg" onClick={showPanel}>
                           查看进度
                         </Button>
@@ -1910,7 +2034,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                       dialogPortraitTask?.id &&
                       generatingState !== 'generating_portrait' &&
                       isAbortableTask(dialogPortraitTask.id) ? (
-                        <Button variant="outline" size="lg" onClick={() => abortTask(dialogPortraitTask.id, 'user')}>
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          onClick={() => abortTask(dialogPortraitTask.id, 'user')}
+                        >
                           取消
                         </Button>
                       ) : null}
@@ -1921,47 +2049,48 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                   </div>
 
                   {/* 错误提示 */}
-                   {error && (
-                     <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
-                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                       <div className="flex-1 min-w-0">
-                         <div className="text-sm">{error}</div>
-                         {(lastAIResponse || lastAIDetails) && (
-                           <div className="mt-1 flex flex-wrap gap-2">
-                             {lastAIResponse ? (
-                               <Button
-                                 type="button"
-                                 variant="ghost"
-                                 size="sm"
-                                 className="h-7 px-2 text-xs"
-                                 onClick={() => void navigator.clipboard.writeText(lastAIResponse)}
-                               >
-                                 复制AI原始返回
-                               </Button>
-                             ) : null}
-                             {lastAIDetails ? (
-                               <Button
-                                 type="button"
-                                 variant="ghost"
-                                 size="sm"
-                                 className="h-7 px-2 text-xs"
-                                 onClick={() => void navigator.clipboard.writeText(lastAIDetails)}
-                               >
-                                 复制解析详情
-                               </Button>
-                             ) : null}
-                           </div>
-                         )}
-                       </div>
-                     </div>
-                   )}
+                  {error && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm">{error}</div>
+                        {(lastAIResponse || lastAIDetails) && (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {lastAIResponse ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => void navigator.clipboard.writeText(lastAIResponse)}
+                              >
+                                复制AI原始返回
+                              </Button>
+                            ) : null}
+                            {lastAIDetails ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => void navigator.clipboard.writeText(lastAIDetails)}
+                              >
+                                复制解析详情
+                              </Button>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 画风提示 */}
                   {currentProject?.style && (
                     <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-md">
                       <Sparkles className="h-4 w-4 text-primary flex-shrink-0" />
                       <span className="text-sm text-muted-foreground">
-                        当前画风：<span className="text-foreground font-medium">{getStyleLabelText()}</span>
+                        当前画风：
+                        <span className="text-foreground font-medium">{getStyleLabelText()}</span>
                       </span>
                     </div>
                   )}
@@ -1974,9 +2103,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                     <Input
                       id="name"
                       value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="AI将自动提取或手动输入"
                     />
                   </div>
@@ -1987,9 +2114,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                     <Textarea
                       id="appearance"
                       value={formData.appearance}
-                      onChange={(e) =>
-                        setFormData({ ...formData, appearance: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, appearance: e.target.value })}
                       placeholder="年龄、身材、发型、服装等特征..."
                       rows={4}
                       disabled={generatingState === 'generating_basic'}
@@ -2002,9 +2127,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                     <Textarea
                       id="personality"
                       value={formData.personality}
-                      onChange={(e) =>
-                        setFormData({ ...formData, personality: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, personality: e.target.value })}
                       placeholder="性格特征、情感表达、互动模式..."
                       rows={3}
                       disabled={generatingState === 'generating_basic'}
@@ -2017,9 +2140,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                     <Textarea
                       id="background"
                       value={formData.background}
-                      onChange={(e) =>
-                        setFormData({ ...formData, background: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, background: e.target.value })}
                       placeholder="出身、经历、动机、目标..."
                       rows={4}
                       disabled={generatingState === 'generating_basic'}
@@ -2032,7 +2153,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                     <div className="grid grid-cols-2 gap-4">
                       {/* 主色 */}
                       <div className="space-y-2">
-                        <Label htmlFor="primaryColor" className="text-sm">主色</Label>
+                        <Label htmlFor="primaryColor" className="text-sm">
+                          主色
+                        </Label>
                         <div className="flex gap-2">
                           <Input
                             id="primaryColor"
@@ -2056,7 +2179,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                       </div>
                       {/* 辅色 */}
                       <div className="space-y-2">
-                        <Label htmlFor="secondaryColor" className="text-sm">辅色</Label>
+                        <Label htmlFor="secondaryColor" className="text-sm">
+                          辅色
+                        </Label>
                         <div className="flex gap-2">
                           <Input
                             id="secondaryColor"
@@ -2120,88 +2245,99 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                       </div>
                       <div>
                         <h4 className="font-semibold">{formData.name}</h4>
-                        <p className="text-xs text-muted-foreground line-clamp-1">{formData.briefDescription}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">
+                          {formData.briefDescription}
+                        </p>
                       </div>
                     </div>
                   </div>
 
                   {/* 错误提示 */}
-                   {error && (
-                     <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
-                       <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                       <div className="flex-1 min-w-0">
-                         <div className="text-sm">{error}</div>
-                         {lastAIResponse ? (
-                           <div className="mt-1 flex flex-wrap gap-2">
-                             <Button
-                               type="button"
-                               variant="ghost"
-                               size="sm"
-                               className="h-7 px-2 text-xs"
-                               onClick={() => void navigator.clipboard.writeText(lastAIResponse)}
-                             >
-                               复制AI原始返回
-                             </Button>
-                           </div>
-                         ) : null}
-                       </div>
-                     </div>
-                   )}
+                  {error && (
+                    <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-md">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm">{error}</div>
+                        {lastAIResponse ? (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => void navigator.clipboard.writeText(lastAIResponse)}
+                            >
+                              复制AI原始返回
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 生成定妆照按钮 */}
-                   {!formData.portraitPrompts && (
-                     <div className="space-y-3">
-                       <div className="flex justify-center py-2 gap-2">
-                         <Button
-                           onClick={handleGeneratePortraitPrompts}
-                           disabled={generatingState !== 'idle' || isDialogPortraitGenerating}
-                           size="lg"
-                         >
-                           {generatingState === 'generating_portrait' || isDialogPortraitGenerating ? (
-                             <>
-                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                               正在生成定妆照提示词...
-                             </>
-                           ) : (
-                             <>
-                               <Camera className="h-4 w-4 mr-2" />
-                               生成定妆照提示词
-                             </>
-                           )}
-                         </Button>
-                         {generatingState === 'generating_portrait' && currentTaskId ? (
-                           <Button variant="outline" size="lg" onClick={() => abortCurrentTask('user')}>
-                             取消
-                           </Button>
-                         ) : isDialogPortraitGenerating && dialogPortraitTask && isAbortableTask(dialogPortraitTask.id) ? (
-                           <Button
-                             variant="outline"
-                             size="lg"
-                             onClick={() => abortTask(dialogPortraitTask.id, 'user')}
-                           >
-                             取消
-                           </Button>
-                         ) : null}
-                         {isDialogPortraitGenerating ? (
-                           <Button variant="outline" size="lg" onClick={showPanel}>
-                             查看进度
-                           </Button>
-                         ) : null}
-                       </div>
- 
-                       {isDialogPortraitGenerating && dialogPortraitTask ? (
-                         <div className="space-y-1">
-                           <div className="flex items-center justify-between text-xs">
-                             <span className="text-muted-foreground truncate">
-                               {dialogPortraitTask.currentStep || '正在生成定妆照提示词...'}
-                             </span>
-                             <span className="text-muted-foreground">{dialogPortraitTask.progress}%</span>
-                           </div>
-                           <Progress value={dialogPortraitTask.progress} className="h-1.5" />
-                         </div>
-                       ) : null}
-                     </div>
-                   )}
+                  {!formData.portraitPrompts && (
+                    <div className="space-y-3">
+                      <div className="flex justify-center py-2 gap-2">
+                        <Button
+                          onClick={handleGeneratePortraitPrompts}
+                          disabled={generatingState !== 'idle' || isDialogPortraitGenerating}
+                          size="lg"
+                        >
+                          {generatingState === 'generating_portrait' ||
+                          isDialogPortraitGenerating ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              正在生成定妆照提示词...
+                            </>
+                          ) : (
+                            <>
+                              <Camera className="h-4 w-4 mr-2" />
+                              生成定妆照提示词
+                            </>
+                          )}
+                        </Button>
+                        {generatingState === 'generating_portrait' && currentTaskId ? (
+                          <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={() => abortCurrentTask('user')}
+                          >
+                            取消
+                          </Button>
+                        ) : isDialogPortraitGenerating &&
+                          dialogPortraitTask &&
+                          isAbortableTask(dialogPortraitTask.id) ? (
+                          <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={() => abortTask(dialogPortraitTask.id, 'user')}
+                          >
+                            取消
+                          </Button>
+                        ) : null}
+                        {isDialogPortraitGenerating ? (
+                          <Button variant="outline" size="lg" onClick={showPanel}>
+                            查看进度
+                          </Button>
+                        ) : null}
+                      </div>
+
+                      {isDialogPortraitGenerating && dialogPortraitTask ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground truncate">
+                              {dialogPortraitTask.currentStep || '正在生成定妆照提示词...'}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {dialogPortraitTask.progress}%
+                            </span>
+                          </div>
+                          <Progress value={dialogPortraitTask.progress} className="h-1.5" />
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
 
                   {/* 定妆照提示词展示 */}
                   {formData.portraitPrompts && (
@@ -2211,7 +2347,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                         <TabsTrigger value="sd">Stable Diffusion</TabsTrigger>
                         <TabsTrigger value="general">通用</TabsTrigger>
                       </TabsList>
-                      
+
                       <TabsContent value="midjourney" className="mt-3">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -2219,12 +2355,20 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleCopyPrompt('mj', formData.portraitPrompts!.midjourney)}
+                              onClick={() =>
+                                handleCopyPrompt('mj', formData.portraitPrompts!.midjourney)
+                              }
                             >
                               {copiedFormat === 'mj' ? (
-                                <><Check className="h-3 w-3 mr-1" />已复制</>
+                                <>
+                                  <Check className="h-3 w-3 mr-1" />
+                                  已复制
+                                </>
                               ) : (
-                                <><Copy className="h-3 w-3 mr-1" />复制</>
+                                <>
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  复制
+                                </>
                               )}
                             </Button>
                           </div>
@@ -2233,20 +2377,30 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                           </div>
                         </div>
                       </TabsContent>
-                      
+
                       <TabsContent value="sd" className="mt-3">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <Label className="text-xs text-muted-foreground">Stable Diffusion 格式</Label>
+                            <Label className="text-xs text-muted-foreground">
+                              Stable Diffusion 格式
+                            </Label>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleCopyPrompt('sd', formData.portraitPrompts!.stableDiffusion)}
+                              onClick={() =>
+                                handleCopyPrompt('sd', formData.portraitPrompts!.stableDiffusion)
+                              }
                             >
                               {copiedFormat === 'sd' ? (
-                                <><Check className="h-3 w-3 mr-1" />已复制</>
+                                <>
+                                  <Check className="h-3 w-3 mr-1" />
+                                  已复制
+                                </>
                               ) : (
-                                <><Copy className="h-3 w-3 mr-1" />复制</>
+                                <>
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  复制
+                                </>
                               )}
                             </Button>
                           </div>
@@ -2255,7 +2409,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                           </div>
                         </div>
                       </TabsContent>
-                      
+
                       <TabsContent value="general" className="mt-3">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -2263,12 +2417,20 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleCopyPrompt('general', formData.portraitPrompts!.general)}
+                              onClick={() =>
+                                handleCopyPrompt('general', formData.portraitPrompts!.general)
+                              }
                             >
                               {copiedFormat === 'general' ? (
-                                <><Check className="h-3 w-3 mr-1" />已复制</>
+                                <>
+                                  <Check className="h-3 w-3 mr-1" />
+                                  已复制
+                                </>
                               ) : (
-                                <><Copy className="h-3 w-3 mr-1" />复制</>
+                                <>
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  复制
+                                </>
                               )}
                             </Button>
                           </div>
@@ -2297,7 +2459,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                           查看进度
                         </Button>
                       ) : null}
-                      {isDialogPortraitGenerating && dialogPortraitTask && isAbortableTask(dialogPortraitTask.id) ? (
+                      {isDialogPortraitGenerating &&
+                      dialogPortraitTask &&
+                      isAbortableTask(dialogPortraitTask.id) ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -2321,10 +2485,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
             <div className="flex justify-between gap-2 pt-4">
               {dialogStep === 'portrait' && (
-                <Button
-                  variant="outline"
-                  onClick={() => setDialogStep('basic')}
-                >
+                <Button variant="outline" onClick={() => setDialogStep('basic')}>
                   返回修改
                 </Button>
               )}
@@ -2349,9 +2510,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                     下一步：生成定妆照
                   </Button>
                 ) : (
-                  <Button onClick={handleSubmit}>
-                    {editingCharacter ? '保存' : '添加角色'}
-                  </Button>
+                  <Button onClick={handleSubmit}>{editingCharacter ? '保存' : '添加角色'}</Button>
                 )}
               </div>
             </div>
@@ -2374,227 +2533,248 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {projectCharacters.map((character) => {
             const portraitTask = portraitTaskByCharacterId.get(character.id);
-            const isPortraitGenerating = portraitTask?.status === 'running' || portraitTask?.status === 'queued';
+            const isPortraitGenerating =
+              portraitTask?.status === 'running' || portraitTask?.status === 'queued';
             const isPortraitError = portraitTask?.status === 'error';
 
             return (
-            <div
-              key={character.id}
-              className="rounded-lg border bg-card p-4 hover:shadow-md transition-shadow"
-            >
-              {/* 角色头部 */}
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold"
-                    style={{ backgroundColor: character.themeColor }}
-                  >
-                    {character.name.charAt(0)}
+              <div
+                key={character.id}
+                className="rounded-lg border bg-card p-4 hover:shadow-md transition-shadow"
+              >
+                {/* 角色头部 */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold"
+                      style={{ backgroundColor: character.themeColor }}
+                    >
+                      {character.name.charAt(0)}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{character.name}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {character.appearances.length} 次出场
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold">{character.name}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {character.appearances.length} 次出场
+
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => handleEdit(character.id)}>
+                      <Edit2 className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(character.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                <Separator className="my-3" />
+
+                {/* 角色信息 */}
+                <Tabs defaultValue="appearance" className="w-full">
+                  <TabsList className="grid w-full grid-cols-4 h-8">
+                    <TabsTrigger value="appearance" className="text-xs">
+                      外观
+                    </TabsTrigger>
+                    <TabsTrigger value="personality" className="text-xs">
+                      性格
+                    </TabsTrigger>
+                    <TabsTrigger value="background" className="text-xs">
+                      背景
+                    </TabsTrigger>
+                    <TabsTrigger value="portrait" className="text-xs">
+                      定妆照
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="appearance" className="mt-2">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {character.appearance || '暂无外观描述'}
                     </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEdit(character.id)}
-                  >
-                    <Edit2 className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(character.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-
-              <Separator className="my-3" />
-
-              {/* 角色信息 */}
-              <Tabs defaultValue="appearance" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 h-8">
-                  <TabsTrigger value="appearance" className="text-xs">
-                    外观
-                  </TabsTrigger>
-                  <TabsTrigger value="personality" className="text-xs">
-                    性格
-                  </TabsTrigger>
-                  <TabsTrigger value="background" className="text-xs">
-                    背景
-                  </TabsTrigger>
-                  <TabsTrigger value="portrait" className="text-xs">
-                    定妆照
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="appearance" className="mt-2">
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {character.appearance || '暂无外观描述'}
-                  </p>
-                </TabsContent>
-                <TabsContent value="personality" className="mt-2">
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {character.personality || '暂无性格描述'}
-                  </p>
-                </TabsContent>
-                <TabsContent value="background" className="mt-2">
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {character.background || '暂无背景故事'}
-                  </p>
-                </TabsContent>
-                <TabsContent value="portrait" className="mt-2">
-                  {isPortraitGenerating ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground truncate">
-                          {portraitTask?.currentStep || '正在生成定妆照提示词...'}
-                        </span>
-                        <span className="text-muted-foreground">{portraitTask?.progress ?? 0}%</span>
-                      </div>
-                      <Progress value={portraitTask?.progress ?? 0} className="h-1.5" />
-                      <div className="flex gap-1">
-                        <Button variant="outline" size="sm" className="text-xs h-7" onClick={showPanel}>
-                          查看进度
-                        </Button>
-                        {portraitTask && isAbortableTask(portraitTask.id) ? (
+                  </TabsContent>
+                  <TabsContent value="personality" className="mt-2">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {character.personality || '暂无性格描述'}
+                    </p>
+                  </TabsContent>
+                  <TabsContent value="background" className="mt-2">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {character.background || '暂无背景故事'}
+                    </p>
+                  </TabsContent>
+                  <TabsContent value="portrait" className="mt-2">
+                    {isPortraitGenerating ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground truncate">
+                            {portraitTask?.currentStep || '正在生成定妆照提示词...'}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {portraitTask?.progress ?? 0}%
+                          </span>
+                        </div>
+                        <Progress value={portraitTask?.progress ?? 0} className="h-1.5" />
+                        <div className="flex gap-1">
                           <Button
                             variant="outline"
                             size="sm"
                             className="text-xs h-7"
-                            onClick={() => abortTask(portraitTask.id, 'user')}
+                            onClick={showPanel}
                           >
-                            取消
+                            查看进度
                           </Button>
-                        ) : null}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => handleEdit(character.id)}
-                        >
-                          编辑
-                        </Button>
+                          {portraitTask && isAbortableTask(portraitTask.id) ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs h-7"
+                              onClick={() => abortTask(portraitTask.id, 'user')}
+                            >
+                              取消
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => handleEdit(character.id)}
+                          >
+                            编辑
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ) : character.portraitPrompts ? (
-                    <div className="space-y-2">
-                      <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => handleCopyPrompt('mj-' + character.id, character.portraitPrompts!.midjourney)}
-                        >
-                          {copiedFormat === 'mj-' + character.id ? (
-                            <Check className="h-3 w-3 mr-1" />
-                          ) : (
-                            <Copy className="h-3 w-3 mr-1" />
-                          )}
-                          MJ
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => handleCopyPrompt('sd-' + character.id, character.portraitPrompts!.stableDiffusion)}
-                        >
-                          {copiedFormat === 'sd-' + character.id ? (
-                            <Check className="h-3 w-3 mr-1" />
-                          ) : (
-                            <Copy className="h-3 w-3 mr-1" />
-                          )}
-                          SD
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => handleCopyPrompt('general-' + character.id, character.portraitPrompts!.general)}
-                        >
-                          {copiedFormat === 'general-' + character.id ? (
-                            <Check className="h-3 w-3 mr-1" />
-                          ) : (
-                            <Copy className="h-3 w-3 mr-1" />
-                          )}
-                          通用
-                        </Button>
+                    ) : character.portraitPrompts ? (
+                      <div className="space-y-2">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() =>
+                              handleCopyPrompt(
+                                'mj-' + character.id,
+                                character.portraitPrompts!.midjourney,
+                              )
+                            }
+                          >
+                            {copiedFormat === 'mj-' + character.id ? (
+                              <Check className="h-3 w-3 mr-1" />
+                            ) : (
+                              <Copy className="h-3 w-3 mr-1" />
+                            )}
+                            MJ
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() =>
+                              handleCopyPrompt(
+                                'sd-' + character.id,
+                                character.portraitPrompts!.stableDiffusion,
+                              )
+                            }
+                          >
+                            {copiedFormat === 'sd-' + character.id ? (
+                              <Check className="h-3 w-3 mr-1" />
+                            ) : (
+                              <Copy className="h-3 w-3 mr-1" />
+                            )}
+                            SD
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() =>
+                              handleCopyPrompt(
+                                'general-' + character.id,
+                                character.portraitPrompts!.general,
+                              )
+                            }
+                          >
+                            {copiedFormat === 'general-' + character.id ? (
+                              <Check className="h-3 w-3 mr-1" />
+                            ) : (
+                              <Copy className="h-3 w-3 mr-1" />
+                            )}
+                            通用
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {character.portraitPrompts.general}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{character.portraitPrompts.general}</p>
-                    </div>
-                  ) : isPortraitError ? (
-                    <div className="space-y-2">
-                      <p className="text-xs text-destructive line-clamp-2">
-                        {portraitTask?.error?.message || '定妆照提示词生成失败'}
-                      </p>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => void handleGeneratePortraitPromptsForCharacter(character)}
-                          disabled={!config || !character.appearance}
-                        >
-                          重试生成
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => handleEdit(character.id)}
-                        >
-                          编辑
-                        </Button>
+                    ) : isPortraitError ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-destructive line-clamp-2">
+                          {portraitTask?.error?.message || '定妆照提示词生成失败'}
+                        </p>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() =>
+                              void handleGeneratePortraitPromptsForCharacter(character)
+                            }
+                            disabled={!config || !character.appearance}
+                          >
+                            重试生成
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => handleEdit(character.id)}
+                          >
+                            编辑
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm text-muted-foreground">
-                        {character.appearance ? '暂无定妆照提示词' : '请先填写外观描述'}
-                      </p>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => void handleGeneratePortraitPromptsForCharacter(character)}
-                          disabled={!config || !character.appearance}
-                        >
-                          生成
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => handleEdit(character.id)}
-                        >
-                          编辑
-                        </Button>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm text-muted-foreground">
+                          {character.appearance ? '暂无定妆照提示词' : '请先填写外观描述'}
+                        </p>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() =>
+                              void handleGeneratePortraitPromptsForCharacter(character)
+                            }
+                            disabled={!config || !character.appearance}
+                          >
+                            生成
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => handleEdit(character.id)}
+                          >
+                            编辑
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
+                    )}
+                  </TabsContent>
+                </Tabs>
 
-              {/* 关系标签 */}
-              {character.relationships.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {character.relationships.map((rel, idx) => (
-                    <Badge key={idx} variant="outline" className="text-xs">
-                      <Link2 className="h-3 w-3 mr-1" />
-                      {rel.relationshipType}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
+                {/* 关系标签 */}
+                {character.relationships.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {character.relationships.map((rel, idx) => (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        <Link2 className="h-3 w-3 mr-1" />
+                        {rel.relationshipType}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -2619,12 +2799,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleSkipCascadeUpdate}>
-              跳过
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmCascadeUpdate}>
-              标记更新
-            </AlertDialogAction>
+            <AlertDialogCancel onClick={handleSkipCascadeUpdate}>跳过</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmCascadeUpdate}>标记更新</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

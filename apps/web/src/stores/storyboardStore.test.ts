@@ -224,7 +224,7 @@ describe('storyboardStore', () => {
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'scene_1', { summary: 'Updated' });
 
-      const updated = useStoryboardStore.getState().scenes.find(s => s.id === 'scene_1');
+      const updated = useStoryboardStore.getState().scenes.find((s) => s.id === 'scene_1');
       expect(updated?.summary).toBe('Updated');
     });
 
@@ -246,7 +246,7 @@ describe('storyboardStore', () => {
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'scene_1', { status: 'completed' });
 
-      const updated = useStoryboardStore.getState().scenes.find(s => s.id === 'scene_1');
+      const updated = useStoryboardStore.getState().scenes.find((s) => s.id === 'scene_1');
       expect(updated?.status).toBe('completed');
     });
   });
@@ -308,9 +308,42 @@ describe('storyboardStore', () => {
 
   describe('reorderScenes', () => {
     const scenes: Scene[] = [
-      { id: 'scene_1', projectId: 'proj_1', order: 1, summary: 'Scene 1', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
-      { id: 'scene_2', projectId: 'proj_1', order: 2, summary: 'Scene 2', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
-      { id: 'scene_3', projectId: 'proj_1', order: 3, summary: 'Scene 3', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
+      {
+        id: 'scene_1',
+        projectId: 'proj_1',
+        order: 1,
+        summary: 'Scene 1',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      },
+      {
+        id: 'scene_2',
+        projectId: 'proj_1',
+        order: 2,
+        summary: 'Scene 2',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      },
+      {
+        id: 'scene_3',
+        projectId: 'proj_1',
+        order: 3,
+        summary: 'Scene 3',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      },
     ];
 
     beforeEach(() => {
@@ -402,14 +435,20 @@ describe('storyboardStore', () => {
 
     it('should add dialogues to scene', () => {
       const dialogues = [
-        { id: 'dl_1', type: 'dialogue' as const, characterName: '小明', content: '你好！', order: 1 },
+        {
+          id: 'dl_1',
+          type: 'dialogue' as const,
+          characterName: '小明',
+          content: '你好！',
+          order: 1,
+        },
         { id: 'dl_2', type: 'narration' as const, content: '两人相视而笑', order: 2 },
       ];
 
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'scene_1', { dialogues });
 
-      const updated = useStoryboardStore.getState().scenes.find(s => s.id === 'scene_1');
+      const updated = useStoryboardStore.getState().scenes.find((s) => s.id === 'scene_1');
       expect(updated?.dialogues).toHaveLength(2);
       expect(updated?.dialogues?.[0].characterName).toBe('小明');
       expect(updated?.dialogues?.[1].type).toBe('narration');
@@ -418,26 +457,50 @@ describe('storyboardStore', () => {
     it('should replace existing dialogues', () => {
       // First add some dialogues
       useStoryboardStore.setState({
-        scenes: [{
-          ...existingScene,
-          dialogues: [{ id: 'old_1', type: 'dialogue' as const, characterName: 'Old', content: 'Old content', order: 1 }],
-        }],
+        scenes: [
+          {
+            ...existingScene,
+            dialogues: [
+              {
+                id: 'old_1',
+                type: 'dialogue' as const,
+                characterName: 'Old',
+                content: 'Old content',
+                order: 1,
+              },
+            ],
+          },
+        ],
       });
 
       const newDialogues = [
-        { id: 'new_1', type: 'monologue' as const, characterName: '主角', content: '新台词', order: 1 },
+        {
+          id: 'new_1',
+          type: 'monologue' as const,
+          characterName: '主角',
+          content: '新台词',
+          order: 1,
+        },
       ];
 
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'scene_1', { dialogues: newDialogues });
 
-      const updated = useStoryboardStore.getState().scenes.find(s => s.id === 'scene_1');
+      const updated = useStoryboardStore.getState().scenes.find((s) => s.id === 'scene_1');
       expect(updated?.dialogues).toHaveLength(1);
       expect(updated?.dialogues?.[0].id).toBe('new_1');
     });
 
     it('should save dialogues to storage', () => {
-      const dialogues = [{ id: 'dl_1', type: 'thought' as const, characterName: '角色', content: '心理活动', order: 1 }];
+      const dialogues = [
+        {
+          id: 'dl_1',
+          type: 'thought' as const,
+          characterName: '角色',
+          content: '心理活动',
+          order: 1,
+        },
+      ];
 
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'scene_1', { dialogues });
@@ -449,17 +512,61 @@ describe('storyboardStore', () => {
       const { updateScene } = useStoryboardStore.getState();
       updateScene('proj_1', 'scene_1', { dialogues: [] });
 
-      const updated = useStoryboardStore.getState().scenes.find(s => s.id === 'scene_1');
+      const updated = useStoryboardStore.getState().scenes.find((s) => s.id === 'scene_1');
       expect(updated?.dialogues).toEqual([]);
     });
   });
 
   describe('boundary conditions for reordering', () => {
     const scenes: Scene[] = [
-      { id: 'scene_1', projectId: 'proj_1', order: 1, summary: 'Scene 1', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
-      { id: 'scene_2', projectId: 'proj_1', order: 2, summary: 'Scene 2', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
-      { id: 'scene_3', projectId: 'proj_1', order: 3, summary: 'Scene 3', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
-      { id: 'scene_4', projectId: 'proj_1', order: 4, summary: 'Scene 4', sceneDescription: '', actionDescription: '', shotPrompt: '', motionPrompt: '', status: 'pending', notes: '' },
+      {
+        id: 'scene_1',
+        projectId: 'proj_1',
+        order: 1,
+        summary: 'Scene 1',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      },
+      {
+        id: 'scene_2',
+        projectId: 'proj_1',
+        order: 2,
+        summary: 'Scene 2',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      },
+      {
+        id: 'scene_3',
+        projectId: 'proj_1',
+        order: 3,
+        summary: 'Scene 3',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      },
+      {
+        id: 'scene_4',
+        projectId: 'proj_1',
+        order: 4,
+        summary: 'Scene 4',
+        sceneDescription: '',
+        actionDescription: '',
+        shotPrompt: '',
+        motionPrompt: '',
+        status: 'pending',
+        notes: '',
+      },
     ];
 
     beforeEach(() => {
@@ -519,7 +626,7 @@ describe('storyboardStore', () => {
   describe('concurrent operations', () => {
     it('should handle concurrent scene additions', () => {
       const { addScene } = useStoryboardStore.getState();
-      
+
       const scene1 = addScene('proj_1', {
         projectId: 'proj_1',
         order: 1,

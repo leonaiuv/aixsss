@@ -2,28 +2,28 @@
  * AI调用调试日志器
  * 用于追踪每次AI调用时传输给AI的完整内容
  * 方便后续调整和优化提示词
- * 
+ *
  * 增强版：集成进度追踪系统，支持实时通知
  */
 
 // AI调用类型
-export type AICallType = 
-  | 'scene_list_generation'      // 分镜列表生成
-  | 'scene_description'          // 场景锚点生成
-  | 'action_description'         // 动作描述生成（已废弃，保留兼容）
-  | 'shot_prompt'                // 镜头提示词生成（已废弃，保留兼容）
-  | 'keyframe_prompt'            // 关键帧提示词生成（KF0/KF1/KF2）
-  | 'motion_prompt'              // 时空/运动提示词生成
-  | 'dialogue'                   // 台词生成
-  | 'character_basic_info'       // 角色基础信息生成
-  | 'character_portrait'         // 角色定妆照提示词生成
-  | 'custom';                    // 自定义调用
+export type AICallType =
+  | 'scene_list_generation' // 分镜列表生成
+  | 'scene_description' // 场景锚点生成
+  | 'action_description' // 动作描述生成（已废弃，保留兼容）
+  | 'shot_prompt' // 镜头提示词生成（已废弃，保留兼容）
+  | 'keyframe_prompt' // 关键帧提示词生成（KF0/KF1/KF2）
+  | 'motion_prompt' // 时空/运动提示词生成
+  | 'dialogue' // 台词生成
+  | 'character_basic_info' // 角色基础信息生成
+  | 'character_portrait' // 角色定妆照提示词生成
+  | 'custom'; // 自定义调用
 
 // ==========================================
 // 事件系统
 // ==========================================
 
-export type AILogEvent = 
+export type AILogEvent =
   | 'call:start'
   | 'call:success'
   | 'call:error'
@@ -36,17 +36,17 @@ const eventListeners: Map<AILogEvent, EventCallback[]> = new Map();
 /**
  * 订阅AI日志事件
  */
-export function subscribeToAIEvents(
-  event: AILogEvent, 
-  callback: EventCallback
-): () => void {
+export function subscribeToAIEvents(event: AILogEvent, callback: EventCallback): () => void {
   const listeners = eventListeners.get(event) || [];
   listeners.push(callback);
   eventListeners.set(event, listeners);
-  
+
   return () => {
     const current = eventListeners.get(event) || [];
-    eventListeners.set(event, current.filter(cb => cb !== callback));
+    eventListeners.set(
+      event,
+      current.filter((cb) => cb !== callback),
+    );
   };
 }
 
@@ -55,7 +55,7 @@ export function subscribeToAIEvents(
  */
 function emitAIEvent(event: AILogEvent, entry: AICallLogEntry, extra?: unknown): void {
   const listeners = eventListeners.get(event) || [];
-  listeners.forEach(callback => {
+  listeners.forEach((callback) => {
     try {
       callback(entry, extra);
     } catch (err) {
@@ -69,20 +69,20 @@ export interface AICallContext {
   // 项目信息
   projectId?: string;
   projectTitle?: string;
-  style?: string;           // 视觉风格
-  protagonist?: string;     // 主角特征
-  summary?: string;         // 故事梗概
-  
+  style?: string; // 视觉风格
+  protagonist?: string; // 主角特征
+  summary?: string; // 故事梗概
+
   // 分镜信息
   sceneId?: string;
   sceneOrder?: number;
-  sceneSummary?: string;    // 分镜概要
-  prevSceneSummary?: string;// 前一分镜概要
-  
+  sceneSummary?: string; // 分镜概要
+  prevSceneSummary?: string; // 前一分镜概要
+
   // 已生成内容
-  sceneDescription?: string;  // 场景锚点（原字段名 sceneDescription）
+  sceneDescription?: string; // 场景锚点（原字段名 sceneDescription）
   actionDescription?: string; // 动作描述
-  
+
   // 其他上下文
   [key: string]: unknown;
 }
@@ -93,18 +93,18 @@ export interface AICallLogEntry {
   timestamp: string;
   callType: AICallType;
   skillName?: string;
-  
+
   // 发送给AI的内容
-  promptTemplate: string;    // 原始模板
-  filledPrompt: string;      // 填充变量后的提示词
+  promptTemplate: string; // 原始模板
+  filledPrompt: string; // 填充变量后的提示词
   messages: Array<{
     role: 'system' | 'user' | 'assistant';
     content: string;
   }>;
-  
+
   // 上下文数据
   context: AICallContext;
-  
+
   // 配置信息
   config: {
     provider: string;
@@ -112,7 +112,7 @@ export interface AICallLogEntry {
     maxTokens?: number;
     profileId?: string;
   };
-  
+
   // 响应信息（可选，成功后填充）
   response?: {
     content: string;
@@ -122,7 +122,7 @@ export interface AICallLogEntry {
       total: number;
     };
   };
-  
+
   // 状态
   status: 'pending' | 'success' | 'error' | 'cancelled';
   error?: string;
@@ -194,35 +194,41 @@ function formatLogOutput(entry: AICallLogEntry): void {
 
   const divider = '═'.repeat(60);
   const subDivider = '─'.repeat(60);
-  
-  console.group(`%c${callTypeLabels[entry.callType]} [${entry.timestamp}]`, 
-    'color: #10b981; font-weight: bold; font-size: 14px;');
-  
+
+  console.group(
+    `%c${callTypeLabels[entry.callType]} [${entry.timestamp}]`,
+    'color: #10b981; font-weight: bold; font-size: 14px;',
+  );
+
   console.log(`%c${divider}`, 'color: #6366f1;');
-  
+
   // 基本信息
   console.log('%c📌 基本信息', 'color: #f59e0b; font-weight: bold;');
   console.table({
-    'ID': entry.id,
-    '调用类型': entry.callType,
-    '技能名称': entry.skillName || '-',
-    'AI供应商': entry.config.provider,
-    '模型': entry.config.model,
-    '最大Token': entry.config.maxTokens || '默认',
+    ID: entry.id,
+    调用类型: entry.callType,
+    技能名称: entry.skillName || '-',
+    AI供应商: entry.config.provider,
+    模型: entry.config.model,
+    最大Token: entry.config.maxTokens || '默认',
   });
 
   console.log(`%c${subDivider}`, 'color: #94a3b8;');
-  
+
   // 上下文数据
   console.log('%c📂 上下文数据（传递给AI的背景信息）', 'color: #f59e0b; font-weight: bold;');
   console.table({
-    '项目ID': entry.context.projectId || '-',
-    '视觉风格': entry.context.style || '-',
-    '主角特征': entry.context.protagonist || '-',
-    '故事梗概': entry.context.summary ? (entry.context.summary.length > 50 ? entry.context.summary.substring(0, 50) + '...' : entry.context.summary) : '-',
-    '分镜序号': entry.context.sceneOrder || '-',
-    '分镜概要': entry.context.sceneSummary || '-',
-    '前一分镜': entry.context.prevSceneSummary || '-',
+    项目ID: entry.context.projectId || '-',
+    视觉风格: entry.context.style || '-',
+    主角特征: entry.context.protagonist || '-',
+    故事梗概: entry.context.summary
+      ? entry.context.summary.length > 50
+        ? entry.context.summary.substring(0, 50) + '...'
+        : entry.context.summary
+      : '-',
+    分镜序号: entry.context.sceneOrder || '-',
+    分镜概要: entry.context.sceneSummary || '-',
+    前一分镜: entry.context.prevSceneSummary || '-',
   });
 
   if (entry.context.sceneDescription) {
@@ -236,13 +242,16 @@ function formatLogOutput(entry: AICallLogEntry): void {
   }
 
   console.log(`%c${subDivider}`, 'color: #94a3b8;');
-  
+
   // 提示词模板
   console.log('%c📝 提示词模板（原始）', 'color: #f59e0b; font-weight: bold;');
-  console.log('%c' + entry.promptTemplate, 'color: #a78bfa; background: #1e1e2e; padding: 8px; border-radius: 4px; white-space: pre-wrap;');
+  console.log(
+    '%c' + entry.promptTemplate,
+    'color: #a78bfa; background: #1e1e2e; padding: 8px; border-radius: 4px; white-space: pre-wrap;',
+  );
 
   console.log(`%c${subDivider}`, 'color: #94a3b8;');
-  
+
   // 实际发送的消息
   console.log('%c📤 实际发送给AI的消息', 'color: #f59e0b; font-weight: bold;');
   entry.messages.forEach((msg) => {
@@ -252,17 +261,23 @@ function formatLogOutput(entry: AICallLogEntry): void {
       assistant: '💬 Assistant',
     };
     console.log(`%c${roleLabels[msg.role] || msg.role}:`, 'color: #22d3ee; font-weight: bold;');
-    console.log('%c' + msg.content, 'color: #f0f9ff; background: #0f172a; padding: 8px; border-radius: 4px; white-space: pre-wrap;');
+    console.log(
+      '%c' + msg.content,
+      'color: #f0f9ff; background: #0f172a; padding: 8px; border-radius: 4px; white-space: pre-wrap;',
+    );
   });
 
   console.log(`%c${subDivider}`, 'color: #94a3b8;');
-  
+
   // 填充后的提示词（完整版）
   console.log('%c📋 完整提示词（变量已替换）', 'color: #f59e0b; font-weight: bold;');
-  console.log('%c' + entry.filledPrompt, 'color: #86efac; background: #052e16; padding: 8px; border-radius: 4px; white-space: pre-wrap;');
+  console.log(
+    '%c' + entry.filledPrompt,
+    'color: #86efac; background: #052e16; padding: 8px; border-radius: 4px; white-space: pre-wrap;',
+  );
 
   console.log(`%c${divider}`, 'color: #6366f1;');
-  
+
   console.groupEnd();
 }
 
@@ -283,7 +298,7 @@ export function logAICall(
       maxTokens?: number;
       profileId?: string;
     };
-  }
+  },
 ): string {
   const entry: AICallLogEntry = {
     id: generateId(),
@@ -300,7 +315,7 @@ export function logAICall(
 
   // 添加到历史
   logHistory.push(entry);
-  
+
   // 限制历史长度
   if (logHistory.length > MAX_LOG_ENTRIES) {
     logHistory.shift();
@@ -310,7 +325,7 @@ export function logAICall(
   if (debugEnabled) {
     formatLogOutput(entry);
   }
-  
+
   // 发射事件通知
   emitAIEvent('call:start', entry);
 
@@ -329,17 +344,20 @@ export function updateLogWithResponse(
       completion: number;
       total: number;
     };
-  }
+  },
 ): void {
-  const entry = logHistory.find(e => e.id === logId);
+  const entry = logHistory.find((e) => e.id === logId);
   if (entry) {
     entry.response = response;
     entry.status = 'success';
-    
+
     if (debugEnabled) {
       console.log(`%c✅ AI响应 [${entry.id}]`, 'color: #10b981; font-weight: bold;');
       console.log('%c响应内容:', 'color: #22d3ee;');
-      console.log('%c' + response.content, 'color: #a5f3fc; background: #0c4a6e; padding: 8px; border-radius: 4px; white-space: pre-wrap;');
+      console.log(
+        '%c' + response.content,
+        'color: #a5f3fc; background: #0c4a6e; padding: 8px; border-radius: 4px; white-space: pre-wrap;',
+      );
       if (response.tokenUsage) {
         console.table({
           'Prompt Tokens': response.tokenUsage.prompt,
@@ -348,7 +366,7 @@ export function updateLogWithResponse(
         });
       }
     }
-    
+
     // 发射成功事件
     emitAIEvent('call:success', entry, response);
   }
@@ -358,16 +376,16 @@ export function updateLogWithResponse(
  * 更新日志条目的错误信息
  */
 export function updateLogWithError(logId: string, error: string): void {
-  const entry = logHistory.find(e => e.id === logId);
+  const entry = logHistory.find((e) => e.id === logId);
   if (entry) {
     entry.status = 'error';
     entry.error = error;
-    
+
     if (debugEnabled) {
       console.error(`%c❌ AI调用失败 [${entry.id}]`, 'color: #ef4444; font-weight: bold;');
       console.error('错误信息:', error);
     }
-    
+
     // 发射错误事件
     emitAIEvent('call:error', entry, { message: error });
   }
@@ -395,7 +413,7 @@ export function updateLogWithCancelled(logId: string, reason: string = '用户�
  * 更新日志进度
  */
 export function updateLogProgress(logId: string, progress: number, step?: string): void {
-  const entry = logHistory.find(e => e.id === logId);
+  const entry = logHistory.find((e) => e.id === logId);
   if (entry) {
     // 发射进度事件
     emitAIEvent('call:progress', entry, { progress, step });
@@ -428,27 +446,36 @@ export function exportLogs(): string {
  * 打印日志摘要
  */
 export function printLogSummary(): void {
-  const summary = logHistory.reduce((acc, entry) => {
-    acc[entry.callType] = (acc[entry.callType] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const summary = logHistory.reduce(
+    (acc, entry) => {
+      acc[entry.callType] = (acc[entry.callType] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
   console.log('%c📊 AI调用统计摘要', 'color: #f59e0b; font-weight: bold; font-size: 16px;');
   console.table(summary);
   console.log(`总调用次数: ${logHistory.length}`);
-  console.log(`成功: ${logHistory.filter(e => e.status === 'success').length}`);
-  console.log(`失败: ${logHistory.filter(e => e.status === 'error').length}`);
-  console.log(`取消: ${logHistory.filter(e => e.status === 'cancelled').length}`);
-  console.log(`进行中: ${logHistory.filter(e => e.status === 'pending').length}`);
+  console.log(`成功: ${logHistory.filter((e) => e.status === 'success').length}`);
+  console.log(`失败: ${logHistory.filter((e) => e.status === 'error').length}`);
+  console.log(`取消: ${logHistory.filter((e) => e.status === 'cancelled').length}`);
+  console.log(`进行中: ${logHistory.filter((e) => e.status === 'pending').length}`);
 }
 
 /**
  * 获取按类型分组的调用统计
  */
-export function getCallStatsByType(): Record<AICallType, { total: number; success: number; error: number; avgTime: number }> {
-  const stats: Record<string, { total: number; success: number; error: number; totalTime: number; count: number }> = {};
-  
-  logHistory.forEach(entry => {
+export function getCallStatsByType(): Record<
+  AICallType,
+  { total: number; success: number; error: number; avgTime: number }
+> {
+  const stats: Record<
+    string,
+    { total: number; success: number; error: number; totalTime: number; count: number }
+  > = {};
+
+  logHistory.forEach((entry) => {
     if (!stats[entry.callType]) {
       stats[entry.callType] = { total: 0, success: 0, error: 0, totalTime: 0, count: 0 };
     }
@@ -459,8 +486,9 @@ export function getCallStatsByType(): Record<AICallType, { total: number; succes
       stats[entry.callType].error++;
     }
   });
-  
-  const result: Record<string, { total: number; success: number; error: number; avgTime: number }> = {};
+
+  const result: Record<string, { total: number; success: number; error: number; avgTime: number }> =
+    {};
   Object.entries(stats).forEach(([type, data]) => {
     result[type] = {
       total: data.total,
@@ -469,17 +497,18 @@ export function getCallStatsByType(): Record<AICallType, { total: number; succes
       avgTime: data.count > 0 ? data.totalTime / data.count : 0,
     };
   });
-  
-  return result as Record<AICallType, { total: number; success: number; error: number; avgTime: number }>;
+
+  return result as Record<
+    AICallType,
+    { total: number; success: number; error: number; avgTime: number }
+  >;
 }
 
 /**
  * 获取最近的错误列表
  */
 export function getRecentErrors(limit: number = 10): AICallLogEntry[] {
-  return logHistory
-    .filter(e => e.status === 'error')
-    .slice(-limit);
+  return logHistory.filter((e) => e.status === 'error').slice(-limit);
 }
 
 /**
@@ -488,35 +517,37 @@ export function getRecentErrors(limit: number = 10): AICallLogEntry[] {
 export function getOptimizationSuggestions(): string[] {
   const suggestions: string[] = [];
   const stats = getCallStatsByType();
-  
+
   // 检查错误率
   Object.entries(stats).forEach(([type, data]) => {
     if (data.total > 0) {
       const errorRate = data.error / data.total;
       if (errorRate > 0.3) {
-        suggestions.push(`⚠️ ${type} 错误率过高 (${(errorRate * 100).toFixed(1)}%)，建议检查提示词或API配置`);
+        suggestions.push(
+          `⚠️ ${type} 错误率过高 (${(errorRate * 100).toFixed(1)}%)，建议检查提示词或API配置`,
+        );
       }
     }
   });
-  
+
   // 检查Token使用
-  const highTokenEntries = logHistory.filter(e => 
-    e.response?.tokenUsage && e.response.tokenUsage.total > 2000
+  const highTokenEntries = logHistory.filter(
+    (e) => e.response?.tokenUsage && e.response.tokenUsage.total > 2000,
   );
   if (highTokenEntries.length > 3) {
     suggestions.push('💡 部分调用Token消耗较高，建议优化提示词以减少成本');
   }
-  
+
   // 检查重试次数
-  const errorEntries = logHistory.filter(e => e.status === 'error');
+  const errorEntries = logHistory.filter((e) => e.status === 'error');
   if (errorEntries.length > 5) {
     suggestions.push('🔄 多次调用失败，建议检查网络连接或API密钥');
   }
-  
+
   if (suggestions.length === 0) {
     suggestions.push('✅ 当前AI调用状态良好，无优化建议');
   }
-  
+
   return suggestions;
 }
 
@@ -536,8 +567,11 @@ if (typeof window !== 'undefined') {
     getSuggestions: getOptimizationSuggestions,
     subscribe: subscribeToAIEvents,
   };
-  
-  console.log('%c🔧 AI调试工具已加载 (增强版)', 'color: #10b981; font-weight: bold; font-size: 14px;');
+
+  console.log(
+    '%c🔧 AI调试工具已加载 (增强版)',
+    'color: #10b981; font-weight: bold; font-size: 14px;',
+  );
   console.log('%c可用命令:', 'color: #f59e0b;');
   console.log('  window.aiDebug.setEnabled(true/false) - 启用/禁用调试日志');
   console.log('  window.aiDebug.getHistory() - 获取所有日志');
