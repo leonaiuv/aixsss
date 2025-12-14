@@ -69,7 +69,18 @@ export function estimateUsageCostUSD(
 
     const pricing = event.profileId ? pricingByProfileId?.[event.profileId] : undefined;
     if (pricing && pricing.currency === 'USD') {
-      cost += (event.tokenUsage.prompt / 1000) * pricing.promptPer1K;
+      const tokenUsage = event.tokenUsage as typeof event.tokenUsage & { cachedPrompt?: number };
+      const cachedPromptTokens =
+        typeof tokenUsage.cachedPrompt === 'number' && Number.isFinite(tokenUsage.cachedPrompt)
+          ? Math.max(0, tokenUsage.cachedPrompt)
+          : 0;
+      const promptTokens = Math.max(0, tokenUsage.prompt);
+      const uncachedPromptTokens = Math.max(0, promptTokens - cachedPromptTokens);
+
+      const cachedPrice = typeof pricing.cachedPromptPer1K === 'number' ? pricing.cachedPromptPer1K : pricing.promptPer1K;
+
+      cost += (uncachedPromptTokens / 1000) * pricing.promptPer1K;
+      cost += (cachedPromptTokens / 1000) * cachedPrice;
       cost += (event.tokenUsage.completion / 1000) * pricing.completionPer1K;
       continue;
     }

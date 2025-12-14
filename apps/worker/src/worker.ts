@@ -237,7 +237,14 @@ async function main() {
         throw err;
       }
     },
-    { connection, concurrency: env.WORKER_CONCURRENCY },
+    {
+      connection,
+      concurrency: env.WORKER_CONCURRENCY,
+      // 避免开发环境热重启/网络抖动导致误判 stalled
+      lockDuration: 120_000,
+      stalledInterval: 60_000,
+      maxStalledCount: 2,
+    },
   );
 
   worker.on('ready', () => {

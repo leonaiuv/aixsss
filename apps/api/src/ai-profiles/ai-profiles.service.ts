@@ -44,6 +44,7 @@ export class AIProfilesService {
       model: p.model,
       baseURL: p.baseURL ?? null,
       generationParams: p.generationParams ?? null,
+      pricing: p.pricing ?? null,
       createdAt: toIso(p.createdAt),
       updatedAt: toIso(p.updatedAt),
     }));
@@ -60,6 +61,7 @@ export class AIProfilesService {
         baseURL: input.baseURL,
         apiKeyEncrypted: this.crypto.encrypt(input.apiKey),
         generationParams: input.generationParams ?? undefined,
+        pricing: input.pricing ? (input.pricing as Prisma.InputJsonValue) : undefined,
       },
     });
 
@@ -70,6 +72,7 @@ export class AIProfilesService {
       model: profile.model,
       baseURL: profile.baseURL ?? null,
       generationParams: profile.generationParams ?? null,
+      pricing: profile.pricing ?? null,
       createdAt: toIso(profile.createdAt),
       updatedAt: toIso(profile.updatedAt),
     };
@@ -95,6 +98,7 @@ export class AIProfilesService {
         ...(input.generationParams !== undefined
           ? { generationParams: input.generationParams as Prisma.InputJsonValue }
           : {}),
+        ...(input.pricing !== undefined ? { pricing: input.pricing as Prisma.InputJsonValue } : {}),
         ...(typeof input.apiKey === 'string' ? { apiKeyEncrypted: this.crypto.encrypt(input.apiKey) } : {}),
       },
     });
@@ -106,6 +110,7 @@ export class AIProfilesService {
       model: profile.model,
       baseURL: profile.baseURL ?? null,
       generationParams: profile.generationParams ?? null,
+      pricing: profile.pricing ?? null,
       createdAt: toIso(profile.createdAt),
       updatedAt: toIso(profile.updatedAt),
     };

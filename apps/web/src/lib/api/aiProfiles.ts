@@ -1,5 +1,12 @@
 import { apiRequest } from './http';
 
+export type ApiAIPricing = {
+  currency: 'USD';
+  promptPer1K: number;
+  completionPer1K: number;
+  cachedPromptPer1K?: number;
+} | null;
+
 export type ApiAIProfile = {
   id: string;
   teamId?: string;
@@ -8,6 +15,7 @@ export type ApiAIProfile = {
   model: string;
   baseURL: string | null;
   generationParams: unknown | null;
+  pricing: ApiAIPricing;
   createdAt: string;
   updatedAt: string;
 };
@@ -24,6 +32,7 @@ export async function apiCreateAIProfile(input: {
   baseURL?: string;
   model: string;
   generationParams?: unknown;
+  pricing?: Exclude<ApiAIPricing, null>;
 }) {
   return apiRequest<ApiAIProfile>('/ai-profiles', { method: 'POST', body: input });
 }
@@ -37,6 +46,7 @@ export async function apiUpdateAIProfile(
     baseURL: string;
     model: string;
     generationParams: unknown | null;
+    pricing: ApiAIPricing;
   }>,
 ) {
   return apiRequest<ApiAIProfile>(`/ai-profiles/${encodeURIComponent(profileId)}`, { method: 'PATCH', body: updates });

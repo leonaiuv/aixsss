@@ -92,8 +92,19 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const [baseURL, setBaseURL] = useState('');
   const [model, setModel] = useState('');
   const [profileName, setProfileName] = useState('默认档案');
-  const [pricingPromptPer1K, setPricingPromptPer1K] = useState('');
-  const [pricingCompletionPer1K, setPricingCompletionPer1K] = useState('');
+  type PricingUnit = 'per_1M' | 'per_1K';
+  const PRICING_UNIT_STORAGE_KEY = 'aixs_pricing_unit';
+  const [pricingUnit, setPricingUnit] = useState<PricingUnit>(() => {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PRICING_UNIT_STORAGE_KEY) : null;
+      return raw === 'per_1K' || raw === 'per_1M' ? raw : 'per_1M';
+    } catch {
+      return 'per_1M';
+    }
+  });
+  const [pricingInput, setPricingInput] = useState('');
+  const [pricingOutput, setPricingOutput] = useState('');
+  const [pricingCachedInput, setPricingCachedInput] = useState('');
   const [presetId, setPresetId] = useState<string>('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -167,11 +178,15 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     const sameGen = JSON.stringify(storedGen) === JSON.stringify(draftGen);
 
     const storedPricing = activeProfile.pricing
-      ? `${activeProfile.pricing.promptPer1K}|${activeProfile.pricing.completionPer1K}`
+      ? `${activeProfile.pricing.promptPer1K}|${activeProfile.pricing.completionPer1K}|${
+          activeProfile.pricing.cachedPromptPer1K ?? ''
+        }`
       : '';
     const draftPricingParsed = parsePricing();
     const draftPricing = draftPricingParsed
-      ? `${draftPricingParsed.promptPer1K}|${draftPricingParsed.completionPer1K}`
+      ? `${draftPricingParsed.promptPer1K}|${draftPricingParsed.completionPer1K}|${
+          draftPricingParsed.cachedPromptPer1K ?? ''
+        }`
       : '';
 
     return (
@@ -189,8 +204,10 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     baseURL,
     generationParams,
     model,
-    pricingCompletionPer1K,
-    pricingPromptPer1K,
+    pricingCachedInput,
+    pricingInput,
+    pricingOutput,
+    pricingUnit,
     profileName,
     provider,
   ]);
@@ -205,11 +222,13 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setBaseURL(activeProfile.config.baseURL || '');
       setModel(activeProfile.config.model);
       setGenerationParams(normalizeGenerationParams(activeProfile.config.generationParams));
-      setPricingPromptPer1K(
-        activeProfile.pricing ? String(activeProfile.pricing.promptPer1K) : ''
-      );
-      setPricingCompletionPer1K(
-        activeProfile.pricing ? String(activeProfile.pricing.completionPer1K) : ''
+      const factor = pricingUnit === 'per_1M' ? 1000 : 1;
+      setPricingInput(activeProfile.pricing ? String(activeProfile.pricing.promptPer1K * factor) : '');
+      setPricingOutput(activeProfile.pricing ? String(activeProfile.pricing.completionPer1K * factor) : '');
+      setPricingCachedInput(
+        activeProfile.pricing && typeof activeProfile.pricing.cachedPromptPer1K === 'number'
+          ? String(activeProfile.pricing.cachedPromptPer1K * factor)
+          : ''
       );
     } else {
       setProfileName('默认档案');
@@ -218,8 +237,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setBaseURL('');
       setModel('deepseek-chat');
       setGenerationParams(DEFAULT_GENERATION_PARAMS);
-      setPricingPromptPer1K('');
-      setPricingCompletionPer1K('');
+      setPricingInput('');
+      setPricingOutput('');
+      setPricingCachedInput('');
     }
 
     setPresetId('');
@@ -235,6 +255,38 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     setShowForgetConfirm(false);
   }, [open]);
 
+  useEffect(() => {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(PRICING_UNIT_STORAGE_KEY, pricingUnit);
+    } catch {
+      // ignore
+    }
+  }, [PRICING_UNIT_STORAGE_KEY, pricingUnit]);
+
+  const handlePricingUnitChange = (next: PricingUnit) => {
+    if (next === pricingUnit) return;
+
+    const prevFactor = pricingUnit === 'per_1M' ? 1000 : 1;
+    const nextFactor = next === 'per_1M' ? 1000 : 1;
+    const ratio = nextFactor / prevFactor;
+
+    const convert = (raw: string): string => {
+      const trimmed = raw.trim();
+      if (!trimmed) return '';
+      const n = Number(trimmed);
+      if (!Number.isFinite(n)) return raw;
+      const converted = n * ratio;
+      // 控制长度：避免出现很长的小数串
+      const normalized = Math.abs(converted) >= 1 ? Number(converted.toFixed(6)) : Number(converted.toFixed(8));
+      return String(normalized);
+    };
+
+    setPricingInput((v) => convert(v));
+    setPricingOutput((v) => convert(v));
+    setPricingCachedInput((v) => convert(v));
+    setPricingUnit(next);
+  };
+
   function normalizedBaseURL(input: string): string | undefined {
     const trimmed = input.trim();
     if (!trimmed) return undefined;
@@ -243,16 +295,32 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   }
 
   function parsePricing(): AIPricing | undefined {
-    const promptRaw = pricingPromptPer1K.trim();
-    const completionRaw = pricingCompletionPer1K.trim();
-    if (!promptRaw && !completionRaw) return undefined;
+    const inputRaw = pricingInput.trim();
+    const outputRaw = pricingOutput.trim();
+    const cachedRaw = pricingCachedInput.trim();
 
-    const prompt = Number(promptRaw);
-    const completion = Number(completionRaw);
-    if (!Number.isFinite(prompt) || prompt < 0) return undefined;
-    if (!Number.isFinite(completion) || completion < 0) return undefined;
+    if (!inputRaw && !outputRaw && !cachedRaw) return undefined;
+    if (!inputRaw || !outputRaw) return undefined;
 
-    return { currency: 'USD', promptPer1K: prompt, completionPer1K: completion };
+    const input = Number(inputRaw);
+    const output = Number(outputRaw);
+    const cached = cachedRaw ? Number(cachedRaw) : undefined;
+
+    if (!Number.isFinite(input) || input < 0) return undefined;
+    if (!Number.isFinite(output) || output < 0) return undefined;
+    if (cachedRaw && (!Number.isFinite(cached) || (cached as number) < 0)) return undefined;
+
+    const factor = pricingUnit === 'per_1M' ? 1000 : 1;
+    const promptPer1K = input / factor;
+    const completionPer1K = output / factor;
+    const cachedPromptPer1K = cachedRaw ? (cached as number) / factor : undefined;
+
+    return {
+      currency: 'USD',
+      promptPer1K,
+      completionPer1K,
+      ...(cachedPromptPer1K !== undefined ? { cachedPromptPer1K } : {}),
+    };
   }
 
   const getValidationErrors = (): {
@@ -293,11 +361,16 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       }
     }
 
-    const pricingRawPrompt = pricingPromptPer1K.trim();
-    const pricingRawCompletion = pricingCompletionPer1K.trim();
-    if (pricingRawPrompt || pricingRawCompletion) {
-      const pricing = parsePricing();
-      if (!pricing) errors.pricing = '价格格式不正确（请输入非负数字）';
+    const pricingRawInput = pricingInput.trim();
+    const pricingRawOutput = pricingOutput.trim();
+    const pricingRawCached = pricingCachedInput.trim();
+    if (pricingRawInput || pricingRawOutput || pricingRawCached) {
+      if (!pricingRawInput || !pricingRawOutput) {
+        errors.pricing = '请同时填写“输入价”和“输出价”（或全部留空）';
+      } else {
+        const pricing = parsePricing();
+        if (!pricing) errors.pricing = '价格格式不正确（请输入非负数字）';
+      }
     }
 
     return errors;
@@ -874,31 +947,55 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             </div>
 
             <div className="mt-3 space-y-2">
-              <Label>价格（可选，USD/1K tokens）</Label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <Label>价格（可选）</Label>
+                <Select value={pricingUnit} onValueChange={(v) => handlePricingUnitChange(v as PricingUnit)}>
+                  <SelectTrigger className="h-9 w-[160px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="per_1M">USD/1M tokens</SelectItem>
+                    <SelectItem value="per_1K">USD/1K tokens</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="pricingPromptPer1K" className="text-xs text-muted-foreground">
-                    Prompt
+                  <Label htmlFor="pricingInput" className="text-xs text-muted-foreground">
+                    输入（Input / Prompt）
                   </Label>
                   <Input
-                    id="pricingPromptPer1K"
+                    id="pricingInput"
                     inputMode="decimal"
-                    placeholder="例如 0.001"
-                    value={pricingPromptPer1K}
-                    onChange={(e) => setPricingPromptPer1K(e.target.value)}
+                    placeholder={pricingUnit === 'per_1M' ? '例如 1.0' : '例如 0.001'}
+                    value={pricingInput}
+                    onChange={(e) => setPricingInput(e.target.value)}
                     className="h-11"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="pricingCompletionPer1K" className="text-xs text-muted-foreground">
-                    Completion
+                  <Label htmlFor="pricingOutput" className="text-xs text-muted-foreground">
+                    输出（Output / Completion）
                   </Label>
                   <Input
-                    id="pricingCompletionPer1K"
+                    id="pricingOutput"
                     inputMode="decimal"
-                    placeholder="例如 0.002"
-                    value={pricingCompletionPer1K}
-                    onChange={(e) => setPricingCompletionPer1K(e.target.value)}
+                    placeholder={pricingUnit === 'per_1M' ? '例如 2.0' : '例如 0.002'}
+                    value={pricingOutput}
+                    onChange={(e) => setPricingOutput(e.target.value)}
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pricingCachedInput" className="text-xs text-muted-foreground">
+                    缓存输入（可选）
+                  </Label>
+                  <Input
+                    id="pricingCachedInput"
+                    inputMode="decimal"
+                    placeholder={pricingUnit === 'per_1M' ? '例如 0.5' : '例如 0.0005'}
+                    value={pricingCachedInput}
+                    onChange={(e) => setPricingCachedInput(e.target.value)}
                     className="h-11"
                   />
                 </div>
@@ -907,7 +1004,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 <p className="text-sm text-destructive">{validationErrors.pricing}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  用于“统计分析/配置页”的成本估算；不填则按默认粗略口径计算。
+                  用于“统计分析/配置页”的成本估算；不填则按默认粗略口径计算。口径：输入=prompt tokens，输出=completion tokens。
+                  {pricingUnit === 'per_1M' ? '（换算：USD/1M ÷ 1000 = USD/1K）' : null}
+                  {' '}缓存输入价仅在供应商支持 Prompt Caching 且返回 cached token 统计时才会用于更精确估算；否则会按输入价计算。
                 </p>
               )}
             </div>

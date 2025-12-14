@@ -7,7 +7,7 @@ NODE_ENV=development
 PORT=3001
 
 # Postgres
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aixsss?schema=public
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/aixsss?schema=public
 
 # Auth
 JWT_SECRET=please_change_me_to_a_long_random_string_at_least_32_chars
@@ -24,5 +24,7 @@ AI_QUEUE_NAME=ai-jobs
 # CORS (dev)
 CORS_ORIGIN=http://localhost:5173
 ```
+
+> Windows / Docker Desktop 提示：若 `localhost` 解析到 IPv6 导致连接异常，优先使用 `127.0.0.1`。
 
 

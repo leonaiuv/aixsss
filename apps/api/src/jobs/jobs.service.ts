@@ -351,6 +351,42 @@ export class JobsService {
     };
   }
 
+  /**
+   * 入队执行（异步）：立即返回 jobId，由前端轮询 /ai-jobs/:jobId 获取结果
+   * - 避免 API 进程同步等待导致 120s 超时报 500
+   * - 适用于本地开发环境或网络抖动场景
+   */
+  async enqueueLlmChat(
+    teamId: string,
+    aiProfileId: string,
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  ): Promise<{ jobId: string }> {
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        aiProfileId,
+        type: 'llm_chat',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'llm_chat',
+      { teamId, aiProfileId, messages, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return { jobId: jobRow.id };
+  }
+
   async cancel(teamId: string, jobId: string) {
     const job = await this.prisma.aIJob.findFirst({ where: { id: jobId, teamId } });
     if (!job) throw new NotFoundException('Job not found');

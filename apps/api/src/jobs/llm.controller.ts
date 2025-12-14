@@ -27,7 +27,7 @@ export class LlmController {
   @Post('chat')
   chat(@CurrentUser() user: AuthUser, @Body() body: unknown) {
     const input = parseOrBadRequest(ChatBodySchema, body);
-    return this.jobs.runLlmChat(user.teamId, input.aiProfileId, input.messages);
+    return this.jobs.enqueueLlmChat(user.teamId, input.aiProfileId, input.messages);
   }
 }
 

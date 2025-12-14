@@ -9,6 +9,32 @@ type OpenAIChatResponse = {
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 };
 
+function getRequestTimeoutMs(): number {
+  const raw = process.env.AI_REQUEST_TIMEOUT_MS;
+  const n = raw ? Number(raw) : NaN;
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  return 120_000;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutMs = getRequestTimeoutMs();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    const isAbort =
+      err instanceof Error &&
+      (err.name === 'AbortError' || /aborted|timeout/i.test(err.message));
+    if (isAbort) {
+      throw new Error(`上游请求超时（>${timeoutMs}ms）。请检查网络/VPN/供应商可用性，或提高 AI_REQUEST_TIMEOUT_MS。`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 function buildUrl(baseURL: string): string {
   const base = baseURL.replace(/\/$/, '');
   return `${base}/v1/chat/completions`;
@@ -44,7 +70,7 @@ export async function chatOpenAICompatible(config: ProviderChatConfig, messages:
     ...(typeof p?.frequencyPenalty === 'number' ? { frequency_penalty: p.frequencyPenalty } : {}),
   };
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

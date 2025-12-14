@@ -146,6 +146,7 @@ model AIProfile {
   baseURL         String?
   apiKeyEncrypted String
   generationParams Json?
+  pricing         Json?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

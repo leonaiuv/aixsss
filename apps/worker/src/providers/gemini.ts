@@ -12,6 +12,32 @@ type GeminiResponse = {
   error?: { message?: string };
 };
 
+function getRequestTimeoutMs(): number {
+  const raw = process.env.AI_REQUEST_TIMEOUT_MS;
+  const n = raw ? Number(raw) : NaN;
+  if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  return 120_000;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutMs = getRequestTimeoutMs();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    const isAbort =
+      err instanceof Error &&
+      (err.name === 'AbortError' || /aborted|timeout/i.test(err.message));
+    if (isAbort) {
+      throw new Error(`上游请求超时（>${timeoutMs}ms）。请检查网络/VPN/供应商可用性，或提高 AI_REQUEST_TIMEOUT_MS。`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 function buildUrl(baseURL: string, model: string): string {
   const base = baseURL.replace(/\/$/, '');
   return `${base}/v1beta/models/${model}:generateContent`;
@@ -69,7 +95,7 @@ export async function chatGemini(config: ProviderChatConfig, messages: ChatMessa
     };
   }
 
-  const response = await fetch(buildUrl(baseURL, model), {
+  const response = await fetchWithTimeout(buildUrl(baseURL, model), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

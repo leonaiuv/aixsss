@@ -149,6 +149,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             },
             createdAt: p.createdAt,
             updatedAt: p.updatedAt,
+            pricing: (p.pricing ?? undefined) as any,
           }));
 
           const savedActive =
@@ -550,6 +551,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               model: cfg.model,
               generationParams: cfg.generationParams as any,
               id: undefined,
+              pricing: target.pricing,
             });
 
             const nextProfile: ConfigProfile = {
@@ -565,7 +567,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               },
               createdAt: created.createdAt,
               updatedAt: created.updatedAt,
-              pricing: target.pricing,
+              pricing: (created.pricing ?? target.pricing) as any,
               lastTest: target.lastTest,
             };
 
@@ -589,6 +591,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             ...(cfg.provider !== 'kimi' && normalizedBaseURL !== null ? { baseURL: normalizedBaseURL } : {}),
             ...(cfg.generationParams !== undefined ? { generationParams: cfg.generationParams as any } : {}),
             ...(cfg.apiKey?.trim() ? { apiKey: cfg.apiKey.trim() } : {}),
+            pricing: (target.pricing ?? null) as any,
           };
 
           const updated = await apiUpdateAIProfile(profileId, payload);
@@ -605,7 +608,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             },
             createdAt: updated.createdAt,
             updatedAt: updated.updatedAt,
-            pricing: target.pricing,
+            pricing: (updated.pricing ?? target.pricing) as any,
             lastTest: target.lastTest,
           };
 

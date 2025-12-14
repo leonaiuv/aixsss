@@ -3,6 +3,13 @@ import { PROVIDER_TYPES } from '../types.js';
 
 export const ProviderTypeSchema = z.enum(PROVIDER_TYPES);
 
+export const AIPricingSchema = z.object({
+  currency: z.literal('USD'),
+  promptPer1K: z.number().min(0).max(1000),
+  completionPer1K: z.number().min(0).max(1000),
+  cachedPromptPer1K: z.number().min(0).max(1000).optional(),
+});
+
 export const CreateAIProfileInputSchema = z.object({
   id: z
     .string()
@@ -24,11 +31,15 @@ export const CreateAIProfileInputSchema = z.object({
       frequencyPenalty: z.number().min(-2).max(2).optional(),
     })
     .optional(),
+  pricing: AIPricingSchema.optional(),
 });
 
 export type CreateAIProfileInput = z.infer<typeof CreateAIProfileInputSchema>;
 
-export const UpdateAIProfileInputSchema = CreateAIProfileInputSchema.partial();
+export const UpdateAIProfileInputSchema = CreateAIProfileInputSchema.partial().extend({
+  // 允许显式清空
+  pricing: AIPricingSchema.nullable().optional(),
+});
 
 export type UpdateAIProfileInput = z.infer<typeof UpdateAIProfileInputSchema>;
 

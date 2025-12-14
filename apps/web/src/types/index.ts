@@ -384,8 +384,21 @@ export type PricingCurrency = 'USD';
 
 export interface AIPricing {
   currency: PricingCurrency;
+  /**
+   * 输入（Input）单价：对应 prompt tokens
+   * 单位：USD / 1K tokens
+   */
   promptPer1K: number;
+  /**
+   * 输出（Output）单价：对应 completion tokens
+   * 单位：USD / 1K tokens
+   */
   completionPer1K: number;
+  /**
+   * 缓存输入（Cached Input）单价：仅当供应商支持 Prompt Caching 且返回 cached token 统计时才有意义
+   * 单位：USD / 1K tokens
+   */
+  cachedPromptPer1K?: number;
 }
 
 export interface ConfigProfile {
