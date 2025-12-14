@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ProjectWorkflowState {
+  IDLE
+  DATA_COLLECTING
+  DATA_COLLECTED
+  WORLD_VIEW_BUILDING
+  CHARACTER_MANAGING
+  SCENE_LIST_GENERATING
+  SCENE_LIST_EDITING
+  SCENE_LIST_CONFIRMED
+  SCENE_PROCESSING
+  ALL_SCENES_COMPLETE
+  EXPORTING
+}
+
+enum SceneStatus {
+  pending
+  scene_generating
+  scene_confirmed
+  keyframe_generating
+  keyframe_confirmed
+  motion_generating
+  completed
+  needs_update
+}
+
+enum ProviderType {
+  deepseek
+  kimi
+  gemini
+  openai_compatible
+}
+
+enum AIJobStatus {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  memberships  TeamMember[]
+  auditLogs    AuditLog[]
+}
+
+model Team {
+  id        String       @id @default(cuid())
+  name      String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  members   TeamMember[]
+  projects  Project[]
+  aiProfiles AIProfile[]
+  auditLogs AuditLog[]
+  jobs      AIJob[]
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  userId    String
+  role      TeamRole @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Project {
+  id               String              @id @default(cuid())
+  teamId           String
+  title            String
+  summary          String              @default("")
+  style            String              @default("")
+  artStyleConfig   Json?
+  protagonist      String              @default("")
+  contextCache     Json?
+  workflowState    ProjectWorkflowState @default(DATA_COLLECTING)
+  currentSceneOrder Int                @default(0)
+  currentSceneStep  String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  scenes Scene[]
+  jobs   AIJob[]
+
+  @@index([teamId, updatedAt(sort: Desc)])
+}
+
+model Scene {
+  id               String     @id @default(cuid())
+  projectId        String
+  order            Int
+  summary          String     @default("")
+  sceneDescription String     @default("")
+  actionDescription String    @default("")
+  shotPrompt       String     @default("")
+  motionPrompt     String     @default("")
+  dialogues        Json?
+  contextSummary   Json?
+  status           SceneStatus @default(pending)
+  notes            String     @default("")
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobs    AIJob[]
+
+  @@unique([projectId, order])
+  @@index([projectId, order])
+}
+
+model AIProfile {
+  id              String       @id @default(cuid())
+  teamId          String
+  name            String
+  provider        ProviderType
+  model           String
+  baseURL         String?
+  apiKeyEncrypted String
+  generationParams Json?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  jobs AIJob[]
+
+  @@index([teamId, updatedAt(sort: Desc)])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  teamId     String
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt(sort: Desc)])
+  @@index([userId])
+}
+
+model AIJob {
+  id        String     @id @default(cuid())
+  teamId    String
+  projectId String?
+  sceneId   String?
+  aiProfileId String?
+  type      String
+  status    AIJobStatus @default(queued)
+  attempts  Int        @default(0)
+  error     String?
+  result    Json?
+  createdAt DateTime   @default(now())
+  startedAt DateTime?
+  finishedAt DateTime?
+
+  team    Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  scene   Scene?   @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  aiProfile AIProfile? @relation(fields: [aiProfileId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, createdAt(sort: Desc)])
+  @@index([status])
+}
+
+

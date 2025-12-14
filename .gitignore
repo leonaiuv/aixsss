@@ -1,0 +1,23 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# builds
+dist
+build
+.turbo
+coverage
+
+# env
+.env
+.env.*.local
+
+# logs
+*.log
+
+# OS/editor
+.DS_Store
+.idea
+.vscode
+
+

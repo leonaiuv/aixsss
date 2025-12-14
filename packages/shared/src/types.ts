@@ -1,0 +1,39 @@
+// 共享领域类型：供 web/api/worker 共用
+
+export const PROVIDER_TYPES = ['deepseek', 'kimi', 'gemini', 'openai-compatible'] as const;
+export type ProviderType = (typeof PROVIDER_TYPES)[number];
+
+export const WORKFLOW_STATES = [
+  'IDLE',
+  'DATA_COLLECTING',
+  'DATA_COLLECTED',
+  'WORLD_VIEW_BUILDING',
+  'CHARACTER_MANAGING',
+  'SCENE_LIST_GENERATING',
+  'SCENE_LIST_EDITING',
+  'SCENE_LIST_CONFIRMED',
+  'SCENE_PROCESSING',
+  'ALL_SCENES_COMPLETE',
+  'EXPORTING',
+] as const;
+export type WorkflowState = (typeof WORKFLOW_STATES)[number];
+
+export const SCENE_STEPS = ['scene_description', 'keyframe_prompt', 'motion_prompt', 'dialogue'] as const;
+export type SceneStep = (typeof SCENE_STEPS)[number];
+
+export const SCENE_STATUSES = [
+  'pending',
+  'scene_generating',
+  'scene_confirmed',
+  'keyframe_generating',
+  'keyframe_confirmed',
+  'motion_generating',
+  'completed',
+  'needs_update',
+] as const;
+export type SceneStatus = (typeof SCENE_STATUSES)[number];
+
+export const TEAM_ROLES = ['OWNER', 'ADMIN', 'MEMBER'] as const;
+export type TeamRole = (typeof TEAM_ROLES)[number];
+
+

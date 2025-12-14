@@ -1,0 +1,28 @@
+# API 环境变量（本地开发）
+
+在 `apps/api` 目录下创建 `.env` 文件（不要提交到仓库），至少需要以下变量：
+
+```bash
+NODE_ENV=development
+PORT=3001
+
+# Postgres
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aixsss?schema=public
+
+# Auth
+JWT_SECRET=please_change_me_to_a_long_random_string_at_least_32_chars
+
+# API Key encryption (recommended: 32 bytes base64)
+# Example:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+API_KEY_ENCRYPTION_KEY=please_change_me
+
+# Redis (BullMQ)
+REDIS_URL=redis://localhost:6379
+AI_QUEUE_NAME=ai-jobs
+
+# CORS (dev)
+CORS_ORIGIN=http://localhost:5173
+```
+
+
