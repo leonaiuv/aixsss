@@ -13,11 +13,12 @@ export class BackendProvider implements AIProvider {
     return apiLlmChat({ aiProfileId, messages }, { signal: options?.signal });
   }
 
-  async *streamChat(messages: ChatMessage[], config: AIProviderConfig, options?: AIRequestOptions): AsyncGenerator<string> {
+  async *streamChat(
+    messages: ChatMessage[],
+    config: AIProviderConfig,
+    options?: AIRequestOptions,
+  ): AsyncGenerator<string> {
     const res = await this.chat(messages, config, options);
     yield res.content;
   }
 }
-
-
-

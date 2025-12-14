@@ -8,7 +8,14 @@ import { apiCreateWorldViewElement } from '@/lib/api/worldView';
 import type { Project } from '@/types';
 import { ApiError } from '@/lib/api/http';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CloudUpload, X } from 'lucide-react';
 
@@ -48,7 +55,11 @@ function getLocalWorldViewElements(projectId: string) {
   }
 }
 
-export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isServerLoading?: boolean; onImported?: () => void }) {
+export function LocalDataMigrationBanner(props: {
+  serverProjects: Project[];
+  isServerLoading?: boolean;
+  onImported?: () => void;
+}) {
   const { toast } = useToast();
   const [status, setStatus] = useState<string | null>(() => safeGetMigrationStatus());
   const [isImporting, setIsImporting] = useState(false);
@@ -63,7 +74,10 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
     }
   }, []);
 
-  const serverIdSet = useMemo(() => new Set((props.serverProjects || []).map((p) => p.id)), [props.serverProjects]);
+  const serverIdSet = useMemo(
+    () => new Set((props.serverProjects || []).map((p) => p.id)),
+    [props.serverProjects],
+  );
   const importCandidates = useMemo(
     () => localProjects.filter((p) => p?.id && !serverIdSet.has(p.id)),
     [localProjects, serverIdSet],
@@ -178,7 +192,8 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
             await apiCreateCharacter(p.id, {
               id: typeof c.id === 'string' ? c.id : undefined,
               name: typeof c.name === 'string' ? c.name : '未命名角色',
-              briefDescription: typeof c.briefDescription === 'string' ? c.briefDescription : undefined,
+              briefDescription:
+                typeof c.briefDescription === 'string' ? c.briefDescription : undefined,
               avatar: typeof c.avatar === 'string' ? c.avatar : undefined,
               appearance: typeof c.appearance === 'string' ? c.appearance : '',
               personality: typeof c.personality === 'string' ? c.personality : '',
@@ -247,7 +262,9 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
           检测到本地项目数据
         </CardTitle>
         <CardDescription>
-          发现 {importCandidates.length} 个本地项目（共 {totalLocalScenes} 个分镜、{totalLocalCharacters} 个角色、{totalLocalWorldView} 个世界观要素）尚未导入到云端。导入后可跨设备同步。
+          发现 {importCandidates.length} 个本地项目（共 {totalLocalScenes} 个分镜、
+          {totalLocalCharacters} 个角色、{totalLocalWorldView}{' '}
+          个世界观要素）尚未导入到云端。导入后可跨设备同步。
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-0">
@@ -266,5 +283,3 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
     </Card>
   );
 }
-
-

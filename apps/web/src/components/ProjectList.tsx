@@ -25,19 +25,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DataExporter } from './editor/DataExporter';
 import { LocalDataMigrationBanner } from './LocalDataMigrationBanner';
 
 export function ProjectList() {
   const navigate = useNavigate();
-  const { projects, createProject, deleteProject, setCurrentProject, updateProject } = useProjectStore();
+  const { projects, createProject, deleteProject, setCurrentProject, updateProject } =
+    useProjectStore();
   const isLoading = useProjectStore((s) => s.isLoading);
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const { toast } = useToast();
@@ -46,10 +41,13 @@ export function ProjectList() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
-  const [projectToRename, setProjectToRename] = useState<{id: string, currentTitle: string} | null>(null);
+  const [projectToRename, setProjectToRename] = useState<{
+    id: string;
+    currentTitle: string;
+  } | null>(null);
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [renameTitle, setRenameTitle] = useState('');
-  
+
   // 搜索和过滤状态
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -58,22 +56,23 @@ export function ProjectList() {
   // 过滤和排序项目
   const filteredProjects = useMemo(() => {
     let result = [...projects];
-    
+
     // 文本搜索
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(p => 
-        p.title.toLowerCase().includes(query) ||
-        p.summary.toLowerCase().includes(query) ||
-        p.style.toLowerCase().includes(query)
+      result = result.filter(
+        (p) =>
+          p.title.toLowerCase().includes(query) ||
+          p.summary.toLowerCase().includes(query) ||
+          p.style.toLowerCase().includes(query),
       );
     }
-    
+
     // 状态过滤
     if (statusFilter !== 'all') {
-      result = result.filter(p => p.workflowState === statusFilter);
+      result = result.filter((p) => p.workflowState === statusFilter);
     }
-    
+
     // 排序
     result.sort((a, b) => {
       if (sortBy === 'date') {
@@ -82,7 +81,7 @@ export function ProjectList() {
         return a.title.localeCompare(b.title, 'zh-CN');
       }
     });
-    
+
     return result;
   }, [projects, searchQuery, statusFilter, sortBy]);
 
@@ -117,10 +116,13 @@ export function ProjectList() {
   };
 
   // 使用 useCallback 缓存回调函数，防止子组件不必要重渲染
-  const handleOpenProject = useCallback((project: typeof projects[0]) => {
-    setCurrentProject(project);
-    navigate(`/projects/${encodeURIComponent(project.id)}`);
-  }, [setCurrentProject, navigate]);
+  const handleOpenProject = useCallback(
+    (project: (typeof projects)[0]) => {
+      setCurrentProject(project);
+      navigate(`/projects/${encodeURIComponent(project.id)}`);
+    },
+    [setCurrentProject, navigate],
+  );
 
   const handleDeleteClick = useCallback((projectId: string) => {
     setProjectToDelete(projectId);
@@ -159,7 +161,11 @@ export function ProjectList() {
 
   return (
     <div className="space-y-6">
-      <LocalDataMigrationBanner serverProjects={projects} isServerLoading={isLoading} onImported={loadProjects} />
+      <LocalDataMigrationBanner
+        serverProjects={projects}
+        isServerLoading={isLoading}
+        onImported={loadProjects}
+      />
       {/* 操作栏 */}
       <div className="flex items-center justify-between">
         <div>
@@ -167,7 +173,7 @@ export function ProjectList() {
           <p className="text-muted-foreground mt-1">管理你的漫剧创作项目</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
+          <Button
             variant="outline"
             onClick={() => setExportDialogOpen(true)}
             disabled={projects.length === 0}
@@ -175,7 +181,7 @@ export function ProjectList() {
             <Download className="mr-2 h-4 w-4" />
             批量导出
           </Button>
-          <Button 
+          <Button
             onClick={() => setCreateDialogOpen(true)}
             size="lg"
             className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
@@ -208,7 +214,7 @@ export function ProjectList() {
               </Button>
             )}
           </div>
-          
+
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[140px] bg-muted border-border">
               <Filter className="h-4 w-4 mr-2" />
@@ -234,8 +240,8 @@ export function ProjectList() {
           </Select>
 
           {hasActiveFilters && (
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={() => {
                 setSearchQuery('');
                 setStatusFilter('all');
@@ -252,55 +258,48 @@ export function ProjectList() {
       {/* 结果统计 */}
       {hasActiveFilters && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>找到 <span className="font-semibold text-foreground">{filteredProjects.length}</span> 个项目</span>
-          {filteredProjects.length !== projects.length && (
-            <span>(共 {projects.length} 个)</span>
-          )}
+          <span>
+            找到 <span className="font-semibold text-foreground">{filteredProjects.length}</span>{' '}
+            个项目
+          </span>
+          {filteredProjects.length !== projects.length && <span>(共 {projects.length} 个)</span>}
         </div>
       )}
 
       {/* 项目列表 */}
       {filteredProjects.length === 0 ? (
         projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center">
-            <FileText className="h-10 w-10 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center py-20 space-y-4">
+            <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center">
+              <FileText className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-xl font-semibold text-foreground mb-2">还没有项目</h3>
+              <p className="text-muted-foreground mb-4">开始创建你的第一个漫剧项目吧</p>
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                size="lg"
+                className="bg-gradient-to-r from-indigo-500 to-purple-600"
+              >
+                <Plus className="mr-2 h-5 w-5" />
+                创建项目
+              </Button>
+            </div>
           </div>
-          <div className="text-center">
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              还没有项目
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              开始创建你的第一个漫剧项目吧
-            </p>
-            <Button 
-              onClick={() => setCreateDialogOpen(true)}
-              size="lg"
-              className="bg-gradient-to-r from-indigo-500 to-purple-600"
-            >
-              <Plus className="mr-2 h-5 w-5" />
-              创建项目
-            </Button>
-          </div>
-        </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
               <Search className="h-8 w-8 text-muted-foreground" />
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                没有找到匹配的项目
-              </h3>
-              <p className="text-muted-foreground">
-                试试调整搜索条件或筛选项
-              </p>
+              <h3 className="text-lg font-semibold text-foreground mb-2">没有找到匹配的项目</h3>
+              <p className="text-muted-foreground">试试调整搜索条件或筛选项</p>
             </div>
           </div>
         )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProjects.map(project => (
+          {filteredProjects.map((project) => (
             <ProjectCard
               key={project.id}
               project={project}
@@ -317,9 +316,7 @@ export function ProjectList() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>创建新项目</DialogTitle>
-            <DialogDescription>
-              为你的漫剧项目起个响亮的名字
-            </DialogDescription>
+            <DialogDescription>为你的漫剧项目起个响亮的名字</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -368,9 +365,7 @@ export function ProjectList() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>重命名项目</DialogTitle>
-            <DialogDescription>
-              为项目输入一个新的名称
-            </DialogDescription>
+            <DialogDescription>为项目输入一个新的名称</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -386,11 +381,14 @@ export function ProjectList() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setRenameDialogOpen(false);
-              setProjectToRename(null);
-              setRenameTitle('');
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRenameDialogOpen(false);
+                setProjectToRename(null);
+                setRenameTitle('');
+              }}
+            >
               取消
             </Button>
             <Button onClick={handleRenameConfirm} disabled={!renameTitle.trim()}>
@@ -405,9 +403,7 @@ export function ProjectList() {
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>批量导出项目</DialogTitle>
-            <DialogDescription>
-              选择要导出的项目和格式
-            </DialogDescription>
+            <DialogDescription>选择要导出的项目和格式</DialogDescription>
           </DialogHeader>
           <DataExporter projects={projects} />
         </DialogContent>

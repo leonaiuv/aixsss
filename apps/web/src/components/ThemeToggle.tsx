@@ -20,9 +20,9 @@ import { Sun, Moon, Monitor } from 'lucide-react';
 
 function ThemeToggleComponent() {
   // 使用选择器优化
-  const theme = useThemeStore(state => state.mode);
-  const setTheme = useThemeStore(state => state.setMode);
-  
+  const theme = useThemeStore((state) => state.mode);
+  const setTheme = useThemeStore((state) => state.setMode);
+
   // 使用 useCallback 缓存回调
   const handleLightTheme = useCallback(() => setTheme('light'), [setTheme]);
   const handleDarkTheme = useCallback(() => setTheme('dark'), [setTheme]);

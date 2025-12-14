@@ -1,12 +1,12 @@
 import { create } from 'zustand';
-import { 
-  CustomArtStyle, 
-  ArtStyleConfig, 
-  composeStyleFullPrompt, 
+import {
+  CustomArtStyle,
+  ArtStyleConfig,
+  composeStyleFullPrompt,
   isCustomStyleId,
   ART_STYLE_PRESETS,
   ArtStylePreset,
-  getArtStyleConfig as getBuiltInStyleConfig
+  getArtStyleConfig as getBuiltInStyleConfig,
 } from '@/types';
 
 // LocalStorage 键名
@@ -50,14 +50,19 @@ interface CustomStyleStore {
   customStyles: CustomArtStyle[];
   /** 是否已加载 */
   isLoaded: boolean;
-  
+
   // 操作方法
   /** 加载自定义画风 */
   loadCustomStyles: () => void;
   /** 创建自定义画风 */
-  createCustomStyle: (style: Omit<CustomArtStyle, 'id' | 'createdAt' | 'updatedAt'>) => CustomArtStyle;
+  createCustomStyle: (
+    style: Omit<CustomArtStyle, 'id' | 'createdAt' | 'updatedAt'>,
+  ) => CustomArtStyle;
   /** 更新自定义画风 */
-  updateCustomStyle: (id: string, updates: Partial<Omit<CustomArtStyle, 'id' | 'createdAt'>>) => void;
+  updateCustomStyle: (
+    id: string,
+    updates: Partial<Omit<CustomArtStyle, 'id' | 'createdAt'>>,
+  ) => void;
   /** 删除自定义画风 */
   deleteCustomStyle: (id: string) => void;
   /** 根据ID获取自定义画风 */
@@ -65,7 +70,11 @@ interface CustomStyleStore {
   /** 根据ID获取 ArtStyleConfig（用于项目中使用） */
   getArtStyleConfigById: (id: string) => ArtStyleConfig | null;
   /** 从现有配置创建自定义画风 */
-  createFromConfig: (name: string, description: string, config: Omit<ArtStyleConfig, 'presetId'>) => CustomArtStyle;
+  createFromConfig: (
+    name: string,
+    description: string,
+    config: Omit<ArtStyleConfig, 'presetId'>,
+  ) => CustomArtStyle;
   /** 复制现有自定义画风 */
   duplicateCustomStyle: (id: string) => CustomArtStyle | null;
 }
@@ -73,12 +82,12 @@ interface CustomStyleStore {
 export const useCustomStyleStore = create<CustomStyleStore>((set, get) => ({
   customStyles: [],
   isLoaded: false,
-  
+
   loadCustomStyles: () => {
     const styles = loadCustomStyles();
     set({ customStyles: styles, isLoaded: true });
   },
-  
+
   createCustomStyle: (styleData) => {
     const now = new Date().toISOString();
     const newStyle: CustomArtStyle = {
@@ -87,32 +96,32 @@ export const useCustomStyleStore = create<CustomStyleStore>((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
-    
+
     // 确保 fullPrompt 存在
     if (!newStyle.config.fullPrompt) {
       newStyle.config.fullPrompt = composeStyleFullPrompt(newStyle.config);
     }
-    
-    set(state => {
+
+    set((state) => {
       const newStyles = [...state.customStyles, newStyle];
       saveCustomStyles(newStyles);
       return { customStyles: newStyles };
     });
-    
+
     return newStyle;
   },
-  
+
   updateCustomStyle: (id, updates) => {
-    set(state => {
-      const updatedStyles = state.customStyles.map(style => {
+    set((state) => {
+      const updatedStyles = state.customStyles.map((style) => {
         if (style.id !== id) return style;
-        
+
         const updatedStyle: CustomArtStyle = {
           ...style,
           ...updates,
           updatedAt: new Date().toISOString(),
         };
-        
+
         // 如果更新了配置，重新生成 fullPrompt
         if (updates.config) {
           updatedStyle.config = {
@@ -123,41 +132,41 @@ export const useCustomStyleStore = create<CustomStyleStore>((set, get) => ({
             updatedStyle.config.fullPrompt = composeStyleFullPrompt(updatedStyle.config);
           }
         }
-        
+
         return updatedStyle;
       });
-      
+
       saveCustomStyles(updatedStyles);
       return { customStyles: updatedStyles };
     });
   },
-  
+
   deleteCustomStyle: (id) => {
-    set(state => {
-      const filteredStyles = state.customStyles.filter(s => s.id !== id);
+    set((state) => {
+      const filteredStyles = state.customStyles.filter((s) => s.id !== id);
       saveCustomStyles(filteredStyles);
       return { customStyles: filteredStyles };
     });
   },
-  
+
   getCustomStyleById: (id) => {
     const { customStyles } = get();
-    return customStyles.find(s => s.id === id) || null;
+    return customStyles.find((s) => s.id === id) || null;
   },
-  
+
   getArtStyleConfigById: (id) => {
     if (!isCustomStyleId(id)) {
       return null;
     }
     const style = get().getCustomStyleById(id);
     if (!style) return null;
-    
+
     return {
       presetId: style.id,
       ...style.config,
     };
   },
-  
+
   createFromConfig: (name, description, config) => {
     const { createCustomStyle } = get();
     return createCustomStyle({
@@ -169,11 +178,11 @@ export const useCustomStyleStore = create<CustomStyleStore>((set, get) => ({
       },
     });
   },
-  
+
   duplicateCustomStyle: (id) => {
     const style = get().getCustomStyleById(id);
     if (!style) return null;
-    
+
     const { createCustomStyle } = get();
     return createCustomStyle({
       name: `${style.name} (副本)`,
@@ -195,7 +204,7 @@ export function getAllAvailableStyles(): Array<{
   config: Omit<ArtStyleConfig, 'presetId'>;
 }> {
   const { customStyles } = useCustomStyleStore.getState();
-  
+
   // 转换内置预设
   const builtInStyles = ART_STYLE_PRESETS.map((preset: ArtStylePreset) => ({
     id: preset.id,
@@ -204,16 +213,16 @@ export function getAllAvailableStyles(): Array<{
     isCustom: false,
     config: preset.config,
   }));
-  
+
   // 转换自定义画风
-  const customStyleItems = customStyles.map(style => ({
+  const customStyleItems = customStyles.map((style) => ({
     id: style.id,
     label: style.name,
     description: style.description,
     isCustom: true,
     config: style.config,
   }));
-  
+
   return [...builtInStyles, ...customStyleItems];
 }
 
@@ -224,7 +233,7 @@ export function getStyleConfigById(styleId: string): ArtStyleConfig | null {
   if (isCustomStyleId(styleId)) {
     return useCustomStyleStore.getState().getArtStyleConfigById(styleId);
   }
-  
+
   // 使用内置函数获取
   return getBuiltInStyleConfig(styleId);
 }

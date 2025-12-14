@@ -16,16 +16,16 @@ interface UseKeyboardShortcutOptions {
 export function useKeyboardShortcut(
   keys: ShortcutKey | ShortcutKey[],
   callback: (event: KeyboardEvent) => void,
-  options: UseKeyboardShortcutOptions = {}
+  options: UseKeyboardShortcutOptions = {},
 ) {
   const { enabled = true, preventDefault = true } = options;
-  
+
   const keyArray = Array.isArray(keys) ? keys : [keys];
-  
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return;
-      
+
       for (const keyCombo of keyArray) {
         if (matchesKeyCombo(event, keyCombo)) {
           if (preventDefault) {
@@ -36,12 +36,12 @@ export function useKeyboardShortcut(
         }
       }
     },
-    [keyArray, callback, enabled, preventDefault]
+    [keyArray, callback, enabled, preventDefault],
   );
-  
+
   useEffect(() => {
     if (!enabled) return;
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -55,26 +55,26 @@ export function useKeyboardShortcut(
 function matchesKeyCombo(event: KeyboardEvent, combo: string): boolean {
   const parts = combo.toLowerCase().split('+');
   const key = parts.pop(); // 最后一个是主键
-  
+
   if (!key) return false;
-  
+
   // 检查修饰键
   const needsCtrl = parts.includes('ctrl');
   const needsCmd = parts.includes('cmd') || parts.includes('meta');
   const needsAlt = parts.includes('alt');
   const needsShift = parts.includes('shift');
-  
+
   const hasCtrl = event.ctrlKey;
   const hasCmd = event.metaKey;
   const hasAlt = event.altKey;
   const hasShift = event.shiftKey;
-  
+
   // 检查修饰键是否匹配
   if (needsCtrl !== hasCtrl) return false;
   if (needsCmd !== hasCmd) return false;
   if (needsAlt !== hasAlt) return false;
   if (needsShift !== hasShift) return false;
-  
+
   // 检查主键
   const eventKey = event.key.toLowerCase();
   return eventKey === key || event.code.toLowerCase() === key.toLowerCase();
@@ -95,23 +95,23 @@ export const GLOBAL_SHORTCUTS = {
   SEARCH_MAC: 'cmd+k',
   HELP: 'ctrl+/',
   HELP_MAC: 'cmd+/',
-  
+
   // 导航
   ESCAPE: 'escape',
   ENTER: 'enter',
-  
+
   // 编辑
   NEW: 'ctrl+n',
   NEW_MAC: 'cmd+n',
   DELETE: 'delete',
   DELETE_ALT: 'backspace',
-  
+
   // 视图
   TOGGLE_SIDEBAR: 'ctrl+b',
   TOGGLE_SIDEBAR_MAC: 'cmd+b',
   TOGGLE_THEME: 'ctrl+shift+t',
   TOGGLE_THEME_MAC: 'cmd+shift+t',
-  
+
   // AI生成
   GENERATE: 'ctrl+g',
   GENERATE_MAC: 'cmd+g',
@@ -138,7 +138,7 @@ export function getPlatformShortcut(base: string, mac: string): string {
  */
 export function formatShortcut(shortcut: string): string {
   const parts = shortcut.split('+');
-  const formatted = parts.map(part => {
+  const formatted = parts.map((part) => {
     switch (part.toLowerCase()) {
       case 'ctrl':
         return 'Ctrl';
@@ -153,6 +153,6 @@ export function formatShortcut(shortcut: string): string {
         return part.charAt(0).toUpperCase() + part.slice(1);
     }
   });
-  
+
   return formatted.join(isMac() ? '' : '+');
 }

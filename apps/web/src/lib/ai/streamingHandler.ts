@@ -34,16 +34,16 @@ export function createAbortController(): AbortController {
 export async function streamChat(
   messages: ChatMessage[],
   config: UserConfig,
-  options: StreamOptions
+  options: StreamOptions,
 ): Promise<void> {
   const { onChunk, onError, onComplete, signal } = options;
-  
+
   try {
     const response = await fetch(config.baseURL || 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
         model: config.model,
@@ -52,44 +52,44 @@ export async function streamChat(
       }),
       signal,
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
-    
+
     if (!reader) {
       throw new Error('Response body is null');
     }
-    
+
     let buffer = '';
-    
+
     while (true) {
       const { done, value } = await reader.read();
-      
+
       if (done) {
         break;
       }
-      
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-      
+
       for (const line of lines) {
         const trimmedLine = line.trim();
-        
+
         if (trimmedLine === '' || trimmedLine === 'data: [DONE]') {
           continue;
         }
-        
+
         if (trimmedLine.startsWith('data: ')) {
           try {
             const jsonStr = trimmedLine.slice(6);
             const data = JSON.parse(jsonStr);
             const content = data.choices?.[0]?.delta?.content;
-            
+
             if (content) {
               onChunk(content, false);
             }
@@ -99,10 +99,9 @@ export async function streamChat(
         }
       }
     }
-    
+
     onChunk('', true);
     onComplete?.();
-    
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
@@ -120,7 +119,7 @@ export async function streamChat(
 export async function streamChatDeepSeek(
   messages: ChatMessage[],
   config: UserConfig,
-  options: StreamOptions
+  options: StreamOptions,
 ): Promise<void> {
   // DeepSeek使用标准OpenAI格式
   return streamChat(messages, config, options);
@@ -132,14 +131,14 @@ export async function streamChatDeepSeek(
 export async function streamChatKimi(
   messages: ChatMessage[],
   config: UserConfig,
-  options: StreamOptions
+  options: StreamOptions,
 ): Promise<void> {
   const { onChunk, onError, onComplete, signal } = options;
-  
+
   try {
     const model = config.model || 'moonshot-v1-8k';
     const isThinkingModel = model.includes('thinking');
-    
+
     // kimi-k2-thinking 模型必须设置 temperature=1.0 和 max_tokens>=16000
     const requestBody = {
       model,
@@ -148,7 +147,7 @@ export async function streamChatKimi(
       temperature: isThinkingModel ? 1.0 : 0.6,
       max_tokens: isThinkingModel ? 16000 : 4096,
     };
-    
+
     console.log('Kimi API Request:', {
       url: 'https://api.moonshot.cn/v1/chat/completions',
       model: requestBody.model,
@@ -157,17 +156,17 @@ export async function streamChatKimi(
       max_tokens: requestBody.max_tokens,
       isThinkingModel,
     });
-    
+
     const response = await fetch('https://api.moonshot.cn/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify(requestBody),
       signal,
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Kimi API Error:', {
@@ -177,43 +176,43 @@ export async function streamChatKimi(
       });
       throw new Error(`Kimi API错误 (${response.status}): ${errorText}`);
     }
-    
+
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
-    
+
     if (!reader) {
       throw new Error('Response body is null');
     }
-    
+
     let buffer = '';
-    
+
     while (true) {
       const { done, value } = await reader.read();
-      
+
       if (done) {
         break;
       }
-      
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-      
+
       for (const line of lines) {
         const trimmedLine = line.trim();
-        
+
         if (trimmedLine === '' || trimmedLine === 'data: [DONE]') {
           continue;
         }
-        
+
         if (trimmedLine.startsWith('data: ')) {
           try {
             const jsonStr = trimmedLine.slice(6);
             const data = JSON.parse(jsonStr);
             const delta = data.choices?.[0]?.delta;
-            
+
             // Kimi K2 Thinking 模型: 只显示 content (推理结果)，不显示 reasoning_content (推理过程)
             const content = delta?.content;
-            
+
             if (content) {
               onChunk(content, false);
             }
@@ -223,10 +222,9 @@ export async function streamChatKimi(
         }
       }
     }
-    
+
     onChunk('', true);
     onComplete?.();
-    
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
@@ -244,17 +242,17 @@ export async function streamChatKimi(
 export async function streamChatGemini(
   messages: ChatMessage[],
   config: UserConfig,
-  options: StreamOptions
+  options: StreamOptions,
 ): Promise<void> {
   const { onChunk, onError, onComplete, signal } = options;
-  
+
   try {
     // Gemini API格式转换
-    const contents = messages.map(msg => ({
+    const contents = messages.map((msg) => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content }],
     }));
-    
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?key=${config.apiKey}`,
       {
@@ -266,44 +264,44 @@ export async function streamChatGemini(
           contents,
         }),
         signal,
-      }
+      },
     );
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
-    
+
     if (!reader) {
       throw new Error('Response body is null');
     }
-    
+
     let buffer = '';
-    
+
     while (true) {
       const { done, value } = await reader.read();
-      
+
       if (done) {
         break;
       }
-      
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
-      
+
       for (const line of lines) {
         const trimmedLine = line.trim();
-        
+
         if (trimmedLine === '' || trimmedLine === 'data: [DONE]') {
           continue;
         }
-        
+
         try {
           const data = JSON.parse(trimmedLine);
           const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          
+
           if (content) {
             onChunk(content, false);
           }
@@ -312,10 +310,9 @@ export async function streamChatGemini(
         }
       }
     }
-    
+
     onChunk('', true);
     onComplete?.();
-    
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
@@ -333,7 +330,7 @@ export async function streamChatGemini(
 export async function streamChatUniversal(
   messages: ChatMessage[],
   config: UserConfig,
-  options: StreamOptions
+  options: StreamOptions,
 ): Promise<void> {
   switch (config.provider) {
     case 'deepseek':
@@ -352,10 +349,7 @@ export async function streamChatUniversal(
 /**
  * 计算生成进度（基于内容长度估算）
  */
-export function calculateProgress(
-  currentLength: number,
-  estimatedTotalLength: number
-): number {
+export function calculateProgress(currentLength: number, estimatedTotalLength: number): number {
   if (estimatedTotalLength === 0) return 0;
   const progress = (currentLength / estimatedTotalLength) * 100;
   return Math.min(progress, 95); // 最多显示95%，等完成后再到100%
@@ -367,7 +361,7 @@ export function calculateProgress(
 export function estimateRemainingTime(
   currentLength: number,
   estimatedTotalLength: number,
-  elapsedMs: number
+  elapsedMs: number,
 ): number {
   if (currentLength === 0) return 0;
   const speed = currentLength / elapsedMs; // 字符/毫秒

@@ -81,10 +81,12 @@ describe('Toast Reducer', () => {
 
     it('应保留未更新的属性', () => {
       const state = {
-        toasts: [{
-          ...createTestToast('1', 'Original'),
-          description: 'Original Description',
-        }],
+        toasts: [
+          {
+            ...createTestToast('1', 'Original'),
+            description: 'Original Description',
+          },
+        ],
       };
 
       const result = reducer(state, {
@@ -111,10 +113,7 @@ describe('Toast Reducer', () => {
 
     it('无 toastId 时应关闭所有 toast', () => {
       const state = {
-        toasts: [
-          createTestToast('1'),
-          createTestToast('2'),
-        ],
+        toasts: [createTestToast('1'), createTestToast('2')],
       };
 
       const result = reducer(state, {
@@ -143,10 +142,7 @@ describe('Toast Reducer', () => {
   describe('REMOVE_TOAST', () => {
     it('应移除指定 toast', () => {
       const state = {
-        toasts: [
-          createTestToast('1'),
-          createTestToast('2'),
-        ],
+        toasts: [createTestToast('1'), createTestToast('2')],
       };
 
       const result = reducer(state, {
@@ -160,10 +156,7 @@ describe('Toast Reducer', () => {
 
     it('无 toastId 时应移除所有 toast', () => {
       const state = {
-        toasts: [
-          createTestToast('1'),
-          createTestToast('2'),
-        ],
+        toasts: [createTestToast('1'), createTestToast('2')],
       };
 
       const result = reducer(state, {

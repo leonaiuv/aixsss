@@ -76,18 +76,22 @@ export function useConfirm() {
             <AlertDialogCancel onClick={() => closeWithResult(false)}>
               {options.cancelText ?? '取消'}
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => closeWithResult(true)}
-              className={actionClassName}
-            >
+            <AlertDialogAction onClick={() => closeWithResult(true)} className={actionClassName}>
               {options.confirmText ?? '确认'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     );
-  }, [closeWithResult, open, options.cancelText, options.confirmText, options.description, options.destructive, options.title]);
+  }, [
+    closeWithResult,
+    open,
+    options.cancelText,
+    options.confirmText,
+    options.description,
+    options.destructive,
+    options.title,
+  ]);
 
   return { confirm, ConfirmDialog };
 }
-

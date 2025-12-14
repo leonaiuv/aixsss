@@ -60,7 +60,7 @@ export const DEFAULT_COST_PER_1K_TOKENS_USD = 0.002;
 
 export function estimateUsageCostUSD(
   events: AIUsageEvent[],
-  pricingByProfileId?: Record<string, AIPricing | undefined>
+  pricingByProfileId?: Record<string, AIPricing | undefined>,
 ): number {
   let cost = 0;
 
@@ -77,7 +77,10 @@ export function estimateUsageCostUSD(
       const promptTokens = Math.max(0, tokenUsage.prompt);
       const uncachedPromptTokens = Math.max(0, promptTokens - cachedPromptTokens);
 
-      const cachedPrice = typeof pricing.cachedPromptPer1K === 'number' ? pricing.cachedPromptPer1K : pricing.promptPer1K;
+      const cachedPrice =
+        typeof pricing.cachedPromptPer1K === 'number'
+          ? pricing.cachedPromptPer1K
+          : pricing.promptPer1K;
 
       cost += (uncachedPromptTokens / 1000) * pricing.promptPer1K;
       cost += (cachedPromptTokens / 1000) * cachedPrice;
@@ -125,10 +128,7 @@ function safeSaveEvents(events: AIUsageEvent[]): AIUsageEvent[] {
   }
 }
 
-export function filterUsageEvents(
-  events: AIUsageEvent[],
-  filter: AIUsageFilter
-): AIUsageEvent[] {
+export function filterUsageEvents(events: AIUsageEvent[], filter: AIUsageFilter): AIUsageEvent[] {
   return events.filter((event) => {
     if (filter.projectId && event.projectId !== filter.projectId) return false;
     if (filter.from && event.completedAt < filter.from) return false;
@@ -151,7 +151,9 @@ export function calculateUsageStats(events: AIUsageEvent[]): AIUsageStats {
     durations.length === 0 ? 0 : durations.reduce((sum, v) => sum + v, 0) / durations.length;
 
   const p95DurationMs =
-    durations.length === 0 ? 0 : durations[Math.min(durations.length - 1, Math.floor(durations.length * 0.95))];
+    durations.length === 0
+      ? 0
+      : durations[Math.min(durations.length - 1, Math.floor(durations.length * 0.95))];
 
   let promptTokens = 0;
   let completionTokens = 0;

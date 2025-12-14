@@ -21,7 +21,8 @@ export function createMockProject(overrides?: Partial<Project>): Project {
     technique: 'flat color blocking, sharp outlines, gradient shading',
     colorPalette: 'vibrant saturated colors, high contrast shadows',
     culturalFeature: 'Japanese animation aesthetics, expressive eyes',
-    fullPrompt: 'anime style, cel shaded, clean lineart, flat color blocking, sharp outlines, gradient shading, vibrant saturated colors, high contrast shadows, Japanese animation aesthetics, expressive eyes',
+    fullPrompt:
+      'anime style, cel shaded, clean lineart, flat color blocking, sharp outlines, gradient shading, vibrant saturated colors, high contrast shadows, Japanese animation aesthetics, expressive eyes',
   };
 
   return {
@@ -82,7 +83,9 @@ export function createMockCharacter(overrides?: Partial<Character>): Character {
 /**
  * 生成测试世界观要素数据
  */
-export function createMockWorldViewElement(overrides?: Partial<WorldViewElement>): WorldViewElement {
+export function createMockWorldViewElement(
+  overrides?: Partial<WorldViewElement>,
+): WorldViewElement {
   const now = new Date().toISOString();
   return {
     id: `test-worldview-${Math.random().toString(36).substring(7)}`,
@@ -119,7 +122,7 @@ export function createMockUserConfig(overrides?: Partial<UserConfig>): UserConfi
 export async function resetAllStores() {
   // 清空localStorage
   localStorage.clear();
-  
+
   // 动态导入所有store并重置
   const { useProjectStore } = await import('@/stores/projectStore');
   const { useStoryboardStore } = await import('@/stores/storyboardStore');
@@ -142,13 +145,19 @@ export async function resetAllStores() {
   useThemeStore.setState({ mode: 'system' });
   useTemplateStore.setState({ templates: [], currentTemplateId: null });
   useVersionStore.setState({ versions: [], maxVersions: 50 });
-  useSearchStore.setState({ query: '', filters: { query: '' }, results: { projects: [], scenes: [] }, isSearching: false, searchHistory: [] });
+  useSearchStore.setState({
+    query: '',
+    filters: { query: '' },
+    results: { projects: [], scenes: [] },
+    isSearching: false,
+    searchHistory: [],
+  });
   useStatisticsStore.setState({ statistics: null, dateRange: { start: '', end: '' } });
-  useAIProgressStore.setState({ 
-    tasks: [], 
-    activeTaskId: null, 
+  useAIProgressStore.setState({
+    tasks: [],
+    activeTaskId: null,
     stats: { total: 0, success: 0, error: 0, running: 0 },
-    listeners: new Map()
+    listeners: new Map(),
   });
 }
 
@@ -201,7 +210,7 @@ export async function setupStoreWithData(data: {
  * 等待异步状态更新完成
  */
 export function waitForAsyncUpdate(ms: number = 0): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -209,7 +218,7 @@ export function waitForAsyncUpdate(ms: number = 0): Promise<void> {
  */
 export async function waitFor(
   condition: () => boolean,
-  options: { timeout?: number; interval?: number } = {}
+  options: { timeout?: number; interval?: number } = {},
 ): Promise<void> {
   const { timeout = 1000, interval = 50 } = options;
   const startTime = Date.now();
@@ -229,7 +238,10 @@ export async function waitFor(
 /**
  * 模拟AI响应
  */
-export function mockAIResponse(content: string, tokenUsage?: { prompt: number; completion: number; total: number }) {
+export function mockAIResponse(
+  content: string,
+  tokenUsage?: { prompt: number; completion: number; total: number },
+) {
   return {
     content,
     tokenUsage: tokenUsage || {
@@ -285,8 +297,12 @@ export function mockPerformanceNow() {
   const original = performance.now;
   performance.now = vi.fn(() => currentTime);
   return {
-    advance: (ms: number) => { currentTime += ms; },
-    restore: () => { performance.now = original; },
+    advance: (ms: number) => {
+      currentTime += ms;
+    },
+    restore: () => {
+      performance.now = original;
+    },
   };
 }
 
@@ -298,12 +314,12 @@ export function mockPerformanceNow() {
  * 批量生成项目
  */
 export function createMockProjects(count: number): Project[] {
-  return Array.from({ length: count }, (_, i) => 
-    createMockProject({ 
+  return Array.from({ length: count }, (_, i) =>
+    createMockProject({
       id: `project-${i}`,
       title: `项目${i}`,
       order: i,
-    } as Partial<Project>)
+    } as Partial<Project>),
   );
 }
 
@@ -311,13 +327,13 @@ export function createMockProjects(count: number): Project[] {
  * 批量生成分镜
  */
 export function createMockScenes(count: number, projectId: string): Scene[] {
-  return Array.from({ length: count }, (_, i) => 
-    createMockScene({ 
+  return Array.from({ length: count }, (_, i) =>
+    createMockScene({
       id: `scene-${i}`,
       projectId,
       order: i + 1,
       summary: `分镜${i + 1}`,
-    })
+    }),
   );
 }
 
@@ -325,11 +341,11 @@ export function createMockScenes(count: number, projectId: string): Scene[] {
  * 批量生成角色
  */
 export function createMockCharacters(count: number, projectId: string): Character[] {
-  return Array.from({ length: count }, (_, i) => 
-    createMockCharacter({ 
+  return Array.from({ length: count }, (_, i) =>
+    createMockCharacter({
       id: `character-${i}`,
       projectId,
       name: `角色${i}`,
-    })
+    }),
   );
 }

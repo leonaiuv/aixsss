@@ -67,7 +67,8 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
       technique: 'flat color blocking, sharp outlines, gradient shading',
       colorPalette: 'vibrant saturated colors, high contrast shadows',
       culturalFeature: 'Japanese animation aesthetics, expressive eyes',
-      fullPrompt: 'anime style, cel shaded, clean lineart, flat color blocking, sharp outlines, gradient shading, vibrant saturated colors, high contrast shadows, Japanese animation aesthetics, expressive eyes',
+      fullPrompt:
+        'anime style, cel shaded, clean lineart, flat color blocking, sharp outlines, gradient shading, vibrant saturated colors, high contrast shadows, Japanese animation aesthetics, expressive eyes',
     },
   },
   {
@@ -79,7 +80,8 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
       technique: 'fluid brushstrokes, ink splatter, wet-on-wet technique',
       colorPalette: 'monochrome ink tones, subtle color washes, negative space',
       culturalFeature: 'Oriental aesthetics, traditional Chinese/Japanese art',
-      fullPrompt: 'Chinese ink wash painting, sumi-e style, fluid brushstrokes, ink splatter, wet-on-wet technique, monochrome ink tones, subtle color washes, negative space, Oriental aesthetics, traditional East Asian art',
+      fullPrompt:
+        'Chinese ink wash painting, sumi-e style, fluid brushstrokes, ink splatter, wet-on-wet technique, monochrome ink tones, subtle color washes, negative space, Oriental aesthetics, traditional East Asian art',
     },
   },
   {
@@ -91,7 +93,8 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
       technique: 'bold outlines, halftone dots, dynamic action lines',
       colorPalette: 'primary colors, high contrast, dramatic lighting',
       culturalFeature: 'Western comic art, Marvel/DC inspired',
-      fullPrompt: 'American comic book style, superhero aesthetics, bold outlines, halftone dots, dynamic action lines, primary colors, high contrast, dramatic lighting, Western comic art',
+      fullPrompt:
+        'American comic book style, superhero aesthetics, bold outlines, halftone dots, dynamic action lines, primary colors, high contrast, dramatic lighting, Western comic art',
     },
   },
   {
@@ -103,7 +106,8 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
       technique: 'neon glow effects, holographic overlays, digital glitch',
       colorPalette: 'cyan and magenta dominance, neon lights, dark shadows',
       culturalFeature: 'dystopian future, Asian street markets, tech noir',
-      fullPrompt: 'cyberpunk style, sci-fi noir, futuristic, neon glow effects, holographic overlays, digital glitch, cyan and magenta dominance, neon lights, dark shadows, dystopian future, Asian street markets, tech noir',
+      fullPrompt:
+        'cyberpunk style, sci-fi noir, futuristic, neon glow effects, holographic overlays, digital glitch, cyan and magenta dominance, neon lights, dark shadows, dystopian future, Asian street markets, tech noir',
     },
   },
   {
@@ -115,7 +119,8 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
       technique: 'volumetric lighting, depth of field, film grain',
       colorPalette: 'natural color grading, cinematic teal and orange',
       culturalFeature: 'Hollywood cinematography, ARRI camera look',
-      fullPrompt: 'cinematic, photorealistic, film still, volumetric lighting, depth of field, film grain, natural color grading, cinematic teal and orange tones, Hollywood cinematography, ARRI camera look, 8k resolution',
+      fullPrompt:
+        'cinematic, photorealistic, film still, volumetric lighting, depth of field, film grain, natural color grading, cinematic teal and orange tones, Hollywood cinematography, ARRI camera look, 8k resolution',
     },
   },
   {
@@ -127,7 +132,8 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
       technique: 'detailed brushwork, atmospheric perspective, dramatic composition',
       colorPalette: 'rich jewel tones, golden highlights, ethereal glow',
       culturalFeature: 'medieval fantasy, mythical creatures, magical elements',
-      fullPrompt: 'epic fantasy art, digital painting, detailed brushwork, atmospheric perspective, dramatic composition, rich jewel tones, golden highlights, ethereal glow, medieval fantasy, mythical creatures, magical elements',
+      fullPrompt:
+        'epic fantasy art, digital painting, detailed brushwork, atmospheric perspective, dramatic composition, rich jewel tones, golden highlights, ethereal glow, medieval fantasy, mythical creatures, magical elements',
     },
   },
   {
@@ -139,7 +145,8 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
       technique: 'soft edges, watercolor washes, hand-painted texture',
       colorPalette: 'pastel tones, warm natural colors, soft gradients',
       culturalFeature: 'Hayao Miyazaki inspired, whimsical nature scenes',
-      fullPrompt: 'Studio Ghibli style, watercolor illustration, soft edges, watercolor washes, hand-painted texture, pastel tones, warm natural colors, soft gradients, Hayao Miyazaki inspired, whimsical nature scenes',
+      fullPrompt:
+        'Studio Ghibli style, watercolor illustration, soft edges, watercolor washes, hand-painted texture, pastel tones, warm natural colors, soft gradients, Hayao Miyazaki inspired, whimsical nature scenes',
     },
   },
   {
@@ -151,7 +158,8 @@ export const ART_STYLE_PRESETS: ArtStylePreset[] = [
       technique: 'limited color palette, dithering, blocky shapes',
       colorPalette: 'CRT color palette, vibrant primary colors, no anti-aliasing',
       culturalFeature: '80s-90s video game nostalgia, arcade game style',
-      fullPrompt: 'pixel art, retro game aesthetics, 16-bit style, limited color palette, dithering, blocky shapes, CRT color palette, vibrant primary colors, no anti-aliasing, 80s-90s video game nostalgia, arcade game style',
+      fullPrompt:
+        'pixel art, retro game aesthetics, 16-bit style, limited color palette, dithering, blocky shapes, CRT color palette, vibrant primary colors, no anti-aliasing, 80s-90s video game nostalgia, arcade game style',
     },
   },
 ];
@@ -172,7 +180,7 @@ export function getArtStyleConfig(presetId: string): ArtStyleConfig | null {
   if (isCustomStyleId(presetId)) {
     return null;
   }
-  const preset = ART_STYLE_PRESETS.find(p => p.id === presetId);
+  const preset = ART_STYLE_PRESETS.find((p) => p.id === presetId);
   if (!preset) return null;
   return {
     presetId: preset.id,
@@ -196,20 +204,20 @@ export function createConfigFromCustomStyle(customStyle: CustomArtStyle): ArtSty
 export function migrateOldStyleToConfig(oldStyle: string): ArtStyleConfig {
   // 旧版预设值映射
   const oldToNewMap: Record<string, string> = {
-    'anime': 'anime_cel',
-    'realistic': 'cinematic_realistic',
-    'ink': 'ink_oriental',
-    'comic': 'comic_western',
-    'cyberpunk': 'cyberpunk',
-    'fantasy': 'fantasy_epic',
+    anime: 'anime_cel',
+    realistic: 'cinematic_realistic',
+    ink: 'ink_oriental',
+    comic: 'comic_western',
+    cyberpunk: 'cyberpunk',
+    fantasy: 'fantasy_epic',
   };
-  
+
   const newPresetId = oldToNewMap[oldStyle];
   if (newPresetId) {
     const config = getArtStyleConfig(newPresetId);
     if (config) return config;
   }
-  
+
   // 如果无法映射，使用默认的日式动漫风格
   return getArtStyleConfig('anime_cel')!;
 }
@@ -217,7 +225,9 @@ export function migrateOldStyleToConfig(oldStyle: string): ArtStyleConfig {
 /**
  * 合成完整画风提示词
  */
-export function composeStyleFullPrompt(config: Omit<ArtStyleConfig, 'presetId' | 'fullPrompt'>): string {
+export function composeStyleFullPrompt(
+  config: Omit<ArtStyleConfig, 'presetId' | 'fullPrompt'>,
+): string {
   const parts = [
     config.baseStyle,
     config.technique,
@@ -242,22 +252,18 @@ export type WorkflowState =
   | 'EXPORTING';
 
 // 分镜处理步骤
-export type SceneStep = 
-  | 'scene_description'
-  | 'keyframe_prompt'
-  | 'motion_prompt'
-  | 'dialogue';  // 台词生成阶段
+export type SceneStep = 'scene_description' | 'keyframe_prompt' | 'motion_prompt' | 'dialogue'; // 台词生成阶段
 
 // ==========================================
 // 台词相关类型
 // ==========================================
 
 /** 台词类型 */
-export type DialogueType = 
-  | 'dialogue'   // 对白（角色间对话）
-  | 'monologue'  // 独白（单个角色自言自语）
-  | 'narration'  // 旁白（画外音）
-  | 'thought';   // 心理活动（内心独白）
+export type DialogueType =
+  | 'dialogue' // 对白（角色间对话）
+  | 'monologue' // 独白（单个角色自言自语）
+  | 'narration' // 旁白（画外音）
+  | 'thought'; // 心理活动（内心独白）
 
 /** 台词类型中文标签 */
 export const DIALOGUE_TYPE_LABELS: Record<DialogueType, string> = {
@@ -271,16 +277,16 @@ export const DIALOGUE_TYPE_LABELS: Record<DialogueType, string> = {
 export interface DialogueLine {
   id: string;
   type: DialogueType;
-  characterName?: string;  // 说话角色名（旁白时可为空）
-  characterId?: string;    // 角色ID（关联角色库）
-  content: string;         // 台词内容
-  order: number;           // 台词顺序
-  emotion?: string;        // 情绪标注（如：激动、悲伤）
-  notes?: string;          // 备注（导演指示等）
+  characterName?: string; // 说话角色名（旁白时可为空）
+  characterId?: string; // 角色ID（关联角色库）
+  content: string; // 台词内容
+  order: number; // 台词顺序
+  emotion?: string; // 情绪标注（如：激动、悲伤）
+  notes?: string; // 备注（导演指示等）
 }
 
 // 分镜状态
-export type SceneStatus = 
+export type SceneStatus =
   | 'pending'
   | 'scene_generating'
   | 'scene_confirmed'
@@ -434,7 +440,7 @@ export interface AIResponse {
 }
 
 // 上下文类型
-export type ContextType = 
+export type ContextType =
   | 'project_essence'
   | 'current_scene'
   | 'current_scene_summary'
@@ -451,7 +457,7 @@ export type ContextType =
   | 'next_scene';
 
 // 生成任务类型
-export type TaskType = 
+export type TaskType =
   | 'generate_scene_list'
   | 'generate_scene_desc'
   | 'generate_keyframe_prompt'
@@ -486,10 +492,10 @@ export interface GenerationResult {
 // ==========================================
 
 export interface LocalStorageSchema {
-  'aixs_version': string;
-  'aixs_projects': Project[];
-  'aixs_scenes': Record<string, Scene[]>;
-  'aixs_config': string; // 加密后的UserConfig
+  aixs_version: string;
+  aixs_projects: Project[];
+  aixs_scenes: Record<string, Scene[]>;
+  aixs_config: string; // 加密后的UserConfig
 }
 
 // ==========================================

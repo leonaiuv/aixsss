@@ -23,9 +23,11 @@ describe('ContextCompressor', () => {
   const mockProject: Project = {
     id: 'test-project',
     title: '测试项目',
-    summary: '这是一个测试故事梗概，包含了各种有趣的情节和转折。主角是一位勇敢的冒险者，他在一个充满魔法的世界中寻找传说中的宝藏。',
+    summary:
+      '这是一个测试故事梗概，包含了各种有趣的情节和转折。主角是一位勇敢的冒险者，他在一个充满魔法的世界中寻找传说中的宝藏。',
     style: '奇幻风格',
-    protagonist: '主角是一位18岁的少年，银色短发，紫色眼睛，穿着黑色长袍，手持魔法杖，性格勇敢且善良。',
+    protagonist:
+      '主角是一位18岁的少年，银色短发，紫色眼睛，穿着黑色长袍，手持魔法杖，性格勇敢且善良。',
     workflowState: 'DATA_COLLECTED',
     currentSceneOrder: 0,
     createdAt: '2024-01-01T00:00:00Z',
@@ -71,7 +73,7 @@ describe('ContextCompressor', () => {
   describe('compressProjectEssence', () => {
     it('应该成功压缩项目核心信息', () => {
       const result = compressProjectEssence(mockProject, 'balanced');
-      
+
       expect(result).toHaveProperty('style');
       expect(result).toHaveProperty('protagonistCore');
       expect(result).toHaveProperty('storyCore');
@@ -83,7 +85,7 @@ describe('ContextCompressor', () => {
     it('激进策略应该产生更少的tokens', () => {
       const aggressive = compressProjectEssence(mockProject, 'aggressive');
       const conservative = compressProjectEssence(mockProject, 'conservative');
-      
+
       expect(aggressive.tokens).toBeLessThan(conservative.tokens);
     });
 
@@ -92,7 +94,7 @@ describe('ContextCompressor', () => {
         ...mockProject,
         summary: '这是一个非常非常非常非常长的故事梗概，'.repeat(50),
       };
-      
+
       const result = compressProjectEssence(longProject, 'aggressive');
       expect(result.storyCore.length).toBeLessThan(longProject.summary.length);
       expect(result.storyCore).toContain('...');
@@ -102,7 +104,7 @@ describe('ContextCompressor', () => {
   describe('compressSceneSummary', () => {
     it('应该成功压缩分镜摘要', () => {
       const result = compressSceneSummary(mockScenes[0], 'balanced');
-      
+
       expect(result).toHaveProperty('summary');
       expect(result).toHaveProperty('mood');
       expect(result).toHaveProperty('keyElement');
@@ -115,7 +117,7 @@ describe('ContextCompressor', () => {
         ...mockScenes[0],
         summary: '主角在危险的战斗中紧张地躲避攻击',
       };
-      
+
       const result = compressSceneSummary(tensionScene, 'balanced');
       expect(result.mood).toBeDefined();
     });
@@ -124,7 +126,7 @@ describe('ContextCompressor', () => {
   describe('compressSceneHistory', () => {
     it('应该成功压缩场景历史', () => {
       const result = compressSceneHistory(mockScenes, 2, 'balanced');
-      
+
       expect(result).toHaveProperty('compressed');
       expect(result).toHaveProperty('tokens');
       expect(result.compressed).toContain('分镜');
@@ -132,7 +134,7 @@ describe('ContextCompressor', () => {
 
     it('第一个分镜应该返回空历史', () => {
       const result = compressSceneHistory(mockScenes, 0, 'balanced');
-      
+
       expect(result.compressed).toBe('');
       expect(result.tokens).toBe(0);
     });
@@ -144,11 +146,11 @@ describe('ContextCompressor', () => {
         order: i + 1,
         summary: `分镜${i + 1}`,
       }));
-      
+
       const result = compressSceneHistory(longScenes, 9, 'balanced');
       // 注意：现在只有summary包含"分镜"，每个scene有1个
       const sceneCount = (result.compressed.match(/分镜概要/g) || []).length;
-      
+
       expect(sceneCount).toBeLessThanOrEqual(3); // balanced策略保留3个
     });
   });
@@ -160,7 +162,7 @@ describe('ContextCompressor', () => {
         project: '项目信息',
         current: '当前内容',
       };
-      
+
       const total = calculateTotalTokens(components);
       expect(total).toBeGreaterThan(0);
     });
@@ -171,7 +173,7 @@ describe('ContextCompressor', () => {
         project: undefined,
         current: '当前内容',
       };
-      
+
       const total = calculateTotalTokens(components);
       expect(total).toBeGreaterThan(0);
     });
@@ -180,7 +182,7 @@ describe('ContextCompressor', () => {
   describe('checkTokenLimit', () => {
     it('应该正确检查token限制', () => {
       const result = checkTokenLimit(2000, 4000);
-      
+
       expect(result.withinLimit).toBe(true);
       expect(result.usage).toBe(50);
       expect(result.remaining).toBe(2000);
@@ -188,7 +190,7 @@ describe('ContextCompressor', () => {
 
     it('超出限制时应该返回false', () => {
       const result = checkTokenLimit(5000, 4000);
-      
+
       expect(result.withinLimit).toBe(false);
       expect(result.usage).toBeGreaterThan(100);
       expect(result.remaining).toBeLessThan(0);
@@ -204,7 +206,7 @@ describe('ContextCompressor', () => {
         currentIndex: 0,
         strategy: 'balanced',
       });
-      
+
       expect(result).toHaveProperty('context');
       expect(result).toHaveProperty('tokens');
       expect(result).toHaveProperty('breakdown');
@@ -219,7 +221,7 @@ describe('ContextCompressor', () => {
         scenes: mockScenes,
         currentIndex: 0,
       });
-      
+
       expect(result.breakdown.history).toBeUndefined();
     });
 
@@ -230,7 +232,7 @@ describe('ContextCompressor', () => {
         scenes: mockScenes,
         currentIndex: 2,
       });
-      
+
       expect(result.context).toContain('前序分镜');
       expect(result.breakdown.history).toBeGreaterThan(0);
     });
@@ -243,7 +245,7 @@ describe('ContextCompressor', () => {
         currentIndex: 2,
         strategy: 'aggressive',
       });
-      
+
       const conservative = buildOptimizedContext({
         project: mockProject,
         currentScene: mockScenes[2],
@@ -251,7 +253,7 @@ describe('ContextCompressor', () => {
         currentIndex: 2,
         strategy: 'conservative',
       });
-      
+
       expect(aggressive.tokens).toBeLessThan(conservative.tokens);
     });
   });
@@ -267,14 +269,14 @@ describe('ContextCompressor', () => {
         summary: '简单的故事',
         protagonist: '主角',
       };
-      
+
       const result = buildOptimizedContext({
         project: simpleProject,
         scenes: mockScenes.slice(0, 2),
         currentIndex: 1,
         strategy: 'conservative',
       });
-      
+
       // 保守策略应该保留更多信息
       expect(result.tokens).toBeGreaterThan(0);
     });
@@ -285,21 +287,21 @@ describe('ContextCompressor', () => {
         summary: '非常复杂的故事梳概，'.repeat(20),
         protagonist: '复杂的主角描述，'.repeat(20),
       };
-      
+
       const aggressive = buildOptimizedContext({
         project: complexProject,
         scenes: mockScenes,
         currentIndex: 2,
         strategy: 'aggressive',
       });
-      
+
       const balanced = buildOptimizedContext({
         project: complexProject,
         scenes: mockScenes,
         currentIndex: 2,
         strategy: 'balanced',
       });
-      
+
       expect(aggressive.tokens).toBeLessThan(balanced.tokens);
     });
   });
@@ -310,7 +312,7 @@ describe('ContextCompressor', () => {
         project: mockProject,
         strategy: 'aggressive',
       });
-      
+
       expect(result.context).toContain('奇幻风格');
     });
 
@@ -320,7 +322,7 @@ describe('ContextCompressor', () => {
         currentScene: mockScenes[0],
         strategy: 'aggressive',
       });
-      
+
       // 应该包含当前分镜信息
       expect(result.context).toContain('当前分镜');
     });
@@ -330,9 +332,9 @@ describe('ContextCompressor', () => {
         ...mockScenes[0],
         summary: '紧张的战斗中主角拼死身亡',
       };
-      
+
       const result = compressSceneSummary(tensionScene, 'aggressive');
-      
+
       expect(result.mood).toBe('紧张');
     });
   });
@@ -370,18 +372,18 @@ describe('ContextCompressor', () => {
 
     it('成功AI提取情绪', async () => {
       mockAIClient.chat.mockResolvedValueOnce({ content: '神秘' });
-      
+
       const result = await extractMoodWithAI(mockAIClient, '黑暗的洞穴中传来未知的声音');
-      
+
       expect(result).toBe('神秘');
       expect(mockAIClient.chat).toHaveBeenCalled();
     });
 
     it('AI失败时回退到规则引擎', async () => {
       mockAIClient.chat.mockRejectedValueOnce(new Error('API超时'));
-      
+
       const result = await extractMoodWithAI(mockAIClient, '紧张的追击场面');
-      
+
       // 应回退到规则引擎，匹配"紧张"关键词
       expect(result).toBe('紧张');
     });
@@ -394,17 +396,17 @@ describe('ContextCompressor', () => {
 
     it('成功AI提取关键元素', async () => {
       mockAIClient.chat.mockResolvedValueOnce({ content: '魔法石' });
-      
+
       const result = await extractKeyElementWithAI(mockAIClient, '老人递给主角一块发光的魔法石');
-      
+
       expect(result).toBe('魔法石');
     });
 
     it('AI失败时回退到规则引擎', async () => {
       mockAIClient.chat.mockRejectedValueOnce(new Error('网络错误'));
-      
+
       const result = await extractKeyElementWithAI(mockAIClient, '老人递给主角一块发光的魔法石');
-      
+
       // 回退到规则引擎，应提取出某个元素
       expect(result.length).toBeGreaterThan(0);
     });
@@ -417,22 +419,22 @@ describe('ContextCompressor', () => {
 
     it('成功AI压缩文本', async () => {
       mockAIClient.chat.mockResolvedValueOnce({ content: '少年银发紫眸，黑袍魔法师' });
-      
+
       const result = await compressTextWithAI(
         mockAIClient,
         '主角是一位18岁的少年，银色短发，紫色眸子，穿着黑色长袍，是一位强大的魔法师',
-        20
+        20,
       );
-      
+
       expect(result).toBe('少年银发紫眸，黑袍魔法师');
     });
 
     it('AI失败时回退到截断', async () => {
       mockAIClient.chat.mockRejectedValueOnce(new Error('API错误'));
-      
+
       const longText = '这是一段很长的文本需要被压缩';
       const result = await compressTextWithAI(mockAIClient, longText, 5);
-      
+
       expect(result).toContain('...');
       expect(result.length).toBeLessThanOrEqual(8); // 5 + "..."
     });
@@ -447,9 +449,9 @@ describe('ContextCompressor', () => {
       mockAIClient.chat
         .mockResolvedValueOnce({ content: '银发紫眸魔法师' }) // protagonist
         .mockResolvedValueOnce({ content: '冒险寻宝故事' }); // story
-      
+
       const result = await compressProjectEssenceWithAI(mockAIClient, mockProject, 'balanced');
-      
+
       expect(result).toHaveProperty('style', '奇幻风格');
       expect(result).toHaveProperty('protagonistCore', '银发紫眸魔法师');
       expect(result).toHaveProperty('storyCore', '冒险寻宝故事');
@@ -458,9 +460,9 @@ describe('ContextCompressor', () => {
 
     it('AI失败时回退到规则引擎', async () => {
       mockAIClient.chat.mockRejectedValueOnce(new Error('服务不可用'));
-      
+
       const result = await compressProjectEssenceWithAI(mockAIClient, mockProject, 'balanced');
-      
+
       // 回退到规则引擎，应该仍能返回结果
       expect(result).toHaveProperty('style');
       expect(result).toHaveProperty('protagonistCore');
@@ -478,9 +480,9 @@ describe('ContextCompressor', () => {
         .mockResolvedValueOnce({ content: '森林遇老人' }) // summary
         .mockResolvedValueOnce({ content: '神秘' }) // mood
         .mockResolvedValueOnce({ content: '神秘老人' }); // keyElement
-      
+
       const result = await compressSceneSummaryWithAI(mockAIClient, mockScenes[0], 'balanced');
-      
+
       expect(result).toHaveProperty('summary', '森林遇老人');
       expect(result).toHaveProperty('mood', '神秘');
       expect(result).toHaveProperty('keyElement', '神秘老人');
@@ -488,9 +490,9 @@ describe('ContextCompressor', () => {
 
     it('AI失败时回退到规则引擎', async () => {
       mockAIClient.chat.mockRejectedValueOnce(new Error('超时'));
-      
+
       const result = await compressSceneSummaryWithAI(mockAIClient, mockScenes[0], 'balanced');
-      
+
       // 回退到规则引擎
       expect(result).toHaveProperty('summary');
       expect(result).toHaveProperty('tokens');

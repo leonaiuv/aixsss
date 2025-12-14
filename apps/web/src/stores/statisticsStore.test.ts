@@ -223,15 +223,81 @@ describe('statisticsStore', () => {
   describe('edge cases', () => {
     it('should handle multiple projects with different states', () => {
       const projects: Project[] = [
-        { id: 'p1', title: 'P1', summary: '', style: '', protagonist: '', workflowState: 'IDLE', currentSceneOrder: 0, createdAt: '2024-01-10T00:00:00Z', updatedAt: '2024-01-10T00:00:00Z' },
-        { id: 'p2', title: 'P2', summary: '', style: '', protagonist: '', workflowState: 'SCENE_PROCESSING', currentSceneOrder: 0, createdAt: '2024-01-15T00:00:00Z', updatedAt: '2024-01-15T00:00:00Z' },
-        { id: 'p3', title: 'P3', summary: '', style: '', protagonist: '', workflowState: 'ALL_SCENES_COMPLETE', currentSceneOrder: 0, createdAt: '2024-01-20T00:00:00Z', updatedAt: '2024-01-20T00:00:00Z' },
+        {
+          id: 'p1',
+          title: 'P1',
+          summary: '',
+          style: '',
+          protagonist: '',
+          workflowState: 'IDLE',
+          currentSceneOrder: 0,
+          createdAt: '2024-01-10T00:00:00Z',
+          updatedAt: '2024-01-10T00:00:00Z',
+        },
+        {
+          id: 'p2',
+          title: 'P2',
+          summary: '',
+          style: '',
+          protagonist: '',
+          workflowState: 'SCENE_PROCESSING',
+          currentSceneOrder: 0,
+          createdAt: '2024-01-15T00:00:00Z',
+          updatedAt: '2024-01-15T00:00:00Z',
+        },
+        {
+          id: 'p3',
+          title: 'P3',
+          summary: '',
+          style: '',
+          protagonist: '',
+          workflowState: 'ALL_SCENES_COMPLETE',
+          currentSceneOrder: 0,
+          createdAt: '2024-01-20T00:00:00Z',
+          updatedAt: '2024-01-20T00:00:00Z',
+        },
       ];
 
       const scenesMap: Record<string, Scene[]> = {
-        p1: [{ id: 's1', projectId: 'p1', order: 1, summary: '', sceneDescription: '', actionDescription: '', shotPrompt: '', status: 'pending', notes: '' }],
-        p2: [{ id: 's2', projectId: 'p2', order: 1, summary: '', sceneDescription: '', actionDescription: '', shotPrompt: '', status: 'completed', notes: '' }],
-        p3: [{ id: 's3', projectId: 'p3', order: 1, summary: '', sceneDescription: '', actionDescription: '', shotPrompt: '', status: 'completed', notes: '' }],
+        p1: [
+          {
+            id: 's1',
+            projectId: 'p1',
+            order: 1,
+            summary: '',
+            sceneDescription: '',
+            actionDescription: '',
+            shotPrompt: '',
+            status: 'pending',
+            notes: '',
+          },
+        ],
+        p2: [
+          {
+            id: 's2',
+            projectId: 'p2',
+            order: 1,
+            summary: '',
+            sceneDescription: '',
+            actionDescription: '',
+            shotPrompt: '',
+            status: 'completed',
+            notes: '',
+          },
+        ],
+        p3: [
+          {
+            id: 's3',
+            projectId: 'p3',
+            order: 1,
+            summary: '',
+            sceneDescription: '',
+            actionDescription: '',
+            shotPrompt: '',
+            status: 'completed',
+            notes: '',
+          },
+        ],
       };
 
       const { calculate } = useStatisticsStore.getState();

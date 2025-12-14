@@ -3,7 +3,7 @@ import { ThemeMode } from '@/types';
 
 interface ThemeStore {
   mode: ThemeMode;
-  
+
   // 操作方法
   setMode: (mode: ThemeMode) => void;
   toggleMode: () => void;
@@ -12,19 +12,19 @@ interface ThemeStore {
 
 export const useThemeStore = create<ThemeStore>((set, get) => ({
   mode: 'system',
-  
+
   setMode: (mode: ThemeMode) => {
     set({ mode });
     localStorage.setItem('aixs_theme', mode);
     applyTheme(mode);
   },
-  
+
   toggleMode: () => {
     const current = get().mode;
     const next = current === 'light' ? 'dark' : 'light';
     get().setMode(next);
   },
-  
+
   initTheme: () => {
     const saved = localStorage.getItem('aixs_theme') as ThemeMode | null;
     const mode = saved || 'system';
@@ -36,7 +36,7 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 // 应用主题
 function applyTheme(mode: ThemeMode) {
   const root = document.documentElement;
-  
+
   if (mode === 'system') {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     root.classList.toggle('dark', prefersDark);

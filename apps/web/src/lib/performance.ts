@@ -10,10 +10,10 @@
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(
   fn: T,
-  delay: number
+  delay: number,
 ): (...args: Parameters<T>) => void {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  
+
   return (...args: Parameters<T>) => {
     if (timeoutId) {
       clearTimeout(timeoutId);
@@ -32,11 +32,11 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
  */
 export function throttle<T extends (...args: unknown[]) => unknown>(
   fn: T,
-  limit: number
+  limit: number,
 ): (...args: Parameters<T>) => void {
   let inThrottle = false;
   let lastArgs: Parameters<T> | null = null;
-  
+
   return (...args: Parameters<T>) => {
     if (!inThrottle) {
       fn(...args);
@@ -61,30 +61,30 @@ export class SimpleCache<K, V> {
   private cache = new Map<K, { value: V; expiry: number }>();
   private maxSize: number;
   private defaultTTL: number;
-  
+
   constructor(maxSize = 100, defaultTTL = 5 * 60 * 1000) {
     this.maxSize = maxSize;
     this.defaultTTL = defaultTTL;
   }
-  
+
   get(key: K): V | undefined {
     const entry = this.cache.get(key);
     if (!entry) return undefined;
-    
+
     if (Date.now() > entry.expiry) {
       this.cache.delete(key);
       return undefined;
     }
-    
+
     return entry.value;
   }
-  
+
   set(key: K, value: V, ttl = this.defaultTTL): void {
     // 清理过期项
     if (this.cache.size >= this.maxSize) {
       this.cleanup();
     }
-    
+
     // 如果仍然超过最大大小，删除最旧的项
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
@@ -92,25 +92,25 @@ export class SimpleCache<K, V> {
         this.cache.delete(firstKey);
       }
     }
-    
+
     this.cache.set(key, {
       value,
       expiry: Date.now() + ttl,
     });
   }
-  
+
   has(key: K): boolean {
     return this.get(key) !== undefined;
   }
-  
+
   delete(key: K): boolean {
     return this.cache.delete(key);
   }
-  
+
   clear(): void {
     this.cache.clear();
   }
-  
+
   private cleanup(): void {
     const now = Date.now();
     for (const [key, entry] of this.cache.entries()) {
@@ -131,47 +131,43 @@ export class BatchQueue<T> {
   private processor: (items: T[]) => void;
   private delay: number;
   private maxSize: number;
-  
-  constructor(
-    processor: (items: T[]) => void,
-    delay = 300,
-    maxSize = 50
-  ) {
+
+  constructor(processor: (items: T[]) => void, delay = 300, maxSize = 50) {
     this.processor = processor;
     this.delay = delay;
     this.maxSize = maxSize;
   }
-  
+
   add(item: T): void {
     this.queue.push(item);
-    
+
     // 达到最大大小立即处理
     if (this.queue.length >= this.maxSize) {
       this.flush();
       return;
     }
-    
+
     // 重置定时器
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
     }
-    
+
     this.timeoutId = setTimeout(() => this.flush(), this.delay);
   }
-  
+
   flush(): void {
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
     }
-    
+
     if (this.queue.length > 0) {
       const items = [...this.queue];
       this.queue = [];
       this.processor(items);
     }
   }
-  
+
   clear(): void {
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
@@ -187,10 +183,15 @@ export class BatchQueue<T> {
 export const requestIdleCallback =
   typeof window !== 'undefined' && 'requestIdleCallback' in window
     ? window.requestIdleCallback
-    : (cb: IdleRequestCallback) => setTimeout(() => cb({ 
-        didTimeout: false, 
-        timeRemaining: () => 50 
-      }), 1);
+    : (cb: IdleRequestCallback) =>
+        setTimeout(
+          () =>
+            cb({
+              didTimeout: false,
+              timeRemaining: () => 50,
+            }),
+          1,
+        );
 
 export const cancelIdleCallback =
   typeof window !== 'undefined' && 'cancelIdleCallback' in window
@@ -200,10 +201,7 @@ export const cancelIdleCallback =
 /**
  * 延迟执行非关键任务
  */
-export function scheduleIdleTask<T>(
-  task: () => T,
-  timeout = 2000
-): Promise<T> {
+export function scheduleIdleTask<T>(task: () => T, timeout = 2000): Promise<T> {
   return new Promise((resolve, reject) => {
     requestIdleCallback(
       () => {
@@ -213,7 +211,7 @@ export function scheduleIdleTask<T>(
           reject(error);
         }
       },
-      { timeout }
+      { timeout },
     );
   });
 }
@@ -227,7 +225,7 @@ export const perfMarker = {
       performance.mark(`${name}-start`);
     }
   },
-  
+
   end(name: string): number {
     if (typeof performance !== 'undefined' && import.meta.env.MODE !== 'production') {
       performance.mark(`${name}-end`);
@@ -252,7 +250,7 @@ export function trackRender(componentName: string): void {
   if (import.meta.env.MODE !== 'production') {
     const count = (renderCounts.get(componentName) || 0) + 1;
     renderCounts.set(componentName, count);
-    
+
     // 每10次渲染输出一次警告
     if (count % 10 === 0) {
       console.warn(`[Render Warning] ${componentName} has rendered ${count} times`);

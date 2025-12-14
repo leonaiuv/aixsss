@@ -40,7 +40,7 @@ function createMockLocalStorage(): Storage {
 
 function buildState(
   profiles: Array<{ id: string; name: string; config: UserConfig }>,
-  activeProfileId: string
+  activeProfileId: string,
 ): UserConfigState {
   const now = new Date().toISOString();
   return {
@@ -105,7 +105,7 @@ describe('configStore（多配置档案）', () => {
           config: { provider: 'deepseek', apiKey: 'k', model: 'deepseek-chat' },
         },
       ],
-      'p1'
+      'p1',
     );
 
     useConfigStore.getState().loadConfig();
@@ -124,7 +124,7 @@ describe('configStore（多配置档案）', () => {
           config: { provider: 'deepseek', apiKey: '', model: 'deepseek-chat' },
         },
       ],
-      'p1'
+      'p1',
     );
     useConfigStore.getState().loadConfig();
 
@@ -139,10 +139,14 @@ describe('configStore（多配置档案）', () => {
   it('setActiveProfile：切换档案应更新 activeProfileId 与可用 config', () => {
     storedConfigState = buildState(
       [
-        { id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } },
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' },
+        },
         { id: 'p2', name: 'B', config: { provider: 'gemini', apiKey: '', model: 'gemini-pro' } },
       ],
-      'p1'
+      'p1',
     );
     useConfigStore.getState().loadConfig();
 
@@ -155,8 +159,14 @@ describe('configStore（多配置档案）', () => {
 
   it('createProfile：应创建新档案并切换为 active', () => {
     storedConfigState = buildState(
-      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
-      'p1'
+      [
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' },
+        },
+      ],
+      'p1',
     );
     useConfigStore.getState().loadConfig();
 
@@ -173,8 +183,14 @@ describe('configStore（多配置档案）', () => {
 
   it('updateProfile：应更新名称与价格', () => {
     storedConfigState = buildState(
-      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
-      'p1'
+      [
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' },
+        },
+      ],
+      'p1',
     );
     useConfigStore.getState().loadConfig();
 
@@ -191,10 +207,14 @@ describe('configStore（多配置档案）', () => {
   it('deleteProfile：删除 active 后应自动切换到剩余档案', () => {
     storedConfigState = buildState(
       [
-        { id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } },
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' },
+        },
         { id: 'p2', name: 'B', config: { provider: 'gemini', apiKey: 'k2', model: 'gemini-pro' } },
       ],
-      'p2'
+      'p2',
     );
     useConfigStore.getState().loadConfig();
 
@@ -207,8 +227,14 @@ describe('configStore（多配置档案）', () => {
 
   it('deleteProfile：删除最后一个档案应清空配置', () => {
     storedConfigState = buildState(
-      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
-      'p1'
+      [
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' },
+        },
+      ],
+      'p1',
     );
     useConfigStore.getState().loadConfig();
 
@@ -221,8 +247,14 @@ describe('configStore（多配置档案）', () => {
 
   it('testConnection：成功时应记录 lastTest 并返回 true', async () => {
     storedConfigState = buildState(
-      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
-      'p1'
+      [
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' },
+        },
+      ],
+      'p1',
     );
     useConfigStore.getState().loadConfig();
 
@@ -239,8 +271,14 @@ describe('configStore（多配置档案）', () => {
 
   it('testConnection：失败时应记录 lastTest 并返回 false', async () => {
     storedConfigState = buildState(
-      [{ id: 'p1', name: 'A', config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' } }],
-      'p1'
+      [
+        {
+          id: 'p1',
+          name: 'A',
+          config: { provider: 'deepseek', apiKey: 'k1', model: 'deepseek-chat' },
+        },
+      ],
+      'p1',
     );
     useConfigStore.getState().loadConfig();
 

@@ -4,7 +4,10 @@ import { apiRequest } from './http';
 export type ApiWorldViewElement = WorldViewElement & { createdAt?: string; updatedAt?: string };
 
 export async function apiListWorldViewElements(projectId: string) {
-  return apiRequest<ApiWorldViewElement[]>(`/projects/${encodeURIComponent(projectId)}/world-view`, { method: 'GET' });
+  return apiRequest<ApiWorldViewElement[]>(
+    `/projects/${encodeURIComponent(projectId)}/world-view`,
+    { method: 'GET' },
+  );
 }
 
 export async function apiCreateWorldViewElement(
@@ -18,7 +21,10 @@ export async function apiCreateWorldViewElement(
     ...(typeof input.content === 'string' ? { content: input.content } : {}),
     order: input.order,
   };
-  return apiRequest<ApiWorldViewElement>(`/projects/${encodeURIComponent(projectId)}/world-view`, { method: 'POST', body });
+  return apiRequest<ApiWorldViewElement>(`/projects/${encodeURIComponent(projectId)}/world-view`, {
+    method: 'POST',
+    body,
+  });
 }
 
 export async function apiUpdateWorldViewElement(
@@ -51,5 +57,3 @@ export async function apiReorderWorldViewElements(projectId: string, elementIds:
     { method: 'POST', body: { elementIds } },
   );
 }
-
-

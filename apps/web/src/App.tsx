@@ -17,16 +17,26 @@ import { Settings, Search, Terminal, Loader2 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent } from './components/ui/dialog';
 import { useAIProgressStore } from './stores/aiProgressStore';
-import { useKeyboardShortcut, GLOBAL_SHORTCUTS, getPlatformShortcut } from './hooks/useKeyboardShortcut';
+import {
+  useKeyboardShortcut,
+  GLOBAL_SHORTCUTS,
+  getPlatformShortcut,
+} from './hooks/useKeyboardShortcut';
 import { useAuthStore } from './stores/authStore';
 import { AuthPage } from './components/AuthPage';
 
 // 懒加载重型组件
-const Editor = lazy(() => import('./components/Editor').then(m => ({ default: m.Editor })));
-const ConfigDialog = lazy(() => import('./components/ConfigDialog').then(m => ({ default: m.ConfigDialog })));
-const DevPanel = lazy(() => import('./components/DevPanel').then(m => ({ default: m.DevPanel })));
-const DevPanelTrigger = lazy(() => import('./components/DevPanel').then(m => ({ default: m.DevPanelTrigger })));
-const ProjectSearch = lazy(() => import('./components/editor/ProjectSearch').then(m => ({ default: m.ProjectSearch })));
+const Editor = lazy(() => import('./components/Editor').then((m) => ({ default: m.Editor })));
+const ConfigDialog = lazy(() =>
+  import('./components/ConfigDialog').then((m) => ({ default: m.ConfigDialog })),
+);
+const DevPanel = lazy(() => import('./components/DevPanel').then((m) => ({ default: m.DevPanel })));
+const DevPanelTrigger = lazy(() =>
+  import('./components/DevPanel').then((m) => ({ default: m.DevPanelTrigger })),
+);
+const ProjectSearch = lazy(() =>
+  import('./components/editor/ProjectSearch').then((m) => ({ default: m.ProjectSearch })),
+);
 
 // 加载占位组件
 function LoadingFallback() {
@@ -63,28 +73,28 @@ function LocalApp() {
   const location = useLocation();
   const navigate = useNavigate();
   const isInEditor = location.pathname.startsWith('/projects/');
-  
+
   // 使用选择器优化，避免订阅整个 store
-  const loadProjects = useProjectStore(state => state.loadProjects);
-  const currentProject = useProjectStore(state => state.currentProject);
-  const projects = useProjectStore(state => state.projects);
-  const setCurrentProject = useProjectStore(state => state.setCurrentProject);
-  const loadConfig = useConfigStore(state => state.loadConfig);
-  const initTheme = useThemeStore(state => state.initTheme);
-  const toggleThemeMode = useThemeStore(state => state.toggleMode);
-  const togglePanel = useAIProgressStore(state => state.togglePanel);
-  const isPanelVisible = useAIProgressStore(state => state.isPanelVisible);
-  
+  const loadProjects = useProjectStore((state) => state.loadProjects);
+  const currentProject = useProjectStore((state) => state.currentProject);
+  const projects = useProjectStore((state) => state.projects);
+  const setCurrentProject = useProjectStore((state) => state.setCurrentProject);
+  const loadConfig = useConfigStore((state) => state.loadConfig);
+  const initTheme = useThemeStore((state) => state.initTheme);
+  const toggleThemeMode = useThemeStore((state) => state.toggleMode);
+  const togglePanel = useAIProgressStore((state) => state.togglePanel);
+  const isPanelVisible = useAIProgressStore((state) => state.isPanelVisible);
+
   useEffect(() => {
     initStorage();
     loadProjects();
     loadConfig();
     initTheme();
-    
+
     // 初始化AI进度桥接器
     const cleanupBridge = initProgressBridge();
     const cleanupUsageAnalytics = initAIUsageAnalytics();
-    
+
     return () => {
       cleanupBridge();
       cleanupUsageAnalytics();
@@ -120,13 +130,13 @@ function LocalApp() {
   // 全局搜索快捷键：Ctrl/Cmd + K
   useKeyboardShortcut(
     getPlatformShortcut(GLOBAL_SHORTCUTS.SEARCH, GLOBAL_SHORTCUTS.SEARCH_MAC),
-    () => setSearchDialogOpen(true)
+    () => setSearchDialogOpen(true),
   );
 
   // 切换主题：Ctrl/Cmd + Shift + T
   useKeyboardShortcut(
     getPlatformShortcut(GLOBAL_SHORTCUTS.TOGGLE_THEME, GLOBAL_SHORTCUTS.TOGGLE_THEME_MAC),
-    () => toggleThemeMode()
+    () => toggleThemeMode(),
   );
 
   // 使用 useCallback 缓存回调函数
@@ -136,12 +146,15 @@ function LocalApp() {
   }, [navigate, setCurrentProject]);
   const handleOpenConfig = useCallback(() => setConfigDialogOpen(true), []);
   const handleOpenSearch = useCallback(() => setSearchDialogOpen(true), []);
-  
-  const handleSearchResultClick = useCallback((project: typeof projects[0]) => {
-    setCurrentProject(project);
-    navigate(`/projects/${encodeURIComponent(project.id)}`);
-    setSearchDialogOpen(false);
-  }, [setCurrentProject, navigate]);
+
+  const handleSearchResultClick = useCallback(
+    (project: (typeof projects)[0]) => {
+      setCurrentProject(project);
+      navigate(`/projects/${encodeURIComponent(project.id)}`);
+      setSearchDialogOpen(false);
+    },
+    [setCurrentProject, navigate],
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -156,14 +169,10 @@ function LocalApp() {
               漫剧创作助手
             </h1>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {isInEditor && (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={handleBackToList}
-              >
+              <Button variant="ghost" size="sm" onClick={handleBackToList}>
                 返回项目列表
               </Button>
             )}
@@ -188,12 +197,7 @@ function LocalApp() {
             </Button>
             <KeyboardShortcuts />
             <ThemeToggle />
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={handleOpenConfig}
-              aria-label="设置"
-            >
+            <Button variant="ghost" size="icon" onClick={handleOpenConfig} aria-label="设置">
               <Settings className="h-5 w-5" />
             </Button>
           </div>
@@ -212,31 +216,25 @@ function LocalApp() {
 
       {/* API配置弹窗 */}
       <Suspense fallback={null}>
-        <ConfigDialog 
-          open={configDialogOpen} 
-          onOpenChange={setConfigDialogOpen} 
-        />
+        <ConfigDialog open={configDialogOpen} onOpenChange={setConfigDialogOpen} />
       </Suspense>
 
       {/* 全局搜索对话框 */}
       <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
         <DialogContent className="max-w-2xl">
           <Suspense fallback={<LoadingFallback />}>
-            <ProjectSearch
-              projects={projects}
-              onSelect={handleSearchResultClick}
-            />
+            <ProjectSearch projects={projects} onSelect={handleSearchResultClick} />
           </Suspense>
         </DialogContent>
       </Dialog>
 
       {/* Toast通知 */}
       <Toaster />
-      
+
       {/* AI进度提醒 */}
       <AIProgressToast />
       <AIProgressIndicator />
-      
+
       {/* 开发者面板 */}
       <Suspense fallback={null}>
         <DevPanel />
@@ -313,12 +311,14 @@ function BackendApp() {
     };
   }, []);
 
-  useKeyboardShortcut(getPlatformShortcut(GLOBAL_SHORTCUTS.SEARCH, GLOBAL_SHORTCUTS.SEARCH_MAC), () =>
-    setSearchDialogOpen(true),
+  useKeyboardShortcut(
+    getPlatformShortcut(GLOBAL_SHORTCUTS.SEARCH, GLOBAL_SHORTCUTS.SEARCH_MAC),
+    () => setSearchDialogOpen(true),
   );
 
-  useKeyboardShortcut(getPlatformShortcut(GLOBAL_SHORTCUTS.TOGGLE_THEME, GLOBAL_SHORTCUTS.TOGGLE_THEME_MAC), () =>
-    toggleThemeMode(),
+  useKeyboardShortcut(
+    getPlatformShortcut(GLOBAL_SHORTCUTS.TOGGLE_THEME, GLOBAL_SHORTCUTS.TOGGLE_THEME_MAC),
+    () => toggleThemeMode(),
   );
 
   const handleBackToList = useCallback(() => {
@@ -329,7 +329,7 @@ function BackendApp() {
   const handleOpenSearch = useCallback(() => setSearchDialogOpen(true), []);
 
   const handleSearchResultClick = useCallback(
-    (project: typeof projects[0]) => {
+    (project: (typeof projects)[0]) => {
       setCurrentProject(project);
       navigate(`/projects/${encodeURIComponent(project.id)}`);
       setSearchDialogOpen(false);

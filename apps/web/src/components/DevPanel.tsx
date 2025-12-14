@@ -3,17 +3,17 @@
  * 显示实时AI调用进度、历史记录、错误信息和优化建议
  */
 import { useState, useEffect } from 'react';
-import { 
-  useAIProgressStore, 
-  getTaskTypeLabel, 
-  getTaskStatusLabel, 
+import {
+  useAIProgressStore,
+  getTaskTypeLabel,
+  getTaskStatusLabel,
   getTaskStatusColor,
   type AITask,
 } from '@/stores/aiProgressStore';
-import { 
-  getLogHistory, 
-  getCallStatsByType, 
-  getRecentErrors, 
+import {
+  getLogHistory,
+  getCallStatsByType,
+  getRecentErrors,
   getOptimizationSuggestions,
   exportLogs,
   clearLogHistory,
@@ -53,9 +53,9 @@ import {
 } from 'lucide-react';
 
 export function DevPanel() {
-  const { 
-    tasks, 
-    isPanelVisible, 
+  const {
+    tasks,
+    isPanelVisible,
     isPanelMinimized,
     stats,
     isBatchGenerating,
@@ -68,10 +68,10 @@ export function DevPanel() {
     refreshStats,
     resetBatchOperations,
   } = useAIProgressStore();
-  
+
   const [activeTab, setActiveTab] = useState('progress');
   const [selectedTask, setSelectedTask] = useState<AITask | null>(null);
-  
+
   // 定时刷新统计
   useEffect(() => {
     const interval = setInterval(() => {
@@ -79,15 +79,15 @@ export function DevPanel() {
     }, 5000);
     return () => clearInterval(interval);
   }, [refreshStats]);
-  
+
   if (!isPanelVisible) return null;
-  
-  const activeTasks = tasks.filter(t => t.status === 'running' || t.status === 'queued');
+
+  const activeTasks = tasks.filter((t) => t.status === 'running' || t.status === 'queued');
   const recentTasks = tasks.slice(0, 20);
   const errors = getRecentErrors(10);
   const suggestions = getOptimizationSuggestions();
   const callStats = getCallStatsByType();
-  
+
   // 最小化视图
   if (isPanelMinimized) {
     return (
@@ -98,9 +98,7 @@ export function DevPanel() {
               {activeTasks.length > 0 ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                  <span className="text-sm font-medium">
-                    {activeTasks.length} 个任务执行中
-                  </span>
+                  <span className="text-sm font-medium">{activeTasks.length} 个任务执行中</span>
                 </>
               ) : (
                 <>
@@ -110,20 +108,10 @@ export function DevPanel() {
               )}
             </div>
             <div className="flex gap-1">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-7 w-7"
-                onClick={expandPanel}
-              >
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={expandPanel}>
                 <Maximize2 className="h-4 w-4" />
               </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-7 w-7"
-                onClick={hidePanel}
-              >
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={hidePanel}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -132,7 +120,7 @@ export function DevPanel() {
       </div>
     );
   }
-  
+
   // 导出日志
   const handleExportLogs = () => {
     const logs = exportLogs();
@@ -144,13 +132,13 @@ export function DevPanel() {
     a.click();
     URL.revokeObjectURL(url);
   };
-  
+
   // 复制任务信息
   const handleCopyTask = (task: AITask) => {
     const info = JSON.stringify(task, null, 2);
     navigator.clipboard.writeText(info);
   };
-  
+
   return (
     <div className="fixed bottom-4 right-4 z-50 w-[480px] max-h-[600px]">
       <Card className="shadow-2xl border-2 border-primary/20 bg-background/98 backdrop-blur overflow-hidden">
@@ -166,37 +154,36 @@ export function DevPanel() {
             )}
           </div>
           <div className="flex gap-1">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7"
-              onClick={minimizePanel}
-            >
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={minimizePanel}>
               <Minimize2 className="h-4 w-4" />
             </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-7 w-7"
-              onClick={hidePanel}
-            >
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={hidePanel}>
               <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
-        
+
         {/* 选项卡 */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
           <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-9 px-2">
-            <TabsTrigger value="progress" className="text-xs data-[state=active]:bg-background h-7 px-2">
+            <TabsTrigger
+              value="progress"
+              className="text-xs data-[state=active]:bg-background h-7 px-2"
+            >
               <Activity className="h-3 w-3 mr-1" />
               进度
             </TabsTrigger>
-            <TabsTrigger value="history" className="text-xs data-[state=active]:bg-background h-7 px-2">
+            <TabsTrigger
+              value="history"
+              className="text-xs data-[state=active]:bg-background h-7 px-2"
+            >
               <Clock className="h-3 w-3 mr-1" />
               历史
             </TabsTrigger>
-            <TabsTrigger value="errors" className="text-xs data-[state=active]:bg-background h-7 px-2">
+            <TabsTrigger
+              value="errors"
+              className="text-xs data-[state=active]:bg-background h-7 px-2"
+            >
               <AlertCircle className="h-3 w-3 mr-1" />
               错误
               {errors.length > 0 && (
@@ -205,25 +192,37 @@ export function DevPanel() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="stats" className="text-xs data-[state=active]:bg-background h-7 px-2">
+            <TabsTrigger
+              value="stats"
+              className="text-xs data-[state=active]:bg-background h-7 px-2"
+            >
               <BarChart3 className="h-3 w-3 mr-1" />
               统计
             </TabsTrigger>
-            <TabsTrigger value="optimize" className="text-xs data-[state=active]:bg-background h-7 px-2">
+            <TabsTrigger
+              value="optimize"
+              className="text-xs data-[state=active]:bg-background h-7 px-2"
+            >
               <Lightbulb className="h-3 w-3 mr-1" />
               优化
             </TabsTrigger>
-            <TabsTrigger value="batch" className="text-xs data-[state=active]:bg-background h-7 px-2">
+            <TabsTrigger
+              value="batch"
+              className="text-xs data-[state=active]:bg-background h-7 px-2"
+            >
               <Layers className="h-3 w-3 mr-1" />
               批量
               {isBatchGenerating && (
-                <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px] bg-blue-500/20 text-blue-600">
+                <Badge
+                  variant="secondary"
+                  className="ml-1 h-4 px-1 text-[10px] bg-blue-500/20 text-blue-600"
+                >
                   进行中
                 </Badge>
               )}
             </TabsTrigger>
           </TabsList>
-          
+
           {/* 进度面板 */}
           <TabsContent value="progress" className="m-0">
             <ScrollArea className="h-[350px]">
@@ -234,10 +233,10 @@ export function DevPanel() {
                     <p className="text-sm">暂无正在执行的任务</p>
                   </div>
                 ) : (
-                  activeTasks.map(task => (
-                    <TaskItem 
-                      key={task.id} 
-                      task={task} 
+                  activeTasks.map((task) => (
+                    <TaskItem
+                      key={task.id}
+                      task={task}
                       onSelect={() => setSelectedTask(task)}
                       onCopy={() => handleCopyTask(task)}
                     />
@@ -246,7 +245,7 @@ export function DevPanel() {
               </div>
             </ScrollArea>
           </TabsContent>
-          
+
           {/* 历史面板 */}
           <TabsContent value="history" className="m-0">
             <div className="flex items-center justify-between px-3 py-2 border-b">
@@ -285,18 +284,14 @@ export function DevPanel() {
                     <p className="text-sm">暂无历史记录</p>
                   </div>
                 ) : (
-                  recentTasks.map(task => (
-                    <HistoryItem 
-                      key={task.id} 
-                      task={task} 
-                      onClick={() => setSelectedTask(task)}
-                    />
+                  recentTasks.map((task) => (
+                    <HistoryItem key={task.id} task={task} onClick={() => setSelectedTask(task)} />
                   ))
                 )}
               </div>
             </ScrollArea>
           </TabsContent>
-          
+
           {/* 错误面板 */}
           <TabsContent value="errors" className="m-0">
             <ScrollArea className="h-[350px]">
@@ -307,41 +302,39 @@ export function DevPanel() {
                     <p className="text-sm">暂无错误记录</p>
                   </div>
                 ) : (
-                  errors.map((entry, index) => (
-                    <ErrorItem key={index} entry={entry} />
-                  ))
+                  errors.map((entry, index) => <ErrorItem key={index} entry={entry} />)
                 )}
               </div>
             </ScrollArea>
           </TabsContent>
-          
+
           {/* 统计面板 */}
           <TabsContent value="stats" className="m-0">
             <ScrollArea className="h-[350px]">
               <div className="p-3 space-y-4">
                 {/* 总体统计 */}
                 <div className="grid grid-cols-3 gap-3">
-                  <StatCard 
-                    label="总调用" 
-                    value={stats.totalCalls} 
+                  <StatCard
+                    label="总调用"
+                    value={stats.totalCalls}
                     icon={<Zap className="h-4 w-4" />}
                   />
-                  <StatCard 
-                    label="成功" 
-                    value={stats.successCount} 
+                  <StatCard
+                    label="成功"
+                    value={stats.successCount}
                     icon={<CheckCircle2 className="h-4 w-4 text-green-500" />}
                     className="text-green-600"
                   />
-                  <StatCard 
-                    label="失败" 
-                    value={stats.errorCount} 
+                  <StatCard
+                    label="失败"
+                    value={stats.errorCount}
                     icon={<XCircle className="h-4 w-4 text-red-500" />}
                     className="text-red-600"
                   />
                 </div>
-                
+
                 <Separator />
-                
+
                 {/* 性能指标 */}
                 <div className="space-y-2">
                   <h4 className="text-xs font-medium text-muted-foreground">性能指标</h4>
@@ -360,15 +353,18 @@ export function DevPanel() {
                     </div>
                   </div>
                 </div>
-                
+
                 <Separator />
-                
+
                 {/* 按类型统计 */}
                 <div className="space-y-2">
                   <h4 className="text-xs font-medium text-muted-foreground">按类型统计</h4>
                   <div className="space-y-2">
                     {Object.entries(callStats).map(([type, data]) => (
-                      <div key={type} className="flex items-center justify-between p-2 rounded bg-muted/30">
+                      <div
+                        key={type}
+                        className="flex items-center justify-between p-2 rounded bg-muted/30"
+                      >
                         <span className="text-xs">{getTaskTypeLabel(type as any)}</span>
                         <div className="flex items-center gap-2">
                           <Badge variant="secondary" className="text-[10px]">
@@ -387,7 +383,7 @@ export function DevPanel() {
               </div>
             </ScrollArea>
           </TabsContent>
-          
+
           {/* 优化建议面板 */}
           <TabsContent value="optimize" className="m-0">
             <ScrollArea className="h-[350px]">
@@ -396,17 +392,14 @@ export function DevPanel() {
                   基于您的AI调用数据，以下是一些优化建议：
                 </div>
                 {suggestions.map((suggestion, index) => (
-                  <div 
-                    key={index}
-                    className="p-3 rounded-lg border bg-muted/20"
-                  >
+                  <div key={index} className="p-3 rounded-lg border bg-muted/20">
                     <p className="text-sm">{suggestion}</p>
                   </div>
                 ))}
               </div>
             </ScrollArea>
           </TabsContent>
-          
+
           {/* 批量操作状态面板 */}
           <TabsContent value="batch" className="m-0">
             <ScrollArea className="h-[350px]">
@@ -442,27 +435,26 @@ export function DevPanel() {
                     )}
                   </div>
                 </div>
-                
+
                 <Separator />
-                
+
                 {/* 批量操作详情 */}
                 <div className="space-y-2">
                   <h4 className="text-xs font-medium text-muted-foreground">批量操作详情</h4>
-                  
+
                   {/* 操作类型和状态 */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="p-2 rounded bg-muted/50">
                       <div className="text-xs text-muted-foreground">操作类型</div>
                       <div className="text-sm font-medium">
-                        {batchOperations.operationType 
+                        {batchOperations.operationType
                           ? {
                               generate: '批量生成',
                               edit: '批量编辑',
                               export: '批量导出',
                               delete: '批量删除',
                             }[batchOperations.operationType]
-                          : '无'
-                        }
+                          : '无'}
                       </div>
                     </div>
                     <div className="p-2 rounded bg-muted/50">
@@ -486,7 +478,7 @@ export function DevPanel() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* 进度信息 */}
                   <div className="p-3 rounded-lg border">
                     <div className="flex items-center justify-between mb-2">
@@ -502,7 +494,7 @@ export function DevPanel() {
                       </div>
                     )}
                   </div>
-                  
+
                   {/* 分镜统计 */}
                   <div className="grid grid-cols-3 gap-2">
                     <div className="p-2 rounded bg-muted/50 text-center">
@@ -522,7 +514,7 @@ export function DevPanel() {
                       <div className="text-xs text-muted-foreground">失败</div>
                     </div>
                   </div>
-                  
+
                   {/* 当前处理分镜 */}
                   {batchOperations.currentSceneId && (
                     <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20">
@@ -532,7 +524,7 @@ export function DevPanel() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* 时间信息 */}
                   {batchOperations.startTime && (
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -540,7 +532,7 @@ export function DevPanel() {
                       <span>{new Date(batchOperations.startTime).toLocaleTimeString('zh-CN')}</span>
                     </div>
                   )}
-                  
+
                   {/* 已完成分镜列表 */}
                   {batchOperations.completedScenes.length > 0 && (
                     <div className="space-y-1">
@@ -559,7 +551,7 @@ export function DevPanel() {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* 失败分镜列表 */}
                   {batchOperations.failedScenes.length > 0 && (
                     <div className="space-y-1">
@@ -574,9 +566,10 @@ export function DevPanel() {
                     </div>
                   )}
                 </div>
-                
+
                 {/* 操作按钮 */}
-                {(batchOperations.completedScenes.length > 0 || batchOperations.failedScenes.length > 0) && (
+                {(batchOperations.completedScenes.length > 0 ||
+                  batchOperations.failedScenes.length > 0) && (
                   <>
                     <Separator />
                     <Button
@@ -594,26 +587,20 @@ export function DevPanel() {
             </ScrollArea>
           </TabsContent>
         </Tabs>
-        
+
         {/* 底部状态栏 */}
         <div className="flex items-center justify-between px-3 py-2 border-t bg-muted/20 text-xs text-muted-foreground">
           <span>
-            成功率: {stats.totalCalls > 0 
-              ? ((stats.successCount / stats.totalCalls) * 100).toFixed(1) 
-              : 0}%
+            成功率:{' '}
+            {stats.totalCalls > 0 ? ((stats.successCount / stats.totalCalls) * 100).toFixed(1) : 0}%
           </span>
-          <span>
-            预估成本: ${stats.costEstimate.toFixed(4)}
-          </span>
+          <span>预估成本: ${stats.costEstimate.toFixed(4)}</span>
         </div>
       </Card>
-      
+
       {/* 任务详情对话框 */}
       {selectedTask && (
-        <TaskDetailDialog 
-          task={selectedTask} 
-          onClose={() => setSelectedTask(null)} 
-        />
+        <TaskDetailDialog task={selectedTask} onClose={() => setSelectedTask(null)} />
       )}
     </div>
   );
@@ -623,17 +610,17 @@ export function DevPanel() {
 // 子组件
 // ==========================================
 
-function TaskItem({ 
-  task, 
-  onSelect, 
-  onCopy 
-}: { 
-  task: AITask; 
+function TaskItem({
+  task,
+  onSelect,
+  onCopy,
+}: {
+  task: AITask;
   onSelect: () => void;
   onCopy: () => void;
 }) {
   return (
-    <div 
+    <div
       className="p-3 rounded-lg border bg-card hover:border-primary/50 transition-colors cursor-pointer"
       onClick={onSelect}
     >
@@ -654,11 +641,9 @@ function TaskItem({
           <Copy className="h-3 w-3" />
         </Button>
       </div>
-      
-      {task.description && (
-        <p className="text-xs text-muted-foreground mb-2">{task.description}</p>
-      )}
-      
+
+      {task.description && <p className="text-xs text-muted-foreground mb-2">{task.description}</p>}
+
       <div className="space-y-1">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">{task.currentStep || '处理中...'}</span>
@@ -666,23 +651,15 @@ function TaskItem({
         </div>
         <Progress value={task.progress} className="h-1.5" />
       </div>
-      
+
       {task.sceneOrder && (
-        <div className="mt-2 text-xs text-muted-foreground">
-          分镜 #{task.sceneOrder}
-        </div>
+        <div className="mt-2 text-xs text-muted-foreground">分镜 #{task.sceneOrder}</div>
       )}
     </div>
   );
 }
 
-function HistoryItem({ 
-  task, 
-  onClick 
-}: { 
-  task: AITask; 
-  onClick: () => void;
-}) {
+function HistoryItem({ task, onClick }: { task: AITask; onClick: () => void }) {
   const StatusIcon = {
     queued: Clock,
     running: Loader2,
@@ -690,7 +667,7 @@ function HistoryItem({
     error: XCircle,
     cancelled: XCircle,
   }[task.status];
-  
+
   const statusColor = {
     queued: 'text-yellow-500',
     running: 'text-blue-500',
@@ -698,13 +675,15 @@ function HistoryItem({
     error: 'text-red-500',
     cancelled: 'text-gray-500',
   }[task.status];
-  
+
   return (
-    <div 
+    <div
       className="flex items-center gap-3 p-2 rounded hover:bg-muted/50 cursor-pointer transition-colors"
       onClick={onClick}
     >
-      <StatusIcon className={`h-4 w-4 ${statusColor} ${task.status === 'running' ? 'animate-spin' : ''}`} />
+      <StatusIcon
+        className={`h-4 w-4 ${statusColor} ${task.status === 'running' ? 'animate-spin' : ''}`}
+      />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{task.title}</div>
         <div className="text-xs text-muted-foreground">
@@ -726,26 +705,22 @@ function ErrorItem({ entry }: { entry: any }) {
           <div className="font-medium text-sm text-red-700 dark:text-red-400">
             {getTaskTypeLabel(entry.callType)}
           </div>
-          <p className="text-xs text-red-600 dark:text-red-300 mt-1">
-            {entry.error || '未知错误'}
-          </p>
-          <div className="text-xs text-red-500/70 mt-2">
-            {entry.timestamp}
-          </div>
+          <p className="text-xs text-red-600 dark:text-red-300 mt-1">{entry.error || '未知错误'}</p>
+          <div className="text-xs text-red-500/70 mt-2">{entry.timestamp}</div>
         </div>
       </div>
     </div>
   );
 }
 
-function StatCard({ 
-  label, 
-  value, 
+function StatCard({
+  label,
+  value,
   icon,
-  className = ''
-}: { 
-  label: string; 
-  value: number; 
+  className = '',
+}: {
+  label: string;
+  value: number;
   icon: React.ReactNode;
   className?: string;
 }) {
@@ -758,29 +733,20 @@ function StatCard({
   );
 }
 
-function TaskDetailDialog({ 
-  task, 
-  onClose 
-}: { 
-  task: AITask; 
-  onClose: () => void;
-}) {
+function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void }) {
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
       onClick={onClose}
     >
-      <Card 
-        className="w-[500px] max-h-[80vh] overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
+      <Card className="w-[500px] max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold">任务详情</h3>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
-        
+
         <ScrollArea className="max-h-[60vh]">
           <div className="p-4 space-y-4">
             {/* 基本信息 */}
@@ -809,7 +775,7 @@ function TaskDetailDialog({
                 )}
               </div>
             </div>
-            
+
             {/* 响应内容 */}
             {task.response && (
               <div className="space-y-2">
@@ -826,7 +792,7 @@ function TaskDetailDialog({
                 )}
               </div>
             )}
-            
+
             {/* 错误信息 */}
             {task.error && (
               <div className="space-y-2">
@@ -849,10 +815,10 @@ function TaskDetailDialog({
 
 export function DevPanelTrigger() {
   const { isPanelVisible, togglePanel, tasks } = useAIProgressStore();
-  const activeTasks = tasks.filter(t => t.status === 'running');
-  
+  const activeTasks = tasks.filter((t) => t.status === 'running');
+
   if (isPanelVisible) return null;
-  
+
   return (
     <Button
       variant="outline"

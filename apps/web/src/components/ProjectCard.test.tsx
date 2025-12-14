@@ -38,7 +38,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       expect(screen.getByText('Test Project')).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       expect(screen.getByText('watercolor')).toBeInTheDocument();
@@ -64,7 +64,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       expect(screen.getByText('未设置风格')).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       expect(screen.getByText(/2024/)).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('ProjectCard', () => {
             onOpen={mockOnOpen}
             onDelete={mockOnDelete}
             onRename={mockOnRename}
-          />
+          />,
         );
 
         expect(screen.getByText(`${expectedProgress}%`)).toBeInTheDocument();
@@ -121,7 +121,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       const title = screen.getByText('Test Project');
@@ -137,7 +137,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       // 找到并点击下拉菜单按钮
@@ -158,7 +158,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       // 找到并点击下拉菜单按钮
@@ -179,7 +179,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       // 找到并点击下拉菜单按钮
@@ -199,7 +199,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       // 找到并点击下拉菜单按钮
@@ -220,7 +220,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       // 标题应该被截断或正常渲染
@@ -234,7 +234,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       expect(screen.getByText('<script>alert("xss")</script>')).toBeInTheDocument();
@@ -247,7 +247,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       expect(screen.getByText('中文项目标题')).toBeInTheDocument();
@@ -260,7 +260,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       expect(screen.getByText('🎨 Art Project 🖌️')).toBeInTheDocument();
@@ -274,7 +274,7 @@ describe('ProjectCard', () => {
           onOpen={mockOnOpen}
           onDelete={mockOnDelete}
           onRename={mockOnRename}
-        />
+        />,
       );
 
       // 找到并点击下拉菜单按钮

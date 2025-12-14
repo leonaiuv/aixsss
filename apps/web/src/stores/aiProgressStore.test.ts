@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { 
-  useAIProgressStore, 
-  getTaskTypeLabel, 
-  getTaskStatusLabel, 
+import {
+  useAIProgressStore,
+  getTaskTypeLabel,
+  getTaskStatusLabel,
   getTaskStatusColor,
   type AITask,
   type AITaskStatus,
@@ -59,7 +59,7 @@ describe('aiProgressStore', () => {
   describe('addTask', () => {
     it('should add a new task and return its id', () => {
       const { addTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -76,7 +76,7 @@ describe('aiProgressStore', () => {
 
     it('should set createdAt timestamp', () => {
       const { addTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -93,7 +93,7 @@ describe('aiProgressStore', () => {
 
     it('should initialize retryCount to 0', () => {
       const { addTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -109,9 +109,9 @@ describe('aiProgressStore', () => {
 
     it('should show panel when adding task', () => {
       const { addTask } = useAIProgressStore.getState();
-      
+
       expect(useAIProgressStore.getState().isPanelVisible).toBe(false);
-      
+
       addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -126,7 +126,7 @@ describe('aiProgressStore', () => {
 
     it('should add new tasks at the beginning of the array', () => {
       const { addTask } = useAIProgressStore.getState();
-      
+
       const taskId1 = addTask({
         type: 'scene_description',
         title: 'Task 1',
@@ -154,7 +154,7 @@ describe('aiProgressStore', () => {
   describe('updateTask', () => {
     it('should update task properties', () => {
       const { addTask, updateTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -173,7 +173,7 @@ describe('aiProgressStore', () => {
 
     it('should not affect other tasks', () => {
       const { addTask, updateTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId1 = addTask({
         type: 'scene_description',
         title: 'Task 1',
@@ -202,7 +202,7 @@ describe('aiProgressStore', () => {
   describe('removeTask', () => {
     it('should remove task from list', () => {
       const { addTask, removeTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -213,15 +213,15 @@ describe('aiProgressStore', () => {
       });
 
       expect(useAIProgressStore.getState().tasks).toHaveLength(1);
-      
+
       removeTask(taskId);
-      
+
       expect(useAIProgressStore.getState().tasks).toHaveLength(0);
     });
 
     it('should clear activeTaskId if removed task was active', () => {
       const { addTask, removeTask, startTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -233,7 +233,7 @@ describe('aiProgressStore', () => {
 
       startTask(taskId);
       expect(useAIProgressStore.getState().activeTaskId).toBe(taskId);
-      
+
       removeTask(taskId);
       expect(useAIProgressStore.getState().activeTaskId).toBeNull();
     });
@@ -242,7 +242,7 @@ describe('aiProgressStore', () => {
   describe('startTask', () => {
     it('should set task status to running', () => {
       const { addTask, startTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -260,7 +260,7 @@ describe('aiProgressStore', () => {
 
     it('should set startedAt timestamp', () => {
       const { addTask, startTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -278,7 +278,7 @@ describe('aiProgressStore', () => {
 
     it('should set activeTaskId', () => {
       const { addTask, startTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -297,7 +297,7 @@ describe('aiProgressStore', () => {
   describe('completeTask', () => {
     it('should set task status to success', () => {
       const { addTask, startTask, completeTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -317,7 +317,7 @@ describe('aiProgressStore', () => {
 
     it('should set completedAt timestamp', () => {
       const { addTask, completeTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -335,7 +335,7 @@ describe('aiProgressStore', () => {
 
     it('should store response data', () => {
       const { addTask, completeTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -358,7 +358,7 @@ describe('aiProgressStore', () => {
 
     it('should clear activeTaskId if completed task was active', () => {
       const { addTask, startTask, completeTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -370,7 +370,7 @@ describe('aiProgressStore', () => {
 
       startTask(taskId);
       expect(useAIProgressStore.getState().activeTaskId).toBe(taskId);
-      
+
       completeTask(taskId);
       expect(useAIProgressStore.getState().activeTaskId).toBeNull();
     });
@@ -379,7 +379,7 @@ describe('aiProgressStore', () => {
   describe('failTask', () => {
     it('should set task status to error', () => {
       const { addTask, failTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -397,7 +397,7 @@ describe('aiProgressStore', () => {
 
     it('should store error information', () => {
       const { addTask, failTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -418,7 +418,7 @@ describe('aiProgressStore', () => {
   describe('cancelTask', () => {
     it('should set task status to cancelled', () => {
       const { addTask, cancelTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -438,7 +438,7 @@ describe('aiProgressStore', () => {
   describe('retryTask', () => {
     it('should increment retryCount', () => {
       const { addTask, failTask, retryTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -458,7 +458,7 @@ describe('aiProgressStore', () => {
 
     it('should not retry if max retries exceeded', () => {
       const { addTask, failTask, retryTask, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -469,14 +469,14 @@ describe('aiProgressStore', () => {
       });
 
       failTask(taskId, { message: 'Error', retryable: true });
-      
+
       // First retry
       retryTask(taskId);
       expect(getTask(taskId)?.retryCount).toBe(1);
-      
+
       // Update status back to error
       useAIProgressStore.getState().updateTask(taskId, { status: 'error' });
-      
+
       // Second retry should not work
       retryTask(taskId);
       expect(getTask(taskId)?.retryCount).toBe(1); // Should not increment
@@ -486,7 +486,7 @@ describe('aiProgressStore', () => {
   describe('updateProgress', () => {
     it('should update task progress', () => {
       const { addTask, updateProgress, getTask } = useAIProgressStore.getState();
-      
+
       const taskId = addTask({
         type: 'scene_description',
         title: 'Test Task',
@@ -507,26 +507,26 @@ describe('aiProgressStore', () => {
   describe('panel controls', () => {
     it('togglePanel should toggle visibility', () => {
       const { togglePanel } = useAIProgressStore.getState();
-      
+
       expect(useAIProgressStore.getState().isPanelVisible).toBe(false);
-      
+
       togglePanel();
       expect(useAIProgressStore.getState().isPanelVisible).toBe(true);
-      
+
       togglePanel();
       expect(useAIProgressStore.getState().isPanelVisible).toBe(false);
     });
 
     it('showPanel should set visibility to true', () => {
       const { showPanel } = useAIProgressStore.getState();
-      
+
       showPanel();
       expect(useAIProgressStore.getState().isPanelVisible).toBe(true);
     });
 
     it('hidePanel should set visibility to false', () => {
       const { showPanel, hidePanel } = useAIProgressStore.getState();
-      
+
       showPanel();
       hidePanel();
       expect(useAIProgressStore.getState().isPanelVisible).toBe(false);
@@ -534,14 +534,14 @@ describe('aiProgressStore', () => {
 
     it('minimizePanel should set minimized to true', () => {
       const { minimizePanel } = useAIProgressStore.getState();
-      
+
       minimizePanel();
       expect(useAIProgressStore.getState().isPanelMinimized).toBe(true);
     });
 
     it('expandPanel should set minimized to false', () => {
       const { minimizePanel, expandPanel } = useAIProgressStore.getState();
-      
+
       minimizePanel();
       expandPanel();
       expect(useAIProgressStore.getState().isPanelMinimized).toBe(false);
@@ -550,8 +550,9 @@ describe('aiProgressStore', () => {
 
   describe('clearCompletedTasks', () => {
     it('should remove completed and error tasks', () => {
-      const { addTask, completeTask, failTask, clearCompletedTasks } = useAIProgressStore.getState();
-      
+      const { addTask, completeTask, failTask, clearCompletedTasks } =
+        useAIProgressStore.getState();
+
       const runningId = addTask({
         type: 'scene_description',
         title: 'Running Task',
@@ -593,14 +594,28 @@ describe('aiProgressStore', () => {
   describe('clearAllTasks', () => {
     it('should remove all tasks', () => {
       const { addTask, clearAllTasks } = useAIProgressStore.getState();
-      
-      addTask({ type: 'scene_description', title: 'Task 1', status: 'running', priority: 'normal', progress: 0, maxRetries: 3 });
-      addTask({ type: 'keyframe_prompt', title: 'Task 2', status: 'queued', priority: 'normal', progress: 0, maxRetries: 3 });
-      
+
+      addTask({
+        type: 'scene_description',
+        title: 'Task 1',
+        status: 'running',
+        priority: 'normal',
+        progress: 0,
+        maxRetries: 3,
+      });
+      addTask({
+        type: 'keyframe_prompt',
+        title: 'Task 2',
+        status: 'queued',
+        priority: 'normal',
+        progress: 0,
+        maxRetries: 3,
+      });
+
       expect(useAIProgressStore.getState().tasks).toHaveLength(2);
-      
+
       clearAllTasks();
-      
+
       expect(useAIProgressStore.getState().tasks).toHaveLength(0);
       expect(useAIProgressStore.getState().activeTaskId).toBeNull();
     });
@@ -609,25 +624,53 @@ describe('aiProgressStore', () => {
   describe('getActiveTasks', () => {
     it('should return only running and queued tasks', () => {
       const { addTask, completeTask, getActiveTasks } = useAIProgressStore.getState();
-      
-      addTask({ type: 'scene_description', title: 'Running', status: 'running', priority: 'normal', progress: 50, maxRetries: 3 });
-      addTask({ type: 'keyframe_prompt', title: 'Queued', status: 'queued', priority: 'normal', progress: 0, maxRetries: 3 });
-      const completedId = addTask({ type: 'motion_prompt', title: 'Completed', status: 'running', priority: 'normal', progress: 50, maxRetries: 3 });
-      
+
+      addTask({
+        type: 'scene_description',
+        title: 'Running',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
+      addTask({
+        type: 'keyframe_prompt',
+        title: 'Queued',
+        status: 'queued',
+        priority: 'normal',
+        progress: 0,
+        maxRetries: 3,
+      });
+      const completedId = addTask({
+        type: 'motion_prompt',
+        title: 'Completed',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
+
       completeTask(completedId);
 
       const activeTasks = getActiveTasks();
       expect(activeTasks).toHaveLength(2);
-      expect(activeTasks.every(t => t.status === 'running' || t.status === 'queued')).toBe(true);
+      expect(activeTasks.every((t) => t.status === 'running' || t.status === 'queued')).toBe(true);
     });
   });
 
   describe('getRecentTasks', () => {
     it('should return limited number of tasks', () => {
       const { addTask, getRecentTasks } = useAIProgressStore.getState();
-      
+
       for (let i = 0; i < 25; i++) {
-        addTask({ type: 'scene_description', title: `Task ${i}`, status: 'running', priority: 'normal', progress: 0, maxRetries: 3 });
+        addTask({
+          type: 'scene_description',
+          title: `Task ${i}`,
+          status: 'running',
+          priority: 'normal',
+          progress: 0,
+          maxRetries: 3,
+        });
       }
 
       const recentTasks = getRecentTasks(10);
@@ -636,9 +679,16 @@ describe('aiProgressStore', () => {
 
     it('should default to 20 tasks', () => {
       const { addTask, getRecentTasks } = useAIProgressStore.getState();
-      
+
       for (let i = 0; i < 25; i++) {
-        addTask({ type: 'scene_description', title: `Task ${i}`, status: 'running', priority: 'normal', progress: 0, maxRetries: 3 });
+        addTask({
+          type: 'scene_description',
+          title: `Task ${i}`,
+          status: 'running',
+          priority: 'normal',
+          progress: 0,
+          maxRetries: 3,
+        });
       }
 
       const recentTasks = getRecentTasks();
@@ -649,30 +699,44 @@ describe('aiProgressStore', () => {
   describe('filter', () => {
     it('setFilter should update filter state', () => {
       const { setFilter } = useAIProgressStore.getState();
-      
+
       setFilter({ status: ['running', 'queued'] });
-      
+
       expect(useAIProgressStore.getState().filter.status).toEqual(['running', 'queued']);
     });
 
     it('clearFilter should reset filter', () => {
       const { setFilter, clearFilter } = useAIProgressStore.getState();
-      
+
       setFilter({ status: ['running'], type: ['scene_description'] });
       clearFilter();
-      
+
       expect(useAIProgressStore.getState().filter).toEqual({});
     });
 
     it('getFilteredTasks should filter by status', () => {
       const { addTask, completeTask, setFilter, getFilteredTasks } = useAIProgressStore.getState();
-      
-      addTask({ type: 'scene_description', title: 'Running', status: 'running', priority: 'normal', progress: 50, maxRetries: 3 });
-      const completedId = addTask({ type: 'keyframe_prompt', title: 'Completed', status: 'running', priority: 'normal', progress: 50, maxRetries: 3 });
+
+      addTask({
+        type: 'scene_description',
+        title: 'Running',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
+      const completedId = addTask({
+        type: 'keyframe_prompt',
+        title: 'Completed',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
       completeTask(completedId);
 
       setFilter({ status: ['success'] });
-      
+
       const filtered = getFilteredTasks();
       expect(filtered).toHaveLength(1);
       expect(filtered[0].status).toBe('success');
@@ -680,12 +744,26 @@ describe('aiProgressStore', () => {
 
     it('getFilteredTasks should filter by type', () => {
       const { addTask, setFilter, getFilteredTasks } = useAIProgressStore.getState();
-      
-      addTask({ type: 'scene_description', title: 'Scene', status: 'running', priority: 'normal', progress: 50, maxRetries: 3 });
-      addTask({ type: 'keyframe_prompt', title: 'Keyframe', status: 'running', priority: 'normal', progress: 50, maxRetries: 3 });
+
+      addTask({
+        type: 'scene_description',
+        title: 'Scene',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
+      addTask({
+        type: 'keyframe_prompt',
+        title: 'Keyframe',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
 
       setFilter({ type: ['scene_description'] });
-      
+
       const filtered = getFilteredTasks();
       expect(filtered).toHaveLength(1);
       expect(filtered[0].type).toBe('scene_description');
@@ -694,15 +772,33 @@ describe('aiProgressStore', () => {
 
   describe('stats', () => {
     it('refreshStats should calculate correct statistics', () => {
-      const { addTask, startTask, completeTask, failTask, refreshStats } = useAIProgressStore.getState();
-      
+      const { addTask, startTask, completeTask, failTask, refreshStats } =
+        useAIProgressStore.getState();
+
       // Add and complete a task with token usage
-      const id1 = addTask({ type: 'scene_description', title: 'Task 1', status: 'queued', priority: 'normal', progress: 0, maxRetries: 3 });
+      const id1 = addTask({
+        type: 'scene_description',
+        title: 'Task 1',
+        status: 'queued',
+        priority: 'normal',
+        progress: 0,
+        maxRetries: 3,
+      });
       startTask(id1);
-      completeTask(id1, { content: 'Result', tokenUsage: { prompt: 100, completion: 50, total: 150 } });
+      completeTask(id1, {
+        content: 'Result',
+        tokenUsage: { prompt: 100, completion: 50, total: 150 },
+      });
 
       // Add and fail a task
-      const id2 = addTask({ type: 'keyframe_prompt', title: 'Task 2', status: 'running', priority: 'normal', progress: 50, maxRetries: 3 });
+      const id2 = addTask({
+        type: 'keyframe_prompt',
+        title: 'Task 2',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
       failTask(id2, { message: 'Error', retryable: false });
 
       refreshStats();
@@ -719,39 +815,68 @@ describe('aiProgressStore', () => {
     it('subscribe should register callback and return unsubscribe function', () => {
       const { subscribe, addTask } = useAIProgressStore.getState();
       const callback = vi.fn();
-      
+
       const unsubscribe = subscribe('task:added', callback);
-      
-      addTask({ type: 'scene_description', title: 'Task', status: 'running', priority: 'normal', progress: 0, maxRetries: 3 });
-      
+
+      addTask({
+        type: 'scene_description',
+        title: 'Task',
+        status: 'running',
+        priority: 'normal',
+        progress: 0,
+        maxRetries: 3,
+      });
+
       expect(callback).toHaveBeenCalledTimes(1);
-      
+
       unsubscribe();
-      
-      addTask({ type: 'keyframe_prompt', title: 'Task 2', status: 'running', priority: 'normal', progress: 0, maxRetries: 3 });
-      
+
+      addTask({
+        type: 'keyframe_prompt',
+        title: 'Task 2',
+        status: 'running',
+        priority: 'normal',
+        progress: 0,
+        maxRetries: 3,
+      });
+
       expect(callback).toHaveBeenCalledTimes(1); // Should not be called again
     });
 
     it('should emit events for task lifecycle', () => {
-      const { subscribe, addTask, startTask, completeTask, failTask } = useAIProgressStore.getState();
-      
+      const { subscribe, addTask, startTask, completeTask, failTask } =
+        useAIProgressStore.getState();
+
       const startedCallback = vi.fn();
       const completedCallback = vi.fn();
       const failedCallback = vi.fn();
-      
+
       subscribe('task:started', startedCallback);
       subscribe('task:completed', completedCallback);
       subscribe('task:failed', failedCallback);
-      
-      const id1 = addTask({ type: 'scene_description', title: 'Task 1', status: 'queued', priority: 'normal', progress: 0, maxRetries: 3 });
+
+      const id1 = addTask({
+        type: 'scene_description',
+        title: 'Task 1',
+        status: 'queued',
+        priority: 'normal',
+        progress: 0,
+        maxRetries: 3,
+      });
       startTask(id1);
       expect(startedCallback).toHaveBeenCalled();
-      
+
       completeTask(id1);
       expect(completedCallback).toHaveBeenCalled();
-      
-      const id2 = addTask({ type: 'keyframe_prompt', title: 'Task 2', status: 'running', priority: 'normal', progress: 50, maxRetries: 3 });
+
+      const id2 = addTask({
+        type: 'keyframe_prompt',
+        title: 'Task 2',
+        status: 'running',
+        priority: 'normal',
+        progress: 50,
+        maxRetries: 3,
+      });
       failTask(id2, { message: 'Error', retryable: false });
       expect(failedCallback).toHaveBeenCalled();
     });
@@ -798,18 +923,18 @@ describe('批量操作状态管理', () => {
   describe('startBatchGenerating', () => {
     it('应该设置全局批量生成状态', () => {
       const { startBatchGenerating } = useAIProgressStore.getState();
-      
+
       startBatchGenerating('batch_panel');
-      
+
       expect(useAIProgressStore.getState().isBatchGenerating).toBe(true);
       expect(useAIProgressStore.getState().batchGeneratingSource).toBe('batch_panel');
     });
 
     it('应该支持不同的来源', () => {
       const { startBatchGenerating } = useAIProgressStore.getState();
-      
+
       startBatchGenerating('scene_refinement');
-      
+
       expect(useAIProgressStore.getState().batchGeneratingSource).toBe('scene_refinement');
     });
   });
@@ -817,10 +942,10 @@ describe('批量操作状态管理', () => {
   describe('stopBatchGenerating', () => {
     it('应该清除全局批量生成状态', () => {
       const { startBatchGenerating, stopBatchGenerating } = useAIProgressStore.getState();
-      
+
       startBatchGenerating('batch_panel');
       stopBatchGenerating();
-      
+
       expect(useAIProgressStore.getState().isBatchGenerating).toBe(false);
       expect(useAIProgressStore.getState().batchGeneratingSource).toBeNull();
     });
@@ -829,7 +954,7 @@ describe('批量操作状态管理', () => {
   describe('updateBatchOperations', () => {
     it('应该更新批量操作状态', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({
         isProcessing: true,
         progress: 50,
@@ -850,7 +975,7 @@ describe('批量操作状态管理', () => {
 
     it('应该部分更新状态而不影响其他字段', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({ progress: 25 });
       updateBatchOperations({ currentScene: 1 });
 
@@ -862,7 +987,7 @@ describe('批量操作状态管理', () => {
     it('应该能够设置开始时间', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
       const now = Date.now();
-      
+
       updateBatchOperations({ startTime: now });
 
       const { batchOperations } = useAIProgressStore.getState();
@@ -871,7 +996,7 @@ describe('批量操作状态管理', () => {
 
     it('应该能够设置当前处理的分镜ID', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({ currentSceneId: 'scene-123' });
 
       const { batchOperations } = useAIProgressStore.getState();
@@ -882,7 +1007,7 @@ describe('批量操作状态管理', () => {
   describe('resetBatchOperations', () => {
     it('应该重置所有批量操作状态', () => {
       const { updateBatchOperations, resetBatchOperations } = useAIProgressStore.getState();
-      
+
       // 先设置一些状态
       updateBatchOperations({
         isProcessing: true,
@@ -917,7 +1042,7 @@ describe('批量操作状态管理', () => {
 
     it('应该清空选中的分镜', () => {
       const { setBatchSelectedScenes, resetBatchOperations } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
       expect(useAIProgressStore.getState().batchOperations.selectedScenes.size).toBe(3);
 
@@ -929,7 +1054,7 @@ describe('批量操作状态管理', () => {
   describe('setBatchSelectedScenes', () => {
     it('应该设置选中的分镜列表', () => {
       const { setBatchSelectedScenes } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
 
       const { batchOperations } = useAIProgressStore.getState();
@@ -941,7 +1066,7 @@ describe('批量操作状态管理', () => {
 
     it('应该同时更新totalScenes', () => {
       const { setBatchSelectedScenes } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes(['scene-1', 'scene-2']);
 
       const { batchOperations } = useAIProgressStore.getState();
@@ -950,7 +1075,7 @@ describe('批量操作状态管理', () => {
 
     it('应该处理空数组', () => {
       const { setBatchSelectedScenes } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes([]);
 
       const { batchOperations } = useAIProgressStore.getState();
@@ -960,7 +1085,7 @@ describe('批量操作状态管理', () => {
 
     it('应该处理重复的ID', () => {
       const { setBatchSelectedScenes } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes(['scene-1', 'scene-1', 'scene-2']);
 
       const { batchOperations } = useAIProgressStore.getState();
@@ -971,7 +1096,7 @@ describe('批量操作状态管理', () => {
   describe('addBatchCompletedScene', () => {
     it('应该添加完成的分镜', () => {
       const { setBatchSelectedScenes, addBatchCompletedScene } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
       addBatchCompletedScene('scene-1');
 
@@ -982,7 +1107,7 @@ describe('批量操作状态管理', () => {
 
     it('应该更新当前分镜索引', () => {
       const { setBatchSelectedScenes, addBatchCompletedScene } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
       addBatchCompletedScene('scene-1');
 
@@ -992,7 +1117,7 @@ describe('批量操作状态管理', () => {
 
     it('应该更新进度', () => {
       const { setBatchSelectedScenes, addBatchCompletedScene } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3']);
       addBatchCompletedScene('scene-1');
 
@@ -1002,7 +1127,7 @@ describe('批量操作状态管理', () => {
 
     it('应该累加多个完成的分镜', () => {
       const { setBatchSelectedScenes, addBatchCompletedScene } = useAIProgressStore.getState();
-      
+
       setBatchSelectedScenes(['scene-1', 'scene-2', 'scene-3', 'scene-4']);
       addBatchCompletedScene('scene-1');
       addBatchCompletedScene('scene-2');
@@ -1017,7 +1142,7 @@ describe('批量操作状态管理', () => {
   describe('addBatchFailedScene', () => {
     it('应该添加失败的分镜', () => {
       const { addBatchFailedScene } = useAIProgressStore.getState();
-      
+
       addBatchFailedScene('scene-1');
 
       const { batchOperations } = useAIProgressStore.getState();
@@ -1027,7 +1152,7 @@ describe('批量操作状态管理', () => {
 
     it('应该累加多个失败的分镜', () => {
       const { addBatchFailedScene } = useAIProgressStore.getState();
-      
+
       addBatchFailedScene('scene-1');
       addBatchFailedScene('scene-2');
 
@@ -1037,7 +1162,7 @@ describe('批量操作状态管理', () => {
 
     it('不应该影响completedScenes', () => {
       const { addBatchCompletedScene, addBatchFailedScene } = useAIProgressStore.getState();
-      
+
       addBatchCompletedScene('scene-1');
       addBatchFailedScene('scene-2');
 
@@ -1050,7 +1175,7 @@ describe('批量操作状态管理', () => {
   describe('批量操作与暂停', () => {
     it('应该能够暂停批量操作', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({ isProcessing: true, isPaused: false });
       updateBatchOperations({ isPaused: true });
 
@@ -1060,7 +1185,7 @@ describe('批量操作状态管理', () => {
 
     it('应该能够继续批量操作', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({ isProcessing: true, isPaused: true });
       updateBatchOperations({ isPaused: false });
 
@@ -1072,7 +1197,7 @@ describe('批量操作状态管理', () => {
   describe('批量操作类型', () => {
     it('应该支持generate类型', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({ operationType: 'generate' });
 
       expect(useAIProgressStore.getState().batchOperations.operationType).toBe('generate');
@@ -1080,7 +1205,7 @@ describe('批量操作状态管理', () => {
 
     it('应该支持edit类型', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({ operationType: 'edit' });
 
       expect(useAIProgressStore.getState().batchOperations.operationType).toBe('edit');
@@ -1088,7 +1213,7 @@ describe('批量操作状态管理', () => {
 
     it('应该支持export类型', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({ operationType: 'export' });
 
       expect(useAIProgressStore.getState().batchOperations.operationType).toBe('export');
@@ -1096,7 +1221,7 @@ describe('批量操作状态管理', () => {
 
     it('应该支持delete类型', () => {
       const { updateBatchOperations } = useAIProgressStore.getState();
-      
+
       updateBatchOperations({ operationType: 'delete' });
 
       expect(useAIProgressStore.getState().batchOperations.operationType).toBe('delete');
@@ -1106,10 +1231,10 @@ describe('批量操作状态管理', () => {
   describe('交叉生成防护', () => {
     it('应该通过isBatchGenerating防止交叉生成', () => {
       const { startBatchGenerating, stopBatchGenerating } = useAIProgressStore.getState();
-      
+
       // 模拟批量操作面板开始生成
       startBatchGenerating('batch_panel');
-      
+
       expect(useAIProgressStore.getState().isBatchGenerating).toBe(true);
       expect(useAIProgressStore.getState().batchGeneratingSource).toBe('batch_panel');
 
@@ -1122,9 +1247,9 @@ describe('批量操作状态管理', () => {
 
     it('应该区分不同的生成来源', () => {
       const { startBatchGenerating } = useAIProgressStore.getState();
-      
+
       startBatchGenerating('scene_refinement');
-      
+
       // 可以检查来源来决定是否阻止
       const state = useAIProgressStore.getState();
       expect(state.batchGeneratingSource).toBe('scene_refinement');

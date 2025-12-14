@@ -67,7 +67,8 @@ export const ActionDescriptionSkill: Skill = {
 
 export const KeyframePromptSkill: Skill = {
   name: 'keyframe-prompt',
-  description: '生成三张静止关键帧（起/中/终）的“人物差分提示词”（适配图生图/参考图流程，中英双语）',
+  description:
+    '生成三张静止关键帧（起/中/终）的“人物差分提示词”（适配图生图/参考图流程，中英双语）',
   requiredContext: ['project_essence', 'confirmed_content'],
   promptTemplate: `你是专业的绘图/视频关键帧提示词工程师。用户已经用“场景锚点”生成了一张无人物的场景图（背景参考图）。现在请为 img2img/图生图 输出 3 张「静止」关键帧的“人物差分提示词”：KF0(起始) / KF1(中间) / KF2(结束)，用于在同一背景上生成连贯的三帧。
 
@@ -329,7 +330,7 @@ export function parseDialoguesFromText(text: string): DialogueLine[] {
 
   for (const line of lines) {
     const match = line.match(
-      /^\[(对白|独白|旁白|心理)(?:\|([^\]]+))?\]\s*(?:([^:：]+)[:：]\s*)?(.+)$/
+      /^\[(对白|独白|旁白|心理)(?:\|([^\]]+))?\]\s*(?:([^:：]+)[:：]\s*)?(.+)$/,
     );
 
     if (!match) {

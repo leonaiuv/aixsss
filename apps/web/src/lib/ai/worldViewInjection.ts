@@ -35,7 +35,7 @@ export const InjectionTiming = {
   NONE: 'none' as const,
 };
 
-export type InjectionTimingType = typeof InjectionTiming[keyof typeof InjectionTiming];
+export type InjectionTimingType = (typeof InjectionTiming)[keyof typeof InjectionTiming];
 
 // ==========================================
 // 默认设置
@@ -86,14 +86,11 @@ export function getInjectionSettings(projectId: string): WorldViewInjectionSetti
  * @param settings 注入设置
  */
 export function saveInjectionSettings(
-  projectId: string, 
-  settings: WorldViewInjectionSettings
+  projectId: string,
+  settings: WorldViewInjectionSettings,
 ): void {
   try {
-    localStorage.setItem(
-      `${STORAGE_KEY_PREFIX}${projectId}`,
-      JSON.stringify(settings)
-    );
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}${projectId}`, JSON.stringify(settings));
   } catch (error) {
     console.error('Failed to save injection settings:', error);
   }
@@ -177,18 +174,18 @@ export function getTimingFromSettings(settings: WorldViewInjectionSettings): Inj
   if (!settings.enabled) {
     return InjectionTiming.NONE;
   }
-  
+
   if (settings.injectAtSceneList && settings.injectAtSceneDescription) {
     return InjectionTiming.BOTH;
   }
-  
+
   if (settings.injectAtSceneList) {
     return InjectionTiming.SCENE_LIST;
   }
-  
+
   if (settings.injectAtSceneDescription) {
     return InjectionTiming.SCENE_DESCRIPTION;
   }
-  
+
   return InjectionTiming.NONE;
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { 
-  WorldViewInjectionSettings, 
+import {
+  WorldViewInjectionSettings,
   DEFAULT_INJECTION_SETTINGS,
   getInjectionSettings,
   saveInjectionSettings,
@@ -56,9 +56,9 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         injectAtSceneDescription: false,
         injectAtCharacter: true,
       };
-      
+
       saveInjectionSettings('project-1', settings);
-      
+
       const loaded = getInjectionSettings('project-1');
       expect(loaded.injectAtSceneList).toBe(true);
       expect(loaded.injectAtSceneDescription).toBe(false);
@@ -66,7 +66,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
 
     it('未保存设置时应该返回默认值', () => {
       const settings = getInjectionSettings('unknown-project');
-      
+
       expect(settings).toEqual(DEFAULT_INJECTION_SETTINGS);
     });
 
@@ -77,14 +77,14 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         injectAtSceneDescription: true,
         injectAtCharacter: true,
       });
-      
+
       saveInjectionSettings('project-1', {
         enabled: true,
         injectAtSceneList: false,
         injectAtSceneDescription: true,
         injectAtCharacter: false,
       });
-      
+
       const loaded = getInjectionSettings('project-1');
       expect(loaded.injectAtSceneList).toBe(false);
       expect(loaded.injectAtSceneDescription).toBe(true);
@@ -103,7 +103,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         injectAtSceneDescription: false,
         injectAtCharacter: false,
       };
-      
+
       expect(shouldInjectAtSceneList(settings)).toBe(true);
     });
 
@@ -114,7 +114,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         injectAtSceneDescription: true,
         injectAtCharacter: true,
       };
-      
+
       expect(shouldInjectAtSceneList(settings)).toBe(false);
       expect(shouldInjectAtSceneDescription(settings)).toBe(false);
       expect(shouldInjectAtCharacter(settings)).toBe(false);
@@ -127,7 +127,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         injectAtSceneDescription: true,
         injectAtCharacter: false,
       };
-      
+
       expect(shouldInjectAtSceneDescription(settings)).toBe(true);
     });
 
@@ -138,7 +138,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         injectAtSceneDescription: true,
         injectAtCharacter: true,
       };
-      
+
       expect(shouldInjectAtSceneList(settings)).toBe(true);
       expect(shouldInjectAtSceneDescription(settings)).toBe(true);
       expect(shouldInjectAtCharacter(settings)).toBe(true);
@@ -151,7 +151,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         injectAtSceneDescription: false,
         injectAtCharacter: false,
       };
-      
+
       expect(shouldInjectAtSceneList(settings)).toBe(false);
       expect(shouldInjectAtSceneDescription(settings)).toBe(false);
       expect(shouldInjectAtCharacter(settings)).toBe(false);

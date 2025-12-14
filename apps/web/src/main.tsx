@@ -7,7 +7,7 @@ import './index.css';
 import App from './App.tsx';
 
 // 加载AI调试日志器（在控制台通过 window.aiDebug 访问）
-import '@/lib/ai/debugLogger'
+import '@/lib/ai/debugLogger';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,4 +32,4 @@ createRoot(document.getElementById('root')!).render(
       {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
     </QueryClientProvider>
   </StrictMode>,
-)
+);

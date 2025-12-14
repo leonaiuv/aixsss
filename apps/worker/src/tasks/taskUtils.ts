@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { JsonValue } from '@prisma/client/runtime/library';
 import type { ChatMessage, ChatResult, GenerationParams, ProviderChatConfig } from '../providers/types.js';
 import { chatWithProvider } from '../providers/index.js';
 
@@ -14,7 +14,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-export function styleFullPrompt(project: { style: string; artStyleConfig: Prisma.JsonValue | null }): string {
+export function styleFullPrompt(project: { style: string; artStyleConfig: JsonValue | null }): string {
   if (project.artStyleConfig && isRecord(project.artStyleConfig)) {
     const fullPrompt = project.artStyleConfig['fullPrompt'];
     if (typeof fullPrompt === 'string' && fullPrompt.trim()) return fullPrompt.trim();
@@ -26,7 +26,7 @@ export function toProviderConfig(profile: {
   provider: DbProviderType;
   model: string;
   baseURL: string | null;
-  generationParams: Prisma.JsonValue | null;
+  generationParams: JsonValue | null;
 }): { providerConfig: ProviderChatConfig; params?: GenerationParams } {
   const rawParams = profile.generationParams;
   const params: GenerationParams | undefined =

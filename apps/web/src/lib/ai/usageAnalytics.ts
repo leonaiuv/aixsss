@@ -6,7 +6,8 @@ const startTimeMap: Map<string, number> = new Map();
 
 function buildBaseEvent(entry: AICallLogEntry, completedAt: number): Omit<AIUsageEvent, 'status'> {
   const startedAt = startTimeMap.get(entry.id);
-  const durationMs = typeof startedAt === 'number' ? Math.max(0, completedAt - startedAt) : undefined;
+  const durationMs =
+    typeof startedAt === 'number' ? Math.max(0, completedAt - startedAt) : undefined;
 
   return {
     id: entry.id,
@@ -35,7 +36,7 @@ export function initAIUsageAnalytics(): () => void {
   unsubscribers.push(
     subscribeToAIEvents('call:start', (entry: AICallLogEntry) => {
       startTimeMap.set(entry.id, Date.now());
-    })
+    }),
   );
 
   unsubscribers.push(
@@ -50,7 +51,7 @@ export function initAIUsageAnalytics(): () => void {
       });
 
       startTimeMap.delete(entry.id);
-    })
+    }),
   );
 
   unsubscribers.push(
@@ -65,7 +66,7 @@ export function initAIUsageAnalytics(): () => void {
       });
 
       startTimeMap.delete(entry.id);
-    })
+    }),
   );
 
   return () => {

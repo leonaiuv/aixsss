@@ -118,9 +118,11 @@ export function parseFirstJSONObject(text: string): ParseFirstJSONObjectResult {
 
   return {
     ok: false,
-    reason: lastError instanceof Error && lastError.message.includes('not an object') ? 'not_object' : 'invalid_json',
+    reason:
+      lastError instanceof Error && lastError.message.includes('not an object')
+        ? 'not_object'
+        : 'invalid_json',
     error: lastError,
     candidates: candidates.slice(0, 3),
   };
 }
-

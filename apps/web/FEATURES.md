@@ -34,20 +34,22 @@
 **文件**: `src/lib/ai/contextCompressor.ts`
 
 **功能说明**:
+
 - 智能压缩对话历史，保留关键信息
 - 动态调整token预算，避免超出API限制
 - 支持三种压缩策略：激进(aggressive)、平衡(balanced)、保守(conservative)
 
 **核心API**:
+
 ```typescript
 // 压缩项目核心信息
-compressProjectEssence(project, strategy)
+compressProjectEssence(project, strategy);
 
 // 压缩分镜摘要
-compressSceneSummary(scene, strategy)
+compressSceneSummary(scene, strategy);
 
 // 构建优化后的上下文
-buildOptimizedContext(options)
+buildOptimizedContext(options);
 ```
 
 **测试覆盖**: `contextCompressor.test.ts` (20+ 测试用例)
@@ -59,12 +61,14 @@ buildOptimizedContext(options)
 **文件**: `src/lib/ai/cascadeUpdater.ts`
 
 **功能说明**:
+
 - 追踪分镜之间的依赖关系
 - 当基础设定修改时，自动标记受影响的分镜为`needs_update`状态
 - 提供批量更新和选择性更新选项
 - 可视化展示更新依赖关系
 
 **核心功能**:
+
 - 项目设定修改影响分析
 - 分镜内容修改影响分析
 - 智能优先级排序（high/medium/low）
@@ -79,12 +83,14 @@ buildOptimizedContext(options)
 **文件**: `src/lib/ai/streamingHandler.ts`
 
 **功能说明**:
+
 - 实时流式显示AI生成内容（打字机效果）
 - 支持多个AI供应商的流式API（DeepSeek/Kimi/Gemini/OpenAI）
 - 可中断生成操作（AbortController）
 - 显示生成进度和预估剩余时间
 
 **核心API**:
+
 ```typescript
 // 流式调用
 streamChatUniversal(messages, config, {
@@ -102,12 +108,14 @@ streamChatUniversal(messages, config, {
 **依赖**: `@dnd-kit/core`, `@dnd-kit/sortable`
 
 **功能说明**:
+
 - 支持鼠标拖拽重新排序分镜
 - 实时视觉反馈（插入位置指示线、卡片抬起效果）
 - 自动重新编号
 - 移动端适配（暂用上移/下移按钮替代）
 
 **交互细节**:
+
 - 拖拽开始：卡片半透明 + 抬起动画
 - 拖拽中：显示蓝色插入位置指示线
 - 拖拽释放：平滑过渡到新位置（200ms动画）
@@ -118,6 +126,7 @@ streamChatUniversal(messages, config, {
 ### 5. AI生成质量优化 ✅
 
 **改进点**:
+
 1. 增强提示词工程策略（使用上下文压缩）
 2. 添加生成结果质量评估机制
 3. 支持多次生成选择最佳结果
@@ -128,6 +137,7 @@ streamChatUniversal(messages, config, {
 ### 6. 错误处理增强 ✅
 
 **改进点**:
+
 1. 统一错误处理机制（try-catch + 错误边界）
 2. 友好的错误提示信息（Toast通知）
 3. API调用失败自动重试策略（最多3次）
@@ -140,16 +150,18 @@ streamChatUniversal(messages, config, {
 **文件**: `src/lib/storageManager.ts`
 
 **功能说明**:
+
 - 数据版本号管理（当前v2.0.0）
 - 自动数据结构升级
 - 向后兼容旧版本数据
 - 数据完整性校验和修复
 
 **核心API**:
+
 ```typescript
-initStorageManager()  // 初始化并执行迁移
-verifyDataIntegrity(key)  // 校验数据完整性
-repairCorruptedData(key)  // 修复损坏数据
+initStorageManager(); // 初始化并执行迁移
+verifyDataIntegrity(key); // 校验数据完整性
+repairCorruptedData(key); // 修复损坏数据
 ```
 
 **测试覆盖**: `storageManager.test.ts` (25+ 测试用例)
@@ -159,17 +171,19 @@ repairCorruptedData(key)  // 修复损坏数据
 ### 8. LocalStorage优化 ✅
 
 **功能说明**:
+
 - 数据分片存储（突破5MB限制）
 - 数据压缩（使用pako gzip）
 - 存储空间监控
 - 自动清理过期数据（可配置天数）
 
 **核心API**:
+
 ```typescript
-saveLargeData(key, data, compress)  // 保存大数据（自动分片）
-loadLargeData(key)  // 加载大数据（自动合并）
-getStorageUsage()  // 获取存储使用情况
-cleanupOldData(days)  // 清理过期数据
+saveLargeData(key, data, compress); // 保存大数据（自动分片）
+loadLargeData(key); // 加载大数据（自动合并）
+getStorageUsage(); // 获取存储使用情况
+cleanupOldData(days); // 清理过期数据
 ```
 
 ---
@@ -181,12 +195,14 @@ cleanupOldData(days)  // 清理过期数据
 **文件**: `src/components/editor/WorldViewBuilder.tsx`
 
 **功能说明**:
+
 - 多维度世界观要素编辑（时代背景、地理设定、社会制度、科技水平、魔法体系、自定义）
 - AI辅助生成世界观要素
 - 要素与分镜关联
 - 世界观一致性检查
 
 **使用场景**:
+
 - 奇幻、科幻类型的世界观设定
 - 确保整个故事的世界观逻辑自洽
 - 为分镜生成提供丰富的背景信息
@@ -198,22 +214,24 @@ cleanupOldData(days)  // 清理过期数据
 **文件**: `src/stores/characterStore.ts`
 
 **功能说明**:
+
 - 多角色创建和管理
 - 角色卡片（外貌、性格、背景、关系网）
 - 角色出场记录追踪
 - 角色关系可视化（关系网图）
 
 **数据结构**:
+
 ```typescript
 interface Character {
   id: string;
   name: string;
-  appearance: string;  // 外貌描述
-  personality: string;  // 性格特征
-  background: string;  // 背景故事
-  relationships: CharacterRelationship[];  // 关系网络
-  appearances: SceneAppearance[];  // 出场记录
-  themeColor?: string;  // 主题色
+  appearance: string; // 外貌描述
+  personality: string; // 性格特征
+  background: string; // 背景故事
+  relationships: CharacterRelationship[]; // 关系网络
+  appearances: SceneAppearance[]; // 出场记录
+  themeColor?: string; // 主题色
 }
 ```
 
@@ -224,6 +242,7 @@ interface Character {
 **文件**: `src/stores/versionStore.ts`
 
 **功能说明**:
+
 - 自动保存历史版本（项目级、分镜级）
 - 版本对比和差异展示
 - 一键回滚到历史版本
@@ -231,10 +250,11 @@ interface Character {
 - 限制版本数量（默认50个）
 
 **核心API**:
+
 ```typescript
-createVersion(projectId, type, targetId, snapshot, label, notes)
-restoreVersion(versionId)
-getVersionHistory(projectId, targetId)
+createVersion(projectId, type, targetId, snapshot, label, notes);
+restoreVersion(versionId);
+getVersionHistory(projectId, targetId);
 ```
 
 ---
@@ -242,6 +262,7 @@ getVersionHistory(projectId, targetId)
 ### 12. 批量生成和批量编辑 ⚡
 
 **功能说明**:
+
 - 批量选择分镜（复选框 + Shift多选）
 - 批量生成多个分镜
 - 批量修改分镜属性
@@ -255,6 +276,7 @@ getVersionHistory(projectId, targetId)
 **文件**: `src/lib/templates.ts`, `src/stores/templateStore.ts`
 
 **功能说明**:
+
 - 内置10+个专业提示词模板
 - 分类管理（场景锚点、动作描述、镜头提示词、风格化）
 - 自定义模板创建
@@ -262,6 +284,7 @@ getVersionHistory(projectId, targetId)
 - 模板使用次数统计
 
 **内置模板类别**:
+
 - 场景锚点：写实、动漫、赛博朋克
 - 动作描述：戏剧性、战斗
 - 镜头提示词：Midjourney、Stable Diffusion、ComfyUI
@@ -272,6 +295,7 @@ getVersionHistory(projectId, targetId)
 ### 14. 分镜预览图生成 🖼️
 
 **功能说明**:
+
 - 基于文本描述生成简易预览图
 - 占位图自动生成
 - 预览图样式自定义
@@ -284,12 +308,14 @@ getVersionHistory(projectId, targetId)
 **文件**: `src/stores/searchStore.ts`
 
 **功能说明**:
+
 - 全文搜索（项目名、梗概、分镜内容）
 - 多维度过滤（状态、创建时间、标签）
 - 搜索历史记录
 - 实时搜索结果高亮
 
 **搜索范围**:
+
 - 项目：标题、梗概、主角、风格
 - 分镜：概要、场景锚点、关键帧、时空/运动、台词
 
@@ -298,18 +324,20 @@ getVersionHistory(projectId, targetId)
 ### 16. 数据导入导出 📤
 
 **功能说明**:
+
 - 多格式导出（JSON、Markdown、PDF、TXT、ZIP）
 - 项目打包导出（包含所有分镜和世界观）
 - 从文件导入项目
 - 批量导入导出
 
 **导出选项**:
+
 ```typescript
 interface ExportOptions {
   format: ExportFormat;
-  includeMetadata: boolean;  // 包含元数据
-  includeImages: boolean;  // 包含图片
-  compression: boolean;  // 压缩
+  includeMetadata: boolean; // 包含元数据
+  includeImages: boolean; // 包含图片
+  compression: boolean; // 压缩
 }
 ```
 
@@ -320,6 +348,7 @@ interface ExportOptions {
 **文件**: `src/hooks/useKeyboardShortcut.ts`
 
 **功能说明**:
+
 - 全局快捷键系统
 - 常用操作快捷键（保存、撤销、生成等）
 - 快捷键自定义
@@ -327,6 +356,7 @@ interface ExportOptions {
 - Mac/Windows自动适配
 
 **内置快捷键**:
+
 - `Ctrl/Cmd + S`: 保存
 - `Ctrl/Cmd + K`: 搜索
 - `Ctrl/Cmd + G`: AI生成
@@ -335,10 +365,15 @@ interface ExportOptions {
 - `Escape`: 取消/关闭
 
 **使用示例**:
+
 ```typescript
-useKeyboardShortcut('ctrl+s', () => {
-  handleSave();
-}, { preventDefault: true });
+useKeyboardShortcut(
+  'ctrl+s',
+  () => {
+    handleSave();
+  },
+  { preventDefault: true },
+);
 ```
 
 ---
@@ -348,17 +383,20 @@ useKeyboardShortcut('ctrl+s', () => {
 **文件**: `src/stores/themeStore.ts`
 
 **功能说明**:
+
 - 暗色和亮色主题
 - 跟随系统主题
 - 主题配置持久化
 - 平滑切换动画
 
 **主题模式**:
+
 - `light`: 亮色模式
 - `dark`: 暗色模式
 - `system`: 跟随系统
 
 **颜色系统**:
+
 - 亮色模式：纯白背景 + 柔和阴影
 - 暗色模式：深灰背景（#0F172A → #1E293B）+ 高对比度
 
@@ -367,6 +405,7 @@ useKeyboardShortcut('ctrl+s', () => {
 ### 19. 分镜对比和合并 🔀
 
 **功能说明**:
+
 - 多个分镜版本对比
 - 分镜差异高亮显示
 - 智能合并不同版本
@@ -377,6 +416,7 @@ useKeyboardShortcut('ctrl+s', () => {
 ### 20. AI生成参数调优 🎛️
 
 **功能说明**:
+
 - Temperature调整（0.0-2.0）
 - Top-P调整（0.0-1.0）
 - Max Tokens调整
@@ -384,6 +424,7 @@ useKeyboardShortcut('ctrl+s', () => {
 - 预设参数配置（创意/平衡/保守）
 
 **参数预设**:
+
 - 创意模式：Temperature 1.2, Top-P 0.95
 - 平衡模式：Temperature 0.7, Top-P 0.9
 - 保守模式：Temperature 0.3, Top-P 0.7
@@ -395,22 +436,24 @@ useKeyboardShortcut('ctrl+s', () => {
 **文件**: `src/stores/statisticsStore.ts`
 
 **功能说明**:
+
 - 项目统计（分镜数、字数、生成次数）
 - AI使用统计（Token消耗、成本估算）
 - 创作效率分析
 - 可视化图表展示（使用recharts）
 
 **统计指标**:
+
 ```typescript
 interface Statistics {
-  projectCount: number;  // 项目总数
-  sceneCount: number;  // 分镜总数
-  completedSceneCount: number;  // 已完成分镜数
-  totalTokens: number;  // Token消耗
-  estimatedCost: number;  // 估算成本
-  averageSceneTime: number;  // 平均分镜完成时间
-  generationSuccessRate: number;  // 生成成功率
-  creationTimeData: Array<{date: string, count: number}>;  // 创作活跃度
+  projectCount: number; // 项目总数
+  sceneCount: number; // 分镜总数
+  completedSceneCount: number; // 已完成分镜数
+  totalTokens: number; // Token消耗
+  estimatedCost: number; // 估算成本
+  averageSceneTime: number; // 平均分镜完成时间
+  generationSuccessRate: number; // 生成成功率
+  creationTimeData: Array<{ date: string; count: number }>; // 创作活跃度
 }
 ```
 
@@ -419,6 +462,7 @@ interface Statistics {
 ### 22. 社区模板库（本地版） 📚
 
 **功能说明**:
+
 - 内置精选模板集（10+个）
 - 模板分类和标签
 - 模板预览和应用
@@ -429,6 +473,7 @@ interface Statistics {
 ### 23. 多语言提示词生成 🌐
 
 **功能说明**:
+
 - 支持中英文提示词生成
 - 语言自动检测和切换
 - 双语对照显示
@@ -439,22 +484,26 @@ interface Statistics {
 ### 24-27. 其他增强功能
 
 **24. 数据备份恢复**:
+
 - 自动备份机制
 - 手动创建备份点
 - 一键恢复
 
 **25. 性能监控**:
+
 - 加载时间统计
 - 渲染性能分析
 - 内存使用监控
 
 **26. 无障碍优化**:
+
 - 键盘导航完整支持
 - ARIA标签完善
 - 颜色对比度优化
 - 屏幕阅读器友好
 
 **27. 响应式优化**:
+
 - 移动端适配
 - 平板端适配
 - 自适应布局
@@ -497,7 +546,7 @@ interface Statistics {
       TemplateSelector.tsx - 模板选择器
       BatchOperations.tsx - 批量操作
       StatisticsDashboard.tsx - 统计面板
-  
+
   /stores - Zustand状态管理
     projectStore.ts - 项目状态
     storyboardStore.ts - 分镜状态
@@ -509,7 +558,7 @@ interface Statistics {
     templateStore.ts - 模板状态 ✨
     searchStore.ts - 搜索状态 ✨
     statisticsStore.ts - 统计状态 ✨
-  
+
   /lib - 工具库
     /ai - AI相关
       /providers - AI供应商适配器
@@ -522,11 +571,11 @@ interface Statistics {
     storageManager.ts - 存储管理器 ✨
     templates.ts - 提示词模板库 ✨
     utils.ts - 工具函数
-  
+
   /hooks - React Hooks
     use-toast.ts - Toast通知
     useKeyboardShortcut.ts - 快捷键 ✨
-  
+
   /types - TypeScript类型定义（扩展）
 ```
 
@@ -589,21 +638,25 @@ npm test -- contextCompressor.test.ts
 ### 快速开始
 
 1. **安装依赖**
+
 ```bash
 npm install
 ```
 
 2. **启动开发服务器**
+
 ```bash
 npm run dev
 ```
 
 3. **运行测试**
+
 ```bash
 npm test
 ```
 
 4. **构建生产版本**
+
 ```bash
 npm run build
 ```
@@ -708,12 +761,14 @@ npm run build
 ## 未来计划
 
 ### v2.1.0 (Q1 2025)
+
 - [ ] 团队协作功能
 - [ ] 云端同步
 - [ ] 实时协作编辑
 - [ ] 评论和批注
 
 ### v2.2.0 (Q2 2025)
+
 - [ ] 移动端App
 - [ ] 图像生成集成
 - [ ] 视频生成集成

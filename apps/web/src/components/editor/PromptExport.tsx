@@ -5,14 +5,7 @@ import { useCustomStyleStore } from '@/stores/customStyleStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Download, 
-  Copy, 
-  FileText, 
-  CheckCircle2,
-  Eye,
-  Code
-} from 'lucide-react';
+import { Download, Copy, FileText, CheckCircle2, Eye, Code } from 'lucide-react';
 import { migrateOldStyleToConfig, ART_STYLE_PRESETS, Project, isCustomStyleId } from '@/types';
 
 /**
@@ -41,12 +34,12 @@ function getStyleLabel(project: Project | null): string {
       const customStyle = useCustomStyleStore.getState().getCustomStyleById(presetId);
       return customStyle ? customStyle.name : '自定义画风';
     }
-    const preset = ART_STYLE_PRESETS.find(p => p.id === presetId);
+    const preset = ART_STYLE_PRESETS.find((p) => p.id === presetId);
     return preset ? preset.label : '自定义画风';
   }
   if (project.style) {
     const migratedConfig = migrateOldStyleToConfig(project.style);
-    const preset = ART_STYLE_PRESETS.find(p => p.id === migratedConfig.presetId);
+    const preset = ART_STYLE_PRESETS.find((p) => p.id === migratedConfig.presetId);
     return preset ? preset.label : project.style;
   }
   return '';
@@ -55,7 +48,7 @@ function getStyleLabel(project: Project | null): string {
 export function PromptExport() {
   const { currentProject } = useProjectStore();
   const { scenes, loadScenes } = useStoryboardStore();
-  
+
   const [exportContent, setExportContent] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -75,7 +68,7 @@ export function PromptExport() {
     return null;
   }
 
-  const completedScenes = scenes.filter(s => s.status === 'completed');
+  const completedScenes = scenes.filter((s) => s.status === 'completed');
   const completionRate = Math.round((completedScenes.length / scenes.length) * 100);
 
   // 生成Markdown格式内容
@@ -109,7 +102,7 @@ ${styleFullPrompt}
 
     scenes.forEach((scene, index) => {
       md += `### 分镜 ${index + 1}: ${scene.summary}\n\n`;
-      
+
       if (scene.sceneDescription) {
         md += `**场景锚点（Scene Anchor）**:\n\n`;
         md += `${scene.sceneDescription}\n\n`;
@@ -160,7 +153,7 @@ ${scene.motionPrompt}
         createdAt: currentProject.createdAt,
         updatedAt: currentProject.updatedAt,
       },
-      scenes: scenes.map(scene => ({
+      scenes: scenes.map((scene) => ({
         order: scene.order,
         summary: scene.summary,
         sceneDescription: scene.sceneDescription,
@@ -274,7 +267,9 @@ ${currentProject.protagonist}
             <p className="text-sm text-muted-foreground mt-1">已完成</p>
           </div>
           <div className="p-4 rounded-lg bg-muted/50 text-center">
-            <p className="text-2xl font-bold text-orange-600">{scenes.length - completedScenes.length}</p>
+            <p className="text-2xl font-bold text-orange-600">
+              {scenes.length - completedScenes.length}
+            </p>
             <p className="text-sm text-muted-foreground mt-1">未完成</p>
           </div>
         </div>
@@ -350,7 +345,12 @@ ${currentProject.protagonist}
 
           <Button
             variant="outline"
-            onClick={() => handleDownload(generateKeyframePromptsOnly(), `${currentProject.title}_keyframe_prompts.txt`)}
+            onClick={() =>
+              handleDownload(
+                generateKeyframePromptsOnly(),
+                `${currentProject.title}_keyframe_prompts.txt`,
+              )
+            }
             className="gap-2"
           >
             <Download className="h-4 w-4" />
@@ -359,7 +359,12 @@ ${currentProject.protagonist}
 
           <Button
             variant="outline"
-            onClick={() => handleDownload(generateMotionPromptsOnly(), `${currentProject.title}_motion_prompts.txt`)}
+            onClick={() =>
+              handleDownload(
+                generateMotionPromptsOnly(),
+                `${currentProject.title}_motion_prompts.txt`,
+              )
+            }
             className="gap-2"
           >
             <Download className="h-4 w-4" />
@@ -385,11 +390,21 @@ ${currentProject.protagonist}
           <span>导出格式说明</span>
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
-          <li>• <strong>Markdown</strong>: 适合人类阅读,包含完整的项目信息和分镜细节</li>
-          <li>• <strong>JSON</strong>: 适合程序处理,可导入其他工具或备份数据</li>
-          <li>• <strong>关键帧提示词（KF0/KF1/KF2）</strong>: 三张静止关键帧提示词，可分别用于生图模型</li>
-          <li>• <strong>时空/运动提示词</strong>: 基于关键帧差分的变化描述，用于图生视频模型</li>
-          <li>• <strong>剪贴板复制</strong>: 快速分享或粘贴到其他应用</li>
+          <li>
+            • <strong>Markdown</strong>: 适合人类阅读,包含完整的项目信息和分镜细节
+          </li>
+          <li>
+            • <strong>JSON</strong>: 适合程序处理,可导入其他工具或备份数据
+          </li>
+          <li>
+            • <strong>关键帧提示词（KF0/KF1/KF2）</strong>: 三张静止关键帧提示词，可分别用于生图模型
+          </li>
+          <li>
+            • <strong>时空/运动提示词</strong>: 基于关键帧差分的变化描述，用于图生视频模型
+          </li>
+          <li>
+            • <strong>剪贴板复制</strong>: 快速分享或粘贴到其他应用
+          </li>
         </ul>
       </Card>
 
@@ -401,8 +416,8 @@ ${currentProject.protagonist}
             <div
               key={scene.id}
               className={`p-4 rounded-lg border ${
-                scene.status === 'completed' 
-                  ? 'border-green-500/30 bg-green-500/5' 
+                scene.status === 'completed'
+                  ? 'border-green-500/30 bg-green-500/5'
                   : 'border-border bg-muted/30'
               }`}
             >
@@ -413,13 +428,19 @@ ${currentProject.protagonist}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium mb-1">{scene.summary}</p>
                   <div className="flex gap-2 text-xs">
-                    <span className={scene.sceneDescription ? 'text-green-600' : 'text-muted-foreground'}>
+                    <span
+                      className={
+                        scene.sceneDescription ? 'text-green-600' : 'text-muted-foreground'
+                      }
+                    >
                       锚点{scene.sceneDescription ? '✓' : '○'}
                     </span>
                     <span className={scene.shotPrompt ? 'text-green-600' : 'text-muted-foreground'}>
                       关键帧{scene.shotPrompt ? '✓' : '○'}
                     </span>
-                    <span className={scene.motionPrompt ? 'text-green-600' : 'text-muted-foreground'}>
+                    <span
+                      className={scene.motionPrompt ? 'text-green-600' : 'text-muted-foreground'}
+                    >
                       运动{scene.motionPrompt ? '✓' : '○'}
                     </span>
                   </div>

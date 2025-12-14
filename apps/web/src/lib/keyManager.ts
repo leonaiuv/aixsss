@@ -181,14 +181,18 @@ class KeyManagerImpl {
   encrypt(data: string, purpose: KeyPurpose): string {
     const key = this.getDerivedKey(purpose);
     const encrypted = CryptoJS.AES.encrypt(data, key).toString();
-    
+
+    // 完整性校验（防止错误密码解密出乱码）
+    const integrity = CryptoJS.HmacSHA256(encrypted, key).toString();
+
     // 添加版本和用途元数据
     const metadata = {
       v: this.state.keyVersion,
       p: purpose,
+      h: integrity,
     };
     const metadataStr = btoa(JSON.stringify(metadata));
-    
+
     return `${ENCRYPTED_PREFIX}${metadataStr}:${encrypted}`;
   }
 
@@ -212,20 +216,27 @@ class KeyManagerImpl {
         try {
           if (typeof atob !== 'function') return '';
           const decoded = atob(metadataStr);
-          const metadata = JSON.parse(decoded) as { p?: unknown; v?: unknown };
+          const metadata = JSON.parse(decoded) as { p?: unknown; v?: unknown; h?: unknown };
           if (typeof metadata.p === 'string' && metadata.p !== purpose) return '';
+
+          const key = this.getDerivedKey(purpose);
+          if (
+            typeof metadata.h === 'string' &&
+            metadata.h !== CryptoJS.HmacSHA256(actualEncrypted, key).toString()
+          ) {
+            return '';
+          }
+
+          const bytes = CryptoJS.AES.decrypt(actualEncrypted, key);
+          const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+
+          return decrypted;
         } catch {
           // 元数据损坏：按失败处理
           return '';
         }
-        
-        const key = this.getDerivedKey(purpose);
-        const bytes = CryptoJS.AES.decrypt(actualEncrypted, key);
-        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-        
-        return decrypted;
       }
-      
+
       // 旧格式数据，使用遗留密钥
       return this.decryptWithKey(encryptedData, LEGACY_ENCRYPTION_KEY);
     } catch {
@@ -256,7 +267,7 @@ class KeyManagerImpl {
         const colonIndex = withoutPrefix.indexOf(':');
         actualEncrypted = withoutPrefix.slice(colonIndex + 1);
       }
-      
+
       const bytes = CryptoJS.AES.decrypt(actualEncrypted, key);
       return bytes.toString(CryptoJS.enc.Utf8);
     } catch {
@@ -293,7 +304,7 @@ class KeyManagerImpl {
       const colonIndex = withoutPrefix.indexOf(':');
       const metadataStr = withoutPrefix.slice(0, colonIndex);
       const metadata = JSON.parse(atob(metadataStr));
-      
+
       return {
         keyVersion: metadata.v || 1,
         purpose: metadata.p as KeyPurpose,
@@ -356,14 +367,10 @@ class KeyManagerImpl {
 
     // 使用 PBKDF2 派生密钥，Salt 结合用途确保不同用途密钥不同
     const combinedSalt = `${this.state.salt}:${purpose}`;
-    const derivedKey = CryptoJS.PBKDF2(
-      this.state.masterPassword,
-      combinedSalt,
-      {
-        keySize: KEY_SIZE,
-        iterations: PBKDF2_ITERATIONS,
-      }
-    );
+    const derivedKey = CryptoJS.PBKDF2(this.state.masterPassword, combinedSalt, {
+      keySize: KEY_SIZE,
+      iterations: PBKDF2_ITERATIONS,
+    });
 
     return derivedKey.toString();
   }
@@ -400,7 +407,7 @@ export const KeyManager = new KeyManagerImpl();
 export function deriveKeyFromPassword(
   masterPassword: string,
   purpose: KeyPurpose,
-  salt: string
+  salt: string,
 ): string {
   const combinedSalt = `${salt}:${purpose}`;
   const derivedKey = CryptoJS.PBKDF2(masterPassword, combinedSalt, {

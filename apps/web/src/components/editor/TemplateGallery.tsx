@@ -33,24 +33,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  FileText,
-  Plus,
-  Search,
-  Star,
-  TrendingUp,
-  Copy,
-  Edit2,
-  Trash2,
-} from 'lucide-react';
+import { FileText, Plus, Search, Star, TrendingUp, Copy, Edit2, Trash2 } from 'lucide-react';
 
 interface TemplateGalleryProps {
   onApplyTemplate: (template: string, variables: Record<string, string>) => void;
 }
 
 export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
-  const { templates, addTemplate, updateTemplate, deleteTemplate } =
-    useTemplateStore();
+  const { templates, addTemplate, updateTemplate, deleteTemplate } = useTemplateStore();
   const { confirm, ConfirmDialog } = useConfirm();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -71,8 +61,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
       const matchesSearch =
         template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         template.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory =
-        selectedCategory === 'all' || template.category === selectedCategory;
+      const matchesCategory = selectedCategory === 'all' || template.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
   }, [templates, searchQuery, selectedCategory]);
@@ -165,9 +154,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
           </div>
           <div>
             <h2 className="text-xl font-bold">提示词模板库</h2>
-            <p className="text-sm text-muted-foreground">
-              {templates.length} 个模板
-            </p>
+            <p className="text-sm text-muted-foreground">{templates.length} 个模板</p>
           </div>
         </div>
 
@@ -193,9 +180,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="例如：科幻城市场景"
                   />
                 </div>
@@ -204,9 +189,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
                   <Label htmlFor="category">分类 *</Label>
                   <Select
                     value={formData.category}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, category: value })
-                    }
+                    onValueChange={(value) => setFormData({ ...formData, category: value })}
                   >
                     <SelectTrigger id="category">
                       <SelectValue />
@@ -227,9 +210,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
                   <Textarea
                     id="description"
                     value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="简要说明这个模板的用途和效果"
                     rows={2}
                   />
@@ -240,9 +221,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
                   <Textarea
                     id="template"
                     value={formData.template}
-                    onChange={(e) =>
-                      setFormData({ ...formData, template: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, template: e.target.value })}
                     placeholder="例如：{{location}} 的街道，{{time}}，{{weather}}，赛博朋克风格"
                     rows={8}
                   />
@@ -256,9 +235,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
                   <Input
                     id="style"
                     value={formData.style}
-                    onChange={(e) =>
-                      setFormData({ ...formData, style: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, style: e.target.value })}
                     placeholder="例如：赛博朋克、日式动漫"
                   />
                 </div>
@@ -266,10 +243,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
             </ScrollArea>
 
             <div className="flex justify-end gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setIsCreateDialogOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                 取消
               </Button>
               <Button onClick={handleCreateTemplate}>创建</Button>
@@ -369,16 +343,11 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
 
       {/* 变量填充对话框 */}
       {selectedTemplate && (
-        <Dialog
-          open={!!selectedTemplate}
-          onOpenChange={() => setSelectedTemplate(null)}
-        >
+        <Dialog open={!!selectedTemplate} onOpenChange={() => setSelectedTemplate(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>填充模板变量</DialogTitle>
-              <DialogDescription>
-                填写模板中的变量值以生成最终内容
-              </DialogDescription>
+              <DialogDescription>填写模板中的变量值以生成最终内容</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
@@ -403,10 +372,7 @@ export function TemplateGallery({ onApplyTemplate }: TemplateGalleryProps) {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setSelectedTemplate(null)}
-              >
+              <Button variant="outline" onClick={() => setSelectedTemplate(null)}>
                 取消
               </Button>
               <Button onClick={handleSubmitVariables}>应用</Button>
@@ -444,9 +410,7 @@ function TemplateCard({
               </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mb-2">
-            {template.description}
-          </p>
+          <p className="text-sm text-muted-foreground mb-2">{template.description}</p>
           {template.style && (
             <Badge variant="outline" className="text-xs">
               {template.style}
@@ -459,11 +423,7 @@ function TemplateCard({
             <Copy className="h-3 w-3" />
           </Button>
           {!template.isBuiltIn && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(template.id)}
-            >
+            <Button variant="ghost" size="sm" onClick={() => onDelete(template.id)}>
               <Trash2 className="h-3 w-3" />
             </Button>
           )}
@@ -481,9 +441,7 @@ function TemplateCard({
 
       <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
         <span>使用次数: {template.usageCount}</span>
-        {template.variables.length > 0 && (
-          <span>变量数: {template.variables.length}</span>
-        )}
+        {template.variables.length > 0 && <span>变量数: {template.variables.length}</span>}
       </div>
     </div>
   );

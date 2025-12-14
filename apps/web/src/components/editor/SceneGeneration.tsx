@@ -7,20 +7,25 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { 
-  Sparkles, 
-  Plus, 
-  Trash2, 
-  GripVertical, 
-  Edit2, 
+import {
+  Sparkles,
+  Plus,
+  Trash2,
+  GripVertical,
+  Edit2,
   Check,
   X,
   RotateCw,
   ChevronRight,
-  Loader2
+  Loader2,
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
-import { logAICall, updateLogWithResponse, updateLogWithError, updateLogProgress } from '@/lib/ai/debugLogger';
+import {
+  logAICall,
+  updateLogWithResponse,
+  updateLogWithError,
+  updateLogProgress,
+} from '@/lib/ai/debugLogger';
 import { Scene, migrateOldStyleToConfig } from '@/types';
 import { SceneSortable } from './SceneSortable';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -28,7 +33,10 @@ import { useConfirm } from '@/hooks/use-confirm';
 /**
  * 获取项目的完整画风提示词
  */
-function getStyleFullPrompt(project: { style: string; artStyleConfig?: { fullPrompt: string } }): string {
+function getStyleFullPrompt(project: {
+  style: string;
+  artStyleConfig?: { fullPrompt: string };
+}): string {
   if (project.artStyleConfig?.fullPrompt) {
     return project.artStyleConfig.fullPrompt;
   }
@@ -40,10 +48,19 @@ function getStyleFullPrompt(project: { style: string; artStyleConfig?: { fullPro
 
 export function SceneGeneration() {
   const { currentProject, updateProject } = useProjectStore();
-  const { scenes, setScenes, addScene, updateScene, deleteScene, isGenerating, setGenerating, loadScenes } = useStoryboardStore();
+  const {
+    scenes,
+    setScenes,
+    addScene,
+    updateScene,
+    deleteScene,
+    isGenerating,
+    setGenerating,
+    loadScenes,
+  } = useStoryboardStore();
   const { config, activeProfileId } = useConfigStore();
   const { confirm, ConfirmDialog } = useConfirm();
-  
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [generationProgress, setGenerationProgress] = useState(0);
@@ -67,7 +84,7 @@ export function SceneGeneration() {
       workflowState === 'SCENE_PROCESSING',
     [workflowState],
   );
-  
+
   // 是否已经确认过分镜列表（已进入细化流程）
   const isAlreadyConfirmed = useMemo(
     () =>
@@ -76,7 +93,7 @@ export function SceneGeneration() {
       workflowState === 'ALL_SCENES_COMPLETE',
     [workflowState],
   );
-  
+
   const canProceed = useMemo(
     () => scenes.length >= 6 && (workflowState === 'SCENE_LIST_EDITING' || isAlreadyConfirmed),
     [scenes.length, workflowState, isAlreadyConfirmed],
@@ -167,13 +184,11 @@ ${currentProject.summary}
       });
 
       setGenerationProgress(20);
-      
+
       // 更新进度
       updateLogProgress(logId, 30, '正在调用AI...');
 
-      const response = await client.chat([
-        { role: 'user', content: prompt }
-      ]);
+      const response = await client.chat([{ role: 'user', content: prompt }]);
 
       setGenerationProgress(60);
       updateLogProgress(logId, 70, '正在解析响应...');
@@ -187,9 +202,9 @@ ${currentProject.summary}
       // 解析响应
       const lines = response.content
         .split('\n')
-        .map(line => line.trim())
-        .filter(line => /^\d+\.\s+/.test(line))
-        .map(line => line.replace(/^\d+\.\s+/, ''));
+        .map((line) => line.trim())
+        .filter((line) => /^\d+\.\s+/.test(line))
+        .map((line) => line.replace(/^\d+\.\s+/, ''));
 
       if (lines.length < 6) {
         throw new Error('生成的分镜数量不足(少于6个)');
@@ -210,14 +225,13 @@ ${currentProject.summary}
       }));
 
       setScenes(currentProject.id, newScenes);
-      
+
       updateProject(currentProject.id, {
         workflowState: 'SCENE_LIST_EDITING',
         updatedAt: new Date().toISOString(),
       });
 
       setGenerationProgress(100);
-      
     } catch (err) {
       setError(err instanceof Error ? err.message : '生成失败');
       console.error('生成分镜失败:', err);
@@ -293,13 +307,13 @@ ${currentProject.summary}
       window.dispatchEvent(new CustomEvent('workflow:next-step'));
       return;
     }
-    
+
     updateProject(currentProject.id, {
       workflowState: 'SCENE_LIST_CONFIRMED',
       currentSceneOrder: 1,
       updatedAt: new Date().toISOString(),
     });
-    
+
     // 触发进入下一步
     window.dispatchEvent(new CustomEvent('workflow:next-step'));
   };
@@ -344,23 +358,17 @@ ${currentProject.summary}
         {scenes.length === 0 ? (
           <div className="py-16 text-center">
             <Sparkles className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground mb-6">
-              还没有分镜,点击下方按钮开始生成
-            </p>
+            <p className="text-muted-foreground mb-6">还没有分镜,点击下方按钮开始生成</p>
             <div className="flex gap-3 justify-center">
-              <Button 
-                onClick={handleGenerate} 
+              <Button
+                onClick={handleGenerate}
                 disabled={!canGenerate || isGenerating}
                 className="gap-2"
               >
                 <Sparkles className="h-4 w-4" />
                 <span>AI生成分镜</span>
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={handleAddScene}
-                className="gap-2"
-              >
+              <Button variant="outline" onClick={handleAddScene} className="gap-2">
                 <Plus className="h-4 w-4" />
                 <span>手动添加</span>
               </Button>
@@ -407,18 +415,10 @@ ${currentProject.summary}
                 {/* 操作按钮 */}
                 {editingId !== scene.id && (
                   <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => startEdit(scene)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => startEdit(scene)}>
                       <Edit2 className="h-4 w-4" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(scene.id)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => handleDelete(scene.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
@@ -432,8 +432,8 @@ ${currentProject.summary}
         {scenes.length > 0 && (
           <div className="flex items-center justify-between mt-6 pt-6 border-t">
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleGenerate}
                 disabled={isGenerating}
                 className="gap-2"
@@ -450,21 +450,13 @@ ${currentProject.summary}
                 <GripVertical className="h-4 w-4" />
                 <span>拖拽排序</span>
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={handleAddScene}
-                className="gap-2"
-              >
+              <Button variant="outline" onClick={handleAddScene} className="gap-2">
                 <Plus className="h-4 w-4" />
                 <span>添加分镜</span>
               </Button>
             </div>
 
-            <Button 
-              onClick={handleConfirm}
-              disabled={!canProceed}
-              className="gap-2"
-            >
+            <Button onClick={handleConfirm} disabled={!canProceed} className="gap-2">
               <span>{isAlreadyConfirmed ? '继续细化' : '确认分镜列表'}</span>
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -505,10 +497,18 @@ ${currentProject.summary}
           <span>分镜调整技巧</span>
         </h3>
         <ul className="space-y-2 text-sm text-muted-foreground">
-          <li>• <strong>数量建议</strong>: 8-12个分镜适合大多数短篇故事</li>
-          <li>• <strong>关键节点</strong>: 确保包含开场、冲突、高潮、结局</li>
-          <li>• <strong>视觉导向</strong>: 每个分镜应该是独立的画面,避免动作流程描述</li>
-          <li>• <strong>情绪曲线</strong>: 注意分镜之间的情绪起伏和节奏变化</li>
+          <li>
+            • <strong>数量建议</strong>: 8-12个分镜适合大多数短篇故事
+          </li>
+          <li>
+            • <strong>关键节点</strong>: 确保包含开场、冲突、高潮、结局
+          </li>
+          <li>
+            • <strong>视觉导向</strong>: 每个分镜应该是独立的画面,避免动作流程描述
+          </li>
+          <li>
+            • <strong>情绪曲线</strong>: 注意分镜之间的情绪起伏和节奏变化
+          </li>
         </ul>
       </Card>
     </div>

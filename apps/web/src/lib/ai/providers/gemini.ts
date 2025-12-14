@@ -20,18 +20,18 @@ export class GeminiProvider implements AIProvider {
     // Gemini uses 'contents' with 'parts' structure
     // System messages need to be handled separately or converted to user messages
     const contents = messages
-      .filter(msg => msg.role !== 'system') // Gemini doesn't support system role in the same way
-      .map(msg => ({
+      .filter((msg) => msg.role !== 'system') // Gemini doesn't support system role in the same way
+      .map((msg) => ({
         role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content }]
+        parts: [{ text: msg.content }],
       }));
 
     // If there's a system message, prepend it as a user message with context
-    const systemMessage = messages.find(msg => msg.role === 'system');
+    const systemMessage = messages.find((msg) => msg.role === 'system');
     if (systemMessage) {
       contents.unshift({
         role: 'user',
-        parts: [{ text: `System instruction: ${systemMessage.content}` }]
+        parts: [{ text: `System instruction: ${systemMessage.content}` }],
       });
     }
 
@@ -58,7 +58,7 @@ export class GeminiProvider implements AIProvider {
   async chat(
     messages: ChatMessage[],
     config: AIProviderConfig,
-    options?: AIRequestOptions
+    options?: AIRequestOptions,
   ): Promise<AIResponse> {
     const url = this.buildURL(config.baseURL, config.model);
     const params = config.generationParams;
@@ -73,7 +73,7 @@ export class GeminiProvider implements AIProvider {
         ...(typeof params.maxTokens === 'number' ? { maxOutputTokens: params.maxTokens } : {}),
       };
     }
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -89,24 +89,26 @@ export class GeminiProvider implements AIProvider {
     }
 
     const data = await response.json();
-    
+
     // Extract text from Gemini's response format
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
+
     return {
       content,
-      tokenUsage: data.usageMetadata ? {
-        prompt: data.usageMetadata.promptTokenCount,
-        completion: data.usageMetadata.candidatesTokenCount,
-        total: data.usageMetadata.totalTokenCount,
-      } : undefined,
+      tokenUsage: data.usageMetadata
+        ? {
+            prompt: data.usageMetadata.promptTokenCount,
+            completion: data.usageMetadata.candidatesTokenCount,
+            total: data.usageMetadata.totalTokenCount,
+          }
+        : undefined,
     };
   }
 
   async *streamChat(
     messages: ChatMessage[],
     config: AIProviderConfig,
-    options?: AIRequestOptions
+    options?: AIRequestOptions,
   ): AsyncGenerator<string> {
     const url = this.buildStreamURL(config.baseURL, config.model);
     const params = config.generationParams;
@@ -121,7 +123,7 @@ export class GeminiProvider implements AIProvider {
         ...(typeof params.maxTokens === 'number' ? { maxOutputTokens: params.maxTokens } : {}),
       };
     }
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -154,7 +156,7 @@ export class GeminiProvider implements AIProvider {
         if (line.startsWith('data: ')) {
           const data = line.slice(6).trim();
           if (!data || data === '[DONE]') continue;
-          
+
           try {
             const json = JSON.parse(data);
             const content = json.candidates?.[0]?.content?.parts?.[0]?.text;

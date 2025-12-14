@@ -8,7 +8,13 @@
 // 4. 提供填充提示词模板的方法
 // ==========================================
 
-import { Character, ArtStyleConfig, WorldViewElement, type CharacterRelationship, type SceneAppearance } from '@/types';
+import {
+  Character,
+  ArtStyleConfig,
+  WorldViewElement,
+  type CharacterRelationship,
+  type SceneAppearance,
+} from '@/types';
 
 /** 世界观要素类型 */
 type WorldViewType = WorldViewElement['type'];
@@ -95,10 +101,7 @@ function safeAppearances(value: unknown): SceneAppearance[] {
  * 构建角色上下文
  * 将角色的外貌、性格、主题色等信息格式化为AI可理解的上下文
  */
-export function buildCharacterContext(
-  characters: Character[],
-  config?: ContextConfig
-): string {
+export function buildCharacterContext(characters: Character[], config?: ContextConfig): string {
   if (!characters || characters.length === 0) {
     return '';
   }
@@ -115,14 +118,14 @@ export function buildCharacterContext(
 
   for (const char of characters) {
     const charParts: string[] = [];
-    
+
     charParts.push(`【${char.name}】`);
 
     const brief = safeString((char as any).briefDescription);
     if (includeStory && brief.trim()) {
       charParts.push(`定位: ${brief.trim()}`);
     }
-    
+
     if (includeVisual && safeString((char as any).appearance).trim()) {
       charParts.push(`外貌: ${safeString((char as any).appearance).trim()}`);
     }
@@ -134,7 +137,7 @@ export function buildCharacterContext(
     if (includeStory && safeString((char as any).background).trim()) {
       charParts.push(`背景: ${safeString((char as any).background).trim()}`);
     }
-    
+
     // 添加主题色信息（如果存在）
     const primaryColor = safeString((char as any).primaryColor).trim();
     const secondaryColor = safeString((char as any).secondaryColor).trim();
@@ -153,7 +156,9 @@ export function buildCharacterContext(
     const portraitGeneral = safeString((char as any).portraitPrompts?.general);
     if (includeVisual && includePortraitPrompt && portraitGeneral.trim()) {
       const snippet = portraitGeneral.trim().slice(0, 180);
-      charParts.push(`定妆照参考: ${snippet}${portraitGeneral.trim().length > snippet.length ? '...' : ''}`);
+      charParts.push(
+        `定妆照参考: ${snippet}${portraitGeneral.trim().length > snippet.length ? '...' : ''}`,
+      );
     }
 
     // 关系（story/full 模式）
@@ -176,17 +181,17 @@ export function buildCharacterContext(
       const bgCount = appearances.filter((a) => a.role === 'background').length;
       charParts.push(`出场: 主${mainCount}/配${supportingCount}/景${bgCount}`);
     }
-    
+
     parts.push(charParts.join('\n'));
   }
 
   let result = parts.join('\n\n');
-  
+
   // 长度控制
   if (result.length > maxLength) {
     result = result.slice(0, maxLength - 3) + '...';
   }
-  
+
   return result;
 }
 
@@ -194,9 +199,7 @@ export function buildCharacterContext(
  * 构建画风上下文
  * 使用完整的画风提示词作为上下文
  */
-export function buildStyleContext(
-  artStyle?: ArtStyleConfig
-): string {
+export function buildStyleContext(artStyle?: ArtStyleConfig): string {
   if (!artStyle) {
     return '';
   }
@@ -220,9 +223,7 @@ export function buildStyleContext(
  * 构建世界观上下文
  * 将世界观要素按类型分组并格式化
  */
-export function buildWorldViewContext(
-  elements: WorldViewElement[]
-): string {
+export function buildWorldViewContext(elements: WorldViewElement[]): string {
   if (!elements || elements.length === 0) {
     return '';
   }
@@ -255,11 +256,11 @@ export function buildWorldViewContext(
   // 格式化输出
   const contextParts: string[] = [];
 
-  (Object.keys(grouped) as WorldViewType[]).forEach(type => {
+  (Object.keys(grouped) as WorldViewType[]).forEach((type) => {
     const items = grouped[type];
     if (items.length > 0) {
       const label = typeLabels[type];
-      const content = items.map(el => `【${el.title}】${el.content}`).join('\n');
+      const content = items.map((el) => `【${el.title}】${el.content}`).join('\n');
       contextParts.push(`## ${label}\n${content}`);
     }
   });
@@ -305,27 +306,29 @@ export function buildFullContext(options: ContextBuildOptions): string {
  * 填充提示词模板
  * 用上下文信息替换模板中的占位符
  */
-export function fillPromptTemplate(
-  template: string,
-  options: ContextBuildOptions
-): string {
+export function fillPromptTemplate(template: string, options: ContextBuildOptions): string {
   let result = template;
 
   // 构建各类上下文
-  const styleContext = options.artStyle 
-    ? buildStyleContext(options.artStyle) 
-    : '';
+  const styleContext = options.artStyle ? buildStyleContext(options.artStyle) : '';
 
   const charVisualContext =
-    options.characters && options.characters.length > 0 ? buildCharacterContext(options.characters, { mode: 'visual' }) : '';
+    options.characters && options.characters.length > 0
+      ? buildCharacterContext(options.characters, { mode: 'visual' })
+      : '';
   const charStoryContext =
-    options.characters && options.characters.length > 0 ? buildCharacterContext(options.characters, { mode: 'story' }) : '';
+    options.characters && options.characters.length > 0
+      ? buildCharacterContext(options.characters, { mode: 'story' })
+      : '';
   const charFullContext =
-    options.characters && options.characters.length > 0 ? buildCharacterContext(options.characters, { mode: 'full' }) : '';
-  
-  const worldContext = options.worldViewElements && options.worldViewElements.length > 0
-    ? buildWorldViewContext(options.worldViewElements)
-    : '';
+    options.characters && options.characters.length > 0
+      ? buildCharacterContext(options.characters, { mode: 'full' })
+      : '';
+
+  const worldContext =
+    options.worldViewElements && options.worldViewElements.length > 0
+      ? buildWorldViewContext(options.worldViewElements)
+      : '';
 
   // 替换已知变量
   const replacements: Record<string, string> = {
@@ -333,18 +336,18 @@ export function fillPromptTemplate(
     '{style}': styleContext,
     '{styleFullPrompt}': styleContext,
     '{{styleFullPrompt}}': styleContext,
-    
+
     // 角色相关
     '{characters}': charVisualContext,
     '{characters_visual}': charVisualContext,
     '{characters_story}': charStoryContext,
     '{characters_full}': charFullContext,
     '{protagonist}': options.protagonist || charStoryContext || charVisualContext,
-    
+
     // 世界观相关
     '{worldview}': worldContext,
     '{world_view}': worldContext,
-    
+
     // 场景相关
     '{scene_description}': options.sceneDescription || '',
     '{scene_summary}': options.sceneSummary || '',
@@ -356,7 +359,7 @@ export function fillPromptTemplate(
     '{keyframe_prompt}': options.shotPrompt || '',
     '{keyframe_prompts}': options.shotPrompt || '',
     '{motion_prompt}': options.motionPrompt || '',
-     
+
     // 故事相关
     '{summary}': options.summary || '',
     '{{summary}}': options.summary || '',
@@ -386,10 +389,7 @@ export function fillPromptTemplate(
  * 获取用于特定Skill的增强上下文
  * 根据Skill的requiredContext自动构建所需的上下文
  */
-export function buildContextForSkill(
-  skillName: string,
-  options: ContextBuildOptions
-): string {
+export function buildContextForSkill(skillName: string, options: ContextBuildOptions): string {
   // 根据不同的skill返回定制化的上下文
   switch (skillName) {
     case 'scene-list':
@@ -399,7 +399,7 @@ export function buildContextForSkill(
         artStyle: options.artStyle,
         worldViewElements: options.worldViewElements,
       });
-    
+
     case 'scene-description':
       // 场景锚点：通常只需要画风、世界观（以及分镜概要/前序概要）
       return buildFullContext({
@@ -407,26 +407,26 @@ export function buildContextForSkill(
         characters: options.characters,
         worldViewElements: options.worldViewElements,
       });
-    
+
     case 'keyframe-prompt':
       // 关键帧提示词：需要画风、角色
       return buildFullContext({
         artStyle: options.artStyle,
         characters: options.characters,
       });
-    
+
     case 'motion-prompt':
       // 时空/运动提示词：需要画风
       return buildFullContext({
         artStyle: options.artStyle,
       });
-    
+
     case 'dialogue':
       // 台词生成：需要角色
       return buildFullContext({
         characters: options.characters,
       });
-    
+
     default:
       return buildFullContext(options);
   }

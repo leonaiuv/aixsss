@@ -5,7 +5,7 @@
 // 1. 音频/配音提示词生成（语调、情绪、声线）
 // 2. BGM与音效标注（情绪氛围、乐器、节奏）
 // 3. 分镜间转场指令（淡入淡出、推拉等）
-// 
+//
 // 支持两种模式：
 // - 规则引擎：快速、零延迟、可预测
 // - AI智能生成：理解语义、更精准（带fallback）
@@ -62,41 +62,41 @@ export interface TransitionPrompt {
 // 情绪到语调映射
 // ==========================================
 const EMOTION_TO_VOICE_TONE: Record<string, string> = {
-  '激动': 'energetic',
-  '兴奋': 'energetic',
-  '开心': 'cheerful',
-  '快乐': 'cheerful',
-  '悲伤': 'melancholic',
-  '难过': 'sorrowful',
-  '愤怒': 'aggressive',
-  '生气': 'angry',
-  '恐惧': 'trembling',
-  '害怕': 'fearful',
-  '平静': 'calm',
-  '冷静': 'composed',
-  '惊讶': 'surprised',
-  '紧张': 'nervous',
-  '温柔': 'gentle',
-  '坚定': 'determined',
+  激动: 'energetic',
+  兴奋: 'energetic',
+  开心: 'cheerful',
+  快乐: 'cheerful',
+  悲伤: 'melancholic',
+  难过: 'sorrowful',
+  愤怒: 'aggressive',
+  生气: 'angry',
+  恐惧: 'trembling',
+  害怕: 'fearful',
+  平静: 'calm',
+  冷静: 'composed',
+  惊讶: 'surprised',
+  紧张: 'nervous',
+  温柔: 'gentle',
+  坚定: 'determined',
 };
 
 const EMOTION_TO_ENGLISH: Record<string, string> = {
-  '激动': 'excited',
-  '兴奋': 'excited',
-  '开心': 'happy',
-  '快乐': 'joyful',
-  '悲伤': 'sad',
-  '难过': 'sorrowful',
-  '愤怒': 'angry',
-  '生气': 'angry',
-  '恐惧': 'fearful',
-  '害怕': 'scared',
-  '平静': 'calm',
-  '冷静': 'composed',
-  '惊讶': 'surprised',
-  '紧张': 'nervous',
-  '温柔': 'gentle',
-  '坚定': 'determined',
+  激动: 'excited',
+  兴奋: 'excited',
+  开心: 'happy',
+  快乐: 'joyful',
+  悲伤: 'sad',
+  难过: 'sorrowful',
+  愤怒: 'angry',
+  生气: 'angry',
+  恐惧: 'fearful',
+  害怕: 'scared',
+  平静: 'calm',
+  冷静: 'composed',
+  惊讶: 'surprised',
+  紧张: 'nervous',
+  温柔: 'gentle',
+  坚定: 'determined',
 };
 
 // ==========================================
@@ -129,10 +129,10 @@ export function generateAudioPrompt(dialogue: DialogueLine): AudioPrompt {
   const emotion = dialogue.emotion || '平静';
   const voiceTone = EMOTION_TO_VOICE_TONE[emotion] || 'neutral';
   const emotionEn = EMOTION_TO_ENGLISH[emotion] || 'neutral';
-  
+
   // 根据台词类型确定声线风格
   let voiceStyle = 'natural';
-  
+
   switch (dialogue.type) {
     case 'narration':
       voiceStyle = 'narrator, professional, clear';
@@ -174,15 +174,15 @@ export function generateAudioPrompt(dialogue: DialogueLine): AudioPrompt {
 export function parseAudioPrompt(promptText: string): AudioPrompt {
   const voiceMatch = promptText.match(/\[voice:\s*([^\]]+)\]/);
   const styleMatch = promptText.match(/\[style:\s*([^\]]+)\]/);
-  
+
   // 移除所有方括号标记后提取文本
   const textOnly = promptText.replace(/\[[^\]]+\]/g, '').trim();
-  
+
   let voiceTone = 'neutral';
   let emotion = 'neutral';
-  
+
   if (voiceMatch) {
-    const voiceParts = voiceMatch[1].split(',').map(s => s.trim());
+    const voiceParts = voiceMatch[1].split(',').map((s) => s.trim());
     voiceTone = voiceParts[0] || 'neutral';
     emotion = voiceParts[1] || 'neutral';
   }
@@ -205,20 +205,20 @@ export function parseAudioPrompt(promptText: string): AudioPrompt {
  */
 export function generateBGMPrompt(scene: Scene): BGMPrompt {
   const sceneText = `${scene.summary} ${scene.sceneDescription}`;
-  
+
   // 分析情绪氛围
   let mood = 'neutral';
   for (const [moodType, keywords] of Object.entries(SCENE_MOOD_KEYWORDS)) {
-    if (keywords.some(kw => sceneText.includes(kw))) {
+    if (keywords.some((kw) => sceneText.includes(kw))) {
       mood = moodType;
       break;
     }
   }
-  
+
   // 分析节奏
   let tempo = 'moderate';
   for (const [tempoType, keywords] of Object.entries(TEMPO_KEYWORDS)) {
-    if (keywords.some(kw => sceneText.includes(kw))) {
+    if (keywords.some((kw) => sceneText.includes(kw))) {
       tempo = tempoType;
       break;
     }
@@ -226,11 +226,11 @@ export function generateBGMPrompt(scene: Scene): BGMPrompt {
   // 别名映射
   if (tempo === 'fast') tempo = 'allegro';
   if (tempo === 'slow') tempo = 'adagio';
-  
+
   // 根据情绪选择音乐风格和乐器
   let genre = 'orchestral';
   let instruments: string[] = ['strings', 'brass'];
-  
+
   switch (mood) {
     case 'epic':
       genre = 'orchestral epic';
@@ -257,7 +257,7 @@ export function generateBGMPrompt(scene: Scene): BGMPrompt {
       instruments = ['piano', 'acoustic guitar', 'flute'];
       break;
   }
-  
+
   // 提取音效
   const soundEffects: string[] = [];
   if (sceneText.includes('森林') || sceneText.includes('鸟')) {
@@ -275,7 +275,7 @@ export function generateBGMPrompt(scene: Scene): BGMPrompt {
   if (sceneText.includes('脚步') || sceneText.includes('走')) {
     soundEffects.push('footsteps');
   }
-  
+
   return {
     mood,
     genre,
@@ -299,12 +299,8 @@ export function parseBGMPrompt(promptText: string): BGMPrompt {
     mood: moodMatch ? moodMatch[1].trim() : 'neutral',
     genre: genreMatch ? genreMatch[1].trim() : 'orchestral',
     tempo: tempoMatch ? tempoMatch[1].trim() : 'moderate',
-    instruments: instrumentsMatch 
-      ? instrumentsMatch[1].split(',').map(s => s.trim()) 
-      : [],
-    soundEffects: sfxMatch 
-      ? sfxMatch[1].split(',').map(s => s.trim()) 
-      : [],
+    instruments: instrumentsMatch ? instrumentsMatch[1].split(',').map((s) => s.trim()) : [],
+    soundEffects: sfxMatch ? sfxMatch[1].split(',').map((s) => s.trim()) : [],
   };
 }
 
@@ -315,21 +311,18 @@ export function parseBGMPrompt(promptText: string): BGMPrompt {
 /**
  * 根据前后场景生成转场指令
  */
-export function generateTransitionPrompt(
-  prevScene: Scene,
-  nextScene: Scene
-): TransitionPrompt {
+export function generateTransitionPrompt(prevScene: Scene, nextScene: Scene): TransitionPrompt {
   const prevDesc = prevScene.sceneDescription.toLowerCase();
   const nextDesc = nextScene.sceneDescription.toLowerCase();
   const prevSummary = prevScene.summary;
   const nextSummary = nextScene.summary;
-  
+
   // 默认值
   let type = 'cut';
   let duration = 0.3;
   let direction: string | undefined;
   let easing = 'ease-in-out';
-  
+
   // 黑屏场景 -> 淡入（但要排除正常文本场景）
   const isPrevBlack = prevDesc.includes('黑屏') || (prevDesc === '' && prevSummary === '');
   if (isPrevBlack) {
@@ -345,7 +338,7 @@ export function generateTransitionPrompt(
   }
   // 时间跳跃
   else if (
-    nextSummary.includes('年后') || 
+    nextSummary.includes('年后') ||
     nextSummary.includes('天后') ||
     nextSummary.includes('之后') ||
     /\d+年/.test(nextSummary)
@@ -383,11 +376,11 @@ export function generateTransitionPrompt(
     duration,
     easing,
   };
-  
+
   if (direction) {
     result.direction = direction;
   }
-  
+
   return result;
 }
 
@@ -399,7 +392,7 @@ export function parseTransitionPrompt(promptText: string): TransitionPrompt {
   const durationMatch = promptText.match(/\[duration:\s*([^\]]+)\]/);
   const directionMatch = promptText.match(/\[direction:\s*([^\]]+)\]/);
   const easingMatch = promptText.match(/\[easing:\s*([^\]]+)\]/);
-  
+
   // 解析持续时间
   let duration = 0.5;
   if (durationMatch) {
@@ -412,11 +405,11 @@ export function parseTransitionPrompt(promptText: string): TransitionPrompt {
     duration,
     easing: easingMatch ? easingMatch[1].trim() : 'ease-in-out',
   };
-  
+
   if (directionMatch) {
     result.direction = directionMatch[1].trim();
   }
-  
+
   return result;
 }
 
@@ -531,18 +524,18 @@ interface SimpleAIClient {
 export async function generateAudioPromptWithAI(
   client: SimpleAIClient,
   dialogue: DialogueLine,
-  character?: Character
+  character?: Character,
 ): Promise<AudioPrompt> {
   try {
-    const characterInfo = character 
+    const characterInfo = character
       ? `角色名: ${character.name}\n性格: ${character.personality || '未设定'}`
       : `角色名: ${dialogue.characterName || '未知'}`;
 
     const dialogueTypeMap: Record<string, string> = {
-      'dialogue': '对白',
-      'monologue': '独白',
-      'narration': '旁白',
-      'thought': '内心独白',
+      dialogue: '对白',
+      monologue: '独白',
+      narration: '旁白',
+      thought: '内心独白',
     };
 
     const prompt = AudioPromptSkill.promptTemplate
@@ -574,7 +567,7 @@ export async function generateAudioPromptWithAI(
 export async function generateBGMPromptWithAI(
   client: SimpleAIClient,
   scene: Scene,
-  styleFullPrompt?: string
+  styleFullPrompt?: string,
 ): Promise<BGMPrompt> {
   try {
     const prompt = BGMPromptSkill.promptTemplate
@@ -606,7 +599,7 @@ export async function generateBGMPromptWithAI(
 export async function generateTransitionPromptWithAI(
   client: SimpleAIClient,
   prevScene: Scene,
-  nextScene: Scene
+  nextScene: Scene,
 ): Promise<TransitionPrompt> {
   try {
     const prompt = TransitionPromptSkill.promptTemplate

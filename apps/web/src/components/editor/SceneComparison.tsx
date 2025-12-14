@@ -31,9 +31,7 @@ interface SceneComparisonProps {
 
 export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
   const [leftSceneId, setLeftSceneId] = useState<string>(scenes[0]?.id || '');
-  const [rightSceneId, setRightSceneId] = useState<string>(
-    scenes[1]?.id || ''
-  );
+  const [rightSceneId, setRightSceneId] = useState<string>(scenes[1]?.id || '');
 
   const leftScene = scenes.find((s) => s.id === leftSceneId);
   const rightScene = scenes.find((s) => s.id === rightSceneId);
@@ -55,9 +53,7 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <GitCompare className="h-12 w-12 text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold mb-2">需要至少2个分镜</h3>
-        <p className="text-sm text-muted-foreground">
-          创建更多分镜后才能使用对比功能
-        </p>
+        <p className="text-sm text-muted-foreground">创建更多分镜后才能使用对比功能</p>
       </div>
     );
   }
@@ -71,9 +67,7 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
         </div>
         <div>
           <h2 className="text-xl font-bold">分镜对比</h2>
-          <p className="text-sm text-muted-foreground">
-            并排对比两个分镜，发现差异并合并内容
-          </p>
+          <p className="text-sm text-muted-foreground">并排对比两个分镜，发现差异并合并内容</p>
         </div>
       </div>
 
@@ -178,15 +172,11 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">场景锚点</span>
-                <span>
-                  {leftScene.sceneDescription ? '已生成' : '未生成'}
-                </span>
+                <span>{leftScene.sceneDescription ? '已生成' : '未生成'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">动作描述</span>
-                <span>
-                  {leftScene.actionDescription ? '已生成' : '未生成'}
-                </span>
+                <span>{leftScene.actionDescription ? '已生成' : '未生成'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">提示词</span>
@@ -204,15 +194,11 @@ export function SceneComparison({ scenes, onMerge }: SceneComparisonProps) {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">场景锚点</span>
-                <span>
-                  {rightScene.sceneDescription ? '已生成' : '未生成'}
-                </span>
+                <span>{rightScene.sceneDescription ? '已生成' : '未生成'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">动作描述</span>
-                <span>
-                  {rightScene.actionDescription ? '已生成' : '未生成'}
-                </span>
+                <span>{rightScene.actionDescription ? '已生成' : '未生成'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">提示词</span>
@@ -258,12 +244,7 @@ function ComparisonField({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">左侧</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCopyToRight}
-              disabled={!isDifferent}
-            >
+            <Button variant="ghost" size="sm" onClick={onCopyToRight} disabled={!isDifferent}>
               <Copy className="h-3 w-3 mr-1" />
               复制到右侧
             </Button>
@@ -271,9 +252,7 @@ function ComparisonField({
           <ScrollArea className="h-[200px] w-full rounded-md border p-4">
             <p
               className={`text-sm whitespace-pre-wrap ${
-                !leftContent || leftContent === '(未生成)'
-                  ? 'text-muted-foreground italic'
-                  : ''
+                !leftContent || leftContent === '(未生成)' ? 'text-muted-foreground italic' : ''
               }`}
             >
               {leftContent}
@@ -285,12 +264,7 @@ function ComparisonField({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">右侧</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCopyToLeft}
-              disabled={!isDifferent}
-            >
+            <Button variant="ghost" size="sm" onClick={onCopyToLeft} disabled={!isDifferent}>
               <Copy className="h-3 w-3 mr-1" />
               复制到左侧
             </Button>
@@ -298,9 +272,7 @@ function ComparisonField({
           <ScrollArea className="h-[200px] w-full rounded-md border p-4">
             <p
               className={`text-sm whitespace-pre-wrap ${
-                !rightContent || rightContent === '(未生成)'
-                  ? 'text-muted-foreground italic'
-                  : ''
+                !rightContent || rightContent === '(未生成)' ? 'text-muted-foreground italic' : ''
               }`}
             >
               {rightContent}

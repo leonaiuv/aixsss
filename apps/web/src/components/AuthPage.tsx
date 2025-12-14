@@ -39,7 +39,9 @@ export function AuthPage() {
         <CardHeader>
           <CardTitle>{mode === 'login' ? '登录' : '注册'}</CardTitle>
           <CardDescription>
-            {mode === 'login' ? '使用账号进入你的工作区（数据将保存到服务端）。' : '创建账号并初始化团队。'}
+            {mode === 'login'
+              ? '使用账号进入你的工作区（数据将保存到服务端）。'
+              : '创建账号并初始化团队。'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -75,7 +77,11 @@ export function AuthPage() {
 
           {error && <div className="text-sm text-destructive">{error}</div>}
 
-          <Button className="w-full" onClick={onSubmit} disabled={isLoading || !email.trim() || !password}>
+          <Button
+            className="w-full"
+            onClick={onSubmit}
+            disabled={isLoading || !email.trim() || !password}
+          >
             {mode === 'login' ? '登录' : '注册'}
           </Button>
 
@@ -94,5 +100,3 @@ export function AuthPage() {
     </div>
   );
 }
-
-

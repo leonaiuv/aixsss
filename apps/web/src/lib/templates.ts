@@ -80,7 +80,7 @@ export const BUILT_IN_TEMPLATES: PromptTemplate[] = [
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
   },
-  
+
   // 动作描述模板
   {
     id: 'builtin_action_dramatic',
@@ -130,7 +130,7 @@ export const BUILT_IN_TEMPLATES: PromptTemplate[] = [
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
   },
-  
+
   // 镜头提示词模板
   {
     id: 'builtin_prompt_midjourney',
@@ -226,7 +226,7 @@ export const BUILT_IN_TEMPLATES: PromptTemplate[] = [
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
   },
-  
+
   // 风格化模板
   {
     id: 'builtin_style_ink',
@@ -284,14 +284,14 @@ export const BUILT_IN_TEMPLATES: PromptTemplate[] = [
  * 根据ID获取模板
  */
 export function getTemplateById(id: string): PromptTemplate | undefined {
-  return BUILT_IN_TEMPLATES.find(t => t.id === id);
+  return BUILT_IN_TEMPLATES.find((t) => t.id === id);
 }
 
 /**
  * 根据分类获取模板
  */
 export function getTemplatesByCategory(category: string): PromptTemplate[] {
-  return BUILT_IN_TEMPLATES.filter(t => t.category === category);
+  return BUILT_IN_TEMPLATES.filter((t) => t.category === category);
 }
 
 /**
@@ -299,14 +299,14 @@ export function getTemplatesByCategory(category: string): PromptTemplate[] {
  */
 export function applyTemplateVariables(
   template: string,
-  variables: Record<string, string>
+  variables: Record<string, string>,
 ): string {
   let result = template;
-  
+
   for (const [key, value] of Object.entries(variables)) {
     const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
     result = result.replace(regex, value);
   }
-  
+
   return result;
 }

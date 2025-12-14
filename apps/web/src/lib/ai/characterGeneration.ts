@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import type { AIResponse, ArtStyleConfig, Character, PortraitPrompts, WorldViewElement } from '@/types';
+import type {
+  AIResponse,
+  ArtStyleConfig,
+  Character,
+  PortraitPrompts,
+  WorldViewElement,
+} from '@/types';
 import { fillPromptTemplate } from '@/lib/ai/contextBuilder';
 import { CharacterBasicInfoSkill, CharacterPortraitSkill } from '@/lib/ai/skills';
 import { parseFirstJSONObject } from '@/lib/ai/jsonExtractor';
@@ -98,7 +104,9 @@ export function buildCharacterPortraitPrompt(input: {
   });
 }
 
-export function parseCharacterBasicInfo(raw: string): { ok: true; value: CharacterBasicInfoOutput } | { ok: false; error: ParsedJsonError } {
+export function parseCharacterBasicInfo(
+  raw: string,
+): { ok: true; value: CharacterBasicInfoOutput } | { ok: false; error: ParsedJsonError } {
   const first = parseFirstJSONObject(raw);
   if (!first.ok) {
     return {
@@ -116,7 +124,9 @@ export function parseCharacterBasicInfo(raw: string): { ok: true; value: Charact
       ok: false,
       error: {
         reason: 'JSON 字段不完整或类型不正确',
-        details: parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('\n'),
+        details: parsed.error.issues
+          .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+          .join('\n'),
       },
     };
   }
@@ -144,7 +154,9 @@ export function parseCharacterPortraitPrompts(
       ok: false,
       error: {
         reason: 'JSON 字段不完整或类型不正确',
-        details: parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('\n'),
+        details: parsed.error.issues
+          .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+          .join('\n'),
       },
     };
   }
@@ -173,7 +185,10 @@ ${original}
 `;
 }
 
-export function mergeTokenUsage(a?: AIResponse['tokenUsage'], b?: AIResponse['tokenUsage']): AIResponse['tokenUsage'] | undefined {
+export function mergeTokenUsage(
+  a?: AIResponse['tokenUsage'],
+  b?: AIResponse['tokenUsage'],
+): AIResponse['tokenUsage'] | undefined {
   if (!a && !b) return undefined;
   return {
     prompt: (a?.prompt ?? 0) + (b?.prompt ?? 0),
@@ -181,5 +196,3 @@ export function mergeTokenUsage(a?: AIResponse['tokenUsage'], b?: AIResponse['to
     total: (a?.total ?? 0) + (b?.total ?? 0),
   };
 }
-
-

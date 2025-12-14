@@ -1,7 +1,17 @@
 import { create } from 'zustand';
-import { Character, PortraitPrompts, type CharacterRelationship, type SceneAppearance } from '@/types';
+import {
+  Character,
+  PortraitPrompts,
+  type CharacterRelationship,
+  type SceneAppearance,
+} from '@/types';
 import { isApiMode } from '@/lib/runtime/mode';
-import { apiCreateCharacter, apiDeleteCharacter, apiListCharacters, apiUpdateCharacter } from '@/lib/api/characters';
+import {
+  apiCreateCharacter,
+  apiDeleteCharacter,
+  apiListCharacters,
+  apiUpdateCharacter,
+} from '@/lib/api/characters';
 
 function safeString(value: unknown): string {
   return typeof value === 'string' ? value : '';
@@ -78,14 +88,23 @@ interface CharacterStore {
   characters: Character[];
   currentCharacterId: string | null;
   isLoading: boolean;
-  
+
   // 操作方法
   loadCharacters: (projectId: string) => void;
-  addCharacter: (projectId: string, character: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>) => Character;
+  addCharacter: (
+    projectId: string,
+    character: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>,
+  ) => Character;
   updateCharacter: (projectId: string, characterId: string, updates: Partial<Character>) => void;
   deleteCharacter: (projectId: string, characterId: string) => void;
   setCurrentCharacter: (characterId: string | null) => void;
-  recordAppearance: (projectId: string, characterId: string, sceneId: string, role: 'main' | 'supporting' | 'background', notes?: string) => void;
+  recordAppearance: (
+    projectId: string,
+    characterId: string,
+    sceneId: string,
+    role: 'main' | 'supporting' | 'background',
+    notes?: string,
+  ) => void;
   updatePortraitPrompts: (projectId: string, characterId: string, prompts: PortraitPrompts) => void;
   getCharactersByProject: (projectId: string) => Character[];
 }
@@ -94,14 +113,17 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   characters: [],
   currentCharacterId: null,
   isLoading: false,
-  
+
   loadCharacters: (projectId: string) => {
     set({ isLoading: true });
     if (isApiMode()) {
       void (async () => {
         try {
           const characters = await apiListCharacters(projectId);
-          set({ characters: characters.map((c) => normalizeCharacter(c, projectId)), isLoading: false });
+          set({
+            characters: characters.map((c) => normalizeCharacter(c, projectId)),
+            isLoading: false,
+          });
         } catch (error) {
           console.error('Failed to load characters (api):', error);
           set({ isLoading: false });
@@ -120,7 +142,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       set({ isLoading: false });
     }
   },
-  
+
   addCharacter: (projectId: string, characterData) => {
     const now = new Date().toISOString();
     const newCharacter: Character = {
@@ -131,7 +153,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
-    
+
     const characters = [...get().characters, newCharacter];
     set({ characters });
 
@@ -151,18 +173,16 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
         }
       })();
     }
-    
+
     return newCharacter;
   },
-  
+
   updateCharacter: (projectId: string, characterId: string, updates: Partial<Character>) => {
     const characters = get().characters;
-    const updated = characters.map(char =>
-      char.id === characterId
-        ? { ...char, ...updates, updatedAt: new Date().toISOString() }
-        : char
+    const updated = characters.map((char) =>
+      char.id === characterId ? { ...char, ...updates, updatedAt: new Date().toISOString() } : char,
     );
-    
+
     set({ characters: updated });
     if (!isApiMode()) {
       saveCharacters(projectId, updated);
@@ -181,9 +201,9 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       })();
     }
   },
-  
+
   deleteCharacter: (projectId: string, characterId: string) => {
-    const characters = get().characters.filter(char => char.id !== characterId);
+    const characters = get().characters.filter((char) => char.id !== characterId);
     set({ characters });
     if (!isApiMode()) {
       saveCharacters(projectId, characters);
@@ -198,24 +218,24 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       })();
     }
   },
-  
+
   setCurrentCharacter: (characterId: string | null) => {
     set({ currentCharacterId: characterId });
   },
-  
+
   recordAppearance: (projectId: string, characterId: string, sceneId: string, role, notes = '') => {
     const characters = get().characters;
-    const updated = characters.map(char => {
+    const updated = characters.map((char) => {
       if (char.id === characterId) {
         const appearances = [...char.appearances];
-        const existingIndex = appearances.findIndex(a => a.sceneId === sceneId);
-        
+        const existingIndex = appearances.findIndex((a) => a.sceneId === sceneId);
+
         if (existingIndex >= 0) {
           appearances[existingIndex] = { sceneId, role, notes };
         } else {
           appearances.push({ sceneId, role, notes });
         }
-        
+
         return {
           ...char,
           appearances,
@@ -224,7 +244,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       }
       return char;
     });
-    
+
     set({ characters: updated });
     if (!isApiMode()) {
       saveCharacters(projectId, updated);
@@ -232,7 +252,9 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       const character = updated.find((c) => c.id === characterId);
       void (async () => {
         try {
-          const saved = await apiUpdateCharacter(projectId, characterId, { appearances: character?.appearances ?? [] });
+          const saved = await apiUpdateCharacter(projectId, characterId, {
+            appearances: character?.appearances ?? [],
+          });
           const normalized = normalizeCharacter(saved, projectId);
           set((state) => ({
             characters: state.characters.map((c) => (c.id === characterId ? normalized : c)),
@@ -244,22 +266,24 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       })();
     }
   },
-  
+
   updatePortraitPrompts: (projectId: string, characterId: string, prompts: PortraitPrompts) => {
     const characters = get().characters;
-    const updated = characters.map(char =>
+    const updated = characters.map((char) =>
       char.id === characterId
         ? { ...char, portraitPrompts: prompts, updatedAt: new Date().toISOString() }
-        : char
+        : char,
     );
-    
+
     set({ characters: updated });
     if (!isApiMode()) {
       saveCharacters(projectId, updated);
     } else {
       void (async () => {
         try {
-          const saved = await apiUpdateCharacter(projectId, characterId, { portraitPrompts: prompts });
+          const saved = await apiUpdateCharacter(projectId, characterId, {
+            portraitPrompts: prompts,
+          });
           const normalized = normalizeCharacter(saved, projectId);
           set((state) => ({
             characters: state.characters.map((c) => (c.id === characterId ? normalized : c)),
@@ -271,9 +295,9 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
       })();
     }
   },
-  
+
   getCharactersByProject: (projectId: string) => {
-    return get().characters.filter(char => char.projectId === projectId);
+    return get().characters.filter((char) => char.projectId === projectId);
   },
 }));
 

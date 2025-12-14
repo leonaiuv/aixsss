@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useConfigStore } from '@/stores/configStore';
-import { ProviderType, type AIGenerationParams, type AIPricing, type ConnectionTestResult } from '@/types';
+import {
+  ProviderType,
+  type AIGenerationParams,
+  type AIPricing,
+  type ConnectionTestResult,
+} from '@/types';
 import { ENCRYPTION_CHECK_KEY, KeyManager, verifyMasterPassword } from '@/lib/keyManager';
 import { initializeEncryption, changeEncryptionPassword } from '@/lib/storage';
 import { useAIUsageStore, calculateUsageStats, estimateUsageCostUSD } from '@/stores/aiUsageStore';
@@ -19,7 +24,20 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Loader2, Shield, ShieldAlert, Lock, Sliders, Layers, Copy, Trash2, Plus, CopyPlus } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  Shield,
+  ShieldAlert,
+  Lock,
+  Sliders,
+  Layers,
+  Copy,
+  Trash2,
+  Plus,
+  CopyPlus,
+} from 'lucide-react';
 import { AIParameterTuner } from './editor/AIParameterTuner';
 
 const DEFAULT_GENERATION_PARAMS: AIGenerationParams = {
@@ -30,10 +48,23 @@ const DEFAULT_GENERATION_PARAMS: AIGenerationParams = {
   frequencyPenalty: 0.3,
 };
 
-const PROVIDER_PRESETS: Record<ProviderType, Array<{ id: string; label: string; model: string; baseURL?: string }>> = {
+const PROVIDER_PRESETS: Record<
+  ProviderType,
+  Array<{ id: string; label: string; model: string; baseURL?: string }>
+> = {
   deepseek: [
-    { id: 'deepseek-default', label: 'DeepSeek 默认（deepseek-chat）', model: 'deepseek-chat', baseURL: 'https://api.deepseek.com' },
-    { id: 'deepseek-reasoner', label: 'DeepSeek 推理（deepseek-reasoner）', model: 'deepseek-reasoner', baseURL: 'https://api.deepseek.com' },
+    {
+      id: 'deepseek-default',
+      label: 'DeepSeek 默认（deepseek-chat）',
+      model: 'deepseek-chat',
+      baseURL: 'https://api.deepseek.com',
+    },
+    {
+      id: 'deepseek-reasoner',
+      label: 'DeepSeek 推理（deepseek-reasoner）',
+      model: 'deepseek-reasoner',
+      baseURL: 'https://api.deepseek.com',
+    },
   ],
   kimi: [
     { id: 'kimi-8k', label: 'Kimi 8k（moonshot-v1-8k）', model: 'moonshot-v1-8k' },
@@ -41,20 +72,48 @@ const PROVIDER_PRESETS: Record<ProviderType, Array<{ id: string; label: string; 
     { id: 'kimi-128k', label: 'Kimi 128k（moonshot-v1-128k）', model: 'moonshot-v1-128k' },
   ],
   gemini: [
-    { id: 'gemini-flash', label: 'Gemini Flash（gemini-1.5-flash）', model: 'gemini-1.5-flash', baseURL: 'https://generativelanguage.googleapis.com' },
-    { id: 'gemini-pro', label: 'Gemini Pro（gemini-1.5-pro）', model: 'gemini-1.5-pro', baseURL: 'https://generativelanguage.googleapis.com' },
-    { id: 'gemini-legacy', label: 'Gemini 旧版（gemini-pro）', model: 'gemini-pro', baseURL: 'https://generativelanguage.googleapis.com' },
+    {
+      id: 'gemini-flash',
+      label: 'Gemini Flash（gemini-1.5-flash）',
+      model: 'gemini-1.5-flash',
+      baseURL: 'https://generativelanguage.googleapis.com',
+    },
+    {
+      id: 'gemini-pro',
+      label: 'Gemini Pro（gemini-1.5-pro）',
+      model: 'gemini-1.5-pro',
+      baseURL: 'https://generativelanguage.googleapis.com',
+    },
+    {
+      id: 'gemini-legacy',
+      label: 'Gemini 旧版（gemini-pro）',
+      model: 'gemini-pro',
+      baseURL: 'https://generativelanguage.googleapis.com',
+    },
   ],
   'openai-compatible': [
-    { id: 'openai-official-mini', label: 'OpenAI 官方（gpt-4o-mini）', model: 'gpt-4o-mini', baseURL: 'https://api.openai.com' },
-    { id: 'openai-official', label: 'OpenAI 官方（gpt-4o）', model: 'gpt-4o', baseURL: 'https://api.openai.com' },
-    { id: 'openai-35', label: 'OpenAI（gpt-3.5-turbo）', model: 'gpt-3.5-turbo', baseURL: 'https://api.openai.com' },
+    {
+      id: 'openai-official-mini',
+      label: 'OpenAI 官方（gpt-4o-mini）',
+      model: 'gpt-4o-mini',
+      baseURL: 'https://api.openai.com',
+    },
+    {
+      id: 'openai-official',
+      label: 'OpenAI 官方（gpt-4o）',
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com',
+    },
+    {
+      id: 'openai-35',
+      label: 'OpenAI（gpt-3.5-turbo）',
+      model: 'gpt-3.5-turbo',
+      baseURL: 'https://api.openai.com',
+    },
   ],
 };
 
-function normalizeGenerationParams(
-  params: AIGenerationParams | undefined
-): AIGenerationParams {
+function normalizeGenerationParams(params: AIGenerationParams | undefined): AIGenerationParams {
   return {
     ...DEFAULT_GENERATION_PARAMS,
     ...params,
@@ -85,7 +144,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const { toast } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const usageEvents = useAIUsageStore((state) => state.events);
-  
+
   const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
   const [provider, setProvider] = useState<ProviderType>('deepseek');
   const [apiKey, setApiKey] = useState('');
@@ -96,7 +155,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const PRICING_UNIT_STORAGE_KEY = 'aixs_pricing_unit';
   const [pricingUnit, setPricingUnit] = useState<PricingUnit>(() => {
     try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PRICING_UNIT_STORAGE_KEY) : null;
+      const raw =
+        typeof localStorage !== 'undefined' ? localStorage.getItem(PRICING_UNIT_STORAGE_KEY) : null;
       return raw === 'per_1K' || raw === 'per_1M' ? raw : 'per_1M';
     } catch {
       return 'per_1M';
@@ -108,11 +168,10 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const [presetId, setPresetId] = useState<string>('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [generationParams, setGenerationParams] = useState<AIGenerationParams>(
-    DEFAULT_GENERATION_PARAMS
-  );
+  const [generationParams, setGenerationParams] =
+    useState<AIGenerationParams>(DEFAULT_GENERATION_PARAMS);
   const [aiTunerOpen, setAiTunerOpen] = useState(false);
-  
+
   // 加密密码相关状态
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
@@ -223,12 +282,16 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setModel(activeProfile.config.model);
       setGenerationParams(normalizeGenerationParams(activeProfile.config.generationParams));
       const factor = pricingUnit === 'per_1M' ? 1000 : 1;
-      setPricingInput(activeProfile.pricing ? String(activeProfile.pricing.promptPer1K * factor) : '');
-      setPricingOutput(activeProfile.pricing ? String(activeProfile.pricing.completionPer1K * factor) : '');
+      setPricingInput(
+        activeProfile.pricing ? String(activeProfile.pricing.promptPer1K * factor) : '',
+      );
+      setPricingOutput(
+        activeProfile.pricing ? String(activeProfile.pricing.completionPer1K * factor) : '',
+      );
       setPricingCachedInput(
         activeProfile.pricing && typeof activeProfile.pricing.cachedPromptPer1K === 'number'
           ? String(activeProfile.pricing.cachedPromptPer1K * factor)
-          : ''
+          : '',
       );
     } else {
       setProfileName('默认档案');
@@ -257,7 +320,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
   useEffect(() => {
     try {
-      if (typeof localStorage !== 'undefined') localStorage.setItem(PRICING_UNIT_STORAGE_KEY, pricingUnit);
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem(PRICING_UNIT_STORAGE_KEY, pricingUnit);
     } catch {
       // ignore
     }
@@ -277,7 +341,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       if (!Number.isFinite(n)) return raw;
       const converted = n * ratio;
       // 控制长度：避免出现很长的小数串
-      const normalized = Math.abs(converted) >= 1 ? Number(converted.toFixed(6)) : Number(converted.toFixed(8));
+      const normalized =
+        Math.abs(converted) >= 1 ? Number(converted.toFixed(6)) : Number(converted.toFixed(8));
       return String(normalized);
     };
 
@@ -342,7 +407,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
     // 后端模式：编辑已有服务端档案时，API Key 允许留空（表示“保持不变”）
     const requiresApiKey =
-      !apiMode || !activeProfileId || (typeof activeProfileId === 'string' && activeProfileId.startsWith('draft_'));
+      !apiMode ||
+      !activeProfileId ||
+      (typeof activeProfileId === 'string' && activeProfileId.startsWith('draft_'));
     if (requiresApiKey && !apiKey.trim()) errors.apiKey = 'API Key 不能为空';
 
     if (!model.trim()) errors.model = '模型名称不能为空';
@@ -378,10 +445,10 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
   const validationErrors = getValidationErrors();
   const hasConfigValidationErrors = Boolean(
-    validationErrors.apiKey || validationErrors.model || validationErrors.baseURL
+    validationErrors.apiKey || validationErrors.model || validationErrors.baseURL,
   );
   const hasProfileValidationErrors = Boolean(
-    validationErrors.profileName || validationErrors.pricing
+    validationErrors.profileName || validationErrors.pricing,
   );
   const hasSaveValidationErrors = hasConfigValidationErrors || hasProfileValidationErrors;
 
@@ -615,17 +682,17 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   // 设置加密密码
   const handleSetEncryptionPassword = () => {
     setPasswordError('');
-    
+
     if (encryptionPassword.length < 6) {
       setPasswordError('密码至少6位');
       return;
     }
-    
+
     if (encryptionPassword !== confirmPassword) {
       setPasswordError('密码不匹配');
       return;
     }
-    
+
     try {
       initializeEncryption(encryptionPassword);
       loadConfig();
@@ -644,7 +711,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   // 更换密码
   const handleChangePassword = () => {
     setPasswordError('');
-    
+
     if (newPassword.length < 6) {
       setPasswordError('新密码至少6位');
       return;
@@ -668,7 +735,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setPasswordError('解锁失败，请检查当前密码');
       return;
     }
-    
+
     const success = changeEncryptionPassword(newPassword);
     if (success) {
       setIsChangingPassword(false);
@@ -697,11 +764,11 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     localStorage.removeItem(ENCRYPTION_CHECK_KEY);
     KeyManager.reset();
     clearConfig();
-    
+
     setHasCustomPassword(false);
     setShowForgetConfirm(false);
     setApiKey('');
-    
+
     toast({
       title: '已重置加密',
       description: '请重新设置密码并配置 API Key',
@@ -719,172 +786,195 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               : '配置你的AI服务商API密钥。数据将加密存储在本地。'}
           </DialogDescription>
         </DialogHeader>
-        
+
         {/* 加密设置区域 */}
         {apiMode ? null : (
-        <div className="border rounded-lg p-4 bg-muted/30">
-          <div className="flex items-center gap-2 mb-3">
-            <Lock className="h-4 w-4" />
-            <span className="font-medium">加密设置</span>
-          </div>
-          
-          {isLocked ? (
-            <div className="space-y-3">
-              <div className="text-sm text-muted-foreground">
-                检测到已设置自定义加密密码。请先解锁后再查看/修改 API 配置。
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="unlockPassword">加密密码</Label>
-                <Input
-                  id="unlockPassword"
-                  type="password"
-                  value={unlockPassword}
-                  onChange={(e) => setUnlockPassword(e.target.value)}
-                  placeholder="请输入密码以解锁"
-                  className="h-11"
-                />
-              </div>
-              {unlockError ? (
-                <p className="text-sm text-destructive">{unlockError}</p>
-              ) : null}
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => void handleUnlock()} disabled={isUnlocking}>
-                  {isUnlocking ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      解锁中...
-                    </>
-                  ) : (
-                    '解锁'
-                  )}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-muted-foreground"
-                  onClick={handleForgetPassword}
-                >
-                  忘记密码
-                </Button>
-              </div>
+          <div className="border rounded-lg p-4 bg-muted/30">
+            <div className="flex items-center gap-2 mb-3">
+              <Lock className="h-4 w-4" />
+              <span className="font-medium">加密设置</span>
+            </div>
 
-              {showForgetConfirm ? (
-                <div className="space-y-3 p-3 bg-destructive/10 rounded border border-destructive/30">
-                  <p className="text-sm font-medium text-destructive">⚠️ 警告</p>
-                  <p className="text-sm">此操作将清除所有加密配置，包括已保存的 API Key。您需要重新配置。</p>
+            {isLocked ? (
+              <div className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  检测到已设置自定义加密密码。请先解锁后再查看/修改 API 配置。
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="unlockPassword">加密密码</Label>
+                  <Input
+                    id="unlockPassword"
+                    type="password"
+                    value={unlockPassword}
+                    onChange={(e) => setUnlockPassword(e.target.value)}
+                    placeholder="请输入密码以解锁"
+                    className="h-11"
+                  />
+                </div>
+                {unlockError ? <p className="text-sm text-destructive">{unlockError}</p> : null}
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => void handleUnlock()} disabled={isUnlocking}>
+                    {isUnlocking ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        解锁中...
+                      </>
+                    ) : (
+                      '解锁'
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground"
+                    onClick={handleForgetPassword}
+                  >
+                    忘记密码
+                  </Button>
+                </div>
+
+                {showForgetConfirm ? (
+                  <div className="space-y-3 p-3 bg-destructive/10 rounded border border-destructive/30">
+                    <p className="text-sm font-medium text-destructive">⚠️ 警告</p>
+                    <p className="text-sm">
+                      此操作将清除所有加密配置，包括已保存的 API Key。您需要重新配置。
+                    </p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="destructive" onClick={handleConfirmReset}>
+                        确认重置
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowForgetConfirm(false)}
+                      >
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : hasCustomPassword ? (
+              // 已设置密码
+              <div>
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-3">
+                  <Shield className="h-4 w-4" />
+                  <span className="text-sm">已启用加密保护</span>
+                </div>
+
+                {isChangingPassword ? (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="currentPassword">当前密码</Label>
+                      <Input
+                        id="currentPassword"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="h-11"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">新密码</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="至少6位字符"
+                        className="h-11"
+                      />
+                    </div>
+                    {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleChangePassword}>
+                        确认更换
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsChangingPassword(false)}
+                      >
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
                   <div className="flex gap-2">
-                    <Button size="sm" variant="destructive" onClick={handleConfirmReset}>
-                      确认重置
+                    <Button size="sm" variant="outline" onClick={() => setIsChangingPassword(true)}>
+                      更换密码
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowForgetConfirm(false)}>
-                      取消
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-muted-foreground"
+                      onClick={handleForgetPassword}
+                    >
+                      忘记密码
                     </Button>
                   </div>
-                </div>
-              ) : null}
-            </div>
-          ) : hasCustomPassword ? (
-            // 已设置密码
-            <div>
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-3">
-                <Shield className="h-4 w-4" />
-                <span className="text-sm">已启用加密保护</span>
+                )}
+
+                {showForgetConfirm ? (
+                  <div className="mt-3 space-y-3 p-3 bg-destructive/10 rounded border border-destructive/30">
+                    <p className="text-sm font-medium text-destructive">⚠️ 警告</p>
+                    <p className="text-sm">
+                      此操作将清除所有加密配置，包括已保存的 API Key。您需要重新配置。
+                    </p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="destructive" onClick={handleConfirmReset}>
+                        确认重置
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowForgetConfirm(false)}
+                      >
+                        取消
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-              
-              {isChangingPassword ? (
+            ) : (
+              // 未设置密码
+              <div>
+                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-3">
+                  <ShieldAlert className="h-4 w-4" />
+                  <span className="text-sm">使用默认加密，建议设置自定义密码</span>
+                </div>
+
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <Label htmlFor="currentPassword">当前密码</Label>
+                    <Label htmlFor="encryptionPassword">加密密码</Label>
                     <Input
-                      id="currentPassword"
+                      id="encryptionPassword"
                       type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="h-11"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">新密码</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
+                      value={encryptionPassword}
+                      onChange={(e) => setEncryptionPassword(e.target.value)}
                       placeholder="至少6位字符"
                       className="h-11"
                     />
                   </div>
-                  {passwordError && (
-                    <p className="text-sm text-destructive">{passwordError}</p>
-                  )}
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleChangePassword}>确认更换</Button>
-                    <Button size="sm" variant="outline" onClick={() => setIsChangingPassword(false)}>取消</Button>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">确认密码</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="再次输入密码"
+                      className="h-11"
+                    />
                   </div>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setIsChangingPassword(true)}>
-                    更换密码
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={handleForgetPassword}>
-                    忘记密码
+                  {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+                  <Button size="sm" onClick={handleSetEncryptionPassword}>
+                    设置加密密码
                   </Button>
                 </div>
-              )}
-
-              {showForgetConfirm ? (
-                <div className="mt-3 space-y-3 p-3 bg-destructive/10 rounded border border-destructive/30">
-                  <p className="text-sm font-medium text-destructive">⚠️ 警告</p>
-                  <p className="text-sm">此操作将清除所有加密配置，包括已保存的 API Key。您需要重新配置。</p>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="destructive" onClick={handleConfirmReset}>确认重置</Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowForgetConfirm(false)}>取消</Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            // 未设置密码
-            <div>
-              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-3">
-                <ShieldAlert className="h-4 w-4" />
-                <span className="text-sm">使用默认加密，建议设置自定义密码</span>
               </div>
-              
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor="encryptionPassword">加密密码</Label>
-                  <Input
-                    id="encryptionPassword"
-                    type="password"
-                    value={encryptionPassword}
-                    onChange={(e) => setEncryptionPassword(e.target.value)}
-                    placeholder="至少6位字符"
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">确认密码</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="再次输入密码"
-                    className="h-11"
-                  />
-                </div>
-                {passwordError && (
-                  <p className="text-sm text-destructive">{passwordError}</p>
-                )}
-                <Button size="sm" onClick={handleSetEncryptionPassword}>
-                  设置加密密码
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         )}
 
         {/* 配置档案（多配置） */}
@@ -918,7 +1008,10 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
             <div className="space-y-2">
               <Label>当前档案</Label>
-              <Select value={activeProfileId || ''} onValueChange={(v) => void handleSwitchProfile(v)}>
+              <Select
+                value={activeProfileId || ''}
+                onValueChange={(v) => void handleSwitchProfile(v)}
+              >
                 <SelectTrigger className="h-11 text-base md:text-sm">
                   <SelectValue placeholder="选择档案" />
                 </SelectTrigger>
@@ -949,7 +1042,10 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             <div className="mt-3 space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label>价格（可选）</Label>
-                <Select value={pricingUnit} onValueChange={(v) => handlePricingUnitChange(v as PricingUnit)}>
+                <Select
+                  value={pricingUnit}
+                  onValueChange={(v) => handlePricingUnitChange(v as PricingUnit)}
+                >
                   <SelectTrigger className="h-9 w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
@@ -1004,15 +1100,17 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 <p className="text-sm text-destructive">{validationErrors.pricing}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  用于“统计分析/配置页”的成本估算；不填则按默认粗略口径计算。口径：输入=prompt tokens，输出=completion tokens。
-                  {pricingUnit === 'per_1M' ? '（换算：USD/1M ÷ 1000 = USD/1K）' : null}
-                  {' '}缓存输入价仅在供应商支持 Prompt Caching 且返回 cached token 统计时才会用于更精确估算；否则会按输入价计算。
+                  用于“统计分析/配置页”的成本估算；不填则按默认粗略口径计算。口径：输入=prompt
+                  tokens，输出=completion tokens。
+                  {pricingUnit === 'per_1M' ? '（换算：USD/1M ÷ 1000 = USD/1K）' : null}{' '}
+                  缓存输入价仅在供应商支持 Prompt Caching 且返回 cached token
+                  统计时才会用于更精确估算；否则会按输入价计算。
                 </p>
               )}
             </div>
           </div>
         )}
-        
+
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>供应商</Label>
@@ -1055,19 +1153,19 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           <div className="space-y-2">
             <Label htmlFor="apiKey">API Key</Label>
             <div className="relative">
-                <Input
-                  id="apiKey"
-                  type={showApiKey ? 'text' : 'password'}
-                  placeholder={
-                    apiMode && activeProfileId && !activeProfileId.startsWith('draft_')
-                      ? '留空表示保持不变（已安全存于服务端）'
-                      : '请输入 API Key'
-                  }
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="h-11 pr-10"
-                  disabled={isLocked}
-                />
+              <Input
+                id="apiKey"
+                type={showApiKey ? 'text' : 'password'}
+                placeholder={
+                  apiMode && activeProfileId && !activeProfileId.startsWith('draft_')
+                    ? '留空表示保持不变（已安全存于服务端）'
+                    : '请输入 API Key'
+                }
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="h-11 pr-10"
+                disabled={isLocked}
+              />
               <Button
                 type="button"
                 variant="ghost"
@@ -1094,7 +1192,11 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               <Label htmlFor="baseURL">Base URL (可选)</Label>
               <Input
                 id="baseURL"
-                placeholder={provider === 'gemini' ? 'https://generativelanguage.googleapis.com' : 'https://api.example.com'}
+                placeholder={
+                  provider === 'gemini'
+                    ? 'https://generativelanguage.googleapis.com'
+                    : 'https://api.example.com'
+                }
                 value={baseURL}
                 onChange={(e) => setBaseURL(e.target.value)}
                 disabled={isLocked}
@@ -1155,8 +1257,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             </div>
           </div>
 
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={handleTest}
             disabled={isTesting || isLocked || hasConfigValidationErrors}
             className="w-full"
@@ -1195,7 +1297,13 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             {lastTest ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className={lastTest.status === 'success' ? 'text-green-600 dark:text-green-400' : 'text-destructive'}>
+                  <span
+                    className={
+                      lastTest.status === 'success'
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-destructive'
+                    }
+                  >
                     {lastTest.status === 'success' ? '连接正常' : '连接失败'}
                   </span>
                   <span className="text-xs text-muted-foreground">
@@ -1221,13 +1329,23 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                         ))}
                       </ul>
                     ) : null}
-                    <Button type="button" size="sm" variant="outline" onClick={() => void handleCopyLastTest()}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void handleCopyLastTest()}
+                    >
                       <Copy className="mr-2 h-4 w-4" />
                       复制错误信息
                     </Button>
                   </div>
                 ) : (
-                  <Button type="button" size="sm" variant="outline" onClick={() => void handleCopyLastTest()}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleCopyLastTest()}
+                  >
                     <Copy className="mr-2 h-4 w-4" />
                     复制测试详情
                   </Button>
@@ -1250,7 +1368,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               </div>
               <div className="rounded-md border bg-background/50 p-3">
                 <p className="text-xs text-muted-foreground">平均耗时</p>
-                <p className="text-lg font-semibold">{formatDuration(usage24h.stats.avgDurationMs)}</p>
+                <p className="text-lg font-semibold">
+                  {formatDuration(usage24h.stats.avgDurationMs)}
+                </p>
               </div>
               <div className="rounded-md border bg-background/50 p-3">
                 <p className="text-xs text-muted-foreground">费用估算（$）</p>
@@ -1259,8 +1379,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             </div>
 
             <div className="text-xs text-muted-foreground">
-              Token（可统计）：{usage24h.stats.totalTokens.toLocaleString()} · 覆盖率 {usage24h.stats.tokenizedCalls}/
-              {usage24h.stats.totalCalls} · P95 耗时 {formatDuration(usage24h.stats.p95DurationMs)}
+              Token（可统计）：{usage24h.stats.totalTokens.toLocaleString()} · 覆盖率{' '}
+              {usage24h.stats.tokenizedCalls}/{usage24h.stats.totalCalls} · P95 耗时{' '}
+              {formatDuration(usage24h.stats.p95DurationMs)}
             </div>
 
             <div className="text-xs text-muted-foreground">

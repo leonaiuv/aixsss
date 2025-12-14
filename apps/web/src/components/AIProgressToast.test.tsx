@@ -29,7 +29,7 @@ describe('AIProgressToast', () => {
   describe('rendering', () => {
     it('should not render when no notifications', () => {
       render(<AIProgressToast />);
-      
+
       // Component should render nothing visible
       expect(screen.queryByText('生成场景锚点')).not.toBeInTheDocument();
     });
@@ -48,18 +48,18 @@ describe('AIProgressToast', () => {
         currentStep: '处理中...',
         maxRetries: 3,
       });
-      
+
       // Emit the event to trigger notification
       const state = useAIProgressStore.getState();
       const task = state.tasks[0];
-      
+
       render(<AIProgressToast />);
-      
+
       // Manually trigger the event
       act(() => {
         state.emit('task:started', task);
       });
-      
+
       expect(screen.getByText('生成场景锚点')).toBeInTheDocument();
     });
 
@@ -74,16 +74,16 @@ describe('AIProgressToast', () => {
         currentStep: '处理中...',
         maxRetries: 3,
       });
-      
+
       const state = useAIProgressStore.getState();
       const task = state.tasks[0];
-      
+
       render(<AIProgressToast />);
-      
+
       act(() => {
         state.emit('task:started', task);
       });
-      
+
       expect(screen.getByText('75%')).toBeInTheDocument();
     });
 
@@ -98,16 +98,16 @@ describe('AIProgressToast', () => {
         sceneOrder: 5,
         maxRetries: 3,
       });
-      
+
       const state = useAIProgressStore.getState();
       const task = state.tasks[0];
-      
+
       render(<AIProgressToast />);
-      
+
       act(() => {
         state.emit('task:started', task);
       });
-      
+
       expect(screen.getByText('分镜 #5')).toBeInTheDocument();
     });
   });
@@ -123,23 +123,26 @@ describe('AIProgressToast', () => {
         progress: 50,
         maxRetries: 3,
       });
-      
+
       render(<AIProgressToast />);
-      
+
       const state = useAIProgressStore.getState();
       const task = state.getTask(taskId)!;
-      
+
       act(() => {
         state.emit('task:started', task);
       });
-      
+
       // Complete the task
       act(() => {
-        completeTask(taskId, { content: 'Result', tokenUsage: { prompt: 100, completion: 50, total: 150 } });
+        completeTask(taskId, {
+          content: 'Result',
+          tokenUsage: { prompt: 100, completion: 50, total: 150 },
+        });
         const updatedTask = useAIProgressStore.getState().getTask(taskId)!;
         useAIProgressStore.getState().emit('task:completed', updatedTask);
       });
-      
+
       expect(screen.getByText('已完成')).toBeInTheDocument();
     });
 
@@ -153,23 +156,23 @@ describe('AIProgressToast', () => {
         progress: 50,
         maxRetries: 3,
       });
-      
+
       render(<AIProgressToast />);
-      
+
       const state = useAIProgressStore.getState();
       const task = state.getTask(taskId)!;
-      
+
       act(() => {
         state.emit('task:started', task);
       });
-      
+
       // Fail the task
       act(() => {
         failTask(taskId, { message: '网络错误', retryable: true });
         const updatedTask = useAIProgressStore.getState().getTask(taskId)!;
         useAIProgressStore.getState().emit('task:failed', updatedTask);
       });
-      
+
       expect(screen.getByText('网络错误')).toBeInTheDocument();
     });
 
@@ -214,7 +217,7 @@ describe('AIProgressIndicator', () => {
 
   it('should not render when no active tasks', () => {
     render(<AIProgressIndicator />);
-    
+
     expect(screen.queryByText(/%/)).not.toBeInTheDocument();
   });
 
@@ -228,9 +231,9 @@ describe('AIProgressIndicator', () => {
       progress: 45,
       maxRetries: 3,
     });
-    
+
     render(<AIProgressIndicator />);
-    
+
     expect(screen.getByText('生成场景锚点')).toBeInTheDocument();
     expect(screen.getByText('45%')).toBeInTheDocument();
   });
@@ -261,9 +264,9 @@ describe('AIProgressIndicator', () => {
       progress: 10,
       maxRetries: 3,
     });
-    
+
     render(<AIProgressIndicator />);
-    
+
     expect(screen.getByText('(+2 更多)')).toBeInTheDocument();
   });
 
@@ -286,9 +289,9 @@ describe('AIProgressIndicator', () => {
       progress: 60,
       maxRetries: 3,
     });
-    
+
     render(<AIProgressIndicator />);
-    
+
     // Should show the most recent (first in array)
     expect(screen.getByText('Second Task')).toBeInTheDocument();
   });

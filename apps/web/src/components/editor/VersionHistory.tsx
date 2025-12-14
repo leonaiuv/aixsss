@@ -25,14 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  History,
-  Clock,
-  RotateCcw,
-  Tag,
-  GitBranch,
-  ChevronRight,
-} from 'lucide-react';
+import { History, Clock, RotateCcw, Tag, GitBranch, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
@@ -49,8 +42,7 @@ export function VersionHistory({
   targetType = 'project',
   onRestore,
 }: VersionHistoryProps) {
-  const { getProjectVersions, getSceneVersions, restoreVersion, addLabel } =
-    useVersionStore();
+  const { getProjectVersions, getSceneVersions, restoreVersion, addLabel } = useVersionStore();
   const { confirm, ConfirmDialog } = useConfirm();
   const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
   const [showLabelDialog, setShowLabelDialog] = useState(false);
@@ -61,8 +53,8 @@ export function VersionHistory({
     targetType === 'project'
       ? getProjectVersions(projectId)
       : targetId
-      ? getSceneVersions(targetId)
-      : [];
+        ? getSceneVersions(targetId)
+        : [];
 
   const handleRestore = async (versionId: string) => {
     const ok = await confirm({
@@ -104,9 +96,7 @@ export function VersionHistory({
         </div>
         <div>
           <h2 className="text-xl font-bold">版本历史</h2>
-          <p className="text-sm text-muted-foreground">
-            {versions.length} 个历史版本
-          </p>
+          <p className="text-sm text-muted-foreground">{versions.length} 个历史版本</p>
         </div>
       </div>
 
@@ -117,9 +107,7 @@ export function VersionHistory({
             <History className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold mb-2">暂无历史版本</h3>
-          <p className="text-sm text-muted-foreground">
-            系统会在关键操作时自动保存版本
-          </p>
+          <p className="text-sm text-muted-foreground">系统会在关键操作时自动保存版本</p>
         </div>
       ) : (
         <ScrollArea className="h-[600px] pr-4">
@@ -149,28 +137,18 @@ export function VersionHistory({
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         <Clock className="h-3 w-3 inline mr-1" />
-                        {format(
-                          new Date(version.createdAt),
-                          'yyyy-MM-dd HH:mm:ss',
-                          { locale: zhCN }
-                        )}
+                        {format(new Date(version.createdAt), 'yyyy-MM-dd HH:mm:ss', {
+                          locale: zhCN,
+                        })}
                       </p>
                     </div>
                   </div>
 
                   <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleAddLabel(version.id)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleAddLabel(version.id)}>
                       <Tag className="h-3 w-3" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRestore(version.id)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleRestore(version.id)}>
                       <RotateCcw className="h-3 w-3" />
                     </Button>
                   </div>
@@ -180,9 +158,7 @@ export function VersionHistory({
                 {version.notes && (
                   <>
                     <Separator className="my-2" />
-                    <p className="text-sm text-muted-foreground">
-                      {version.notes}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{version.notes}</p>
                   </>
                 )}
 
@@ -208,9 +184,7 @@ export function VersionHistory({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>添加版本标签</DialogTitle>
-            <DialogDescription>
-              为这个版本添加标签和备注，方便日后查找
-            </DialogDescription>
+            <DialogDescription>为这个版本添加标签和备注，方便日后查找</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -219,9 +193,7 @@ export function VersionHistory({
               <Input
                 id="label"
                 value={labelForm.label}
-                onChange={(e) =>
-                  setLabelForm({ ...labelForm, label: e.target.value })
-                }
+                onChange={(e) => setLabelForm({ ...labelForm, label: e.target.value })}
                 placeholder="例如：初版、修订版、最终版"
               />
             </div>
@@ -231,9 +203,7 @@ export function VersionHistory({
               <Textarea
                 id="notes"
                 value={labelForm.notes}
-                onChange={(e) =>
-                  setLabelForm({ ...labelForm, notes: e.target.value })
-                }
+                onChange={(e) => setLabelForm({ ...labelForm, notes: e.target.value })}
                 placeholder="记录这个版本的主要变更"
                 rows={3}
               />

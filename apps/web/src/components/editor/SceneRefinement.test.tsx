@@ -61,7 +61,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
 
     mockUpdateScene = vi.fn((projectId, sceneId, updates) => {
       // 模拟 store 更新
-      const sceneIndex = scenesState.findIndex(s => s.id === sceneId);
+      const sceneIndex = scenesState.findIndex((s) => s.id === sceneId);
       if (sceneIndex >= 0) {
         scenesState[sceneIndex] = { ...scenesState[sceneIndex], ...updates };
       }
@@ -145,22 +145,23 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     // Mock skills
     vi.mocked(skillsModule.getSkillByName).mockImplementation((skillName: string) => {
       const skillMap: Record<string, any> = {
-        'generate_scene_desc': {
+        generate_scene_desc: {
           name: 'scene-description',
-          promptTemplate: 'Generate scene: {style} {protagonist} {current_scene_summary} {prev_scene_summary}',
+          promptTemplate:
+            'Generate scene: {style} {protagonist} {current_scene_summary} {prev_scene_summary}',
           maxTokens: 500,
         },
-        'generate_keyframe_prompt': {
+        generate_keyframe_prompt: {
           name: 'keyframe-prompt',
           promptTemplate: 'Generate keyframe: {style} {protagonist} {scene_description}',
           maxTokens: 500,
         },
-        'generate_motion_prompt': {
+        generate_motion_prompt: {
           name: 'motion-prompt',
           promptTemplate: 'Generate motion: {scene_description}',
           maxTokens: 200,
         },
-        'generate_dialogue': {
+        generate_dialogue: {
           name: 'dialogue',
           promptTemplate: 'Generate dialogue: {scene_summary} {scene_description} {characters}',
           maxTokens: 800,
@@ -172,7 +173,13 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     // Mock parseDialoguesFromText
     vi.mocked(skillsModule.parseDialoguesFromText).mockImplementation((text: string) => {
       return [
-        { id: 'dl1', type: 'dialogue' as const, characterName: '主角', content: '这里是什么地方？', order: 1 },
+        {
+          id: 'dl1',
+          type: 'dialogue' as const,
+          characterName: '主角',
+          content: '这里是什么地方？',
+          order: 1,
+        },
       ];
     });
   });
@@ -229,7 +236,15 @@ describe('SceneRefinement - 一键生成全部功能', () => {
         return { content: structuredMotion };
       })
       .mockImplementationOnce(async () => {
-        scenesState[0].dialogues = [{ id: 'dl1', type: 'dialogue', characterName: '主角', content: '这里是什么地方？', order: 1 }];
+        scenesState[0].dialogues = [
+          {
+            id: 'dl1',
+            type: 'dialogue',
+            characterName: '主角',
+            content: '这里是什么地方？',
+            order: 1,
+          },
+        ];
         scenesState[0].status = 'completed';
         return { content: '[对白] 主角: 这里是什么地方？' };
       });
@@ -238,7 +253,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
 
     // 点击"一键生成全部"按钮
     const generateAllBtn = screen.getByRole('button', { name: /一键生成全部/i });
-    
+
     await act(async () => {
       await userEvent.click(generateAllBtn);
     });
@@ -248,12 +263,12 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       () => {
         expect(mockChatFn).toHaveBeenCalledTimes(4);
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
 
     // 验证四个阶段都被调用
     expect(mockUpdateScene).toHaveBeenCalledTimes(4);
-    
+
     // 验证第一次调用（场景锚点）
     expect(mockUpdateScene).toHaveBeenNthCalledWith(1, 'test-project-1', 'scene-1', {
       sceneDescription: structuredSceneAnchor,
@@ -273,11 +288,14 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     });
 
     // 验证第四次调用（台词生成）
-    expect(mockUpdateScene).toHaveBeenNthCalledWith(4, 'test-project-1', 'scene-1', 
+    expect(mockUpdateScene).toHaveBeenNthCalledWith(
+      4,
+      'test-project-1',
+      'scene-1',
       expect.objectContaining({
         dialogues: expect.any(Array),
         status: 'completed',
-      })
+      }),
     );
   }, 15000);
 
@@ -333,7 +351,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       () => {
         expect(mockChatFn).toHaveBeenCalledTimes(5);
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
 
     expect(mockUpdateScene).toHaveBeenNthCalledWith(1, 'test-project-1', 'scene-1', {
@@ -383,9 +401,11 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       } else if (callCount === 3) {
         scenesState[0].motionPrompt = structuredMotion;
       } else if (callCount === 4) {
-        scenesState[0].dialogues = [{ id: 'dl1', type: 'dialogue', characterName: '主角', content: '台词', order: 1 }];
+        scenesState[0].dialogues = [
+          { id: 'dl1', type: 'dialogue', characterName: '主角', content: '台词', order: 1 },
+        ];
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
       if (callCount === 1) return { content: structuredSceneAnchor };
       if (callCount === 2) return { content: structuredKeyframes };
       if (callCount === 3) return { content: structuredMotion };
@@ -395,7 +415,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     render(<SceneRefinement />);
 
     const generateAllBtn = screen.getByRole('button', { name: /一键生成全部/i });
-    
+
     // 快速点击两次
     await act(async () => {
       await userEvent.click(generateAllBtn);
@@ -407,7 +427,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       () => {
         expect(mockChatFn).toHaveBeenCalledTimes(4);
       },
-      { timeout: 5000 }
+      { timeout: 5000 },
     );
 
     // 验证只调用了一次完整流程（4次API调用）
@@ -433,28 +453,31 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     render(<SceneRefinement />);
 
     const generateAllBtn = screen.getByRole('button', { name: /一键生成全部/i });
-    
+
     await act(async () => {
       await userEvent.click(generateAllBtn);
     });
 
     // 等待错误显示
-    await waitFor(() => {
-      const errorMsg = screen.queryByText(/生成失败|API调用失败|动作描述生成失败/);
-      expect(errorMsg).toBeInTheDocument();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        const errorMsg = screen.queryByText(/生成失败|API调用失败|动作描述生成失败/);
+        expect(errorMsg).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
   });
 
   it('应该在生成过程中显示正确的状态', async () => {
     mockChatFn.mockImplementation(async () => {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       return { content: 'test' };
     });
 
     render(<SceneRefinement />);
 
     const generateAllBtn = screen.getByRole('button', { name: /一键生成全部/i });
-    
+
     await act(async () => {
       await userEvent.click(generateAllBtn);
     });
@@ -471,15 +494,25 @@ describe('SceneRefinement - 一键生成全部功能', () => {
 
   it('应该在所有内容已生成时禁用按钮', async () => {
     // 模拟已完成的场景
-    scenesState = [{
-      ...mockScene,
-      sceneDescription: '已有场景锚点',
-      actionDescription: '',
-      shotPrompt: '已有关键帧提示词（KF0/KF1/KF2）',
-      motionPrompt: '已有时空/运动提示词',
-      dialogues: [{ id: 'dl1', type: 'dialogue' as const, characterName: '角色', content: '台词', order: 1 }],
-      status: 'completed' as const,
-    }];
+    scenesState = [
+      {
+        ...mockScene,
+        sceneDescription: '已有场景锚点',
+        actionDescription: '',
+        shotPrompt: '已有关键帧提示词（KF0/KF1/KF2）',
+        motionPrompt: '已有时空/运动提示词',
+        dialogues: [
+          {
+            id: 'dl1',
+            type: 'dialogue' as const,
+            characterName: '角色',
+            content: '台词',
+            order: 1,
+          },
+        ],
+        status: 'completed' as const,
+      },
+    ];
 
     render(<SceneRefinement />);
 
@@ -518,7 +551,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     ].join('\n');
 
     let callCount = 0;
-    
+
     mockChatFn.mockImplementation(async () => {
       callCount++;
       // 模拟状态更新
@@ -537,7 +570,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     render(<SceneRefinement />);
 
     const generateAllBtn = screen.getByRole('button', { name: /一键生成全部/i });
-    
+
     await act(async () => {
       await userEvent.click(generateAllBtn);
     });
@@ -546,7 +579,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       () => {
         expect(mockChatFn).toHaveBeenCalledTimes(3);
       },
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
 
     // 验证 getState 被调用来获取最新状态
@@ -600,7 +633,7 @@ describe('SceneRefinement - 台词生成功能', () => {
     scenesState = [{ ...mockSceneWithContent }];
 
     mockUpdateScene = vi.fn((projectId, sceneId, updates) => {
-      const sceneIndex = scenesState.findIndex(s => s.id === sceneId);
+      const sceneIndex = scenesState.findIndex((s) => s.id === sceneId);
       if (sceneIndex >= 0) {
         scenesState[sceneIndex] = { ...scenesState[sceneIndex], ...updates };
       }
@@ -678,22 +711,23 @@ describe('SceneRefinement - 台词生成功能', () => {
 
     vi.mocked(skillsModule.getSkillByName).mockImplementation((skillName: string) => {
       const skillMap: Record<string, any> = {
-        'generate_scene_desc': {
+        generate_scene_desc: {
           name: 'scene-description',
-          promptTemplate: 'Generate scene: {style} {protagonist} {current_scene_summary} {prev_scene_summary}',
+          promptTemplate:
+            'Generate scene: {style} {protagonist} {current_scene_summary} {prev_scene_summary}',
           maxTokens: 500,
         },
-        'generate_keyframe_prompt': {
+        generate_keyframe_prompt: {
           name: 'keyframe-prompt',
           promptTemplate: 'Generate keyframe: {style} {protagonist} {scene_description}',
           maxTokens: 500,
         },
-        'generate_motion_prompt': {
+        generate_motion_prompt: {
           name: 'motion-prompt',
           promptTemplate: 'Generate motion: {scene_description}',
           maxTokens: 200,
         },
-        'generate_dialogue': {
+        generate_dialogue: {
           name: 'dialogue',
           promptTemplate: 'Generate dialogue: {scene_summary} {scene_description} {characters}',
           maxTokens: 800,
@@ -717,11 +751,13 @@ describe('SceneRefinement - 台词生成功能', () => {
 
   it('应该在时空/运动提示词完成后启用台词生成按钮', async () => {
     // 模拟已有时空/运动提示词的场景
-    scenesState = [{
-      ...mockSceneWithContent,
-      motionPrompt: 'character walks forward',
-      dialogues: [],
-    }];
+    scenesState = [
+      {
+        ...mockSceneWithContent,
+        motionPrompt: 'character walks forward',
+        dialogues: [],
+      },
+    ];
 
     render(<SceneRefinement />);
 
@@ -737,11 +773,13 @@ describe('SceneRefinement - 台词生成功能', () => {
 
     mockChatFn.mockResolvedValueOnce({ content: mockDialogueResponse });
 
-    scenesState = [{
-      ...mockSceneWithContent,
-      motionPrompt: 'character walks forward',
-      dialogues: [],
-    }];
+    scenesState = [
+      {
+        ...mockSceneWithContent,
+        motionPrompt: 'character walks forward',
+        dialogues: [],
+      },
+    ];
 
     render(<SceneRefinement />);
 
@@ -753,13 +791,15 @@ describe('SceneRefinement - 台词生成功能', () => {
   });
 
   it('应该显示已生成的台词列表', async () => {
-    scenesState = [{
-      ...mockSceneWithContent,
-      dialogues: [
-        { id: 'dl1', type: 'dialogue', characterName: '小明', content: '你好！', order: 1 },
-        { id: 'dl2', type: 'narration', content: '两人相视而笑', order: 2 },
-      ],
-    }];
+    scenesState = [
+      {
+        ...mockSceneWithContent,
+        dialogues: [
+          { id: 'dl1', type: 'dialogue', characterName: '小明', content: '你好！', order: 1 },
+          { id: 'dl2', type: 'narration', content: '两人相视而笑', order: 2 },
+        ],
+      },
+    ];
 
     render(<SceneRefinement />);
 
@@ -771,12 +811,14 @@ describe('SceneRefinement - 台词生成功能', () => {
   });
 
   it('应该支持台词复制功能', async () => {
-    scenesState = [{
-      ...mockSceneWithContent,
-      dialogues: [
-        { id: 'dl1', type: 'dialogue', characterName: '小明', content: '你好！', order: 1 },
-      ],
-    }];
+    scenesState = [
+      {
+        ...mockSceneWithContent,
+        dialogues: [
+          { id: 'dl1', type: 'dialogue', characterName: '小明', content: '你好！', order: 1 },
+        ],
+      },
+    ];
 
     render(<SceneRefinement />);
 

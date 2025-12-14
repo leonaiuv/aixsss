@@ -43,4 +43,3 @@ describe('jsonExtractor', () => {
     expect(res.reason).toBe('no_json_object');
   });
 });
-

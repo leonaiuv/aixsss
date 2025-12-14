@@ -36,7 +36,9 @@ describe('createAIProvider', () => {
   });
 
   it('不支持的类型应抛出错误', () => {
-    expect(() => createAIProvider('unknown' as ProviderType)).toThrow('Unsupported provider: unknown');
+    expect(() => createAIProvider('unknown' as ProviderType)).toThrow(
+      'Unsupported provider: unknown',
+    );
   });
 });
 
@@ -85,7 +87,9 @@ describe('AIFactory.createClient', () => {
     });
 
     it('配置为 undefined 时应抛出错误', () => {
-      expect(() => AIFactory.createClient(undefined as unknown as UserConfig)).toThrow('AI配置不完整');
+      expect(() => AIFactory.createClient(undefined as unknown as UserConfig)).toThrow(
+        'AI配置不完整',
+      );
     });
 
     it('完整配置应成功创建客户端', () => {
@@ -174,8 +178,9 @@ describe('AIFactory.createClient', () => {
         model: 'deepseek-chat',
       });
 
-      await expect(client.chat([{ role: 'user', content: 'test' }]))
-        .rejects.toThrow('DeepSeek API error');
+      await expect(client.chat([{ role: 'user', content: 'test' }])).rejects.toThrow(
+        'DeepSeek API error',
+      );
     });
 
     it('应处理网络错误', async () => {
@@ -187,15 +192,17 @@ describe('AIFactory.createClient', () => {
         model: 'deepseek-chat',
       });
 
-      await expect(client.chat([{ role: 'user', content: 'test' }]))
-        .rejects.toThrow('Network error');
+      await expect(client.chat([{ role: 'user', content: 'test' }])).rejects.toThrow(
+        'Network error',
+      );
     });
   });
 
   describe('streamChat 方法', () => {
     it('应返回 AsyncGenerator', async () => {
       const mockReader = {
-        read: vi.fn()
+        read: vi
+          .fn()
           .mockResolvedValueOnce({
             done: false,
             value: new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n'),
@@ -421,8 +428,7 @@ describe('边界情况', () => {
       model: 'deepseek-chat',
     });
 
-    await expect(client.chat([{ role: 'user', content: 'test' }]))
-      .rejects.toThrow();
+    await expect(client.chat([{ role: 'user', content: 'test' }])).rejects.toThrow();
   });
 
   it('应处理 429 速率限制错误', async () => {
@@ -441,8 +447,7 @@ describe('边界情况', () => {
       model: 'deepseek-chat',
     });
 
-    await expect(client.chat([{ role: 'user', content: 'test' }]))
-      .rejects.toThrow();
+    await expect(client.chat([{ role: 'user', content: 'test' }])).rejects.toThrow();
   });
 
   it('应处理带 baseURL 的配置', async () => {

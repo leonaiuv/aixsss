@@ -26,15 +26,18 @@ interface WorldViewStore {
   elements: WorldViewElement[];
   currentElementId: string | null;
   isLoading: boolean;
-  
+
   // 操作方法
   loadElements: (projectId: string) => void;
-  addElement: (projectId: string, element: Omit<WorldViewElement, 'id' | 'createdAt' | 'updatedAt'>) => WorldViewElement;
+  addElement: (
+    projectId: string,
+    element: Omit<WorldViewElement, 'id' | 'createdAt' | 'updatedAt'>,
+  ) => WorldViewElement;
   updateElement: (projectId: string, elementId: string, updates: Partial<WorldViewElement>) => void;
   deleteElement: (projectId: string, elementId: string) => void;
   reorderElements: (projectId: string, fromIndex: number, toIndex: number) => void;
   setCurrentElement: (elementId: string | null) => void;
-  
+
   // P0-2: 世界观多选支持 - 新增方法
   /** 按类型筛选世界观要素 */
   getElementsByType: (type: WorldViewType) => WorldViewElement[];
@@ -48,7 +51,7 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
   elements: [],
   currentElementId: null,
   isLoading: false,
-  
+
   loadElements: (projectId: string) => {
     set({ isLoading: true });
     if (isApiMode()) {
@@ -72,7 +75,7 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
       set({ isLoading: false });
     }
   },
-  
+
   addElement: (projectId: string, elementData) => {
     const now = new Date().toISOString();
     const newElement: WorldViewElement = {
@@ -81,7 +84,7 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
-    
+
     const elements = [...get().elements, newElement];
     set({ elements });
     if (!isApiMode()) {
@@ -91,18 +94,16 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
         console.error('Failed to create world view element (api):', error);
       });
     }
-    
+
     return newElement;
   },
-  
+
   updateElement: (projectId: string, elementId: string, updates: Partial<WorldViewElement>) => {
     const elements = get().elements;
-    const updated = elements.map(el =>
-      el.id === elementId
-        ? { ...el, ...updates, updatedAt: new Date().toISOString() }
-        : el
+    const updated = elements.map((el) =>
+      el.id === elementId ? { ...el, ...updates, updatedAt: new Date().toISOString() } : el,
     );
-    
+
     set({ elements: updated });
     if (!isApiMode()) {
       saveElements(projectId, updated);
@@ -112,9 +113,9 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
       });
     }
   },
-  
+
   deleteElement: (projectId: string, elementId: string) => {
-    const elements = get().elements.filter(el => el.id !== elementId);
+    const elements = get().elements.filter((el) => el.id !== elementId);
     set({ elements });
     if (!isApiMode()) {
       saveElements(projectId, elements);
@@ -124,53 +125,56 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
       });
     }
   },
-  
+
   reorderElements: (projectId: string, fromIndex: number, toIndex: number) => {
     const elements = [...get().elements];
     const [movedElement] = elements.splice(fromIndex, 1);
     elements.splice(toIndex, 0, movedElement);
-    
+
     // 重新编号
     const reordered = elements.map((el, index) => ({
       ...el,
       order: index + 1,
     }));
-    
+
     set({ elements: reordered });
     if (!isApiMode()) {
       saveElements(projectId, reordered);
     } else {
-      void apiReorderWorldViewElements(projectId, reordered.map((e) => e.id)).catch((error) => {
+      void apiReorderWorldViewElements(
+        projectId,
+        reordered.map((e) => e.id),
+      ).catch((error) => {
         console.error('Failed to reorder world view elements (api):', error);
       });
     }
   },
-  
+
   setCurrentElement: (elementId: string | null) => {
     set({ currentElementId: elementId });
   },
-  
+
   // P0-2: 世界观多选支持 - 新增方法
   getElementsByType: (type: WorldViewType) => {
-    return get().elements.filter(el => el.type === type);
+    return get().elements.filter((el) => el.type === type);
   },
-  
+
   getElementsByTypeGrouped: () => {
     const elements = get().elements;
     return {
-      era: elements.filter(el => el.type === 'era'),
-      geography: elements.filter(el => el.type === 'geography'),
-      society: elements.filter(el => el.type === 'society'),
-      technology: elements.filter(el => el.type === 'technology'),
-      magic: elements.filter(el => el.type === 'magic'),
-      custom: elements.filter(el => el.type === 'custom'),
+      era: elements.filter((el) => el.type === 'era'),
+      geography: elements.filter((el) => el.type === 'geography'),
+      society: elements.filter((el) => el.type === 'society'),
+      technology: elements.filter((el) => el.type === 'technology'),
+      magic: elements.filter((el) => el.type === 'magic'),
+      custom: elements.filter((el) => el.type === 'custom'),
     };
   },
-  
+
   getWorldViewContext: () => {
     const elements = get().elements;
     if (elements.length === 0) return '';
-    
+
     const typeLabels: Record<WorldViewType, string> = {
       era: '时代背景',
       geography: '地理设定',
@@ -179,20 +183,20 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
       magic: '魔法体系',
       custom: '其他设定',
     };
-    
+
     // 按类型分组并格式化
     const grouped = get().getElementsByTypeGrouped();
     const contextParts: string[] = [];
-    
-    (Object.keys(grouped) as WorldViewType[]).forEach(type => {
+
+    (Object.keys(grouped) as WorldViewType[]).forEach((type) => {
       const items = grouped[type];
       if (items.length > 0) {
         const label = typeLabels[type];
-        const content = items.map(el => `【${el.title}】${el.content}`).join('\n');
+        const content = items.map((el) => `【${el.title}】${el.content}`).join('\n');
         contextParts.push(`## ${label}\n${content}`);
       }
     });
-    
+
     return contextParts.join('\n\n');
   },
 }));

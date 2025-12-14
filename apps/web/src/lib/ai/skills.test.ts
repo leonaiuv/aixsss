@@ -188,7 +188,7 @@ describe('边界/一致性', () => {
     [SceneDescriptionSkill, KeyframePromptSkill, MotionPromptSkill, DialogueSkill].forEach(
       (skill) => {
         expect(skill.promptTemplate).toMatch(/\{[^{].*[^}]\}/);
-      }
+      },
     );
   });
 });
@@ -238,4 +238,3 @@ describe('parseDialoguesFromText', () => {
     expect(dialogues[0].characterName).toBe('林默');
   });
 });
-

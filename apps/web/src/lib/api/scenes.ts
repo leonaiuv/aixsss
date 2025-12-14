@@ -4,10 +4,15 @@ import { apiRequest } from './http';
 export type ApiScene = Scene & { createdAt?: string; updatedAt?: string };
 
 export async function apiListScenes(projectId: string) {
-  return apiRequest<ApiScene[]>(`/projects/${encodeURIComponent(projectId)}/scenes`, { method: 'GET' });
+  return apiRequest<ApiScene[]>(`/projects/${encodeURIComponent(projectId)}/scenes`, {
+    method: 'GET',
+  });
 }
 
-export async function apiCreateScene(projectId: string, input: Partial<ApiScene> & Pick<Scene, 'order'>) {
+export async function apiCreateScene(
+  projectId: string,
+  input: Partial<ApiScene> & Pick<Scene, 'order'>,
+) {
   const body = {
     ...(typeof input.id === 'string' ? { id: input.id } : {}),
     order: input.order,
@@ -21,15 +26,26 @@ export async function apiCreateScene(projectId: string, input: Partial<ApiScene>
     status: input.status ?? undefined,
     notes: input.notes ?? '',
   };
-  return apiRequest<ApiScene>(`/projects/${encodeURIComponent(projectId)}/scenes`, { method: 'POST', body });
+  return apiRequest<ApiScene>(`/projects/${encodeURIComponent(projectId)}/scenes`, {
+    method: 'POST',
+    body,
+  });
 }
 
-export async function apiUpdateScene(projectId: string, sceneId: string, updates: Partial<ApiScene>) {
+export async function apiUpdateScene(
+  projectId: string,
+  sceneId: string,
+  updates: Partial<ApiScene>,
+) {
   const body: Record<string, unknown> = {
     ...(typeof updates.order === 'number' ? { order: updates.order } : {}),
     ...(typeof updates.summary === 'string' ? { summary: updates.summary } : {}),
-    ...(typeof updates.sceneDescription === 'string' ? { sceneDescription: updates.sceneDescription } : {}),
-    ...(typeof updates.actionDescription === 'string' ? { actionDescription: updates.actionDescription } : {}),
+    ...(typeof updates.sceneDescription === 'string'
+      ? { sceneDescription: updates.sceneDescription }
+      : {}),
+    ...(typeof updates.actionDescription === 'string'
+      ? { actionDescription: updates.actionDescription }
+      : {}),
     ...(typeof updates.shotPrompt === 'string' ? { shotPrompt: updates.shotPrompt } : {}),
     ...(typeof updates.motionPrompt === 'string' ? { motionPrompt: updates.motionPrompt } : {}),
     ...(updates.dialogues !== undefined ? { dialogues: updates.dialogues } : {}),
@@ -51,11 +67,8 @@ export async function apiDeleteScene(projectId: string, sceneId: string) {
 }
 
 export async function apiReorderScenes(projectId: string, sceneIds: string[]) {
-  return apiRequest<ApiScene[]>(
-    `/projects/${encodeURIComponent(projectId)}/scenes/reorder`,
-    { method: 'POST', body: { sceneIds } },
-  );
+  return apiRequest<ApiScene[]>(`/projects/${encodeURIComponent(projectId)}/scenes/reorder`, {
+    method: 'POST',
+    body: { sceneIds },
+  });
 }
-
-
-

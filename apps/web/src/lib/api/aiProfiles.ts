@@ -49,11 +49,14 @@ export async function apiUpdateAIProfile(
     pricing: ApiAIPricing;
   }>,
 ) {
-  return apiRequest<ApiAIProfile>(`/ai-profiles/${encodeURIComponent(profileId)}`, { method: 'PATCH', body: updates });
+  return apiRequest<ApiAIProfile>(`/ai-profiles/${encodeURIComponent(profileId)}`, {
+    method: 'PATCH',
+    body: updates,
+  });
 }
 
 export async function apiDeleteAIProfile(profileId: string) {
-  return apiRequest<{ ok: true }>(`/ai-profiles/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
+  return apiRequest<{ ok: true }>(`/ai-profiles/${encodeURIComponent(profileId)}`, {
+    method: 'DELETE',
+  });
 }
-
-

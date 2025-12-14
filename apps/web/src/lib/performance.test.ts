@@ -2,10 +2,10 @@
  * 性能优化工具库测试
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { 
-  debounce, 
-  throttle, 
-  SimpleCache, 
+import {
+  debounce,
+  throttle,
+  SimpleCache,
   BatchQueue,
   perfMarker,
   trackRender,
@@ -158,9 +158,9 @@ describe('SimpleCache', () => {
   it('应在 TTL 后过期', () => {
     const cache = new SimpleCache<string, number>(100, 100);
     cache.set('key', 42);
-    
+
     expect(cache.get('key')).toBe(42);
-    
+
     vi.advanceTimersByTime(101);
     expect(cache.get('key')).toBeUndefined();
   });

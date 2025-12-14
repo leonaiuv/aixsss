@@ -38,7 +38,7 @@ function normalizeNewlines(text: string): string {
 
 function parseLabeledBlocks(
   text: string,
-  allowedLabels: Set<string>
+  allowedLabels: Set<string>,
 ): Record<string, string> & { __unlabeled?: string } {
   const blocks: Record<string, string[]> = {};
   const unlabeled: string[] = [];
@@ -114,9 +114,7 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
   ];
 
   const avoid: LocaleText | undefined =
-    get('AVOID_ZH') || get('AVOID_EN')
-      ? { zh: get('AVOID_ZH'), en: get('AVOID_EN') }
-      : undefined;
+    get('AVOID_ZH') || get('AVOID_EN') ? { zh: get('AVOID_ZH'), en: get('AVOID_EN') } : undefined;
 
   return {
     keyframes,
@@ -154,14 +152,10 @@ export function parseSceneAnchorText(text: string): ParsedSceneAnchorText {
   };
 
   const lock: LocaleText | undefined =
-    get('LOCK_ZH') || get('LOCK_EN')
-      ? { zh: get('LOCK_ZH'), en: get('LOCK_EN') }
-      : undefined;
+    get('LOCK_ZH') || get('LOCK_EN') ? { zh: get('LOCK_ZH'), en: get('LOCK_EN') } : undefined;
 
   const avoid: LocaleText | undefined =
-    get('AVOID_ZH') || get('AVOID_EN')
-      ? { zh: get('AVOID_ZH'), en: get('AVOID_EN') }
-      : undefined;
+    get('AVOID_ZH') || get('AVOID_EN') ? { zh: get('AVOID_ZH'), en: get('AVOID_EN') } : undefined;
 
   return {
     sceneAnchor,

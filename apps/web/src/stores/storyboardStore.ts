@@ -9,7 +9,7 @@ interface StoryboardStore {
   scenes: Scene[];
   currentSceneId: string | null;
   isGenerating: boolean;
-  
+
   // 操作方法
   loadScenes: (projectId: string) => void;
   setScenes: (projectId: string, scenes: Scene[]) => void;
@@ -25,7 +25,7 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
   scenes: [],
   currentSceneId: null,
   isGenerating: false,
-  
+
   loadScenes: (projectId: string) => {
     if (isApiMode()) {
       void (async () => {
@@ -41,24 +41,27 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
     const scenes = getScenes(projectId);
     set({ scenes });
   },
-  
+
   setScenes: (projectId: string, scenes: Scene[]) => {
     // 重新编号
     const reorderedScenes = scenes.map((scene, index) => ({
       ...scene,
       order: index + 1,
     }));
-    
+
     if (!isApiMode()) {
       saveScenes(projectId, reorderedScenes);
     } else {
-      void apiReorderScenes(projectId, reorderedScenes.map((s) => s.id)).catch((error) => {
+      void apiReorderScenes(
+        projectId,
+        reorderedScenes.map((s) => s.id),
+      ).catch((error) => {
         console.error('Failed to reorder scenes (api):', error);
       });
     }
     set({ scenes: reorderedScenes });
   },
-  
+
   addScene: (projectId: string, sceneData) => {
     const scenes = get().scenes;
     const newScene: Scene = {
@@ -68,7 +71,7 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
       status: 'pending' as SceneStatus,
       motionPrompt: sceneData.motionPrompt || '',
     };
-    
+
     if (!isApiMode()) {
       saveScene(projectId, newScene);
     } else {
@@ -77,14 +80,14 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
       });
     }
     set({ scenes: [...scenes, newScene] });
-    
+
     return newScene;
   },
-  
+
   updateScene: (projectId: string, sceneId: string, updates: Partial<Scene>) => {
     const scenes = get().scenes;
-    const scene = scenes.find(s => s.id === sceneId);
-    
+    const scene = scenes.find((s) => s.id === sceneId);
+
     if (scene) {
       const updatedScene = { ...scene, ...updates };
       if (!isApiMode()) {
@@ -92,60 +95,66 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
       } else {
         queueApiScenePatch(projectId, sceneId, updates as unknown as Record<string, unknown>);
       }
-      
+
       set({
-        scenes: scenes.map(s => s.id === sceneId ? updatedScene : s),
+        scenes: scenes.map((s) => (s.id === sceneId ? updatedScene : s)),
       });
     }
   },
-  
+
   deleteScene: (projectId: string, sceneId: string) => {
-    const scenes = get().scenes.filter(s => s.id !== sceneId);
-    
+    const scenes = get().scenes.filter((s) => s.id !== sceneId);
+
     // 重新编号
     const reorderedScenes = scenes.map((scene, index) => ({
       ...scene,
       order: index + 1,
     }));
-    
+
     if (!isApiMode()) {
       saveScenes(projectId, reorderedScenes);
     } else {
       void apiDeleteScene(projectId, sceneId).catch((error) => {
         console.error('Failed to delete scene (api):', error);
       });
-      void apiReorderScenes(projectId, reorderedScenes.map((s) => s.id)).catch((error) => {
+      void apiReorderScenes(
+        projectId,
+        reorderedScenes.map((s) => s.id),
+      ).catch((error) => {
         console.error('Failed to reorder scenes after delete (api):', error);
       });
     }
     set({ scenes: reorderedScenes });
   },
-  
+
   reorderScenes: (projectId: string, fromIndex: number, toIndex: number) => {
     const scenes = [...get().scenes];
     const [movedScene] = scenes.splice(fromIndex, 1);
     scenes.splice(toIndex, 0, movedScene);
-    
+
     // 重新编号
     const reorderedScenes = scenes.map((scene, index) => ({
       ...scene,
       order: index + 1,
     }));
-    
+
     if (!isApiMode()) {
       saveScenes(projectId, reorderedScenes);
     } else {
-      void apiReorderScenes(projectId, reorderedScenes.map((s) => s.id)).catch((error) => {
+      void apiReorderScenes(
+        projectId,
+        reorderedScenes.map((s) => s.id),
+      ).catch((error) => {
         console.error('Failed to reorder scenes (api):', error);
       });
     }
     set({ scenes: reorderedScenes });
   },
-  
+
   setCurrentScene: (sceneId: string | null) => {
     set({ currentSceneId: sceneId });
   },
-  
+
   setGenerating: (isGenerating: boolean) => {
     set({ isGenerating });
   },

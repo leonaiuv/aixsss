@@ -20,7 +20,7 @@ describe('useKeyboardShortcut', () => {
   describe('basic functionality', () => {
     it('should call callback when key is pressed', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('a', callback));
 
       const event = new KeyboardEvent('keydown', { key: 'a' });
@@ -31,7 +31,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should not call callback for different key', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('a', callback));
 
       const event = new KeyboardEvent('keydown', { key: 'b' });
@@ -42,7 +42,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should handle modifier keys (ctrl)', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('ctrl+s', callback));
 
       const event = new KeyboardEvent('keydown', { key: 's', ctrlKey: true });
@@ -53,7 +53,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should not trigger without modifier when required', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('ctrl+s', callback));
 
       const event = new KeyboardEvent('keydown', { key: 's', ctrlKey: false });
@@ -64,7 +64,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should handle cmd/meta key', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('cmd+k', callback));
 
       const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true });
@@ -75,7 +75,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should handle alt key', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('alt+a', callback));
 
       const event = new KeyboardEvent('keydown', { key: 'a', altKey: true });
@@ -86,7 +86,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should handle shift key', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('shift+a', callback));
 
       const event = new KeyboardEvent('keydown', { key: 'a', shiftKey: true });
@@ -97,7 +97,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should handle multiple modifiers', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('ctrl+shift+z', callback));
 
       const event = new KeyboardEvent('keydown', {
@@ -114,7 +114,7 @@ describe('useKeyboardShortcut', () => {
   describe('multiple shortcuts', () => {
     it('should handle array of shortcuts', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut(['a', 'b'], callback));
 
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
@@ -126,7 +126,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should not trigger for non-matching keys in array', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut(['a', 'b'], callback));
 
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }));
@@ -137,7 +137,7 @@ describe('useKeyboardShortcut', () => {
   describe('options', () => {
     it('should not call callback when disabled', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('a', callback, { enabled: false }));
 
       const event = new KeyboardEvent('keydown', { key: 'a' });
@@ -148,12 +148,12 @@ describe('useKeyboardShortcut', () => {
 
     it('should prevent default when option is true', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('a', callback, { preventDefault: true }));
 
       const event = new KeyboardEvent('keydown', { key: 'a' });
       const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
-      
+
       window.dispatchEvent(event);
 
       expect(callback).toHaveBeenCalled();
@@ -161,7 +161,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should not prevent default when option is false', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('a', callback, { preventDefault: false }));
 
       const event = new KeyboardEvent('keydown', { key: 'a' });
@@ -175,7 +175,7 @@ describe('useKeyboardShortcut', () => {
     it('should remove event listener on unmount', () => {
       const callback = vi.fn();
       const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
-      
+
       const { unmount } = renderHook(() => useKeyboardShortcut('a', callback));
       unmount();
 
@@ -186,7 +186,7 @@ describe('useKeyboardShortcut', () => {
   describe('special keys', () => {
     it('should handle escape key', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('escape', callback));
 
       const event = new KeyboardEvent('keydown', { key: 'Escape' });
@@ -197,7 +197,7 @@ describe('useKeyboardShortcut', () => {
 
     it('should handle enter key', () => {
       const callback = vi.fn();
-      
+
       renderHook(() => useKeyboardShortcut('enter', callback));
 
       const event = new KeyboardEvent('keydown', { key: 'Enter' });

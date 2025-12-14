@@ -61,14 +61,17 @@ export function BatchOperations({
 }: BatchOperationsProps) {
   const { confirm, ConfirmDialog } = useConfirm();
   // 使用全局状态
-  const { 
-    batchOperations,
-    updateBatchOperations,
-    isBatchGenerating,
-  } = useAIProgressStore();
-  
-  const { selectedScenes, isProcessing, isPaused, cancelRequested, progress, currentScene, operationType } =
-    batchOperations;
+  const { batchOperations, updateBatchOperations, isBatchGenerating } = useAIProgressStore();
+
+  const {
+    selectedScenes,
+    isProcessing,
+    isPaused,
+    cancelRequested,
+    progress,
+    currentScene,
+    operationType,
+  } = batchOperations;
 
   const toggleScene = (sceneId: string) => {
     const newSelected = new Set(selectedScenes);
@@ -77,7 +80,7 @@ export function BatchOperations({
     } else {
       newSelected.add(sceneId);
     }
-    updateBatchOperations({ 
+    updateBatchOperations({
       selectedScenes: newSelected,
       totalScenes: newSelected.size,
     });
@@ -85,12 +88,12 @@ export function BatchOperations({
 
   const toggleAll = () => {
     if (selectedScenes.size === scenes.length) {
-      updateBatchOperations({ 
+      updateBatchOperations({
         selectedScenes: new Set(),
         totalScenes: 0,
       });
     } else {
-      updateBatchOperations({ 
+      updateBatchOperations({
         selectedScenes: new Set(scenes.map((s) => s.id)),
         totalScenes: scenes.length,
       });
@@ -107,7 +110,7 @@ export function BatchOperations({
   const handleBatchExport = (format: string) => {
     if (selectedScenes.size === 0) return;
     onBatchExport(Array.from(selectedScenes), format);
-    updateBatchOperations({ 
+    updateBatchOperations({
       selectedScenes: new Set(),
       totalScenes: 0,
     });
@@ -126,7 +129,7 @@ export function BatchOperations({
     if (!ok) return;
 
     onBatchDelete(Array.from(selectedScenes));
-    updateBatchOperations({ 
+    updateBatchOperations({
       selectedScenes: new Set(),
       totalScenes: 0,
     });
@@ -168,9 +171,7 @@ export function BatchOperations({
           </div>
           <div>
             <h2 className="text-xl font-bold">批量操作</h2>
-            <p className="text-sm text-muted-foreground">
-              已选择 {selectedScenes.size} 个分镜
-            </p>
+            <p className="text-sm text-muted-foreground">已选择 {selectedScenes.size} 个分镜</p>
           </div>
         </div>
 
@@ -242,11 +243,7 @@ export function BatchOperations({
         </Button>
 
         {isProcessing && (
-          <Button
-            variant="outline"
-            onClick={handlePauseToggle}
-            disabled={cancelRequested}
-          >
+          <Button variant="outline" onClick={handlePauseToggle} disabled={cancelRequested}>
             {isPaused ? (
               <>
                 <Play className="h-4 w-4 mr-2" />
@@ -262,11 +259,7 @@ export function BatchOperations({
         )}
 
         {(isProcessing || isBatchGenerating) && (
-          <Button
-            variant="destructive"
-            onClick={handleCancel}
-            disabled={cancelRequested}
-          >
+          <Button variant="destructive" onClick={handleCancel} disabled={cancelRequested}>
             <Square className="h-4 w-4 mr-2" />
             {cancelRequested ? '取消中...' : '停止'}
           </Button>
@@ -291,9 +284,7 @@ export function BatchOperations({
               已发起取消请求，将在当前分镜处理完成后停止。
             </p>
           )}
-          {isPaused && (
-            <p className="text-sm text-yellow-600">已暂停，点击继续按钮恢复</p>
-          )}
+          {isPaused && <p className="text-sm text-yellow-600">已暂停，点击继续按钮恢复</p>}
         </div>
       )}
 
@@ -306,9 +297,7 @@ export function BatchOperations({
             <div
               key={scene.id}
               className={`flex items-center gap-3 p-3 rounded-lg border ${
-                selectedScenes.has(scene.id)
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border'
+                selectedScenes.has(scene.id) ? 'border-primary bg-primary/5' : 'border-border'
               } hover:border-primary/50 transition-colors cursor-pointer`}
               onClick={() => toggleScene(scene.id)}
             >
@@ -325,9 +314,7 @@ export function BatchOperations({
 
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{scene.summary}</p>
-                <p className="text-xs text-muted-foreground">
-                  状态: {getStatusText(scene.status)}
-                </p>
+                <p className="text-xs text-muted-foreground">状态: {getStatusText(scene.status)}</p>
               </div>
 
               {scene.status === 'completed' && (

@@ -29,16 +29,16 @@ export class DeepSeekProvider implements AIProvider {
   async chat(
     messages: ChatMessage[],
     config: AIProviderConfig,
-    options?: AIRequestOptions
+    options?: AIRequestOptions,
   ): Promise<AIResponse> {
     const url = this.buildURL(config.baseURL);
     const params = config.generationParams;
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
         model: config.model || 'deepseek-chat',
@@ -46,8 +46,12 @@ export class DeepSeekProvider implements AIProvider {
         ...(typeof params?.temperature === 'number' ? { temperature: params.temperature } : {}),
         ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
         ...(typeof params?.maxTokens === 'number' ? { max_tokens: params.maxTokens } : {}),
-        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
-        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
+        ...(typeof params?.presencePenalty === 'number'
+          ? { presence_penalty: params.presencePenalty }
+          : {}),
+        ...(typeof params?.frequencyPenalty === 'number'
+          ? { frequency_penalty: params.frequencyPenalty }
+          : {}),
       }),
       signal: options?.signal,
     });
@@ -70,16 +74,16 @@ export class DeepSeekProvider implements AIProvider {
   async *streamChat(
     messages: ChatMessage[],
     config: AIProviderConfig,
-    options?: AIRequestOptions
+    options?: AIRequestOptions,
   ): AsyncGenerator<string> {
     const url = this.buildURL(config.baseURL);
     const params = config.generationParams;
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
         model: config.model || 'deepseek-chat',
@@ -88,8 +92,12 @@ export class DeepSeekProvider implements AIProvider {
         ...(typeof params?.temperature === 'number' ? { temperature: params.temperature } : {}),
         ...(typeof params?.topP === 'number' ? { top_p: params.topP } : {}),
         ...(typeof params?.maxTokens === 'number' ? { max_tokens: params.maxTokens } : {}),
-        ...(typeof params?.presencePenalty === 'number' ? { presence_penalty: params.presencePenalty } : {}),
-        ...(typeof params?.frequencyPenalty === 'number' ? { frequency_penalty: params.frequencyPenalty } : {}),
+        ...(typeof params?.presencePenalty === 'number'
+          ? { presence_penalty: params.presencePenalty }
+          : {}),
+        ...(typeof params?.frequencyPenalty === 'number'
+          ? { frequency_penalty: params.frequencyPenalty }
+          : {}),
       }),
       signal: options?.signal,
     });
@@ -116,7 +124,7 @@ export class DeepSeekProvider implements AIProvider {
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (data === '[DONE]') return;
-          
+
           try {
             const json = JSON.parse(data);
             const content = json.choices[0]?.delta?.content;

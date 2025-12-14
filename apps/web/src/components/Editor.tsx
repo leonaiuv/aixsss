@@ -8,7 +8,15 @@ import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { CheckCircle2, Circle, History, BarChart3, Download, Layers, GitCompare } from 'lucide-react';
+import {
+  CheckCircle2,
+  Circle,
+  History,
+  BarChart3,
+  Download,
+  Layers,
+  GitCompare,
+} from 'lucide-react';
 import { BasicSettings } from './editor/BasicSettings';
 import { SceneGeneration } from './editor/SceneGeneration';
 import { SceneRefinement } from './editor/SceneRefinement';
@@ -20,7 +28,12 @@ import { BatchOperations } from './editor/BatchOperations';
 import { SceneComparison } from './editor/SceneComparison';
 import { AIFactory } from '@/lib/ai/factory';
 import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
-import { logAICall, updateLogProgress, updateLogWithError, updateLogWithResponse } from '@/lib/ai/debugLogger';
+import {
+  logAICall,
+  updateLogProgress,
+  updateLogWithError,
+  updateLogWithResponse,
+} from '@/lib/ai/debugLogger';
 import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
 import { isStructuredOutput, mergeTokenUsage, requestFormatFix } from '@/lib/ai/outputFixer';
@@ -37,8 +50,8 @@ export function Editor() {
   const { config, activeProfileId } = useConfigStore();
   const { characters } = useCharacterStore();
   const { elements: worldViewElements } = useWorldViewStore();
-  const { 
-    startBatchGenerating, 
+  const {
+    startBatchGenerating,
     stopBatchGenerating,
     batchOperations,
     updateBatchOperations,
@@ -56,10 +69,14 @@ export function Editor() {
     if (!currentProject) return;
 
     const state = currentProject.workflowState;
-    
+
     if (state === 'IDLE' || state === 'DATA_COLLECTING') {
       setActiveStep('basic');
-    } else if (state === 'DATA_COLLECTED' || state === 'SCENE_LIST_GENERATING' || state === 'SCENE_LIST_EDITING') {
+    } else if (
+      state === 'DATA_COLLECTED' ||
+      state === 'SCENE_LIST_GENERATING' ||
+      state === 'SCENE_LIST_EDITING'
+    ) {
       setActiveStep('generation');
     } else if (state === 'SCENE_LIST_CONFIRMED' || state === 'SCENE_PROCESSING') {
       setActiveStep('refinement');
@@ -74,7 +91,7 @@ export function Editor() {
       if (!currentProject) return;
 
       const state = currentProject.workflowState;
-      
+
       if (state === 'DATA_COLLECTED') {
         setActiveStep('generation');
       } else if (state === 'SCENE_LIST_CONFIRMED' || state === 'SCENE_PROCESSING') {
@@ -111,7 +128,7 @@ export function Editor() {
   };
 
   // 获取项目角色
-  const projectCharacters = characters.filter(c => c.projectId === currentProject?.id);
+  const projectCharacters = characters.filter((c) => c.projectId === currentProject?.id);
 
   // 版本恢复处理
   const handleVersionRestore = (snapshot: Partial<typeof currentProject>) => {
@@ -135,7 +152,7 @@ export function Editor() {
 
     // 设置全局批量生成状态，防止交叉生成
     startBatchGenerating('batch_panel');
-    
+
     // 初始化批量操作状态
     setBatchSelectedScenes(sceneIds);
     updateBatchOperations({
@@ -181,7 +198,7 @@ export function Editor() {
         break outer;
       }
       const sceneId = sceneIds[i];
-      const scene = scenes.find(s => s.id === sceneId);
+      const scene = scenes.find((s) => s.id === sceneId);
       if (!scene) continue;
 
       // 更新当前处理的分镜信息
@@ -202,9 +219,9 @@ export function Editor() {
         if (!scene.sceneDescription) {
           const sceneSkill = getSkillByName('generate_scene_desc');
           if (sceneSkill) {
-            const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+            const sceneIndex = scenes.findIndex((s) => s.id === sceneId);
             const prevScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
-            
+
             const prompt = fillPromptTemplate(sceneSkill.promptTemplate, {
               artStyle: currentProject.artStyleConfig,
               characters: projectCharacters,
@@ -252,8 +269,13 @@ export function Editor() {
 
               updateLogProgress(logId, 60, '正在检查输出格式...');
 
-              const cancelRequestedNow = useAIProgressStore.getState().batchOperations.cancelRequested;
-              if (!cancelRequestedNow && finalContent && !isStructuredOutput('scene_anchor', finalContent)) {
+              const cancelRequestedNow =
+                useAIProgressStore.getState().batchOperations.cancelRequested;
+              if (
+                !cancelRequestedNow &&
+                finalContent &&
+                !isStructuredOutput('scene_anchor', finalContent)
+              ) {
                 updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
                 try {
                   const fixed = await requestFormatFix({
@@ -303,13 +325,13 @@ export function Editor() {
 
         // 获取更新后的场景数据
         const { scenes: updatedScenes1 } = useStoryboardStore.getState();
-        const latestScene1 = updatedScenes1.find(s => s.id === sceneId);
+        const latestScene1 = updatedScenes1.find((s) => s.id === sceneId);
 
         // 生成关键帧提示词
         if (latestScene1?.sceneDescription && !latestScene1.shotPrompt) {
           const keyframeSkill = getSkillByName('generate_keyframe_prompt');
           if (keyframeSkill) {
-            const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+            const sceneIndex = scenes.findIndex((s) => s.id === sceneId);
             const prevScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
             const prompt = fillPromptTemplate(keyframeSkill.promptTemplate, {
               artStyle: currentProject.artStyleConfig,
@@ -357,8 +379,13 @@ export function Editor() {
 
               updateLogProgress(logId, 60, '正在检查输出格式...');
 
-              const cancelRequestedNow = useAIProgressStore.getState().batchOperations.cancelRequested;
-              if (!cancelRequestedNow && finalContent && !isStructuredOutput('keyframe_prompt', finalContent)) {
+              const cancelRequestedNow =
+                useAIProgressStore.getState().batchOperations.cancelRequested;
+              if (
+                !cancelRequestedNow &&
+                finalContent &&
+                !isStructuredOutput('keyframe_prompt', finalContent)
+              ) {
                 updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
                 try {
                   const fixed = await requestFormatFix({
@@ -408,101 +435,106 @@ export function Editor() {
 
         // 获取更新后的场景数据
         const { scenes: updatedScenes2 } = useStoryboardStore.getState();
-        const latestScene2 = updatedScenes2.find(s => s.id === sceneId);
+        const latestScene2 = updatedScenes2.find((s) => s.id === sceneId);
 
         // 生成时空/运动提示词
-         if (latestScene2?.shotPrompt && !latestScene2.motionPrompt) {
-           const motionSkill = getSkillByName('generate_motion_prompt');
-           if (motionSkill) {
-             const prompt = fillPromptTemplate(motionSkill.promptTemplate, {
-               artStyle: currentProject.artStyleConfig,
-               characters: projectCharacters,
-               worldViewElements,
-               sceneDescription: latestScene2.sceneDescription,
-               shotPrompt: latestScene2.shotPrompt,
-               sceneSummary: latestScene2.summary,
-             });
+        if (latestScene2?.shotPrompt && !latestScene2.motionPrompt) {
+          const motionSkill = getSkillByName('generate_motion_prompt');
+          if (motionSkill) {
+            const prompt = fillPromptTemplate(motionSkill.promptTemplate, {
+              artStyle: currentProject.artStyleConfig,
+              characters: projectCharacters,
+              worldViewElements,
+              sceneDescription: latestScene2.sceneDescription,
+              shotPrompt: latestScene2.shotPrompt,
+              sceneSummary: latestScene2.summary,
+            });
 
-             const messages = [{ role: 'user', content: prompt }] as const;
-             let logId = '';
+            const messages = [{ role: 'user', content: prompt }] as const;
+            let logId = '';
 
-             try {
-               logId = logAICall('motion_prompt', {
-                 skillName: motionSkill.name,
-                 promptTemplate: motionSkill.promptTemplate,
-                 filledPrompt: prompt,
-                 messages: [...messages],
-                 context: {
-                   projectId: currentProject.id,
-                   projectTitle: currentProject.title,
-                   style: styleFullPrompt,
-                   protagonist: currentProject.protagonist,
-                   summary: currentProject.summary,
-                   sceneId,
-                   sceneOrder: scene.order,
-                   sceneSummary: latestScene2.summary,
-                   sceneDescription: latestScene2.sceneDescription,
-                   shotPrompt: latestScene2.shotPrompt,
-                 },
-                 config: {
-                   provider: config.provider,
-                   model: config.model,
-                   maxTokens: motionSkill.maxTokens,
-                   profileId: activeProfileId || undefined,
-                 },
-               });
+            try {
+              logId = logAICall('motion_prompt', {
+                skillName: motionSkill.name,
+                promptTemplate: motionSkill.promptTemplate,
+                filledPrompt: prompt,
+                messages: [...messages],
+                context: {
+                  projectId: currentProject.id,
+                  projectTitle: currentProject.title,
+                  style: styleFullPrompt,
+                  protagonist: currentProject.protagonist,
+                  summary: currentProject.summary,
+                  sceneId,
+                  sceneOrder: scene.order,
+                  sceneSummary: latestScene2.summary,
+                  sceneDescription: latestScene2.sceneDescription,
+                  shotPrompt: latestScene2.shotPrompt,
+                },
+                config: {
+                  provider: config.provider,
+                  model: config.model,
+                  maxTokens: motionSkill.maxTokens,
+                  profileId: activeProfileId || undefined,
+                },
+              });
 
-               updateLogProgress(logId, 30, '正在生成时空/运动提示词...');
-               const response = await client.chat([...messages]);
+              updateLogProgress(logId, 30, '正在生成时空/运动提示词...');
+              const response = await client.chat([...messages]);
 
-               let finalContent = response.content.trim();
-               let mergedTokenUsage = response.tokenUsage;
+              let finalContent = response.content.trim();
+              let mergedTokenUsage = response.tokenUsage;
 
-               updateLogProgress(logId, 60, '正在检查输出格式...');
+              updateLogProgress(logId, 60, '正在检查输出格式...');
 
-               const cancelRequestedNow = useAIProgressStore.getState().batchOperations.cancelRequested;
-               if (!cancelRequestedNow && finalContent && !isStructuredOutput('motion_prompt', finalContent)) {
-                 updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
-                 try {
-                   const fixed = await requestFormatFix({
-                     chat: (messages2, options) => client.chat(messages2, options),
-                     type: 'motion_prompt',
-                     raw: finalContent,
-                   });
+              const cancelRequestedNow =
+                useAIProgressStore.getState().batchOperations.cancelRequested;
+              if (
+                !cancelRequestedNow &&
+                finalContent &&
+                !isStructuredOutput('motion_prompt', finalContent)
+              ) {
+                updateLogProgress(logId, 65, '输出格式不规范，正在纠偏...');
+                try {
+                  const fixed = await requestFormatFix({
+                    chat: (messages2, options) => client.chat(messages2, options),
+                    type: 'motion_prompt',
+                    raw: finalContent,
+                  });
 
-                   mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
+                  mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
 
-                   const fixedContent = fixed.content.trim();
-                   if (fixedContent && isStructuredOutput('motion_prompt', fixedContent)) {
-                     finalContent = fixedContent;
-                     updateLogProgress(logId, 75, '纠偏完成，正在保存结果...');
-                   } else {
-                     updateLogProgress(logId, 75, '纠偏未生效，正在保存原始输出...');
-                   }
-                 } catch (fixError) {
-                   console.warn('时空/运动提示词输出纠偏失败，已回退到原始输出:', fixError);
-                   updateLogProgress(logId, 75, '纠偏失败，正在保存原始输出...');
-                 }
-               }
+                  const fixedContent = fixed.content.trim();
+                  if (fixedContent && isStructuredOutput('motion_prompt', fixedContent)) {
+                    finalContent = fixedContent;
+                    updateLogProgress(logId, 75, '纠偏完成，正在保存结果...');
+                  } else {
+                    updateLogProgress(logId, 75, '纠偏未生效，正在保存原始输出...');
+                  }
+                } catch (fixError) {
+                  console.warn('时空/运动提示词输出纠偏失败，已回退到原始输出:', fixError);
+                  updateLogProgress(logId, 75, '纠偏失败，正在保存原始输出...');
+                }
+              }
 
-               updateLogProgress(logId, 80, '正在保存结果...');
+              updateLogProgress(logId, 80, '正在保存结果...');
 
-               updateLogWithResponse(logId, {
-                 content: finalContent,
-                 tokenUsage: mergedTokenUsage,
-               });
+              updateLogWithResponse(logId, {
+                content: finalContent,
+                tokenUsage: mergedTokenUsage,
+              });
 
-               updateScene(currentProject.id, sceneId, {
-                 motionPrompt: finalContent,
-                 status: 'motion_generating',
-               });
-             } catch (error) {
-               const errorMessage = error instanceof Error ? error.message : '生成失败';
-               if (logId) updateLogWithError(logId, errorMessage);
-               throw error;
-             }
-           }
-         }
+              updateScene(currentProject.id, sceneId, {
+                motionPrompt: finalContent,
+                status: 'motion_generating',
+              });
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : '生成失败';
+              if (logId) updateLogWithError(logId, errorMessage);
+              throw error;
+            }
+          }
+        }
 
         if (!(await waitForResumeOrCancel())) {
           cancelled = true;
@@ -511,7 +543,7 @@ export function Editor() {
 
         // 获取更新后的场景数据
         const { scenes: updatedScenes3 } = useStoryboardStore.getState();
-        const latestScene3 = updatedScenes3.find(s => s.id === sceneId);
+        const latestScene3 = updatedScenes3.find((s) => s.id === sceneId);
 
         if (!(await waitForResumeOrCancel())) {
           cancelled = true;
@@ -519,7 +551,10 @@ export function Editor() {
         }
 
         // 生成台词
-        if (latestScene3?.motionPrompt && (!latestScene3.dialogues || latestScene3.dialogues.length === 0)) {
+        if (
+          latestScene3?.motionPrompt &&
+          (!latestScene3.dialogues || latestScene3.dialogues.length === 0)
+        ) {
           const dialogueSkill = getSkillByName('generate_dialogue');
           if (dialogueSkill) {
             const characterContext = buildCharacterContext(projectCharacters);
@@ -600,7 +635,7 @@ export function Editor() {
     stopBatchGenerating();
 
     const processedCount = successCount + failCount;
-    
+
     // 更新批量操作完成状态
     updateBatchOperations({
       isProcessing: false,
@@ -608,9 +643,7 @@ export function Editor() {
       cancelRequested: false,
       currentSceneId: null,
       currentScene: cancelled ? processedCount : sceneIds.length,
-      progress: cancelled
-        ? Math.round((processedCount / Math.max(1, sceneIds.length)) * 100)
-        : 100,
+      progress: cancelled ? Math.round((processedCount / Math.max(1, sceneIds.length)) * 100) : 100,
       statusMessage: cancelled
         ? `已停止：已处理 ${processedCount}/${sceneIds.length}（成功 ${successCount}，失败 ${failCount}）`
         : `完成！成功 ${successCount} 个，失败 ${failCount} 个`,
@@ -625,42 +658,49 @@ export function Editor() {
     });
   };
 
-  const handleBatchEdit = (sceneIds: string[], updates: Partial<typeof scenes[0]>) => {
-    sceneIds.forEach(id => {
+  const handleBatchEdit = (sceneIds: string[], updates: Partial<(typeof scenes)[0]>) => {
+    sceneIds.forEach((id) => {
       updateScene(currentProject.id, id, updates);
     });
   };
 
   const handleBatchExport = (sceneIds: string[], format: string) => {
-    const selectedScenes = scenes.filter(s => sceneIds.includes(s.id));
+    const selectedScenes = scenes.filter((s) => sceneIds.includes(s.id));
     if (selectedScenes.length === 0) return;
 
     let content = '';
     const filename = `batch_export_${Date.now()}`;
 
     if (format === 'markdown') {
-      content = selectedScenes.map((scene, index) => {
-        const dialoguesText = scene.dialogues?.map(d => `- **${d.characterName || '旁白'}**: ${d.content}`).join('\n') || '(未生成)';
-        return `## 分镜 ${index + 1}: ${scene.summary}\n\n` +
-          `### 场景锚点（Scene Anchor）\n${scene.sceneDescription || '(未生成)'}\n\n` +
-          `### 关键帧提示词（KF0/KF1/KF2）
+      content = selectedScenes
+        .map((scene, index) => {
+          const dialoguesText =
+            scene.dialogues
+              ?.map((d) => `- **${d.characterName || '旁白'}**: ${d.content}`)
+              .join('\n') || '(未生成)';
+          return (
+            `## 分镜 ${index + 1}: ${scene.summary}\n\n` +
+            `### 场景锚点（Scene Anchor）\n${scene.sceneDescription || '(未生成)'}\n\n` +
+            `### 关键帧提示词（KF0/KF1/KF2）
 \`\`\`
 ${scene.shotPrompt || '(未生成)'}
 \`\`\`
 
 ` +
-          `### 时空/运动提示词
+            `### 时空/运动提示词
 \`\`\`
 ${scene.motionPrompt || '(未生成)'}
 \`\`\`
 
 ` +
-          `### 台词
+            `### 台词
 ${dialoguesText}
 
 ---
-`;
-      }).join('\n');
+`
+          );
+        })
+        .join('\n');
 
       const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -679,14 +719,20 @@ ${dialoguesText}
       a.click();
       URL.revokeObjectURL(url);
     } else if (format === 'txt') {
-      content = selectedScenes.map((scene, index) => {
-        const dialoguesText = scene.dialogues?.map(d => `${d.characterName || '旁白'}: ${d.content}`).join('; ') || '(未生成)';
-        return `[分镜 ${index + 1}] ${scene.summary}\n` +
-          `锚点: ${scene.sceneDescription || '(未生成)'}\n` +
-          `关键帧: ${scene.shotPrompt || '(未生成)'}\n` +
-          `运动: ${scene.motionPrompt || '(未生成)'}\n` +
-          `台词: ${dialoguesText}\n\n`;
-      }).join('');
+      content = selectedScenes
+        .map((scene, index) => {
+          const dialoguesText =
+            scene.dialogues?.map((d) => `${d.characterName || '旁白'}: ${d.content}`).join('; ') ||
+            '(未生成)';
+          return (
+            `[分镜 ${index + 1}] ${scene.summary}\n` +
+            `锚点: ${scene.sceneDescription || '(未生成)'}\n` +
+            `关键帧: ${scene.shotPrompt || '(未生成)'}\n` +
+            `运动: ${scene.motionPrompt || '(未生成)'}\n` +
+            `台词: ${dialoguesText}\n\n`
+          );
+        })
+        .join('');
 
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -704,26 +750,38 @@ ${dialoguesText}
   };
 
   const handleBatchDelete = (sceneIds: string[]) => {
-    sceneIds.forEach(id => {
+    sceneIds.forEach((id) => {
       deleteScene(currentProject.id, id);
     });
   };
 
   const steps = [
-    { id: 'basic' as EditorStep, name: '基础设定', states: ['IDLE', 'DATA_COLLECTING', 'DATA_COLLECTED'] },
-    { id: 'generation' as EditorStep, name: '分镜生成', states: ['SCENE_LIST_GENERATING', 'SCENE_LIST_EDITING', 'SCENE_LIST_CONFIRMED'] },
+    {
+      id: 'basic' as EditorStep,
+      name: '基础设定',
+      states: ['IDLE', 'DATA_COLLECTING', 'DATA_COLLECTED'],
+    },
+    {
+      id: 'generation' as EditorStep,
+      name: '分镜生成',
+      states: ['SCENE_LIST_GENERATING', 'SCENE_LIST_EDITING', 'SCENE_LIST_CONFIRMED'],
+    },
     { id: 'refinement' as EditorStep, name: '分镜细化', states: ['SCENE_PROCESSING'] },
-    { id: 'export' as EditorStep, name: '提示词导出', states: ['ALL_SCENES_COMPLETE', 'EXPORTING'] },
+    {
+      id: 'export' as EditorStep,
+      name: '提示词导出',
+      states: ['ALL_SCENES_COMPLETE', 'EXPORTING'],
+    },
   ];
 
-  const getStepStatus = (step: typeof steps[0]) => {
+  const getStepStatus = (step: (typeof steps)[0]) => {
     const currentState = currentProject.workflowState;
-    
+
     // 检查是否是当前步骤
     if (step.states.includes(currentState)) {
       return 'current';
     }
-    
+
     // 检查是否已完成
     const allStates = [
       'IDLE',
@@ -736,21 +794,21 @@ ${dialoguesText}
       'ALL_SCENES_COMPLETE',
       'EXPORTING',
     ];
-    
+
     const currentIndex = allStates.indexOf(currentState);
-    const stepMaxIndex = Math.max(...step.states.map(s => allStates.indexOf(s)));
-    
+    const stepMaxIndex = Math.max(...step.states.map((s) => allStates.indexOf(s)));
+
     if (currentIndex > stepMaxIndex) {
       return 'completed';
     }
-    
+
     return 'pending';
   };
 
   const handleStepClick = (stepId: EditorStep) => {
-    const step = steps.find(s => s.id === stepId);
+    const step = steps.find((s) => s.id === stepId);
     if (!step) return;
-    
+
     const status = getStepStatus(step);
     // 只允许点击当前或已完成的步骤
     if (status === 'current' || status === 'completed') {
@@ -821,57 +879,63 @@ ${dialoguesText}
 
       {/* 主内容区域 */}
       <div className="grid grid-cols-[240px_1fr] gap-6 min-h-[calc(100vh-260px)]">
-      {/* 左侧步骤导航 */}
-      <Card className="p-6 h-fit sticky top-24">
-        <h3 className="font-semibold mb-4">创作流程</h3>
-        <div className="space-y-4">
-          {steps.map((step, index) => {
-            const status = getStepStatus(step);
-            const isClickable = status === 'current' || status === 'completed';
-            
-            return (
-              <div key={step.id} className="flex items-start gap-3">
-                <div className="flex flex-col items-center">
-                  {status === 'completed' ? (
-                    <CheckCircle2 className="h-5 w-5 text-primary" />
-                  ) : status === 'current' ? (
-                    <div className="h-5 w-5 rounded-full border-2 border-primary bg-primary/20" />
-                  ) : (
-                    <Circle className="h-5 w-5 text-muted-foreground" />
-                  )}
-                  {index < steps.length - 1 && (
-                    <div className={`w-0.5 h-8 mt-2 ${
-                      status === 'completed' ? 'bg-primary' : 'bg-border'
-                    }`} />
-                  )}
-                </div>
-                <button
-                  onClick={() => handleStepClick(step.id)}
-                  disabled={!isClickable}
-                  className={`text-left transition-colors ${
-                    isClickable ? 'cursor-pointer hover:text-primary' : 'cursor-not-allowed'
-                  }`}
-                >
-                  <p className={`text-sm font-medium ${
-                    status === 'current' ? 'text-primary' : 
-                    status === 'completed' ? 'text-foreground' : 
-                    'text-muted-foreground'
-                  }`}>
-                    {step.name}
-                  </p>
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        
-        <div className="mt-6 pt-6 border-t space-y-2">
-          <p className="text-xs text-muted-foreground">当前项目</p>
-          <p className="font-medium text-sm">{currentProject.title}</p>
-        </div>
-      </Card>
+        {/* 左侧步骤导航 */}
+        <Card className="p-6 h-fit sticky top-24">
+          <h3 className="font-semibold mb-4">创作流程</h3>
+          <div className="space-y-4">
+            {steps.map((step, index) => {
+              const status = getStepStatus(step);
+              const isClickable = status === 'current' || status === 'completed';
 
-      {/* 右侧主内容区 */}
+              return (
+                <div key={step.id} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center">
+                    {status === 'completed' ? (
+                      <CheckCircle2 className="h-5 w-5 text-primary" />
+                    ) : status === 'current' ? (
+                      <div className="h-5 w-5 rounded-full border-2 border-primary bg-primary/20" />
+                    ) : (
+                      <Circle className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    {index < steps.length - 1 && (
+                      <div
+                        className={`w-0.5 h-8 mt-2 ${
+                          status === 'completed' ? 'bg-primary' : 'bg-border'
+                        }`}
+                      />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleStepClick(step.id)}
+                    disabled={!isClickable}
+                    className={`text-left transition-colors ${
+                      isClickable ? 'cursor-pointer hover:text-primary' : 'cursor-not-allowed'
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-medium ${
+                        status === 'current'
+                          ? 'text-primary'
+                          : status === 'completed'
+                            ? 'text-foreground'
+                            : 'text-muted-foreground'
+                      }`}
+                    >
+                      {step.name}
+                    </p>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 pt-6 border-t space-y-2">
+            <p className="text-xs text-muted-foreground">当前项目</p>
+            <p className="font-medium text-sm">{currentProject.title}</p>
+          </div>
+        </Card>
+
+        {/* 右侧主内容区 */}
         <div className="space-y-6">
           {activeStep === 'basic' && <BasicSettings />}
           {activeStep === 'generation' && <SceneGeneration />}
@@ -881,7 +945,10 @@ ${dialoguesText}
       </div>
 
       {/* 版本历史对话框 */}
-      <Dialog open={activeDialog === 'version'} onOpenChange={(open) => setActiveDialog(open ? 'version' : 'none')}>
+      <Dialog
+        open={activeDialog === 'version'}
+        onOpenChange={(open) => setActiveDialog(open ? 'version' : 'none')}
+      >
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>版本历史</DialogTitle>
@@ -895,7 +962,10 @@ ${dialoguesText}
       </Dialog>
 
       {/* 统计分析对话框 */}
-      <Dialog open={activeDialog === 'statistics'} onOpenChange={(open) => setActiveDialog(open ? 'statistics' : 'none')}>
+      <Dialog
+        open={activeDialog === 'statistics'}
+        onOpenChange={(open) => setActiveDialog(open ? 'statistics' : 'none')}
+      >
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>统计分析</DialogTitle>
@@ -908,7 +978,10 @@ ${dialoguesText}
       </Dialog>
 
       {/* 分镜对比对话框 */}
-      <Dialog open={activeDialog === 'compare'} onOpenChange={(open) => setActiveDialog(open ? 'compare' : 'none')}>
+      <Dialog
+        open={activeDialog === 'compare'}
+        onOpenChange={(open) => setActiveDialog(open ? 'compare' : 'none')}
+      >
         <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>分镜对比</DialogTitle>
@@ -927,7 +1000,10 @@ ${dialoguesText}
       </Dialog>
 
       {/* 批量操作对话框 */}
-      <Dialog open={activeDialog === 'batch'} onOpenChange={(open) => setActiveDialog(open ? 'batch' : 'none')}>
+      <Dialog
+        open={activeDialog === 'batch'}
+        onOpenChange={(open) => setActiveDialog(open ? 'batch' : 'none')}
+      >
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>批量操作</DialogTitle>
@@ -943,7 +1019,10 @@ ${dialoguesText}
       </Dialog>
 
       {/* 数据导出对话框 */}
-      <Dialog open={activeDialog === 'export'} onOpenChange={(open) => setActiveDialog(open ? 'export' : 'none')}>
+      <Dialog
+        open={activeDialog === 'export'}
+        onOpenChange={(open) => setActiveDialog(open ? 'export' : 'none')}
+      >
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>数据导出</DialogTitle>
