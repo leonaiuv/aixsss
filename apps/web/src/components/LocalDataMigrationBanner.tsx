@@ -3,6 +3,8 @@ import { isApiMode } from '@/lib/runtime/mode';
 import { getProjects, getScenes } from '@/lib/storage';
 import { apiCreateProject, apiUpdateProject } from '@/lib/api/projects';
 import { apiCreateScene } from '@/lib/api/scenes';
+import { apiCreateCharacter } from '@/lib/api/characters';
+import { apiCreateWorldViewElement } from '@/lib/api/worldView';
 import type { Project } from '@/types';
 import { ApiError } from '@/lib/api/http';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +27,24 @@ function safeSetMigrationStatus(status: 'dismissed' | 'done'): void {
     localStorage.setItem(MIGRATION_STATUS_KEY, status);
   } catch {
     // ignore
+  }
+}
+
+function getLocalCharacters(projectId: string) {
+  try {
+    const raw = localStorage.getItem(`aixs_characters_${projectId}`);
+    return raw ? (JSON.parse(raw) as unknown[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getLocalWorldViewElements(projectId: string) {
+  try {
+    const raw = localStorage.getItem(`aixs_worldview_${projectId}`);
+    return raw ? (JSON.parse(raw) as unknown[]) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -57,6 +77,22 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
     }
   }, [localProjects]);
 
+  const totalLocalCharacters = useMemo(() => {
+    try {
+      return localProjects.reduce((sum, p) => sum + getLocalCharacters(p.id).length, 0);
+    } catch {
+      return 0;
+    }
+  }, [localProjects]);
+
+  const totalLocalWorldView = useMemo(() => {
+    try {
+      return localProjects.reduce((sum, p) => sum + getLocalWorldViewElements(p.id).length, 0);
+    } catch {
+      return 0;
+    }
+  }, [localProjects]);
+
   if (!isApiMode()) return null;
   if (props.isServerLoading) return null;
   if (status === 'dismissed' || status === 'done') return null;
@@ -75,6 +111,8 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
 
     let importedProjects = 0;
     let importedScenes = 0;
+    let importedCharacters = 0;
+    let importedWorldView = 0;
 
     try {
       for (let i = 0; i < importCandidates.length; i++) {
@@ -131,6 +169,51 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
             // ignore per-scene failure
           }
         }
+
+        const localCharacters = getLocalCharacters(p.id);
+        for (let j = 0; j < localCharacters.length; j++) {
+          const c = localCharacters[j] as any;
+          setProgressText(`导入角色：${p.title || p.id}（${j + 1}/${localCharacters.length}）`);
+          try {
+            await apiCreateCharacter(p.id, {
+              id: typeof c.id === 'string' ? c.id : undefined,
+              name: typeof c.name === 'string' ? c.name : '未命名角色',
+              briefDescription: typeof c.briefDescription === 'string' ? c.briefDescription : undefined,
+              avatar: typeof c.avatar === 'string' ? c.avatar : undefined,
+              appearance: typeof c.appearance === 'string' ? c.appearance : '',
+              personality: typeof c.personality === 'string' ? c.personality : '',
+              background: typeof c.background === 'string' ? c.background : '',
+              portraitPrompts: c.portraitPrompts ?? undefined,
+              customStyle: typeof c.customStyle === 'string' ? c.customStyle : undefined,
+              relationships: c.relationships ?? undefined,
+              appearances: c.appearances ?? undefined,
+              themeColor: typeof c.themeColor === 'string' ? c.themeColor : undefined,
+              primaryColor: typeof c.primaryColor === 'string' ? c.primaryColor : undefined,
+              secondaryColor: typeof c.secondaryColor === 'string' ? c.secondaryColor : undefined,
+            } as any);
+            importedCharacters += 1;
+          } catch (e) {
+            if (e instanceof ApiError && (e.status === 401 || e.status === 403)) throw e;
+          }
+        }
+
+        const localWorldView = getLocalWorldViewElements(p.id);
+        for (let j = 0; j < localWorldView.length; j++) {
+          const w = localWorldView[j] as any;
+          setProgressText(`导入世界观：${p.title || p.id}（${j + 1}/${localWorldView.length}）`);
+          try {
+            await apiCreateWorldViewElement(p.id, {
+              id: typeof w.id === 'string' ? w.id : undefined,
+              type: w.type,
+              title: typeof w.title === 'string' ? w.title : '未命名要素',
+              content: typeof w.content === 'string' ? w.content : '',
+              order: typeof w.order === 'number' ? w.order : j + 1,
+            } as any);
+            importedWorldView += 1;
+          } catch (e) {
+            if (e instanceof ApiError && (e.status === 401 || e.status === 403)) throw e;
+          }
+        }
       }
 
       safeSetMigrationStatus('done');
@@ -139,7 +222,7 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
 
       toast({
         title: '导入完成',
-        description: `已导入 ${importedProjects}/${importCandidates.length} 个项目、${importedScenes}/${totalLocalScenes} 个分镜到云端。`,
+        description: `已导入 ${importedProjects}/${importCandidates.length} 个项目、${importedScenes}/${totalLocalScenes} 个分镜、${importedCharacters}/${totalLocalCharacters} 个角色、${importedWorldView}/${totalLocalWorldView} 个世界观要素到云端。`,
       });
 
       props.onImported?.();
@@ -164,7 +247,7 @@ export function LocalDataMigrationBanner(props: { serverProjects: Project[]; isS
           检测到本地项目数据
         </CardTitle>
         <CardDescription>
-          发现 {importCandidates.length} 个本地项目（共 {totalLocalScenes} 个分镜）尚未导入到云端。导入后可跨设备同步。
+          发现 {importCandidates.length} 个本地项目（共 {totalLocalScenes} 个分镜、{totalLocalCharacters} 个角色、{totalLocalWorldView} 个世界观要素）尚未导入到云端。导入后可跨设备同步。
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-0">

@@ -1,5 +1,78 @@
 import { create } from 'zustand';
-import { Character, PortraitPrompts } from '@/types';
+import { Character, PortraitPrompts, type CharacterRelationship, type SceneAppearance } from '@/types';
+import { isApiMode } from '@/lib/runtime/mode';
+import { apiCreateCharacter, apiDeleteCharacter, apiListCharacters, apiUpdateCharacter } from '@/lib/api/characters';
+
+function safeString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function normalizePortraitPrompts(value: unknown): PortraitPrompts | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const v = value as any;
+  const midjourney = safeString(v.midjourney).trim();
+  const stableDiffusion = safeString(v.stableDiffusion).trim();
+  const general = safeString(v.general).trim();
+  if (!midjourney && !stableDiffusion && !general) return undefined;
+  return {
+    midjourney,
+    stableDiffusion,
+    general,
+  };
+}
+
+function normalizeRelationships(value: unknown): CharacterRelationship[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (v && typeof v === 'object' ? (v as any) : null))
+    .filter(Boolean)
+    .map((v) => ({
+      targetCharacterId: safeString(v.targetCharacterId),
+      relationshipType: safeString(v.relationshipType),
+      description: safeString(v.description),
+    }))
+    .filter((r) => r.targetCharacterId && r.relationshipType);
+}
+
+function normalizeAppearances(value: unknown): SceneAppearance[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (v && typeof v === 'object' ? (v as any) : null))
+    .filter(Boolean)
+    .map((v) => ({
+      sceneId: safeString(v.sceneId),
+      role: (safeString(v.role) as any) || 'supporting',
+      notes: safeString(v.notes),
+    }))
+    .filter((a) => a.sceneId);
+}
+
+function normalizeCharacter(raw: unknown, projectId: string): Character {
+  const now = new Date().toISOString();
+  const v = raw && typeof raw === 'object' ? (raw as any) : ({} as any);
+
+  const id = safeString(v.id) || `char_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+  return {
+    id,
+    projectId: safeString(v.projectId) || projectId,
+    name: safeString(v.name) || '未命名角色',
+    briefDescription: safeString(v.briefDescription) || undefined,
+    avatar: safeString(v.avatar) || undefined,
+    appearance: safeString(v.appearance),
+    personality: safeString(v.personality),
+    background: safeString(v.background),
+    portraitPrompts: normalizePortraitPrompts(v.portraitPrompts),
+    customStyle: safeString(v.customStyle) || undefined,
+    relationships: normalizeRelationships(v.relationships),
+    appearances: normalizeAppearances(v.appearances),
+    themeColor: safeString(v.themeColor) || undefined,
+    primaryColor: safeString(v.primaryColor) || undefined,
+    secondaryColor: safeString(v.secondaryColor) || undefined,
+    createdAt: safeString(v.createdAt) || now,
+    updatedAt: safeString(v.updatedAt) || now,
+  };
+}
 
 interface CharacterStore {
   characters: Character[];
@@ -24,9 +97,23 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
   
   loadCharacters: (projectId: string) => {
     set({ isLoading: true });
+    if (isApiMode()) {
+      void (async () => {
+        try {
+          const characters = await apiListCharacters(projectId);
+          set({ characters: characters.map((c) => normalizeCharacter(c, projectId)), isLoading: false });
+        } catch (error) {
+          console.error('Failed to load characters (api):', error);
+          set({ isLoading: false });
+        }
+      })();
+      return;
+    }
+
     try {
       const stored = localStorage.getItem(`aixs_characters_${projectId}`);
-      const characters = stored ? JSON.parse(stored) : [];
+      const raw = stored ? (JSON.parse(stored) as unknown[]) : [];
+      const characters = Array.isArray(raw) ? raw.map((c) => normalizeCharacter(c, projectId)) : [];
       set({ characters, isLoading: false });
     } catch (error) {
       console.error('Failed to load characters:', error);
@@ -38,7 +125,7 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     const now = new Date().toISOString();
     const newCharacter: Character = {
       ...characterData,
-      id: `char_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `char_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       relationships: characterData.relationships || [],
       appearances: characterData.appearances || [],
       createdAt: now,
@@ -47,7 +134,23 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     
     const characters = [...get().characters, newCharacter];
     set({ characters });
-    saveCharacters(projectId, characters);
+
+    if (!isApiMode()) {
+      saveCharacters(projectId, characters);
+    } else {
+      void (async () => {
+        try {
+          const saved = await apiCreateCharacter(projectId, newCharacter);
+          const normalized = normalizeCharacter(saved, projectId);
+          set((state) => ({
+            characters: state.characters.map((c) => (c.id === newCharacter.id ? normalized : c)),
+          }));
+        } catch (error) {
+          console.error('Failed to create character (api):', error);
+          get().loadCharacters(projectId);
+        }
+      })();
+    }
     
     return newCharacter;
   },
@@ -61,13 +164,39 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     );
     
     set({ characters: updated });
-    saveCharacters(projectId, updated);
+    if (!isApiMode()) {
+      saveCharacters(projectId, updated);
+    } else {
+      void (async () => {
+        try {
+          const saved = await apiUpdateCharacter(projectId, characterId, updates);
+          const normalized = normalizeCharacter(saved, projectId);
+          set((state) => ({
+            characters: state.characters.map((c) => (c.id === characterId ? normalized : c)),
+          }));
+        } catch (error) {
+          console.error('Failed to update character (api):', error);
+          get().loadCharacters(projectId);
+        }
+      })();
+    }
   },
   
   deleteCharacter: (projectId: string, characterId: string) => {
     const characters = get().characters.filter(char => char.id !== characterId);
     set({ characters });
-    saveCharacters(projectId, characters);
+    if (!isApiMode()) {
+      saveCharacters(projectId, characters);
+    } else {
+      void (async () => {
+        try {
+          await apiDeleteCharacter(projectId, characterId);
+        } catch (error) {
+          console.error('Failed to delete character (api):', error);
+          get().loadCharacters(projectId);
+        }
+      })();
+    }
   },
   
   setCurrentCharacter: (characterId: string | null) => {
@@ -97,7 +226,23 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     });
     
     set({ characters: updated });
-    saveCharacters(projectId, updated);
+    if (!isApiMode()) {
+      saveCharacters(projectId, updated);
+    } else {
+      const character = updated.find((c) => c.id === characterId);
+      void (async () => {
+        try {
+          const saved = await apiUpdateCharacter(projectId, characterId, { appearances: character?.appearances ?? [] });
+          const normalized = normalizeCharacter(saved, projectId);
+          set((state) => ({
+            characters: state.characters.map((c) => (c.id === characterId ? normalized : c)),
+          }));
+        } catch (error) {
+          console.error('Failed to update character appearances (api):', error);
+          get().loadCharacters(projectId);
+        }
+      })();
+    }
   },
   
   updatePortraitPrompts: (projectId: string, characterId: string, prompts: PortraitPrompts) => {
@@ -109,7 +254,22 @@ export const useCharacterStore = create<CharacterStore>((set, get) => ({
     );
     
     set({ characters: updated });
-    saveCharacters(projectId, updated);
+    if (!isApiMode()) {
+      saveCharacters(projectId, updated);
+    } else {
+      void (async () => {
+        try {
+          const saved = await apiUpdateCharacter(projectId, characterId, { portraitPrompts: prompts });
+          const normalized = normalizeCharacter(saved, projectId);
+          set((state) => ({
+            characters: state.characters.map((c) => (c.id === characterId ? normalized : c)),
+          }));
+        } catch (error) {
+          console.error('Failed to update character portrait prompts (api):', error);
+          get().loadCharacters(projectId);
+        }
+      })();
+    }
   },
   
   getCharactersByProject: (projectId: string) => {

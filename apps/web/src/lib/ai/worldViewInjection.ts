@@ -19,6 +19,8 @@ export interface WorldViewInjectionSettings {
   injectAtSceneList: boolean;
   /** 是否在生成场景锚点时注入 */
   injectAtSceneDescription: boolean;
+  /** 是否在生成角色设定时注入（角色管理模块） */
+  injectAtCharacter: boolean;
 }
 
 /** 注入时机枚举 */
@@ -44,6 +46,7 @@ export const DEFAULT_INJECTION_SETTINGS: WorldViewInjectionSettings = {
   enabled: true,
   injectAtSceneList: true,
   injectAtSceneDescription: true,
+  injectAtCharacter: true,
 };
 
 // ==========================================
@@ -119,6 +122,13 @@ export function shouldInjectAtSceneDescription(settings: WorldViewInjectionSetti
 }
 
 /**
+ * 判断是否应该在角色设定生成时注入世界观
+ */
+export function shouldInjectAtCharacter(settings: WorldViewInjectionSettings): boolean {
+  return settings.enabled && settings.injectAtCharacter;
+}
+
+/**
  * 根据注入时机枚举创建设置
  * @param timing 注入时机
  * @returns 对应的注入设置
@@ -130,24 +140,28 @@ export function createSettingsFromTiming(timing: InjectionTimingType): WorldView
         enabled: true,
         injectAtSceneList: true,
         injectAtSceneDescription: false,
+        injectAtCharacter: true,
       };
     case InjectionTiming.SCENE_DESCRIPTION:
       return {
         enabled: true,
         injectAtSceneList: false,
         injectAtSceneDescription: true,
+        injectAtCharacter: true,
       };
     case InjectionTiming.BOTH:
       return {
         enabled: true,
         injectAtSceneList: true,
         injectAtSceneDescription: true,
+        injectAtCharacter: true,
       };
     case InjectionTiming.NONE:
       return {
         enabled: false,
         injectAtSceneList: false,
         injectAtSceneDescription: false,
+        injectAtCharacter: false,
       };
     default:
       return { ...DEFAULT_INJECTION_SETTINGS };

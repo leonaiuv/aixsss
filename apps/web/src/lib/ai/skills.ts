@@ -158,7 +158,7 @@ export const DialogueSkill: Skill = {
 {motion_prompt}
 
 ## 场景中的角色
-{characters}
+{characters_story}
 
 ## 台词类型说明
 1. 对白: 角色之间的对话
@@ -183,6 +183,86 @@ export const DialogueSkill: Skill = {
   maxTokens: 900,
 };
 
+export const CharacterBasicInfoSkill: Skill = {
+  name: 'character-basic-info',
+  description: '根据简短描述与项目设定生成完整角色卡（外观/性格/背景/配色）',
+  requiredContext: ['project_essence', 'character_info'],
+  promptTemplate: `你是一位专业的漫画/动画角色设计师。请基于“角色简述”与“项目设定”，生成一个符合故事世界观与画风的角色设定卡。
+
+## 项目设定（必须遵守，不要自相矛盾）
+故事梗概:
+{summary}
+
+主角设定（用于确定气质与叙事风格）:
+{protagonist}
+
+世界观（如果为空表示未启用/未填写）:
+{worldview}
+
+视觉风格参考（可融入但避免堆砌质量词）:
+{style}
+
+已存在角色（避免撞设定/撞外观，可参考其命名风格与叙事基调）:
+{characters_story}
+
+## 角色简述（用户输入）
+{briefDescription}
+
+## 输出要求
+1) “外观描述”必须可视化：年龄/体型/发型发色/眼睛/服装/配饰/独特识别点（让绘图能稳定复现同一人）。
+2) “性格特点”要可演：沟通方式/情绪表达/价值观/弱点与反差。
+3) “背景故事”要与项目设定挂钩：出身/关键事件/动机目标（给后续剧情和台词用）。
+4) 同一角色要有稳定的“视觉锚点词汇”，避免大量同义改写（尤其是发型、衣着、关键饰品）。
+5) 给出推荐配色：primaryColor/secondaryColor 必须是 #RRGGBB（用于后续提示词一致性）。
+
+## 输出格式（严格 JSON；只输出 JSON，不要代码块/解释）
+{
+  "name": "角色名称",
+  "appearance": "外观描述（建议 120-220 字）",
+  "personality": "性格特点（建议 80-160 字）",
+  "background": "背景故事（建议 160-280 字）",
+  "primaryColor": "#RRGGBB",
+  "secondaryColor": "#RRGGBB"
+}`,
+  outputFormat: { type: 'json', maxLength: 4000 },
+  maxTokens: 1200,
+};
+
+export const CharacterPortraitSkill: Skill = {
+  name: 'character-portrait-prompts',
+  description: '生成角色定妆照提示词（MJ/SD/通用），用于角色一致性参考图',
+  requiredContext: ['project_essence', 'character_info', 'style'],
+  promptTemplate: `你是专业的 AI 绘图提示词工程师。请为下述角色生成“定妆照（全身、白底）”提示词，用于后续分镜生成时锁定同一人物身份。
+
+## 画风（可融入，不要堆砌质量词）
+{style}
+
+## 世界观（用于服装/道具/质感，但不要把剧情写进定妆照）
+{worldview}
+
+## 角色信息（必须锁定外观关键词，避免同义改写）
+{characterName}
+{characterAppearance}
+
+配色参考（如果为空可忽略）:
+primaryColor={primaryColor}
+secondaryColor={secondaryColor}
+
+## 定妆照要求
+- 单人、全身、正面或 3/4 站姿，纯白背景
+- 强调外观锚点（发型/发色/服装关键件/配饰/体态/表情气质）
+- 禁止新增其他人物/文字水印/多余物体
+
+## 输出格式（严格 JSON；只输出 JSON）
+{
+  "midjourney": "英文提示词，末尾包含 --ar 2:3 --v 6，并包含 --no text --no watermark --no extra people 等约束",
+  "stableDiffusion": "英文正向提示词（可包含逗号分隔关键词），可在末尾追加 Negative prompt: ...",
+  "general": "中文通用描述（适配其他绘图工具）"
+}`,
+  outputFormat: { type: 'json', maxLength: 3000 },
+  maxTokens: 900,
+};
+
 // 技能注册表
 export const SkillRegistry = new Map<string, Skill>([
   ['scene-list', SceneListSkill],
@@ -191,6 +271,8 @@ export const SkillRegistry = new Map<string, Skill>([
   ['keyframe-prompt', KeyframePromptSkill],
   ['motion-prompt', MotionPromptSkill],
   ['dialogue', DialogueSkill],
+  ['character-basic-info', CharacterBasicInfoSkill],
+  ['character-portrait-prompts', CharacterPortraitSkill],
 ]);
 
 // 根据任务类型获取技能

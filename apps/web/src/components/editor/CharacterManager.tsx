@@ -16,11 +16,23 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useAIProgressStore, type AITask } from '@/stores/aiProgressStore';
 import { useCustomStyleStore } from '@/stores/customStyleStore';
+import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useToast } from '@/hooks/use-toast';
 import { AIFactory } from '@/lib/ai/factory';
 import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
 import { parseFirstJSONObject } from '@/lib/ai/jsonExtractor';
+import { buildWorldViewContext } from '@/lib/ai/contextBuilder';
+import { getInjectionSettings, shouldInjectAtCharacter } from '@/lib/ai/worldViewInjection';
+import {
+  buildCharacterBasicInfoPrompt,
+  buildCharacterPortraitPrompt,
+  buildJsonRepairPrompt,
+  mergeTokenUsage as mergeCharacterTokenUsage,
+  parseCharacterBasicInfo,
+  parseCharacterPortraitPrompts,
+} from '@/lib/ai/characterGeneration';
+import { CharacterBasicInfoSkill, CharacterPortraitSkill } from '@/lib/ai/skills';
 import {
   clearCharacterCreateDraft,
   isCharacterCreateDraftMeaningful,
@@ -218,14 +230,24 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const { confirm, ConfirmDialog } = useConfirm();
   const { characters, addCharacter, updateCharacter, deleteCharacter, loadCharacters } =
     useCharacterStore();
+  const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
   
   // 加载角色数据
   useEffect(() => {
     loadCharacters(projectId);
   }, [projectId, loadCharacters]);
+  // 加载世界观要素（用于角色生成上下文）
+  useEffect(() => {
+    loadWorldViewElements(projectId);
+  }, [projectId, loadWorldViewElements]);
   const { config, activeProfileId } = useConfigStore();
   const { currentProject } = useProjectStore();
-  const { scenes, updateScene: updateSceneInStore } = useStoryboardStore();
+  const { scenes, loadScenes, updateScene: updateSceneInStore } = useStoryboardStore();
+
+  // 若已有分镜，确保加载（用于角色变更后的 needs_update 标记）
+  useEffect(() => {
+    loadScenes(projectId);
+  }, [loadScenes, projectId]);
   
   // AI进度追踪 Store
   const { 
@@ -347,6 +369,10 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   };
 
   const projectCharacters = characters.filter((c) => c.projectId === projectId);
+  const projectWorldViewElements = useMemo(
+    () => worldViewElements.filter((e) => e.projectId === projectId),
+    [projectId, worldViewElements],
+  );
 
   const isInProgressTask = useCallback(
     (task?: AITask | null) => task?.status === 'running' || task?.status === 'queued',
@@ -824,25 +850,35 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     try {
       const client = AIFactory.createClient(config);
       const styleDesc = getStyleDescription();
-      
-      const projectContext = buildProjectContext(currentProject, styleDesc);
+      const injectionSettings = getInjectionSettings(projectId);
+      const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
+      const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
 
-      const prompt = `你是一位专业的角色设计师。请根据以下简短描述，生成完整的角色设定。
+      const existingCharacters = projectCharacters.filter((c) => (targetCharacterId ? c.id !== targetCharacterId : true));
 
-角色简述：${briefDescription}
-${projectContext}
+      const colorHints = [
+        baseFormData.primaryColor?.trim() ? `主色 ${baseFormData.primaryColor.trim()}` : null,
+        baseFormData.secondaryColor?.trim() ? `辅色 ${baseFormData.secondaryColor.trim()}` : null,
+      ]
+        .filter(Boolean)
+        .join('，');
 
-请按以下JSON格式输出（不要有任何其他内容）：
-{
-  "name": "角色名称",
-  "appearance": "外观描述（100-200字，包含年龄、身材、发型、发色、眼睛、服装、配饰等具体可视化描述）",
-  "personality": "性格特点（80-150字，包含主要性格、情感表达、互动模式、独特亮点）",
-  "background": "背景故事（150-250字，包含出身、成长、关键事件、动机目标）"
-}`;
+      const briefForPrompt = colorHints ? `${briefDescription}\n（色彩偏好：${colorHints}）` : briefDescription;
+
+      const prompt = buildCharacterBasicInfoPrompt({
+        briefDescription: briefForPrompt,
+        summary: (currentProject?.summary ?? '').trim(),
+        protagonist: (currentProject?.protagonist ?? '').trim(),
+        artStyle:
+          currentProject?.artStyleConfig ?? (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined),
+        worldViewElements: worldViewForPrompt,
+        existingCharacters,
+      });
 
       // 记录日志
       logId = logAICall('character_basic_info', {
-        promptTemplate: prompt,
+        skillName: CharacterBasicInfoSkill.name,
+        promptTemplate: CharacterBasicInfoSkill.promptTemplate,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
         context: {
@@ -851,6 +887,7 @@ ${projectContext}
           skipProgressBridge: true,
           briefDescription,
           style: styleDesc,
+          worldViewInjected: shouldInjectWorldView,
         },
         config: {
           provider: config.provider,
@@ -881,33 +918,30 @@ ${projectContext}
       if (isMountedRef.current) setLastAIResponse(firstResponseContent);
 
       // 记录原始响应（即便格式不正确，也方便排查）
-      updateLogWithResponse(logId, { content: firstResponseContent });
-
-      const attempt1 = parseFirstJSONObject(firstResponseContent);
-      const buildNextBasicInfo = (value: Record<string, unknown>) => {
-        const nextName =
-          pickString(value.name) || baseFormData.name.trim() || deriveNameFromBrief(briefDescription);
-        const nextAppearance = pickString(value.appearance) || baseFormData.appearance.trim();
-        const nextPersonality = pickString(value.personality) || baseFormData.personality.trim();
-        const nextBackground = pickString(value.background) || baseFormData.background.trim();
-        return {
-          name: nextName,
-          appearance: nextAppearance,
-          personality: nextPersonality,
-          background: nextBackground,
-        };
-      };
+      let mergedTokenUsage = response.tokenUsage;
+      updateLogWithResponse(logId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
 
       const commitBasicInfo = (next: {
         name: string;
         appearance: string;
         personality: string;
         background: string;
-      }, raw: string) => {
+        primaryColor?: string;
+        secondaryColor?: string;
+      }, raw: string, tokenUsage?: { prompt: number; completion: number; total: number }) => {
         if (!targetCharacterId) {
           const merged: CharacterFormData = {
             ...baseFormData,
-            ...next,
+            name: baseFormData.name.trim() ? baseFormData.name : next.name || deriveNameFromBrief(briefDescription),
+            appearance: baseFormData.appearance.trim() ? baseFormData.appearance : next.appearance,
+            personality: baseFormData.personality.trim() ? baseFormData.personality : next.personality,
+            background: baseFormData.background.trim() ? baseFormData.background : next.background,
+            primaryColor: baseFormData.primaryColor.trim()
+              ? baseFormData.primaryColor
+              : next.primaryColor || baseFormData.primaryColor,
+            secondaryColor: baseFormData.secondaryColor.trim()
+              ? baseFormData.secondaryColor
+              : next.secondaryColor || baseFormData.secondaryColor,
           };
           const draft: CharacterCreateDraft = {
             version: 1,
@@ -934,46 +968,43 @@ ${projectContext}
         if (shouldUpdateUI) {
           setFormData((prev) => ({
             ...prev,
-            ...next,
+            name: prev.name.trim() ? prev.name : next.name || deriveNameFromBrief(briefDescription),
+            appearance: prev.appearance.trim() ? prev.appearance : next.appearance,
+            personality: prev.personality.trim() ? prev.personality : next.personality,
+            background: prev.background.trim() ? prev.background : next.background,
+            primaryColor: prev.primaryColor.trim() ? prev.primaryColor : next.primaryColor || prev.primaryColor,
+            secondaryColor: prev.secondaryColor.trim()
+              ? prev.secondaryColor
+              : next.secondaryColor || prev.secondaryColor,
           }));
           setDialogStep('basic');
         }
-        completeTask(taskId, { content: raw });
+        completeTask(taskId, { content: raw, tokenUsage });
       };
 
+      const attempt1 = parseCharacterBasicInfo(firstResponseContent);
       if (attempt1.ok) {
-        const next = buildNextBasicInfo(attempt1.value);
-        if (next.appearance) {
-          commitBasicInfo(next, firstResponseContent);
-          return;
-        }
+        commitBasicInfo(attempt1.value, firstResponseContent, mergedTokenUsage);
+        return;
       }
 
       // 第二次：尝试让模型“修复成严格JSON”
       updateTask(taskId, { retryCount: 1 });
       updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
-      if (!attempt1.ok) {
-        parseDetails = [
-          `解析失败原因：${attempt1.reason}`,
-          attempt1.error instanceof Error ? `错误信息：${attempt1.error.message}` : null,
-          attempt1.candidates?.length ? `候选片段：${attempt1.candidates.join('\n---\n')}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n');
-      } else {
-        parseDetails = '解析成功，但缺少「外观描述」字段';
-      }
+      parseDetails = [attempt1.error.reason, attempt1.error.details ? `详情：\n${attempt1.error.details}` : null]
+        .filter(Boolean)
+        .join('\n');
       if (isMountedRef.current) setLastAIDetails(parseDetails);
 
-      const repairPrompt = `你的上一条回复没有按要求输出严格 JSON（或包含了额外文字/Markdown）。
-请把下面内容转换为严格 JSON 对象，并且【只输出 JSON】，不要输出任何解释或代码块标记。
-必须包含并填充以下字段（均为非空字符串）：name / appearance / personality / background。
-
-【待转换内容】
-${firstResponseContent}`;
+      const repairPrompt = buildJsonRepairPrompt({
+        requiredKeys: ['name', 'appearance', 'personality', 'background', 'primaryColor', 'secondaryColor'],
+        raw: firstResponseContent,
+        extraRules: ['primaryColor/secondaryColor 必须是 #RRGGBB（可不带 #，系统会自动补齐）'],
+      });
 
       const repairLogId = logAICall('character_basic_info', {
-        promptTemplate: repairPrompt,
+        skillName: CharacterBasicInfoSkill.name,
+        promptTemplate: CharacterBasicInfoSkill.promptTemplate,
         filledPrompt: repairPrompt,
         messages: [{ role: 'user', content: repairPrompt }],
         context: {
@@ -983,6 +1014,7 @@ ${firstResponseContent}`;
           briefDescription,
           style: styleDesc,
           attempt: 2,
+          worldViewInjected: shouldInjectWorldView,
         },
         config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
       });
@@ -1006,18 +1038,25 @@ ${firstResponseContent}`;
 
       const repairedContent = repairResponse.content || '';
       if (isMountedRef.current) setLastAIResponse(repairedContent);
-      updateLogWithResponse(repairLogId, { content: repairedContent });
+      mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
+      updateLogWithResponse(repairLogId, { content: repairedContent, tokenUsage: repairResponse.tokenUsage });
 
-      const attempt2 = parseFirstJSONObject(repairedContent);
+      const attempt2 = parseCharacterBasicInfo(repairedContent);
       if (attempt2.ok) {
-        const next = buildNextBasicInfo(attempt2.value);
-        if (next.appearance) {
-          commitBasicInfo(next, repairedContent);
-          return;
-        }
+        commitBasicInfo(attempt2.value, repairedContent, mergedTokenUsage);
+        return;
       }
 
-      throw new Error('AI 返回缺少「外观描述」，请点击“一键生成”重试或手动补齐。');
+      parseDetails = [
+        parseDetails,
+        `二次纠偏仍失败：${attempt2.error.reason}`,
+        attempt2.error.details ? `详情：\n${attempt2.error.details}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n');
+      if (isMountedRef.current) setLastAIDetails(parseDetails);
+
+      throw new Error(`AI 返回格式仍不正确：${attempt2.error.reason}`);
     } catch (err) {
       console.error('生成角色信息失败:', err);
 
@@ -1122,31 +1161,24 @@ ${firstResponseContent}`;
       const client = AIFactory.createClient(config);
       const styleDesc = getStyleDescription();
 
-      const prompt = `你是一位专业的AI绘图提示词专家。请根据以下角色信息，生成「角色定妆照」提示词。
+      const injectionSettings = getInjectionSettings(projectId);
+      const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
+      const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
 
-## 角色信息
-名称：${formData.name}
-外观：${formData.appearance}
-性格：${formData.personality || '未设定'}
-
-## 画风要求
-${styleDesc}
-
-## 定妆照要求
-- 全身照，纯白背景
-- 突出角色外观特征、服装细节、表情神态
-- 适合作为角色参考图，保持角色一致性
-
-请按以下JSON格式输出三种格式的提示词（不要有任何其他内容）：
-{
-  "midjourney": "Midjourney格式提示词（英文，包含画风、角色描述、全身照、白色背景、画质参数，末尾加 --ar 2:3 --v 6）",
-  "stableDiffusion": "Stable Diffusion格式提示词（英文，正向提示词，包含画风、角色描述、全身照、白色背景、画质词如masterpiece, best quality等）",
-  "general": "通用中文描述（可用于其他AI绘图工具，包含画风、完整角色描述、全身照、纯白背景）"
-}`;
+      const prompt = buildCharacterPortraitPrompt({
+        characterName: formData.name,
+        characterAppearance: formData.appearance,
+        primaryColor: formData.primaryColor?.trim() || undefined,
+        secondaryColor: formData.secondaryColor?.trim() || undefined,
+        artStyle:
+          currentProject?.artStyleConfig ?? (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined),
+        worldViewElements: worldViewForPrompt,
+      });
 
       // 记录日志
       logId = logAICall('character_portrait', {
-        promptTemplate: prompt,
+        skillName: CharacterPortraitSkill.name,
+        promptTemplate: CharacterPortraitSkill.promptTemplate,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
         context: {
@@ -1156,6 +1188,7 @@ ${styleDesc}
           characterName: formData.name,
           appearance: formData.appearance,
           style: styleDesc,
+          worldViewInjected: shouldInjectWorldView,
         },
         config: {
           provider: config.provider,
@@ -1185,24 +1218,14 @@ ${styleDesc}
       const firstResponseContent = response.content || '';
       if (isMountedRef.current) setLastAIResponse(firstResponseContent);
 
-      updateLogWithResponse(logId, { content: firstResponseContent });
+      let mergedTokenUsage = response.tokenUsage;
+      updateLogWithResponse(logId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
 
-      const attempt1 = parseFirstJSONObject(firstResponseContent);
-      const buildNextPortraitPrompts = (value: Record<string, unknown>) => {
-        const mj = pickString(value.midjourney);
-        const sd = pickString(value.stableDiffusion);
-        const general = pickString(value.general);
-        return { midjourney: mj, stableDiffusion: sd, general };
-      };
-
-      const commitPortraitPrompts = (
-        next: { midjourney?: string; stableDiffusion?: string; general?: string },
-        raw: string
-      ) => {
+      const commitPortraitPrompts = (next: PortraitPrompts, raw: string, tokenUsage?: { prompt: number; completion: number; total: number }) => {
         const mergedPortraitPrompts: PortraitPrompts = {
-          midjourney: next.midjourney || baseFormData.portraitPrompts?.midjourney || '',
-          stableDiffusion: next.stableDiffusion || baseFormData.portraitPrompts?.stableDiffusion || '',
-          general: next.general || baseFormData.portraitPrompts?.general || '',
+          midjourney: next.midjourney,
+          stableDiffusion: next.stableDiffusion,
+          general: next.general,
         };
 
         if (targetCharacterId) {
@@ -1246,29 +1269,26 @@ ${styleDesc}
           }));
           setDialogStep('portrait');
         }
-        completeTask(taskId, { content: raw });
+        completeTask(taskId, { content: raw, tokenUsage });
       };
 
+      const attempt1 = parseCharacterPortraitPrompts(firstResponseContent);
       if (attempt1.ok) {
-        const next = buildNextPortraitPrompts(attempt1.value);
-        if (next.midjourney || next.stableDiffusion || next.general) {
-          commitPortraitPrompts(next, firstResponseContent);
-          return;
-        }
+        commitPortraitPrompts(attempt1.value, firstResponseContent, mergedTokenUsage);
+        return;
       }
 
       updateTask(taskId, { retryCount: 1 });
       updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
 
-      const repairPrompt = `你的上一条回复没有按要求输出严格 JSON（或包含了额外文字/Markdown）。
-请把下面内容转换为严格 JSON 对象，并且【只输出 JSON】，不要输出任何解释或代码块标记。
-必须包含并填充以下字段（均为非空字符串）：midjourney / stableDiffusion / general。
-
-【待转换内容】
-${firstResponseContent}`;
+      const repairPrompt = buildJsonRepairPrompt({
+        requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
+        raw: firstResponseContent,
+      });
 
       const repairLogId = logAICall('character_portrait', {
-        promptTemplate: repairPrompt,
+        skillName: CharacterPortraitSkill.name,
+        promptTemplate: CharacterPortraitSkill.promptTemplate,
         filledPrompt: repairPrompt,
         messages: [{ role: 'user', content: repairPrompt }],
         context: {
@@ -1277,6 +1297,7 @@ ${firstResponseContent}`;
           skipProgressBridge: true,
           characterName: formData.name,
           attempt: 2,
+          worldViewInjected: shouldInjectWorldView,
         },
         config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
       });
@@ -1300,18 +1321,16 @@ ${firstResponseContent}`;
 
       const repairedContent = repairResponse.content || '';
       if (isMountedRef.current) setLastAIResponse(repairedContent);
-      updateLogWithResponse(repairLogId, { content: repairedContent });
+      mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
+      updateLogWithResponse(repairLogId, { content: repairedContent, tokenUsage: repairResponse.tokenUsage });
 
-      const attempt2 = parseFirstJSONObject(repairedContent);
+      const attempt2 = parseCharacterPortraitPrompts(repairedContent);
       if (attempt2.ok) {
-        const next = buildNextPortraitPrompts(attempt2.value);
-        if (next.midjourney || next.stableDiffusion || next.general) {
-          commitPortraitPrompts(next, repairedContent);
-          return;
-        }
+        commitPortraitPrompts(attempt2.value, repairedContent, mergedTokenUsage);
+        return;
       }
 
-      throw new Error('AI 返回缺少定妆照提示词内容，请重试。');
+      throw new Error(`AI 返回缺少定妆照提示词内容：${attempt2.error.reason}`);
     } catch (err) {
       console.error('生成定妆照提示词失败:', err);
       if (isAbortError(err)) {
@@ -1381,31 +1400,24 @@ ${firstResponseContent}`;
     try {
       const client = AIFactory.createClient(config);
       const styleDesc = getStyleDescription();
+      const injectionSettings = getInjectionSettings(projectId);
+      const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
+      const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
+      const artStyleForPrompt =
+        currentProject?.artStyleConfig ?? (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
 
-      const prompt = `你是一位专业的AI绘图提示词专家。请根据以下角色信息，生成「角色定妆照」提示词。
-
-## 角色信息
-名称：${character.name}
-外观：${appearance}
-性格：${character.personality || '未设定'}
-
-## 画风要求
-${styleDesc}
-
-## 定妆照要求
-- 全身照，纯白背景
-- 突出角色外观特征、服装细节、表情神态
-- 适合作为角色参考图，保持角色一致性
-
-请按以下JSON格式输出三种格式的提示词（不要有任何其他内容）：
-{
-  "midjourney": "Midjourney格式提示词（英文，包含画风、角色描述、全身照、白色背景、画质参数，末尾加 --ar 2:3 --v 6）",
-  "stableDiffusion": "Stable Diffusion格式提示词（英文，正向提示词，包含画风、角色描述、全身照、白色背景、画质词如masterpiece, best quality等）",
-  "general": "通用中文描述（可用于其他AI绘图工具，包含画风、完整角色描述、全身照、纯白背景）"
-}`;
+      const prompt = buildCharacterPortraitPrompt({
+        characterName: character.name,
+        characterAppearance: appearance,
+        primaryColor: character.primaryColor?.trim() || undefined,
+        secondaryColor: character.secondaryColor?.trim() || undefined,
+        artStyle: artStyleForPrompt,
+        worldViewElements: worldViewForPrompt,
+      });
 
       logId = logAICall('character_portrait', {
-        promptTemplate: prompt,
+        skillName: CharacterPortraitSkill.name,
+        promptTemplate: CharacterPortraitSkill.promptTemplate,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
         context: {
@@ -1415,6 +1427,7 @@ ${styleDesc}
           characterName: character.name,
           appearance,
           style: styleDesc,
+          worldViewInjected: shouldInjectWorldView,
         },
         config: {
           provider: config.provider,
@@ -1442,47 +1455,31 @@ ${styleDesc}
 
       updateProgress(taskId, 80, '正在解析响应...');
       const firstResponseContent = response.content || '';
-      updateLogWithResponse(logId, { content: firstResponseContent });
+      let mergedTokenUsage = response.tokenUsage;
+      updateLogWithResponse(logId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
 
-      const buildNextPortraitPrompts = (value: Record<string, unknown>) => {
-        const mj = pickString(value.midjourney);
-        const sd = pickString(value.stableDiffusion);
-        const general = pickString(value.general);
-        return { midjourney: mj, stableDiffusion: sd, general };
+      const commit = (next: PortraitPrompts, raw: string, tokenUsage?: { prompt: number; completion: number; total: number }) => {
+        updateCharacter(projectId, character.id, { portraitPrompts: next });
+        completeTask(taskId, { content: raw, tokenUsage });
       };
 
-      const commit = (next: { midjourney?: string; stableDiffusion?: string; general?: string }, raw: string) => {
-        const mergedPortraitPrompts: PortraitPrompts = {
-          midjourney: next.midjourney || character.portraitPrompts?.midjourney || '',
-          stableDiffusion: next.stableDiffusion || character.portraitPrompts?.stableDiffusion || '',
-          general: next.general || character.portraitPrompts?.general || '',
-        };
-
-        updateCharacter(projectId, character.id, { portraitPrompts: mergedPortraitPrompts });
-        completeTask(taskId, { content: raw });
-      };
-
-      const attempt1 = parseFirstJSONObject(firstResponseContent);
+      const attempt1 = parseCharacterPortraitPrompts(firstResponseContent);
       if (attempt1.ok) {
-        const next = buildNextPortraitPrompts(attempt1.value);
-        if (next.midjourney || next.stableDiffusion || next.general) {
-          commit(next, firstResponseContent);
-          return;
-        }
+        commit(attempt1.value, firstResponseContent, mergedTokenUsage);
+        return;
       }
 
       updateTask(taskId, { retryCount: 1 });
       updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
 
-      const repairPrompt = `你的上一条回复没有按要求输出严格 JSON（或包含了额外文字/Markdown）。
-请把下面内容转换为严格JSON对象，并且【只输出JSON】，不要输出任何解释或代码块标记。
-必须包含并填充以下字段（均为非空字符串）：midjourney / stableDiffusion / general。
-
-【待转换内容】
-${firstResponseContent}`;
+      const repairPrompt = buildJsonRepairPrompt({
+        requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
+        raw: firstResponseContent,
+      });
 
       const repairLogId = logAICall('character_portrait', {
-        promptTemplate: repairPrompt,
+        skillName: CharacterPortraitSkill.name,
+        promptTemplate: CharacterPortraitSkill.promptTemplate,
         filledPrompt: repairPrompt,
         messages: [{ role: 'user', content: repairPrompt }],
         context: {
@@ -1491,6 +1488,7 @@ ${firstResponseContent}`;
           skipProgressBridge: true,
           characterName: character.name,
           attempt: 2,
+          worldViewInjected: shouldInjectWorldView,
         },
         config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
       });
@@ -1513,18 +1511,16 @@ ${firstResponseContent}`;
       }
 
       const repairedContent = repairResponse.content || '';
-      updateLogWithResponse(repairLogId, { content: repairedContent });
+      mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
+      updateLogWithResponse(repairLogId, { content: repairedContent, tokenUsage: repairResponse.tokenUsage });
 
-      const attempt2 = parseFirstJSONObject(repairedContent);
+      const attempt2 = parseCharacterPortraitPrompts(repairedContent);
       if (attempt2.ok) {
-        const next = buildNextPortraitPrompts(attempt2.value);
-        if (next.midjourney || next.stableDiffusion || next.general) {
-          commit(next, repairedContent);
-          return;
-        }
+        commit(attempt2.value, repairedContent, mergedTokenUsage);
+        return;
       }
 
-      throw new Error('AI 返回缺少定妆照提示词内容，请重试。');
+      throw new Error(`AI 返回缺少定妆照提示词内容：${attempt2.error.reason}`);
     } catch (err) {
       console.error('生成定妆照提示词失败:', err);
       if (isAbortError(err)) {
@@ -1581,6 +1577,11 @@ ${firstResponseContent}`;
     
     const client = AIFactory.createClient(config);
     const styleDesc = getStyleDescription();
+    const injectionSettings = getInjectionSettings(projectId);
+    const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
+    const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
+    const artStyleForPrompt =
+      currentProject?.artStyleConfig ?? (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
     
     for (let i = 0; i < charactersToProcess.length; i++) {
       const character = charactersToProcess[i];
@@ -1603,29 +1604,18 @@ ${firstResponseContent}`;
       });
       let logId = '';
       try {
-        const prompt = `你是一位专业的AI绘图提示词专家。请根据以下角色信息，生成「角色定妆照」提示词。
-
-## 角色信息
-名称：${character.name}
-外观：${character.appearance}
-性格：${character.personality || '未设定'}
-
-## 画风要求
-${styleDesc}
-
-## 定妆照要求
-- 全身照，纯白背景
-- 突出角色外观特征、服装细节、表情神态
-
-请按以下JSON格式输出（不要有任何其他内容）：
-{
-  "midjourney": "Midjourney格式提示词 --ar 2:3 --v 6",
-  "stableDiffusion": "Stable Diffusion格式提示词",
-  "general": "通用中文描述"
-}`;
+        const prompt = buildCharacterPortraitPrompt({
+          characterName: character.name,
+          characterAppearance: character.appearance,
+          primaryColor: character.primaryColor?.trim() || undefined,
+          secondaryColor: character.secondaryColor?.trim() || undefined,
+          artStyle: artStyleForPrompt,
+          worldViewElements: worldViewForPrompt,
+        });
         
         logId = logAICall('character_portrait', {
-          promptTemplate: prompt,
+          skillName: CharacterPortraitSkill.name,
+          promptTemplate: CharacterPortraitSkill.promptTemplate,
           filledPrompt: prompt,
           messages: [{ role: 'user', content: prompt }],
           context: {
@@ -1633,42 +1623,108 @@ ${styleDesc}
             characterId: character.id,
             skipProgressBridge: true,
             characterName: character.name,
+            style: styleDesc,
+            worldViewInjected: shouldInjectWorldView,
           },
           config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
         });
         
         updateProgress(taskId, 30, '正在调用AI...');
-        
-        const response = await client.chat([{ role: 'user', content: prompt }]);
+
+        const controller = new AbortController();
+        taskAbortControllersRef.current.set(taskId, controller);
+        taskAbortReasonsRef.current.delete(taskId);
+        const timeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+
+        let response;
+        try {
+          response = await client.chat([{ role: 'user', content: prompt }], { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+          if (taskAbortControllersRef.current.get(taskId) === controller) {
+            taskAbortControllersRef.current.delete(taskId);
+          }
+        }
         
         updateProgress(taskId, 80, '正在解析...');
-        
-         const parsedResult = parseFirstJSONObject(response.content || '');
-         if (parsedResult.ok) {
-           const prompts: PortraitPrompts = {
-             midjourney: pickString(parsedResult.value.midjourney) || '',
-             stableDiffusion: pickString(parsedResult.value.stableDiffusion) || '',
-             general: pickString(parsedResult.value.general) || '',
-           };
-           
-           updateCharacter(projectId, character.id, { portraitPrompts: prompts });
-           updateLogWithResponse(logId, { content: response.content });
-           completeTask(taskId, { content: response.content });
-           
-           setBatchGeneration(prev => ({
-             ...prev,
-             completedIds: [...prev.completedIds, character.id],
-           }));
-         } else {
-           throw new Error('AI返回格式错误');
-         }
+
+        const firstResponseContent = response.content || '';
+        let mergedTokenUsage = response.tokenUsage;
+        updateLogWithResponse(logId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
+
+        const attempt1 = parseCharacterPortraitPrompts(firstResponseContent);
+        if (attempt1.ok) {
+          updateCharacter(projectId, character.id, { portraitPrompts: attempt1.value });
+          completeTask(taskId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
+          setBatchGeneration((prev) => ({
+            ...prev,
+            completedIds: [...prev.completedIds, character.id],
+          }));
+          continue;
+        }
+
+        updateTask(taskId, { retryCount: 1 });
+        updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
+
+        const repairPrompt = buildJsonRepairPrompt({
+          requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
+          raw: firstResponseContent,
+        });
+
+        const repairLogId = logAICall('character_portrait', {
+          skillName: CharacterPortraitSkill.name,
+          promptTemplate: CharacterPortraitSkill.promptTemplate,
+          filledPrompt: repairPrompt,
+          messages: [{ role: 'user', content: repairPrompt }],
+          context: {
+            projectId,
+            characterId: character.id,
+            skipProgressBridge: true,
+            characterName: character.name,
+            attempt: 2,
+            style: styleDesc,
+            worldViewInjected: shouldInjectWorldView,
+          },
+          config: { provider: config.provider, model: config.model, profileId: activeProfileId || undefined },
+        });
+
+        const repairController = new AbortController();
+        taskAbortControllersRef.current.set(taskId, repairController);
+        taskAbortReasonsRef.current.delete(taskId);
+        const repairTimeoutId = setTimeout(() => abortTask(taskId, 'timeout'), 90_000);
+
+        let repairResponse;
+        try {
+          repairResponse = await client.chat([{ role: 'user', content: repairPrompt }], { signal: repairController.signal });
+        } finally {
+          clearTimeout(repairTimeoutId);
+          if (taskAbortControllersRef.current.get(taskId) === repairController) {
+            taskAbortControllersRef.current.delete(taskId);
+          }
+        }
+
+        const repairedContent = repairResponse.content || '';
+        mergedTokenUsage = mergeCharacterTokenUsage(mergedTokenUsage, repairResponse.tokenUsage);
+        updateLogWithResponse(repairLogId, { content: repairedContent, tokenUsage: repairResponse.tokenUsage });
+
+        const attempt2 = parseCharacterPortraitPrompts(repairedContent);
+        if (!attempt2.ok) {
+          throw new Error(`AI返回格式错误：${attempt2.error.reason}`);
+        }
+
+        updateCharacter(projectId, character.id, { portraitPrompts: attempt2.value });
+        completeTask(taskId, { content: repairedContent, tokenUsage: mergedTokenUsage });
+        setBatchGeneration((prev) => ({
+          ...prev,
+          completedIds: [...prev.completedIds, character.id],
+        }));
       } catch (err) {
         console.error(`批量生成失败 [${character.name}]:`, err);
         failTask(taskId, {
           message: err instanceof Error ? err.message : '生成失败',
           retryable: true,
         });
-        if (logId) updateLogWithError(logId, err instanceof Error ? err.message : '鐢熸垚澶辫触');
+        if (logId) updateLogWithError(logId, err instanceof Error ? err.message : '生成失败');
         setBatchGeneration(prev => ({
           ...prev,
           failedIds: [...prev.failedIds, character.id],
@@ -1685,7 +1741,24 @@ ${styleDesc}
       ...prev,
       isProcessing: false,
     }));
-  }, [config, isInProgressTask, portraitTaskByCharacterId, projectCharacters, projectId, addTask, updateProgress, completeTask, failTask, updateCharacter, showPanel]);
+  }, [
+    activeProfileId,
+    addTask,
+    abortTask,
+    completeTask,
+    config,
+    currentProject,
+    failTask,
+    isInProgressTask,
+    portraitTaskByCharacterId,
+    projectCharacters,
+    projectId,
+    projectWorldViewElements,
+    showPanel,
+    updateCharacter,
+    updateProgress,
+    updateTask,
+  ]);
 
   // 为所有缺少定妆照的角色批量生成
   const handleBatchGenerateAllMissingPortraits = useCallback(() => {

@@ -8,7 +8,7 @@
 // 4. 提供填充提示词模板的方法
 // ==========================================
 
-import { Character, ArtStyleConfig, WorldViewElement } from '@/types';
+import { Character, ArtStyleConfig, WorldViewElement, type CharacterRelationship, type SceneAppearance } from '@/types';
 
 /** 世界观要素类型 */
 type WorldViewType = WorldViewElement['type'];
@@ -35,12 +35,60 @@ export interface ContextBuildOptions {
   prevSceneSummary?: string;
   /** 故事梗概 */
   summary?: string;
+  /** 角色简述（用于角色管理模块） */
+  briefDescription?: string;
+  /** 角色名称（用于定妆照提示词等） */
+  characterName?: string;
+  /** 角色外观（用于定妆照提示词等） */
+  characterAppearance?: string;
+  /** 角色主色 */
+  primaryColor?: string;
+  /** 角色辅色 */
+  secondaryColor?: string;
 }
 
 /** 上下文构建配置 */
+export type CharacterContextMode = 'visual' | 'story' | 'full';
+
 interface ContextConfig {
   /** 最大长度限制 */
   maxLength?: number;
+  /** 角色上下文模式：visual=偏外观，story=偏性格/背景/关系，full=全量 */
+  mode?: CharacterContextMode;
+  /** 最多输出多少条关系（story/full 模式） */
+  maxRelationships?: number;
+  /** 是否附带定妆照通用描述（如果有） */
+  includePortraitPrompt?: boolean;
+}
+
+function safeString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function safeRelationships(value: unknown): CharacterRelationship[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (v && typeof v === 'object' ? (v as any) : null))
+    .filter(Boolean)
+    .map((v) => ({
+      targetCharacterId: safeString((v as any).targetCharacterId),
+      relationshipType: safeString((v as any).relationshipType),
+      description: safeString((v as any).description),
+    }))
+    .filter((r) => r.targetCharacterId && r.relationshipType);
+}
+
+function safeAppearances(value: unknown): SceneAppearance[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (v && typeof v === 'object' ? (v as any) : null))
+    .filter(Boolean)
+    .map((v) => ({
+      sceneId: safeString((v as any).sceneId),
+      role: (safeString((v as any).role) as any) || 'supporting',
+      notes: safeString((v as any).notes),
+    }))
+    .filter((a) => a.sceneId);
 }
 
 /**
@@ -56,31 +104,77 @@ export function buildCharacterContext(
   }
 
   const maxLength = config?.maxLength || 1000;
+  const mode: CharacterContextMode = config?.mode ?? 'visual';
+  const includeVisual = mode === 'visual' || mode === 'full';
+  const includeStory = mode === 'story' || mode === 'full';
+  const maxRelationships = config?.maxRelationships ?? 3;
+  const includePortraitPrompt = config?.includePortraitPrompt ?? true;
   const parts: string[] = [];
+
+  const nameById = new Map(characters.map((c) => [c.id, c.name]));
 
   for (const char of characters) {
     const charParts: string[] = [];
     
     charParts.push(`【${char.name}】`);
-    
-    if (char.appearance) {
-      charParts.push(`外貌: ${char.appearance}`);
+
+    const brief = safeString((char as any).briefDescription);
+    if (includeStory && brief.trim()) {
+      charParts.push(`定位: ${brief.trim()}`);
     }
     
-    if (char.personality) {
-      charParts.push(`性格: ${char.personality}`);
+    if (includeVisual && safeString((char as any).appearance).trim()) {
+      charParts.push(`外貌: ${safeString((char as any).appearance).trim()}`);
+    }
+
+    if (safeString((char as any).personality).trim() && (includeVisual || includeStory)) {
+      charParts.push(`性格: ${safeString((char as any).personality).trim()}`);
+    }
+
+    if (includeStory && safeString((char as any).background).trim()) {
+      charParts.push(`背景: ${safeString((char as any).background).trim()}`);
     }
     
     // 添加主题色信息（如果存在）
-    if (char.primaryColor || char.secondaryColor) {
+    const primaryColor = safeString((char as any).primaryColor).trim();
+    const secondaryColor = safeString((char as any).secondaryColor).trim();
+    if (includeVisual && (primaryColor || secondaryColor)) {
       const colorParts: string[] = [];
-      if (char.primaryColor) {
-        colorParts.push(`主色: ${char.primaryColor}`);
+      if (primaryColor) {
+        colorParts.push(`主色: ${primaryColor}`);
       }
-      if (char.secondaryColor) {
-        colorParts.push(`辅色: ${char.secondaryColor}`);
+      if (secondaryColor) {
+        colorParts.push(`辅色: ${secondaryColor}`);
       }
       charParts.push(`色彩特征: ${colorParts.join(', ')}`);
+    }
+
+    // 可选：附带通用定妆照提示词（作为“稳定视觉锚点”）
+    const portraitGeneral = safeString((char as any).portraitPrompts?.general);
+    if (includeVisual && includePortraitPrompt && portraitGeneral.trim()) {
+      const snippet = portraitGeneral.trim().slice(0, 180);
+      charParts.push(`定妆照参考: ${snippet}${portraitGeneral.trim().length > snippet.length ? '...' : ''}`);
+    }
+
+    // 关系（story/full 模式）
+    const relationships = safeRelationships((char as any).relationships);
+    if (includeStory && relationships.length > 0) {
+      const relLines = relationships.slice(0, maxRelationships).map((r) => {
+        const targetName = nameById.get(r.targetCharacterId) || r.targetCharacterId;
+        const desc = r.description?.trim();
+        const descShort = desc ? ` - ${desc.slice(0, 60)}${desc.length > 60 ? '...' : ''}` : '';
+        return `${r.relationshipType} -> ${targetName}${descShort}`;
+      });
+      charParts.push(`关系: ${relLines.join('; ')}`);
+    }
+
+    // 出场记录（可作为剧情辅助，story/full 模式）
+    const appearances = safeAppearances((char as any).appearances);
+    if (includeStory && appearances.length > 0) {
+      const mainCount = appearances.filter((a) => a.role === 'main').length;
+      const supportingCount = appearances.filter((a) => a.role === 'supporting').length;
+      const bgCount = appearances.filter((a) => a.role === 'background').length;
+      charParts.push(`出场: 主${mainCount}/配${supportingCount}/景${bgCount}`);
     }
     
     parts.push(charParts.join('\n'));
@@ -221,10 +315,13 @@ export function fillPromptTemplate(
   const styleContext = options.artStyle 
     ? buildStyleContext(options.artStyle) 
     : '';
-  
-  const charContext = options.characters && options.characters.length > 0
-    ? buildCharacterContext(options.characters)
-    : '';
+
+  const charVisualContext =
+    options.characters && options.characters.length > 0 ? buildCharacterContext(options.characters, { mode: 'visual' }) : '';
+  const charStoryContext =
+    options.characters && options.characters.length > 0 ? buildCharacterContext(options.characters, { mode: 'story' }) : '';
+  const charFullContext =
+    options.characters && options.characters.length > 0 ? buildCharacterContext(options.characters, { mode: 'full' }) : '';
   
   const worldContext = options.worldViewElements && options.worldViewElements.length > 0
     ? buildWorldViewContext(options.worldViewElements)
@@ -238,8 +335,11 @@ export function fillPromptTemplate(
     '{{styleFullPrompt}}': styleContext,
     
     // 角色相关
-    '{characters}': charContext,
-    '{protagonist}': options.protagonist || charContext,
+    '{characters}': charVisualContext,
+    '{characters_visual}': charVisualContext,
+    '{characters_story}': charStoryContext,
+    '{characters_full}': charFullContext,
+    '{protagonist}': options.protagonist || charStoryContext || charVisualContext,
     
     // 世界观相关
     '{worldview}': worldContext,
@@ -260,6 +360,18 @@ export function fillPromptTemplate(
     // 故事相关
     '{summary}': options.summary || '',
     '{{summary}}': options.summary || '',
+
+    // 角色生成相关（角色管理模块专用）
+    '{briefDescription}': options.briefDescription || '',
+    '{{briefDescription}}': options.briefDescription || '',
+    '{characterName}': options.characterName || '',
+    '{{characterName}}': options.characterName || '',
+    '{characterAppearance}': options.characterAppearance || '',
+    '{{characterAppearance}}': options.characterAppearance || '',
+    '{primaryColor}': options.primaryColor || '',
+    '{{primaryColor}}': options.primaryColor || '',
+    '{secondaryColor}': options.secondaryColor || '',
+    '{{secondaryColor}}': options.secondaryColor || '',
   };
 
   // 执行替换

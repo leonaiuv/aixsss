@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useWorldViewStore } from '@/stores/worldViewStore';
+import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ const ELEMENT_TYPES = [
 export function WorldViewBuilder() {
   const { currentProject } = useProjectStore();
   const { elements, loadElements, addElement, updateElement, deleteElement, currentElementId, setCurrentElement } = useWorldViewStore();
+  const { scenes, loadScenes, updateScene } = useStoryboardStore();
   const { config } = useConfigStore();
   const { confirm, ConfirmDialog } = useConfirm();
   
@@ -58,16 +60,42 @@ export function WorldViewBuilder() {
     enabled: true,
     injectAtSceneList: true,
     injectAtSceneDescription: true,
+    injectAtCharacter: true,
   });
 
   useEffect(() => {
     if (currentProject) {
       loadElements(currentProject.id);
+      // 若项目已进入分镜阶段，尝试加载分镜（用于世界观变更后的 needs_update 标记）
+      loadScenes(currentProject.id);
       // 加载注入设置
       const settings = getInjectionSettings(currentProject.id);
       setInjectionSettings(settings);
     }
-  }, [currentProject?.id, loadElements]);
+  }, [currentProject?.id, loadElements, loadScenes]);
+
+  const maybeMarkScenesNeedUpdate = async (reason: string) => {
+    if (!currentProject) return;
+
+    const affectedScenes = scenes.filter(
+      (s) => s.projectId === currentProject.id && s.status !== 'pending' && s.status !== 'needs_update',
+    );
+
+    if (affectedScenes.length === 0) return;
+
+    const ok = await confirm({
+      title: '世界观已修改，是否标记分镜需更新？',
+      description: `检测到已有 ${affectedScenes.length} 个分镜包含已生成内容。${reason}\n\n建议标记为「需更新」，稍后在「分镜细化」中一键重新生成相关阶段。`,
+      confirmText: '标记需更新',
+      cancelText: '暂不标记',
+    });
+
+    if (!ok) return;
+
+    affectedScenes.forEach((scene) => {
+      updateScene(currentProject.id, scene.id, { status: 'needs_update' });
+    });
+  };
 
   useEffect(() => {
     if (currentElementId) {
@@ -95,6 +123,13 @@ export function WorldViewBuilder() {
     setIsGenerating(true);
     try {
       const client = AIFactory.createClient(config);
+      const styleFullPrompt =
+        (typeof currentProject.artStyleConfig?.fullPrompt === 'string' ? currentProject.artStyleConfig.fullPrompt : '') || '';
+
+      const existingContext = elements
+        .filter((e) => e.projectId === currentProject.id)
+        .map((e) => `- [${e.type}] ${e.title}：${(e.content || '').trim().slice(0, 80)}`)
+        .join('\n');
       
       const typeLabels: Record<string, string> = {
         era: '时代背景',
@@ -109,7 +144,9 @@ export function WorldViewBuilder() {
 
 标题：${formData.title}
 故事背景：${currentProject.summary}
-画风：${currentProject.style}
+主角设定：${currentProject.protagonist || '（未填写）'}
+视觉风格：${styleFullPrompt || currentProject.style || '（未填写）'}
+${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${existingContext}\n` : ''}
 
 要求：
 1. 内容要与整体故事风格协调一致
@@ -141,6 +178,7 @@ export function WorldViewBuilder() {
     if (editingId) {
       updateElement(currentProject.id, editingId, formData);
       setEditingId(null);
+      void maybeMarkScenesNeedUpdate('该操作可能影响场景锚点/关键帧提示词与整体一致性。');
     } else {
       const newElement = addElement(currentProject.id, {
         projectId: currentProject.id,
@@ -150,6 +188,7 @@ export function WorldViewBuilder() {
         order: elements.length + 1,
       });
       setCurrentElement(newElement.id);
+      void maybeMarkScenesNeedUpdate('新增世界观要素会影响后续生成的一致性。');
     }
 
     setFormData({
@@ -184,6 +223,7 @@ export function WorldViewBuilder() {
     if (currentElementId === elementId) {
       setCurrentElement(null);
     }
+    void maybeMarkScenesNeedUpdate('删除世界观要素可能导致已生成内容与当前设定不一致。');
   };
 
   // 更新注入设置
@@ -450,6 +490,24 @@ export function WorldViewBuilder() {
                     disabled={!injectionSettings.enabled}
                   />
                 </div>
+
+                {/* 角色设定生成时注入 */}
+                <div className={`flex items-center justify-between p-4 rounded-lg border ${
+                  injectionSettings.enabled ? '' : 'opacity-50'
+                }`}>
+                  <div className="space-y-0.5">
+                    <Label htmlFor="inject-character" className="font-medium">角色设定生成时注入</Label>
+                    <p className="text-sm text-muted-foreground">
+                      在“角色管理 → 一键生成角色卡”时考虑世界观设定
+                    </p>
+                  </div>
+                  <Switch
+                    id="inject-character"
+                    checked={injectionSettings.injectAtCharacter}
+                    onCheckedChange={(checked) => handleInjectionSettingChange('injectAtCharacter', checked)}
+                    disabled={!injectionSettings.enabled}
+                  />
+                </div>
               </div>
 
               {/* 状态指示 */}
@@ -461,14 +519,14 @@ export function WorldViewBuilder() {
                   ) : (
                     <span className="text-primary">
                       {' '}将在
-                      {injectionSettings.injectAtSceneList && injectionSettings.injectAtSceneDescription
-                        ? ' 分镜列表生成 和 场景锚点生成 '
-                        : injectionSettings.injectAtSceneList
-                        ? ' 分镜列表生成 '
-                        : injectionSettings.injectAtSceneDescription
-                        ? ' 场景锚点生成 '
-                        : ' 无任何阶段 '}
-                      时注入世界观
+                      {[
+                        injectionSettings.injectAtSceneList ? '分镜列表生成' : null,
+                        injectionSettings.injectAtSceneDescription ? '场景锚点生成' : null,
+                        injectionSettings.injectAtCharacter ? '角色设定生成' : null,
+                      ]
+                        .filter(Boolean)
+                        .join('、') || '（无任何阶段）'}
+                      注入世界观
                     </span>
                   )}
                 </p>

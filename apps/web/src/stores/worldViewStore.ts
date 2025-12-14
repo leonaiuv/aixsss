@@ -1,5 +1,13 @@
 import { create } from 'zustand';
 import { WorldViewElement } from '@/types';
+import { isApiMode } from '@/lib/runtime/mode';
+import {
+  apiCreateWorldViewElement,
+  apiDeleteWorldViewElement,
+  apiListWorldViewElements,
+  apiReorderWorldViewElements,
+  apiUpdateWorldViewElement,
+} from '@/lib/api/worldView';
 
 /** 世界观要素类型 */
 type WorldViewType = WorldViewElement['type'];
@@ -43,6 +51,18 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
   
   loadElements: (projectId: string) => {
     set({ isLoading: true });
+    if (isApiMode()) {
+      void (async () => {
+        try {
+          const elements = await apiListWorldViewElements(projectId);
+          set({ elements: elements as WorldViewElement[], isLoading: false });
+        } catch (error) {
+          console.error('Failed to load world view elements (api):', error);
+          set({ isLoading: false });
+        }
+      })();
+      return;
+    }
     try {
       const stored = localStorage.getItem(`aixs_worldview_${projectId}`);
       const elements = stored ? JSON.parse(stored) : [];
@@ -64,7 +84,13 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
     
     const elements = [...get().elements, newElement];
     set({ elements });
-    saveElements(projectId, elements);
+    if (!isApiMode()) {
+      saveElements(projectId, elements);
+    } else {
+      void apiCreateWorldViewElement(projectId, newElement).catch((error) => {
+        console.error('Failed to create world view element (api):', error);
+      });
+    }
     
     return newElement;
   },
@@ -78,13 +104,25 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
     );
     
     set({ elements: updated });
-    saveElements(projectId, updated);
+    if (!isApiMode()) {
+      saveElements(projectId, updated);
+    } else {
+      void apiUpdateWorldViewElement(projectId, elementId, updates).catch((error) => {
+        console.error('Failed to update world view element (api):', error);
+      });
+    }
   },
   
   deleteElement: (projectId: string, elementId: string) => {
     const elements = get().elements.filter(el => el.id !== elementId);
     set({ elements });
-    saveElements(projectId, elements);
+    if (!isApiMode()) {
+      saveElements(projectId, elements);
+    } else {
+      void apiDeleteWorldViewElement(projectId, elementId).catch((error) => {
+        console.error('Failed to delete world view element (api):', error);
+      });
+    }
   },
   
   reorderElements: (projectId: string, fromIndex: number, toIndex: number) => {
@@ -99,7 +137,13 @@ export const useWorldViewStore = create<WorldViewStore>((set, get) => ({
     }));
     
     set({ elements: reordered });
-    saveElements(projectId, reordered);
+    if (!isApiMode()) {
+      saveElements(projectId, reordered);
+    } else {
+      void apiReorderWorldViewElements(projectId, reordered.map((e) => e.id)).catch((error) => {
+        console.error('Failed to reorder world view elements (api):', error);
+      });
+    }
   },
   
   setCurrentElement: (elementId: string | null) => {

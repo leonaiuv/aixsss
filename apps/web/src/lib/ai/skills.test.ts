@@ -6,6 +6,8 @@ import {
   KeyframePromptSkill,
   MotionPromptSkill,
   DialogueSkill,
+  CharacterBasicInfoSkill,
+  CharacterPortraitSkill,
   SkillRegistry,
   getSkillForTask,
   getSkillByName,
@@ -105,13 +107,15 @@ describe('技能定义', () => {
 
 describe('SkillRegistry', () => {
   it('应包含所有预定义技能', () => {
-    expect(SkillRegistry.size).toBe(6);
+    expect(SkillRegistry.size).toBe(8);
     expect(SkillRegistry.get('scene-list')).toBe(SceneListSkill);
     expect(SkillRegistry.get('scene-description')).toBe(SceneDescriptionSkill);
     expect(SkillRegistry.get('action-description')).toBe(ActionDescriptionSkill);
     expect(SkillRegistry.get('keyframe-prompt')).toBe(KeyframePromptSkill);
     expect(SkillRegistry.get('motion-prompt')).toBe(MotionPromptSkill);
     expect(SkillRegistry.get('dialogue')).toBe(DialogueSkill);
+    expect(SkillRegistry.get('character-basic-info')).toBe(CharacterBasicInfoSkill);
+    expect(SkillRegistry.get('character-portrait-prompts')).toBe(CharacterPortraitSkill);
   });
 });
 
@@ -161,7 +165,7 @@ describe('边界/一致性', () => {
       expect(skill.description).toBeDefined();
       expect(skill.requiredContext.length).toBeGreaterThan(0);
       expect(skill.promptTemplate.length).toBeGreaterThan(0);
-      expect(skill.outputFormat.type).toBe('text');
+      expect(['text', 'json']).toContain(skill.outputFormat.type);
       expect(skill.maxTokens).toBeGreaterThanOrEqual(100);
       expect(skill.maxTokens).toBeLessThanOrEqual(10000);
       if (skill.outputFormat.maxLength !== undefined) {

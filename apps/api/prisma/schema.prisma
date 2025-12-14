@@ -109,6 +109,8 @@ model Project {
 
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
   scenes Scene[]
+  characters Character[]
+  worldViewElements WorldViewElement[]
   jobs   AIJob[]
 
   @@index([teamId, updatedAt(sort: Desc)])
@@ -132,6 +134,46 @@ model Scene {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   jobs    AIJob[]
+
+  @@unique([projectId, order])
+  @@index([projectId, order])
+}
+
+model Character {
+  id               String   @id @default(cuid())
+  projectId        String
+  name             String
+  briefDescription String?
+  avatar           String?
+  appearance       String   @default("")
+  personality      String   @default("")
+  background       String   @default("")
+  portraitPrompts  Json?
+  customStyle      String?
+  relationships    Json?
+  appearances      Json?
+  themeColor       String?
+  primaryColor     String?
+  secondaryColor   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, updatedAt(sort: Desc)])
+}
+
+model WorldViewElement {
+  id        String   @id @default(cuid())
+  projectId String
+  type      String
+  title     String
+  content   String   @default("")
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, order])
   @@index([projectId, order])

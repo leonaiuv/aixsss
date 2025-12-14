@@ -6,6 +6,7 @@ import {
   saveInjectionSettings,
   shouldInjectAtSceneList,
   shouldInjectAtSceneDescription,
+  shouldInjectAtCharacter,
   InjectionTiming,
 } from './worldViewInjection';
 
@@ -23,6 +24,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
     it('应该有正确的默认注入设置', () => {
       expect(DEFAULT_INJECTION_SETTINGS).toHaveProperty('injectAtSceneList');
       expect(DEFAULT_INJECTION_SETTINGS).toHaveProperty('injectAtSceneDescription');
+      expect(DEFAULT_INJECTION_SETTINGS).toHaveProperty('injectAtCharacter');
       expect(DEFAULT_INJECTION_SETTINGS).toHaveProperty('enabled');
     });
 
@@ -37,6 +39,10 @@ describe('WorldViewInjection - 世界观注入设置', () => {
     it('默认应该在场景描述生成时注入', () => {
       expect(DEFAULT_INJECTION_SETTINGS.injectAtSceneDescription).toBe(true);
     });
+
+    it('默认应该在角色设定生成时注入', () => {
+      expect(DEFAULT_INJECTION_SETTINGS.injectAtCharacter).toBe(true);
+    });
   });
 
   // ==========================================
@@ -48,6 +54,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         enabled: true,
         injectAtSceneList: true,
         injectAtSceneDescription: false,
+        injectAtCharacter: true,
       };
       
       saveInjectionSettings('project-1', settings);
@@ -68,17 +75,20 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         enabled: true,
         injectAtSceneList: true,
         injectAtSceneDescription: true,
+        injectAtCharacter: true,
       });
       
       saveInjectionSettings('project-1', {
         enabled: true,
         injectAtSceneList: false,
         injectAtSceneDescription: true,
+        injectAtCharacter: false,
       });
       
       const loaded = getInjectionSettings('project-1');
       expect(loaded.injectAtSceneList).toBe(false);
       expect(loaded.injectAtSceneDescription).toBe(true);
+      expect(loaded.injectAtCharacter).toBe(false);
     });
   });
 
@@ -91,6 +101,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         enabled: true,
         injectAtSceneList: true,
         injectAtSceneDescription: false,
+        injectAtCharacter: false,
       };
       
       expect(shouldInjectAtSceneList(settings)).toBe(true);
@@ -101,10 +112,12 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         enabled: false,
         injectAtSceneList: true,
         injectAtSceneDescription: true,
+        injectAtCharacter: true,
       };
       
       expect(shouldInjectAtSceneList(settings)).toBe(false);
       expect(shouldInjectAtSceneDescription(settings)).toBe(false);
+      expect(shouldInjectAtCharacter(settings)).toBe(false);
     });
 
     it('当启用并开启场景描述注入时，应该在场景描述生成时注入', () => {
@@ -112,6 +125,7 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         enabled: true,
         injectAtSceneList: false,
         injectAtSceneDescription: true,
+        injectAtCharacter: false,
       };
       
       expect(shouldInjectAtSceneDescription(settings)).toBe(true);
@@ -122,10 +136,12 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         enabled: true,
         injectAtSceneList: true,
         injectAtSceneDescription: true,
+        injectAtCharacter: true,
       };
       
       expect(shouldInjectAtSceneList(settings)).toBe(true);
       expect(shouldInjectAtSceneDescription(settings)).toBe(true);
+      expect(shouldInjectAtCharacter(settings)).toBe(true);
     });
 
     it('可以都不在任何时机注入（但仍启用）', () => {
@@ -133,10 +149,12 @@ describe('WorldViewInjection - 世界观注入设置', () => {
         enabled: true,
         injectAtSceneList: false,
         injectAtSceneDescription: false,
+        injectAtCharacter: false,
       };
       
       expect(shouldInjectAtSceneList(settings)).toBe(false);
       expect(shouldInjectAtSceneDescription(settings)).toBe(false);
+      expect(shouldInjectAtCharacter(settings)).toBe(false);
     });
   });
 
