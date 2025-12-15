@@ -937,7 +937,13 @@ export function EpisodeWorkflow() {
         </Card>
 
         <div className="space-y-6">
-          {activeStep === 'global' && <BasicSettings />}
+          {activeStep === 'global' && (
+            <BasicSettings
+              minSummaryLength={100}
+              proceedText="确认并进入剧集规划"
+              onProceed={() => setActiveStep('plan')}
+            />
+          )}
           {activeStep === 'plan' && renderPlanStep()}
           {activeStep === 'episode' && renderEpisodeStep()}
           {activeStep === 'export' && renderExportStep()}

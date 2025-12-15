@@ -72,7 +72,14 @@ import {
   CustomArtStyle,
 } from '@/types';
 
-export function BasicSettings() {
+export type BasicSettingsProps = {
+  proceedText?: string;
+  onProceed?: () => void;
+  minSummaryLength?: number;
+  minProtagonistLength?: number;
+};
+
+export function BasicSettings(props: BasicSettingsProps = {}) {
   const { currentProject, updateProject } = useProjectStore();
   const { toast } = useToast();
   const {
@@ -135,8 +142,15 @@ export function BasicSettings() {
     }
   }, [currentProject?.id]);
 
+  const minSummaryLength = props.minSummaryLength ?? 50;
+  const minProtagonistLength = props.minProtagonistLength ?? 20;
+  const maxSummaryLength = 300;
+  const maxProtagonistLength = 150;
+
   const canProceed =
-    formData.summary.length >= 50 && styleConfig.fullPrompt && formData.protagonist.length >= 20;
+    formData.summary.length >= minSummaryLength &&
+    styleConfig.fullPrompt &&
+    formData.protagonist.length >= minProtagonistLength;
 
   const draftPayload = useMemo(
     () => ({
@@ -201,8 +215,12 @@ export function BasicSettings() {
       ...draftPayload,
       workflowState: 'DATA_COLLECTED',
     });
-    // 触发进入下一步的事件
-    window.dispatchEvent(new CustomEvent('workflow:next-step'));
+    if (props.onProceed) {
+      props.onProceed();
+    } else {
+      // 触发进入下一步的事件（旧版编辑器）
+      window.dispatchEvent(new CustomEvent('workflow:next-step'));
+    }
   };
 
   // 快捷键：Ctrl/Cmd + S 保存草稿
@@ -400,7 +418,7 @@ export function BasicSettings() {
                   剧本梗概 *
                 </Label>
                 <p className="text-sm text-muted-foreground mb-2">
-                  简述故事情节、冲突、转折点(建议50-300字)
+                  简述故事情节、冲突、转折点(建议{minSummaryLength}-{maxSummaryLength}字)
                 </p>
                 <Textarea
                   id="summary"
@@ -411,19 +429,22 @@ export function BasicSettings() {
                 />
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-muted-foreground">
-                    {formData.summary.length < 50 && (
+                    {formData.summary.length < minSummaryLength && (
                       <span className="text-yellow-500">
-                        还需 {50 - formData.summary.length} 字
+                        还需 {minSummaryLength - formData.summary.length} 字
                       </span>
                     )}
-                    {formData.summary.length >= 50 && formData.summary.length < 300 && (
+                    {formData.summary.length >= minSummaryLength &&
+                      formData.summary.length < maxSummaryLength && (
                       <span className="text-green-500">✓ 长度合适</span>
                     )}
-                    {formData.summary.length >= 300 && (
-                      <span className="text-orange-500">建议精简至300字以内</span>
+                    {formData.summary.length >= maxSummaryLength && (
+                      <span className="text-orange-500">建议精简至{maxSummaryLength}字以内</span>
                     )}
                   </p>
-                  <p className="text-xs text-muted-foreground">{formData.summary.length} / 300</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formData.summary.length} / {maxSummaryLength}
+                  </p>
                 </div>
               </div>
 
@@ -665,7 +686,7 @@ export function BasicSettings() {
                   主角描述 *
                 </Label>
                 <p className="text-sm text-muted-foreground mb-2">
-                  描述主角的外貌特征、服装、性格(建议20-150字)
+                  描述主角的外貌特征、服装、性格(建议{minProtagonistLength}-{maxProtagonistLength}字)
                 </p>
                 <Textarea
                   id="protagonist"
@@ -676,17 +697,17 @@ export function BasicSettings() {
                 />
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-muted-foreground">
-                    {formData.protagonist.length < 20 && (
+                    {formData.protagonist.length < minProtagonistLength && (
                       <span className="text-yellow-500">
-                        还需 {20 - formData.protagonist.length} 字
+                        还需 {minProtagonistLength - formData.protagonist.length} 字
                       </span>
                     )}
-                    {formData.protagonist.length >= 20 && (
+                    {formData.protagonist.length >= minProtagonistLength && (
                       <span className="text-green-500">✓ 描述充分</span>
                     )}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {formData.protagonist.length} / 150
+                    {formData.protagonist.length} / {maxProtagonistLength}
                   </p>
                 </div>
               </div>
@@ -703,7 +724,7 @@ export function BasicSettings() {
                 </span>
               </div>
               <Button onClick={handleProceed} disabled={!canProceed} className="gap-2">
-                <span>确认并生成分镜</span>
+                <span>{props.proceedText ?? '确认并生成分镜'}</span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
