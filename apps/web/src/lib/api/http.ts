@@ -37,6 +37,24 @@ async function readErrorDetail(response: Response): Promise<unknown> {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function extractErrorMessage(detail: unknown): string | null {
+  if (typeof detail === 'string') return detail || null;
+  if (!isRecord(detail)) return null;
+
+  const message = detail.message;
+  if (typeof message === 'string') return message || null;
+  if (Array.isArray(message) && message.every((m) => typeof m === 'string')) {
+    const joined = message.join('; ').trim();
+    return joined || null;
+  }
+
+  return null;
+}
+
 export async function apiRequest<T>(
   path: string,
   init?: Omit<RequestInit, 'body'> & { body?: unknown; auth?: boolean },
@@ -61,8 +79,7 @@ export async function apiRequest<T>(
 
   if (!res.ok) {
     const detail = await readErrorDetail(res);
-    const message =
-      typeof detail === 'string' && detail ? detail : `API ${res.status} ${res.statusText}`;
+    const message = extractErrorMessage(detail) ?? `API ${res.status} ${res.statusText}`;
     throw new ApiError(message, res.status, detail);
   }
 

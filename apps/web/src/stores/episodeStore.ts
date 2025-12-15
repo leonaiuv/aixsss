@@ -56,7 +56,15 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       return;
     }
 
-    set({ isLoading: true, error: null });
+    const prevEpisodes = get().episodes;
+    const isSameProject = prevEpisodes.length > 0 && prevEpisodes[0].projectId === projectId;
+
+    // 关键：切换项目时必须清空，避免沿用旧的 episodeId 去请求新项目导致 404
+    set({
+      isLoading: true,
+      error: null,
+      ...(isSameProject ? {} : { episodes: [], currentEpisodeId: null }),
+    });
     void (async () => {
       try {
         const episodes = await apiListEpisodes(projectId);
@@ -173,4 +181,3 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
     }
   },
 }));
-
