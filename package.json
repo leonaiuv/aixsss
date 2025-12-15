@@ -10,11 +10,11 @@
     "test": "turbo test",
     "check": "turbo lint test typecheck",
     "format": "turbo format",
-    "format:check": "turbo format:check"
+    "format:check": "turbo format:check",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
     "turbo": "^2.5.6"
   }
 }
-
-

@@ -1,0 +1,2 @@
+echo "🔍 Running pre-commit checks..."
+pnpm run format:check && pnpm run lint

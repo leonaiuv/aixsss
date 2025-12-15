@@ -1,0 +1,15 @@
+echo "🚀 Running pre-push CI checks (same as GitHub CI)..."
+echo ""
+
+# 运行与 CI 相同的检查
+echo "📝 Step 1/4: Format check..."
+pnpm run format:check || { echo "❌ Format check failed! Run 'pnpm run format' to fix."; exit 1; }
+
+echo "✅ Step 2/4: Lint + Test + Typecheck..."
+pnpm run check || { echo "❌ Check failed! Fix the issues above before pushing."; exit 1; }
+
+echo "🏗️  Step 3/4: Build..."
+pnpm run build || { echo "❌ Build failed! Fix the issues above before pushing."; exit 1; }
+
+echo ""
+echo "✅ All CI checks passed! Pushing to remote..."
