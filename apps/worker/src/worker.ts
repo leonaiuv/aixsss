@@ -13,6 +13,10 @@ import { planEpisodes } from './tasks/planEpisodes.js';
 import { generateEpisodeCoreExpression } from './tasks/generateEpisodeCoreExpression.js';
 import { generateEpisodeSceneList } from './tasks/generateEpisodeSceneList.js';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
   const parsed = new URL(url);
   if (parsed.protocol !== 'redis:' && parsed.protocol !== 'rediss:') {
@@ -101,13 +105,19 @@ async function main() {
             return result;
           }
           case 'plan_episodes': {
+            const rawOptions = isRecord(data.options) ? data.options : null;
+            const options =
+              rawOptions && typeof rawOptions.targetEpisodeCount === 'number'
+                ? { targetEpisodeCount: rawOptions.targetEpisodeCount }
+                : undefined;
+
             const result = await planEpisodes({
               prisma,
               teamId,
               projectId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              options: typeof data.options === 'object' && data.options !== null ? (data.options as any) : undefined,
+              options,
               updateProgress: async (progress) => {
                 await job.updateProgress(progress);
               },
@@ -151,6 +161,12 @@ async function main() {
             return result;
           }
           case 'generate_episode_scene_list': {
+            const rawOptions = isRecord(data.options) ? data.options : null;
+            const options =
+              rawOptions && typeof rawOptions.sceneCountHint === 'number'
+                ? { sceneCountHint: rawOptions.sceneCountHint }
+                : undefined;
+
             const result = await generateEpisodeSceneList({
               prisma,
               teamId,
@@ -158,7 +174,7 @@ async function main() {
               episodeId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              options: typeof data.options === 'object' && data.options !== null ? (data.options as any) : undefined,
+              options,
               updateProgress: async (progress) => {
                 await job.updateProgress(progress);
               },
@@ -349,4 +365,3 @@ main().catch((err) => {
   console.error('[worker] bootstrap failed', err);
   process.exit(1);
 });
-

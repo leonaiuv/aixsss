@@ -5,7 +5,7 @@ import { ScenesService } from './scenes.service.js';
 @Module({
   controllers: [ScenesController],
   providers: [ScenesService],
+  exports: [ScenesService],
 })
 export class ScenesModule {}
-
 

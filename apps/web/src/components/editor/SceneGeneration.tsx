@@ -29,6 +29,9 @@ import {
 import { Scene, migrateOldStyleToConfig } from '@/types';
 import { SceneSortable } from './SceneSortable';
 import { useConfirm } from '@/hooks/use-confirm';
+import { isApiMode } from '@/lib/runtime/mode';
+import { apiWorkflowGenerateSceneList } from '@/lib/api/workflow';
+import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 
 /**
  * 获取项目的完整画风提示词
@@ -107,6 +110,44 @@ export function SceneGeneration() {
   const handleGenerate = async () => {
     if (!config) {
       setError('请先配置AI服务');
+      return;
+    }
+
+    if (isApiMode()) {
+      const aiProfileId = config.aiProfileId;
+      if (!aiProfileId) {
+        setError('未绑定 AI Profile：请在「设置」中选择并保存');
+        return;
+      }
+      setGenerating(true);
+      setError('');
+      setGenerationProgress(0);
+
+      try {
+        setGenerationProgress(10);
+        const job = await apiWorkflowGenerateSceneList({
+          projectId: currentProject.id,
+          aiProfileId,
+        });
+        setGenerationProgress(30);
+        await apiWaitForAIJob(job.id);
+        setGenerationProgress(80);
+        loadScenes(currentProject.id);
+
+        updateProject(currentProject.id, {
+          workflowState: 'SCENE_LIST_EDITING',
+          updatedAt: new Date().toISOString(),
+        });
+        setGenerationProgress(100);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '生成失败');
+        console.error('生成分镜失败(api workflow):', err);
+      } finally {
+        setTimeout(() => {
+          setGenerating(false);
+          setGenerationProgress(0);
+        }, 500);
+      }
       return;
     }
 

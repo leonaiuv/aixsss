@@ -6,6 +6,7 @@ import { useThemeStore } from './stores/themeStore';
 import { initStorage, flushScenePatchQueue } from './lib/storage';
 import { isApiMode } from './lib/runtime/mode';
 import { flushApiScenePatchQueue } from './lib/api/scenePatchQueue';
+import { flushApiEpisodeScenePatchQueue } from './lib/api/episodeScenePatchQueue';
 import { ProjectList } from './components/ProjectList';
 import { ThemeToggle } from './components/ThemeToggle';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
@@ -107,6 +108,7 @@ function LocalApp() {
       try {
         flushScenePatchQueue();
         void flushApiScenePatchQueue();
+        void flushApiEpisodeScenePatchQueue();
       } catch {
         // 忽略：避免影响页面卸载
       }
@@ -291,6 +293,7 @@ function BackendApp() {
       try {
         flushScenePatchQueue();
         void flushApiScenePatchQueue();
+        void flushApiEpisodeScenePatchQueue();
       } catch {
         // ignore
       }

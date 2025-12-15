@@ -300,6 +300,14 @@ export type SceneStatus =
   | 'completed'
   | 'needs_update';
 
+// 单集工作流状态
+export type EpisodeWorkflowState =
+  | 'IDLE'
+  | 'CORE_EXPRESSION_READY'
+  | 'SCENE_LIST_EDITING'
+  | 'SCENE_PROCESSING'
+  | 'COMPLETE';
+
 // 项目上下文缓存
 export interface ProjectContextCache {
   styleKeywords: string;
@@ -337,6 +345,8 @@ export interface SceneContextSummary {
 export interface Scene {
   id: string;
   projectId: string;
+  /** API 模式下分镜归属的 Episode */
+  episodeId?: string;
   order: number;
   summary: string;
   /** 场景锚点 - 环境一致性（避免人物/动作/镜头运动） */
@@ -352,6 +362,21 @@ export interface Scene {
   contextSummary?: SceneContextSummary;
   status: SceneStatus;
   notes: string;
+}
+
+// 剧集（Episode）实体
+export interface Episode {
+  id: string;
+  projectId: string;
+  order: number;
+  title: string;
+  summary: string;
+  outline: unknown | null;
+  coreExpression: unknown | null;
+  contextCache: unknown | null;
+  workflowState: EpisodeWorkflowState;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ==========================================

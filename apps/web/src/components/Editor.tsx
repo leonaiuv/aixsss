@@ -5,6 +5,7 @@ import { useConfigStore } from '@/stores/configStore';
 import { useCharacterStore } from '@/stores/characterStore';
 import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
+import { isApiMode } from '@/lib/runtime/mode';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -40,11 +41,17 @@ import { isStructuredOutput, mergeTokenUsage, requestFormatFix } from '@/lib/ai/
 import { migrateOldStyleToConfig } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
+import { EpisodeWorkflow } from './editor/EpisodeWorkflow';
 
 type EditorStep = 'basic' | 'generation' | 'refinement' | 'export';
 type ActiveDialog = 'none' | 'version' | 'statistics' | 'export' | 'batch' | 'compare';
 
 export function Editor() {
+  // 生产默认 API 模式：启用 Episode Planning 全流程 UI
+  return isApiMode() ? <EpisodeWorkflow /> : <LegacyEditor />;
+}
+
+function LegacyEditor() {
   const { currentProject, updateProject } = useProjectStore();
   const { scenes, updateScene, deleteScene } = useStoryboardStore();
   const { config, activeProfileId } = useConfigStore();

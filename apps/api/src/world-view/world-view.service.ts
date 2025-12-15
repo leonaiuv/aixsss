@@ -1,6 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { Prisma, WorldViewElement } from '@prisma/client';
+import type { WorldViewElement } from '@prisma/client';
 import type { CreateWorldViewElementInput, UpdateWorldViewElementInput } from '@aixsss/shared';
 
 function toIso(date: Date): string {
@@ -125,5 +125,4 @@ export class WorldViewService {
     return this.list(teamId, projectId);
   }
 }
-
 

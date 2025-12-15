@@ -32,6 +32,15 @@ export class ScenesService {
     if (!project) throw new NotFoundException('Project not found');
   }
 
+  private async assertEpisode(teamId: string, projectId: string, episodeId: string) {
+    await this.assertProject(teamId, projectId);
+    const episode = await this.prisma.episode.findFirst({
+      where: { id: episodeId, projectId },
+      select: { id: true },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
+  }
+
   private async ensureDefaultEpisode(teamId: string, projectId: string): Promise<{ id: string }> {
     await this.assertProject(teamId, projectId);
 
@@ -66,10 +75,28 @@ export class ScenesService {
     return scenes.map(mapScene);
   }
 
+  async listByEpisode(teamId: string, projectId: string, episodeId: string) {
+    await this.assertEpisode(teamId, projectId, episodeId);
+    const scenes = await this.prisma.scene.findMany({
+      where: { projectId, episodeId },
+      orderBy: { order: 'asc' },
+    });
+    return scenes.map(mapScene);
+  }
+
   async get(teamId: string, projectId: string, sceneId: string) {
     await this.assertProject(teamId, projectId);
     const scene = await this.prisma.scene.findFirst({
       where: { id: sceneId, projectId },
+    });
+    if (!scene) throw new NotFoundException('Scene not found');
+    return mapScene(scene);
+  }
+
+  async getInEpisode(teamId: string, projectId: string, episodeId: string, sceneId: string) {
+    await this.assertEpisode(teamId, projectId, episodeId);
+    const scene = await this.prisma.scene.findFirst({
+      where: { id: sceneId, projectId, episodeId },
     });
     if (!scene) throw new NotFoundException('Scene not found');
     return mapScene(scene);
@@ -82,6 +109,28 @@ export class ScenesService {
         ...(input.id ? { id: input.id } : {}),
         projectId,
         episodeId: episode.id,
+        order: input.order,
+        summary: input.summary ?? '',
+        sceneDescription: input.sceneDescription ?? '',
+        actionDescription: input.actionDescription ?? '',
+        shotPrompt: input.shotPrompt ?? '',
+        motionPrompt: input.motionPrompt ?? '',
+        dialogues: input.dialogues ?? undefined,
+        contextSummary: input.contextSummary ?? undefined,
+        status: (input.status as SceneStatus) ?? undefined,
+        notes: input.notes ?? '',
+      },
+    });
+    return mapScene(scene);
+  }
+
+  async createInEpisode(teamId: string, projectId: string, episodeId: string, input: CreateSceneInput) {
+    await this.assertEpisode(teamId, projectId, episodeId);
+    const scene = await this.prisma.scene.create({
+      data: {
+        ...(input.id ? { id: input.id } : {}),
+        projectId,
+        episodeId,
         order: input.order,
         summary: input.summary ?? '',
         sceneDescription: input.sceneDescription ?? '',
@@ -125,10 +174,56 @@ export class ScenesService {
     return mapScene(scene);
   }
 
+  async updateInEpisode(
+    teamId: string,
+    projectId: string,
+    episodeId: string,
+    sceneId: string,
+    input: UpdateSceneInput,
+  ) {
+    await this.assertEpisode(teamId, projectId, episodeId);
+    const existing = await this.prisma.scene.findFirst({
+      where: { id: sceneId, projectId, episodeId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Scene not found');
+
+    const scene = await this.prisma.scene.update({
+      where: { id: sceneId },
+      data: {
+        ...(typeof input.order === 'number' ? { order: input.order } : {}),
+        ...(typeof input.summary === 'string' ? { summary: input.summary } : {}),
+        ...(typeof input.sceneDescription === 'string' ? { sceneDescription: input.sceneDescription } : {}),
+        ...(typeof input.actionDescription === 'string' ? { actionDescription: input.actionDescription } : {}),
+        ...(typeof input.shotPrompt === 'string' ? { shotPrompt: input.shotPrompt } : {}),
+        ...(typeof input.motionPrompt === 'string' ? { motionPrompt: input.motionPrompt } : {}),
+        ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),
+        ...(input.contextSummary !== undefined
+          ? { contextSummary: input.contextSummary as Prisma.InputJsonValue }
+          : {}),
+        ...(input.status ? { status: input.status as SceneStatus } : {}),
+        ...(typeof input.notes === 'string' ? { notes: input.notes } : {}),
+      },
+    });
+    return mapScene(scene);
+  }
+
   async remove(teamId: string, projectId: string, sceneId: string) {
     await this.assertProject(teamId, projectId);
     const existing = await this.prisma.scene.findFirst({
       where: { id: sceneId, projectId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Scene not found');
+
+    await this.prisma.scene.delete({ where: { id: sceneId } });
+    return { ok: true };
+  }
+
+  async removeInEpisode(teamId: string, projectId: string, episodeId: string, sceneId: string) {
+    await this.assertEpisode(teamId, projectId, episodeId);
+    const existing = await this.prisma.scene.findFirst({
+      where: { id: sceneId, projectId, episodeId },
       select: { id: true },
     });
     if (!existing) throw new NotFoundException('Scene not found');
@@ -167,5 +262,29 @@ export class ScenesService {
 
     return this.list(teamId, projectId);
   }
-}
 
+  async reorderInEpisode(teamId: string, projectId: string, episodeId: string, sceneIds: string[]) {
+    await this.assertEpisode(teamId, projectId, episodeId);
+
+    const existing = await this.prisma.scene.findMany({
+      where: { projectId, episodeId, id: { in: sceneIds } },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((s) => s.id));
+
+    for (const id of sceneIds) {
+      if (!existingIds.has(id)) throw new BadRequestException('Invalid sceneIds');
+    }
+
+    await this.prisma.$transaction(
+      sceneIds.map((id, idx) =>
+        this.prisma.scene.update({
+          where: { id },
+          data: { order: idx + 1 },
+        }),
+      ),
+    );
+
+    return this.listByEpisode(teamId, projectId, episodeId);
+  }
+}
