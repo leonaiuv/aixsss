@@ -3,6 +3,7 @@ import type { Queue, QueueEvents } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AI_QUEUE, AI_QUEUE_EVENTS } from './jobs.constants.js';
 import type { AIJob } from '@prisma/client';
+import { validateProjectPlannable } from './planningValidation.js';
 
 function toIso(date: Date): string {
   return date.toISOString();
@@ -55,6 +56,14 @@ export class JobsService {
     if (!scene) throw new NotFoundException('Scene not found');
   }
 
+  private async requireEpisode(projectId: string, episodeId: string): Promise<void> {
+    const episode = await this.prisma.episode.findFirst({
+      where: { id: episodeId, projectId },
+      select: { id: true },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
+  }
+
   private async requireAIProfile(teamId: string, aiProfileId: string): Promise<void> {
     const profile = await this.prisma.aIProfile.findFirst({
       where: { id: aiProfileId, teamId },
@@ -63,10 +72,155 @@ export class JobsService {
     if (!profile) throw new NotFoundException('AI profile not found');
   }
 
+  private async assertProjectPlannable(teamId: string, projectId: string) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, teamId, deletedAt: null },
+      select: { summary: true, style: true, artStyleConfig: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const result = validateProjectPlannable(project);
+    if (!result.ok) throw new BadRequestException({ message: 'Global settings not plannable', missingFields: result.missingFields });
+  }
+
   async get(teamId: string, jobId: string) {
     const job = await this.prisma.aIJob.findFirst({ where: { id: jobId, teamId } });
     if (!job) throw new NotFoundException('Job not found');
     return mapJob(job);
+  }
+
+  async enqueuePlanEpisodes(
+    teamId: string,
+    projectId: string,
+    aiProfileId: string,
+    options?: { targetEpisodeCount?: number },
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireAIProfile(teamId, aiProfileId);
+    await this.assertProjectPlannable(teamId, projectId);
+
+    const targetEpisodeCount = options?.targetEpisodeCount;
+    if (targetEpisodeCount !== undefined && (targetEpisodeCount < 1 || targetEpisodeCount > 24)) {
+      throw new BadRequestException('targetEpisodeCount out of range');
+    }
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        aiProfileId,
+        type: 'plan_episodes',
+        status: 'queued',
+      },
+    });
+
+    // best-effort status hint for UI
+    try {
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: { workflowState: 'EPISODE_PLANNING', currentSceneOrder: 0 },
+      });
+    } catch {
+      // ignore
+    }
+
+    await this.queue.add(
+      'plan_episodes',
+      { teamId, projectId, aiProfileId, jobId: jobRow.id, options: { targetEpisodeCount } },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueGenerateEpisodeCoreExpression(teamId: string, projectId: string, episodeId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireEpisode(projectId, episodeId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        episodeId,
+        aiProfileId,
+        type: 'generate_episode_core_expression',
+        status: 'queued',
+      },
+    });
+
+    try {
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: { workflowState: 'EPISODE_CREATING', currentSceneOrder: 0 },
+      });
+    } catch {
+      // ignore
+    }
+
+    await this.queue.add(
+      'generate_episode_core_expression',
+      { teamId, projectId, episodeId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueGenerateEpisodeSceneList(
+    teamId: string,
+    projectId: string,
+    episodeId: string,
+    aiProfileId: string,
+    options?: { sceneCountHint?: number },
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireEpisode(projectId, episodeId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const ep = await this.prisma.episode.findFirst({
+      where: { id: episodeId, projectId },
+      select: { coreExpression: true },
+    });
+    if (!ep) throw new NotFoundException('Episode not found');
+    if (!ep.coreExpression) throw new BadRequestException({ message: 'Episode coreExpression missing' });
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        episodeId,
+        aiProfileId,
+        type: 'generate_episode_scene_list',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_episode_scene_list',
+      { teamId, projectId, episodeId, aiProfileId, jobId: jobRow.id, options: options ?? {} },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
   }
 
   async enqueueGenerateSceneList(teamId: string, projectId: string, aiProfileId: string) {
@@ -412,5 +566,3 @@ export class JobsService {
     return mapJob(updated);
   }
 }
-
-

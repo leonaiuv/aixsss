@@ -43,16 +43,30 @@ export class ProjectsService {
   }
 
   async create(teamId: string, input: CreateProjectInput) {
-    const project = await this.prisma.project.create({
-      data: {
-        ...(input.id ? { id: input.id } : {}),
-        teamId,
-        title: input.title,
-        summary: input.summary ?? '',
-        style: input.style ?? '',
-        artStyleConfig: input.artStyleConfig ?? undefined,
-        protagonist: input.protagonist ?? '',
-      },
+    const project = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.project.create({
+        data: {
+          ...(input.id ? { id: input.id } : {}),
+          teamId,
+          title: input.title,
+          summary: input.summary ?? '',
+          style: input.style ?? '',
+          artStyleConfig: input.artStyleConfig ?? undefined,
+          protagonist: input.protagonist ?? '',
+        },
+      });
+
+      await tx.episode.create({
+        data: {
+          projectId: created.id,
+          order: 1,
+          title: '',
+          summary: '',
+          workflowState: 'IDLE',
+        },
+      });
+
+      return created;
     });
     return mapProject(project);
   }
@@ -98,5 +112,4 @@ export class ProjectsService {
     return { ok: true };
   }
 }
-
 

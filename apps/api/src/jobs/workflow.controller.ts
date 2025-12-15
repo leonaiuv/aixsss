@@ -10,10 +10,50 @@ const WorkflowBodySchema = z.object({
   aiProfileId: z.string().min(1),
 });
 
+const EpisodePlanBodySchema = WorkflowBodySchema.extend({
+  targetEpisodeCount: z.number().int().min(1).max(24).optional(),
+});
+
+const EpisodeSceneListBodySchema = WorkflowBodySchema.extend({
+  sceneCountHint: z.number().int().min(6).max(24).optional(),
+});
+
 @UseGuards(JwtAuthGuard)
 @Controller('workflow')
 export class WorkflowController {
   constructor(@Inject(JobsService) private readonly jobs: JobsService) {}
+
+  @Post('projects/:projectId/episode-plan')
+  planEpisodes(@CurrentUser() user: AuthUser, @Param('projectId') projectId: string, @Body() body: unknown) {
+    const input = parseOrBadRequest(EpisodePlanBodySchema, body);
+    return this.jobs.enqueuePlanEpisodes(user.teamId, projectId, input.aiProfileId, {
+      targetEpisodeCount: input.targetEpisodeCount,
+    });
+  }
+
+  @Post('projects/:projectId/episodes/:episodeId/core-expression')
+  generateEpisodeCoreExpression(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('episodeId') episodeId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueGenerateEpisodeCoreExpression(user.teamId, projectId, episodeId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/episodes/:episodeId/scene-list')
+  generateEpisodeSceneList(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('episodeId') episodeId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(EpisodeSceneListBodySchema, body);
+    return this.jobs.enqueueGenerateEpisodeSceneList(user.teamId, projectId, episodeId, input.aiProfileId, {
+      sceneCountHint: input.sceneCountHint,
+    });
+  }
 
   @Post('projects/:projectId/scene-list')
   generateSceneList(
@@ -80,5 +120,4 @@ export class WorkflowController {
     return this.jobs.enqueueRefineSceneAll(user.teamId, projectId, sceneId, input.aiProfileId);
   }
 }
-
 

@@ -18,7 +18,7 @@ const STORAGE_KEYS = {
 };
 
 /** PBKDF2 迭代次数 */
-const PBKDF2_ITERATIONS = 10000;
+const PBKDF2_ITERATIONS = import.meta.env.MODE === 'test' ? 200 : 10000;
 
 /** 派生密钥长度（256位） */
 const KEY_SIZE = 256 / 32;

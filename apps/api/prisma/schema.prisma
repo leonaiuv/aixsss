@@ -19,12 +19,24 @@ enum ProjectWorkflowState {
   DATA_COLLECTED
   WORLD_VIEW_BUILDING
   CHARACTER_MANAGING
+  EPISODE_PLANNING
+  EPISODE_PLAN_EDITING
+  EPISODE_CREATING
   SCENE_LIST_GENERATING
   SCENE_LIST_EDITING
   SCENE_LIST_CONFIRMED
   SCENE_PROCESSING
   ALL_SCENES_COMPLETE
+  ALL_EPISODES_COMPLETE
   EXPORTING
+}
+
+enum EpisodeWorkflowState {
+  IDLE
+  CORE_EXPRESSION_READY
+  SCENE_LIST_EDITING
+  SCENE_PROCESSING
+  COMPLETE
 }
 
 enum SceneStatus {
@@ -108,6 +120,7 @@ model Project {
   deletedAt        DateTime?
 
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  episodes Episode[]
   scenes Scene[]
   characters Character[]
   worldViewElements WorldViewElement[]
@@ -116,9 +129,31 @@ model Project {
   @@index([teamId, updatedAt(sort: Desc)])
 }
 
+model Episode {
+  id             String              @id @default(cuid())
+  projectId      String
+  order          Int
+  title          String              @default("")
+  summary        String              @default("")
+  outline        Json?
+  coreExpression Json?
+  contextCache   Json?
+  workflowState  EpisodeWorkflowState @default(IDLE)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scenes  Scene[]
+  jobs    AIJob[]
+
+  @@unique([projectId, order])
+  @@index([projectId, order])
+}
+
 model Scene {
   id               String     @id @default(cuid())
   projectId        String
+  episodeId        String
   order            Int
   summary          String     @default("")
   sceneDescription String     @default("")
@@ -133,10 +168,12 @@ model Scene {
   updatedAt        DateTime   @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
   jobs    AIJob[]
 
-  @@unique([projectId, order])
-  @@index([projectId, order])
+  @@unique([episodeId, order])
+  @@index([episodeId, order])
+  @@index([projectId, episodeId, order])
 }
 
 model Character {
@@ -219,6 +256,7 @@ model AIJob {
   id        String     @id @default(cuid())
   teamId    String
   projectId String?
+  episodeId String?
   sceneId   String?
   aiProfileId String?
   type      String
@@ -232,11 +270,11 @@ model AIJob {
 
   team    Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
   scene   Scene?   @relation(fields: [sceneId], references: [id], onDelete: SetNull)
   aiProfile AIProfile? @relation(fields: [aiProfileId], references: [id], onDelete: SetNull)
 
   @@index([teamId, createdAt(sort: Desc)])
   @@index([status])
 }
-
 

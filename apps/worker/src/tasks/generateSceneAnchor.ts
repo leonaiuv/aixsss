@@ -53,14 +53,14 @@ export async function generateSceneAnchor(args: {
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
-    select: { id: true, order: true, summary: true },
+    select: { id: true, episodeId: true, order: true, summary: true },
   });
   if (!scene) throw new Error('Scene not found');
 
   const prev =
     scene.order > 1
       ? await prisma.scene.findFirst({
-          where: { projectId, order: scene.order - 1 },
+          where: { episodeId: scene.episodeId, order: scene.order - 1 },
           select: { summary: true },
         })
       : null;
@@ -117,6 +117,5 @@ export async function generateSceneAnchor(args: {
     tokenUsage: fixed.tokenUsage ?? null,
   };
 }
-
 
 

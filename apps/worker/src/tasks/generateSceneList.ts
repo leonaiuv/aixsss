@@ -31,6 +31,25 @@ export async function generateSceneList(args: {
   });
   if (!project) throw new Error('Project not found');
 
+  let episode = await prisma.episode.findFirst({
+    where: { projectId, order: 1 },
+    select: { id: true },
+  });
+  if (!episode) {
+    try {
+      episode = await prisma.episode.create({
+        data: { projectId, order: 1, title: '', summary: '', workflowState: 'IDLE' },
+        select: { id: true },
+      });
+    } catch {
+      episode = await prisma.episode.findFirst({
+        where: { projectId, order: 1 },
+        select: { id: true },
+      });
+    }
+  }
+  if (!episode) throw new Error('Failed to ensure default episode');
+
   const profile = await prisma.aIProfile.findFirst({
     where: { id: aiProfileId, teamId },
     select: {
@@ -84,15 +103,17 @@ ${project.summary}
   }
 
   await prisma.$transaction([
-    prisma.scene.deleteMany({ where: { projectId } }),
+    prisma.scene.deleteMany({ where: { episodeId: episode.id } }),
     prisma.scene.createMany({
       data: summaries.map((summary, idx) => ({
         projectId,
+        episodeId: episode.id,
         order: idx + 1,
         summary,
         status: 'pending',
       })),
     }),
+    prisma.episode.update({ where: { id: episode.id }, data: { workflowState: 'SCENE_LIST_EDITING' } }),
     prisma.project.update({
       where: { id: projectId },
       data: { workflowState: 'SCENE_LIST_EDITING', currentSceneOrder: 0 },
@@ -107,5 +128,4 @@ ${project.summary}
     tokenUsage: res.tokenUsage ?? null,
   };
 }
-
 

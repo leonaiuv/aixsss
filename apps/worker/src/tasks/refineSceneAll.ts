@@ -159,13 +159,16 @@ export async function refineSceneAll(args: {
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
-    select: { id: true, order: true, summary: true },
+    select: { id: true, episodeId: true, order: true, summary: true },
   });
   if (!scene) throw new Error('Scene not found');
 
   const prev =
     scene.order > 1
-      ? await prisma.scene.findFirst({ where: { projectId, order: scene.order - 1 }, select: { summary: true } })
+      ? await prisma.scene.findFirst({
+          where: { episodeId: scene.episodeId, order: scene.order - 1 },
+          select: { summary: true },
+        })
       : null;
 
   const profile = await prisma.aIProfile.findFirst({
@@ -300,14 +303,23 @@ export async function refineSceneAll(args: {
     data: { dialogues, status: 'completed' },
   });
 
-  // best-effort: mark project complete if all scenes are completed
+  // best-effort: mark episode/project complete
   try {
-    const scenes: Array<{ status: string }> = await prisma.scene.findMany({
+    const episodeScenes: Array<{ status: string }> = await prisma.scene.findMany({
+      where: { episodeId: scene.episodeId },
+      select: { status: true },
+    });
+    const episodeDone = episodeScenes.length > 0 && episodeScenes.every((s) => s.status === 'completed');
+    if (episodeDone) {
+      await prisma.episode.update({ where: { id: scene.episodeId }, data: { workflowState: 'COMPLETE' } });
+    }
+
+    const projectScenes: Array<{ status: string }> = await prisma.scene.findMany({
       where: { projectId },
       select: { status: true },
     });
-    const allDone = scenes.length > 0 && scenes.every((scene) => scene.status === 'completed');
-    if (allDone) {
+    const projectDone = projectScenes.length > 0 && projectScenes.every((s) => s.status === 'completed');
+    if (projectDone) {
       await prisma.project.update({ where: { id: projectId }, data: { workflowState: 'ALL_SCENES_COMPLETE' } });
     }
   } catch {
@@ -325,6 +337,5 @@ export async function refineSceneAll(args: {
     tokenUsage: tokens ?? null,
   };
 }
-
 
 

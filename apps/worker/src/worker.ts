@@ -9,6 +9,9 @@ import { generateMotionPrompt } from './tasks/generateMotionPrompt.js';
 import { generateDialogue } from './tasks/generateDialogue.js';
 import { refineSceneAll } from './tasks/refineSceneAll.js';
 import { llmChat } from './tasks/llmChat.js';
+import { planEpisodes } from './tasks/planEpisodes.js';
+import { generateEpisodeCoreExpression } from './tasks/generateEpisodeCoreExpression.js';
+import { generateEpisodeSceneList } from './tasks/generateEpisodeSceneList.js';
 
 function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
   const parsed = new URL(url);
@@ -34,6 +37,7 @@ async function main() {
 
       const teamId = typeof data.teamId === 'string' ? data.teamId : '';
       const projectId = typeof data.projectId === 'string' ? data.projectId : '';
+      const episodeId = typeof data.episodeId === 'string' ? data.episodeId : '';
       const sceneId = typeof data.sceneId === 'string' ? data.sceneId : '';
       const aiProfileId = typeof data.aiProfileId === 'string' ? data.aiProfileId : '';
 
@@ -79,6 +83,82 @@ async function main() {
               projectId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress: async (progress) => {
+                await job.updateProgress(progress);
+              },
+            });
+
+            await prisma.aIJob.update({
+              where: { id: jobId },
+              data: {
+                status: 'succeeded',
+                finishedAt: new Date(),
+                result,
+                error: null,
+              },
+            });
+
+            return result;
+          }
+          case 'plan_episodes': {
+            const result = await planEpisodes({
+              prisma,
+              teamId,
+              projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              options: typeof data.options === 'object' && data.options !== null ? (data.options as any) : undefined,
+              updateProgress: async (progress) => {
+                await job.updateProgress(progress);
+              },
+            });
+
+            await prisma.aIJob.update({
+              where: { id: jobId },
+              data: {
+                status: 'succeeded',
+                finishedAt: new Date(),
+                result,
+                error: null,
+              },
+            });
+
+            return result;
+          }
+          case 'generate_episode_core_expression': {
+            const result = await generateEpisodeCoreExpression({
+              prisma,
+              teamId,
+              projectId,
+              episodeId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress: async (progress) => {
+                await job.updateProgress(progress);
+              },
+            });
+
+            await prisma.aIJob.update({
+              where: { id: jobId },
+              data: {
+                status: 'succeeded',
+                finishedAt: new Date(),
+                result,
+                error: null,
+              },
+            });
+
+            return result;
+          }
+          case 'generate_episode_scene_list': {
+            const result = await generateEpisodeSceneList({
+              prisma,
+              teamId,
+              projectId,
+              episodeId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              options: typeof data.options === 'object' && data.options !== null ? (data.options as any) : undefined,
               updateProgress: async (progress) => {
                 await job.updateProgress(progress);
               },
@@ -269,5 +349,4 @@ main().catch((err) => {
   console.error('[worker] bootstrap failed', err);
   process.exit(1);
 });
-
 

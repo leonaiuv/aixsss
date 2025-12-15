@@ -10,6 +10,7 @@ import { WorldViewModule } from './world-view/world-view.module.js';
 import { AIProfilesModule } from './ai-profiles/ai-profiles.module.js';
 import { HealthController } from './health/health.controller.js';
 import { JobsModule } from './jobs/jobs.module.js';
+import { EpisodesModule } from './episodes/episodes.module.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { JobsModule } from './jobs/jobs.module.js';
     PrismaModule,
     AuthModule,
     ProjectsModule,
+    EpisodesModule,
     ScenesModule,
     CharactersModule,
     WorldViewModule,
@@ -29,5 +31,4 @@ import { JobsModule } from './jobs/jobs.module.js';
   controllers: [HealthController],
 })
 export class AppModule {}
-
 

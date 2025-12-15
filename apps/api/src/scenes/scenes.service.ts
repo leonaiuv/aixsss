@@ -32,10 +32,35 @@ export class ScenesService {
     if (!project) throw new NotFoundException('Project not found');
   }
 
-  async list(teamId: string, projectId: string) {
+  private async ensureDefaultEpisode(teamId: string, projectId: string): Promise<{ id: string }> {
     await this.assertProject(teamId, projectId);
+
+    const existing = await this.prisma.episode.findFirst({
+      where: { projectId, order: 1 },
+      select: { id: true },
+    });
+    if (existing) return existing;
+
+    try {
+      return await this.prisma.episode.create({
+        data: { projectId, order: 1, title: '', summary: '', workflowState: 'IDLE' },
+        select: { id: true },
+      });
+    } catch {
+      // In case of race, re-fetch.
+      const created = await this.prisma.episode.findFirst({
+        where: { projectId, order: 1 },
+        select: { id: true },
+      });
+      if (!created) throw new Error('Failed to ensure default episode');
+      return created;
+    }
+  }
+
+  async list(teamId: string, projectId: string) {
+    const episode = await this.ensureDefaultEpisode(teamId, projectId);
     const scenes = await this.prisma.scene.findMany({
-      where: { projectId },
+      where: { projectId, episodeId: episode.id },
       orderBy: { order: 'asc' },
     });
     return scenes.map(mapScene);
@@ -51,11 +76,12 @@ export class ScenesService {
   }
 
   async create(teamId: string, projectId: string, input: CreateSceneInput) {
-    await this.assertProject(teamId, projectId);
+    const episode = await this.ensureDefaultEpisode(teamId, projectId);
     const scene = await this.prisma.scene.create({
       data: {
         ...(input.id ? { id: input.id } : {}),
         projectId,
+        episodeId: episode.id,
         order: input.order,
         summary: input.summary ?? '',
         sceneDescription: input.sceneDescription ?? '',
@@ -115,13 +141,18 @@ export class ScenesService {
     await this.assertProject(teamId, projectId);
 
     const existing = await this.prisma.scene.findMany({
-      where: { projectId },
-      select: { id: true },
+      where: { projectId, id: { in: sceneIds } },
+      select: { id: true, episodeId: true },
     });
     const existingIds = new Set(existing.map((s) => s.id));
 
     for (const id of sceneIds) {
       if (!existingIds.has(id)) throw new BadRequestException('Invalid sceneIds');
+    }
+
+    const episodeIds = new Set(existing.map((s) => s.episodeId));
+    if (episodeIds.size !== 1) {
+      throw new BadRequestException('sceneIds must belong to the same episode');
     }
 
     // Re-assign orders in a single transaction
@@ -137,5 +168,4 @@ export class ScenesService {
     return this.list(teamId, projectId);
   }
 }
-
 
