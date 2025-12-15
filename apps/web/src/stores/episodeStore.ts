@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import type { Episode } from '@/types';
 import { isApiMode } from '@/lib/runtime/mode';
-import { apiCreateEpisode, apiDeleteEpisode, apiListEpisodes, apiUpdateEpisode } from '@/lib/api/episodes';
+import {
+  apiCreateEpisode,
+  apiDeleteEpisode,
+  apiListEpisodes,
+  apiUpdateEpisode,
+} from '@/lib/api/episodes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import {
   apiWorkflowGenerateEpisodeCoreExpression,
@@ -20,8 +25,15 @@ interface EpisodeStore {
   loadEpisodes: (projectId: string) => void;
   setCurrentEpisode: (episodeId: string | null) => void;
 
-  createEpisode: (projectId: string, input: Partial<Episode> & Pick<Episode, 'order'>) => Promise<Episode>;
-  updateEpisode: (projectId: string, episodeId: string, updates: Partial<Episode>) => Promise<Episode>;
+  createEpisode: (
+    projectId: string,
+    input: Partial<Episode> & Pick<Episode, 'order'>,
+  ) => Promise<Episode>;
+  updateEpisode: (
+    projectId: string,
+    episodeId: string,
+    updates: Partial<Episode>,
+  ) => Promise<Episode>;
   deleteEpisode: (projectId: string, episodeId: string) => Promise<void>;
 
   planEpisodes: (input: {

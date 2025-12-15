@@ -6,15 +6,18 @@ export async function apiWorkflowPlanEpisodes(input: {
   aiProfileId: string;
   targetEpisodeCount?: number;
 }) {
-  return apiRequest<ApiAIJob>(`/workflow/projects/${encodeURIComponent(input.projectId)}/episode-plan`, {
-    method: 'POST',
-    body: {
-      aiProfileId: input.aiProfileId,
-      ...(typeof input.targetEpisodeCount === 'number'
-        ? { targetEpisodeCount: input.targetEpisodeCount }
-        : {}),
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/episode-plan`,
+    {
+      method: 'POST',
+      body: {
+        aiProfileId: input.aiProfileId,
+        ...(typeof input.targetEpisodeCount === 'number'
+          ? { targetEpisodeCount: input.targetEpisodeCount }
+          : {}),
+      },
     },
-  });
+  );
 }
 
 export async function apiWorkflowGenerateEpisodeCoreExpression(input: {
@@ -44,17 +47,25 @@ export async function apiWorkflowGenerateEpisodeSceneList(input: {
       method: 'POST',
       body: {
         aiProfileId: input.aiProfileId,
-        ...(typeof input.sceneCountHint === 'number' ? { sceneCountHint: input.sceneCountHint } : {}),
+        ...(typeof input.sceneCountHint === 'number'
+          ? { sceneCountHint: input.sceneCountHint }
+          : {}),
       },
     },
   );
 }
 
-export async function apiWorkflowGenerateSceneList(input: { projectId: string; aiProfileId: string }) {
-  return apiRequest<ApiAIJob>(`/workflow/projects/${encodeURIComponent(input.projectId)}/scene-list`, {
-    method: 'POST',
-    body: { aiProfileId: input.aiProfileId },
-  });
+export async function apiWorkflowGenerateSceneList(input: {
+  projectId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scene-list`,
+    {
+      method: 'POST',
+      body: { aiProfileId: input.aiProfileId },
+    },
+  );
 }
 
 export async function apiWorkflowGenerateSceneAnchor(input: {
@@ -121,4 +132,3 @@ export async function apiWorkflowRefineSceneAll(input: {
     { method: 'POST', body: { aiProfileId: input.aiProfileId } },
   );
 }
-

@@ -46,7 +46,12 @@ export async function flushApiEpisodeScenePatchQueue(): Promise<void> {
   await Promise.all(
     items.map(async (item) => {
       try {
-        await apiUpdateEpisodeScene(item.projectId, item.episodeId, item.sceneId, item.patch as any);
+        await apiUpdateEpisodeScene(
+          item.projectId,
+          item.episodeId,
+          item.sceneId,
+          item.patch as any,
+        );
       } catch (err) {
         const key = `${item.projectId}:${item.episodeId}:${item.sceneId}`;
         const prev = pending.get(key);
@@ -61,4 +66,3 @@ export async function flushApiEpisodeScenePatchQueue(): Promise<void> {
     }),
   );
 }
-

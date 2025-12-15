@@ -20,7 +20,12 @@ vi.mock('@/lib/api/aiJobs', () => ({
 }));
 
 import { useEpisodeStore } from './episodeStore';
-import { apiListEpisodes, apiCreateEpisode, apiUpdateEpisode, apiDeleteEpisode } from '@/lib/api/episodes';
+import {
+  apiListEpisodes,
+  apiCreateEpisode,
+  apiUpdateEpisode,
+  apiDeleteEpisode,
+} from '@/lib/api/episodes';
 import {
   apiWorkflowPlanEpisodes,
   apiWorkflowGenerateEpisodeCoreExpression,
@@ -111,7 +116,9 @@ describe('episodeStore (api)', () => {
       title: '新标题',
     } as any);
 
-    const updated = await useEpisodeStore.getState().updateEpisode('proj_1', 'ep_1', { title: '新标题' } as any);
+    const updated = await useEpisodeStore
+      .getState()
+      .updateEpisode('proj_1', 'ep_1', { title: '新标题' } as any);
     expect(updated.title).toBe('新标题');
     expect(useEpisodeStore.getState().episodes[0].title).toBe('新标题');
   });
@@ -172,7 +179,10 @@ describe('episodeStore (api)', () => {
     vi.mocked(apiListEpisodes).mockResolvedValue([] as any);
 
     await useEpisodeStore.getState().planEpisodes({ projectId: 'proj_1', aiProfileId: 'aip_1' });
-    expect(apiWorkflowPlanEpisodes).toHaveBeenCalledWith({ projectId: 'proj_1', aiProfileId: 'aip_1' });
+    expect(apiWorkflowPlanEpisodes).toHaveBeenCalledWith({
+      projectId: 'proj_1',
+      aiProfileId: 'aip_1',
+    });
     expect(apiWaitForAIJob).toHaveBeenCalledWith('job_1');
     await new Promise((r) => setTimeout(r, 0));
     expect(apiListEpisodes).toHaveBeenCalledWith('proj_1');
@@ -235,4 +245,3 @@ describe('episodeStore (api)', () => {
     expect(apiWaitForAIJob).toHaveBeenCalledWith('job_3');
   });
 });
-

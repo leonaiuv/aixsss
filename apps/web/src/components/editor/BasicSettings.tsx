@@ -436,8 +436,8 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
                     )}
                     {formData.summary.length >= minSummaryLength &&
                       formData.summary.length < maxSummaryLength && (
-                      <span className="text-green-500">✓ 长度合适</span>
-                    )}
+                        <span className="text-green-500">✓ 长度合适</span>
+                      )}
                     {formData.summary.length >= maxSummaryLength && (
                       <span className="text-orange-500">建议精简至{maxSummaryLength}字以内</span>
                     )}
@@ -686,7 +686,8 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
                   主角描述 *
                 </Label>
                 <p className="text-sm text-muted-foreground mb-2">
-                  描述主角的外貌特征、服装、性格(建议{minProtagonistLength}-{maxProtagonistLength}字)
+                  描述主角的外貌特征、服装、性格(建议{minProtagonistLength}-{maxProtagonistLength}
+                  字)
                 </p>
                 <Textarea
                   id="protagonist"

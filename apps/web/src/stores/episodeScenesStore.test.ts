@@ -72,9 +72,13 @@ describe('episodeScenesStore (api)', () => {
       ] as any,
     } as any);
 
-    useEpisodeScenesStore.getState().updateScene('proj_1', 'ep_1', 's_1', { summary: 'new' } as any);
+    useEpisodeScenesStore
+      .getState()
+      .updateScene('proj_1', 'ep_1', 's_1', { summary: 'new' } as any);
     expect(useEpisodeScenesStore.getState().scenes[0].summary).toBe('new');
-    expect(queueApiEpisodeScenePatch).toHaveBeenCalledWith('proj_1', 'ep_1', 's_1', { summary: 'new' });
+    expect(queueApiEpisodeScenePatch).toHaveBeenCalledWith('proj_1', 'ep_1', 's_1', {
+      summary: 'new',
+    });
   });
 
   it('addScene 应调用创建 API 并追加到列表', async () => {
@@ -147,9 +151,10 @@ describe('episodeScenesStore (api)', () => {
 
     await useEpisodeScenesStore.getState().deleteScene('proj_1', 'ep_1', 's_1');
     expect(apiDeleteEpisodeScene).toHaveBeenCalledWith('proj_1', 'ep_1', 's_1');
-    expect(useEpisodeScenesStore.getState().scenes.map((s) => [s.id, s.order])).toEqual([['s_2', 1]]);
+    expect(useEpisodeScenesStore.getState().scenes.map((s) => [s.id, s.order])).toEqual([
+      ['s_2', 1],
+    ]);
     await new Promise((r) => setTimeout(r, 0));
     expect(apiReorderEpisodeScenes).toHaveBeenCalledWith('proj_1', 'ep_1', ['s_2']);
   });
 });
-

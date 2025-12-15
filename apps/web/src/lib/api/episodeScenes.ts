@@ -73,10 +73,13 @@ export async function apiDeleteEpisodeScene(projectId: string, episodeId: string
   );
 }
 
-export async function apiReorderEpisodeScenes(projectId: string, episodeId: string, sceneIds: string[]) {
+export async function apiReorderEpisodeScenes(
+  projectId: string,
+  episodeId: string,
+  sceneIds: string[],
+) {
   return apiRequest<ApiEpisodeScene[]>(
     `/projects/${encodeURIComponent(projectId)}/episodes/${encodeURIComponent(episodeId)}/scenes/reorder`,
     { method: 'POST', body: { sceneIds } },
   );
 }
-

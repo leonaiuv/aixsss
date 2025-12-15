@@ -82,7 +82,12 @@ export const useEpisodeScenesStore = create<EpisodeScenesStore>((set, get) => ({
     set({ scenes: scenes.map((s) => (s.id === sceneId ? updatedScene : s)) });
 
     if (!isApiMode()) return;
-    queueApiEpisodeScenePatch(projectId, episodeId, sceneId, updates as unknown as Record<string, unknown>);
+    queueApiEpisodeScenePatch(
+      projectId,
+      episodeId,
+      sceneId,
+      updates as unknown as Record<string, unknown>,
+    );
   },
 
   deleteScene: async (projectId, episodeId, sceneId) => {
@@ -98,7 +103,9 @@ export const useEpisodeScenesStore = create<EpisodeScenesStore>((set, get) => ({
       projectId,
       episodeId,
       reordered.map((s) => s.id),
-    ).catch((error) => console.error('Failed to reorder episode scenes after delete (api):', error));
+    ).catch((error) =>
+      console.error('Failed to reorder episode scenes after delete (api):', error),
+    );
   },
 
   reorderScenes: (projectId, episodeId, fromIndex, toIndex) => {
@@ -117,4 +124,3 @@ export const useEpisodeScenesStore = create<EpisodeScenesStore>((set, get) => ({
     ).catch((error) => console.error('Failed to reorder episode scenes (api):', error));
   },
 }));
-

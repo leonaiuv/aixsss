@@ -138,7 +138,7 @@ export function EpisodeWorkflow() {
   const [copied, setCopied] = useState(false);
 
   const currentEpisode = useMemo(() => {
-    return currentEpisodeId ? episodes.find((e) => e.id === currentEpisodeId) ?? null : null;
+    return currentEpisodeId ? (episodes.find((e) => e.id === currentEpisodeId) ?? null) : null;
   }, [currentEpisodeId, episodes]);
 
   const styleFullPrompt = useMemo(() => getStyleFullPrompt(currentProject), [currentProject]);
@@ -203,7 +203,11 @@ export function EpisodeWorkflow() {
     if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
     try {
       toast({ title: '生成核心表达', description: '已入队，正在等待 AI 完成...' });
-      await generateCoreExpression({ projectId: currentProject.id, episodeId: currentEpisode.id, aiProfileId });
+      await generateCoreExpression({
+        projectId: currentProject.id,
+        episodeId: currentEpisode.id,
+        aiProfileId,
+      });
       toast({ title: '核心表达已生成', description: `第 ${currentEpisode.order} 集已就绪。` });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -247,7 +251,11 @@ export function EpisodeWorkflow() {
     setIsRefining(true);
     setRefiningSceneId(sceneId);
     try {
-      const job = await apiWorkflowRefineSceneAll({ projectId: currentProject.id, sceneId, aiProfileId });
+      const job = await apiWorkflowRefineSceneAll({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+      });
       await apiWaitForAIJob(job.id);
       if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
       toast({ title: '分镜细化完成', description: '已更新当前分镜内容。' });
@@ -437,7 +445,9 @@ export function EpisodeWorkflow() {
                 <Badge variant={summaryLen >= 100 ? 'default' : 'destructive'}>
                   梗概 {summaryLen}/100
                 </Badge>
-                <Badge variant={hasStyle ? 'default' : 'destructive'}>画风 {hasStyle ? 'OK' : '缺失'}</Badge>
+                <Badge variant={hasStyle ? 'default' : 'destructive'}>
+                  画风 {hasStyle ? 'OK' : '缺失'}
+                </Badge>
                 <Badge variant={worldViewElements.length > 0 ? 'secondary' : 'outline'}>
                   世界观 {worldViewElements.length}
                 </Badge>
@@ -466,8 +476,16 @@ export function EpisodeWorkflow() {
                   placeholder="留空表示让 AI 推荐"
                 />
               </div>
-              <Button onClick={handlePlanEpisodes} disabled={!canPlan || isRunningWorkflow} className="w-full gap-2">
-                {isRunningWorkflow ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              <Button
+                onClick={handlePlanEpisodes}
+                disabled={!canPlan || isRunningWorkflow}
+                className="w-full gap-2"
+              >
+                {isRunningWorkflow ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
                 <span>生成/覆盖剧集规划</span>
               </Button>
               <Button
@@ -493,11 +511,15 @@ export function EpisodeWorkflow() {
           <Separator className="my-4" />
 
           {episodeError ? (
-            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{episodeError}</div>
+            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+              {episodeError}
+            </div>
           ) : null}
 
           {episodes.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">暂无 Episodes，请先生成剧集规划。</div>
+            <div className="py-8 text-center text-muted-foreground text-sm">
+              暂无 Episodes，请先生成剧集规划。
+            </div>
           ) : (
             <div className="space-y-3">
               {episodes.map((ep) => (
@@ -509,7 +531,9 @@ export function EpisodeWorkflow() {
                         <span className="font-medium">{ep.title || '(未命名)'}</span>
                         <Badge variant="outline">{getEpisodeStateLabel(ep.workflowState)}</Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">{ep.summary || '（无一句话概要）'}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {ep.summary || '（无一句话概要）'}
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => openEpisodeEditor(ep)}>
@@ -672,7 +696,9 @@ export function EpisodeWorkflow() {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => currentEpisode?.id && loadScenes(currentProject.id, currentEpisode.id)}
+                      onClick={() =>
+                        currentEpisode?.id && loadScenes(currentProject.id, currentEpisode.id)
+                      }
                       disabled={!currentEpisode?.id || isScenesLoading}
                       className="w-full gap-2"
                     >
@@ -693,7 +719,9 @@ export function EpisodeWorkflow() {
                 <Separator className="my-4" />
 
                 {scenesError ? (
-                  <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{scenesError}</div>
+                  <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                    {scenesError}
+                  </div>
                 ) : null}
 
                 {isScenesLoading ? (
@@ -878,7 +906,9 @@ export function EpisodeWorkflow() {
     );
   };
 
-  const refineScene = selectedSceneId ? scenes.find((s) => s.id === selectedSceneId) ?? null : null;
+  const refineScene = selectedSceneId
+    ? (scenes.find((s) => s.id === selectedSceneId) ?? null)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -915,7 +945,9 @@ export function EpisodeWorkflow() {
                       <Circle className="h-5 w-5 text-muted-foreground" />
                     )}
                     {index < steps.length - 1 && (
-                      <div className={`w-0.5 h-8 mt-2 ${status === 'completed' ? 'bg-primary' : 'bg-border'}`} />
+                      <div
+                        className={`w-0.5 h-8 mt-2 ${status === 'completed' ? 'bg-primary' : 'bg-border'}`}
+                      />
                     )}
                   </div>
                   <button
@@ -962,7 +994,9 @@ export function EpisodeWorkflow() {
               className="min-h-[320px] font-mono text-xs"
             />
             {coreExpressionDraftError ? (
-              <div className="text-sm text-destructive">JSON 解析失败：{coreExpressionDraftError}</div>
+              <div className="text-sm text-destructive">
+                JSON 解析失败：{coreExpressionDraftError}
+              </div>
             ) : null}
           </div>
           <DialogFooter className="gap-2">
@@ -1002,7 +1036,11 @@ export function EpisodeWorkflow() {
                   disabled={!aiProfileId || isRefining}
                   className="gap-2"
                 >
-                  {isRefining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {isRefining ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
                   <span>一键细化</span>
                 </Button>
               </div>
@@ -1105,11 +1143,25 @@ export function EpisodeWorkflow() {
               {isExporting ? '生成中...' : exportContent ? '已生成' : '点击生成以获取最新数据'}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleBuildExport} disabled={isExporting} className="gap-2">
-                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <Button
+                variant="outline"
+                onClick={handleBuildExport}
+                disabled={isExporting}
+                className="gap-2"
+              >
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
                 <span>生成</span>
               </Button>
-              <Button variant="outline" onClick={handleCopyExport} disabled={!exportContent} className="gap-2">
+              <Button
+                variant="outline"
+                onClick={handleCopyExport}
+                disabled={!exportContent}
+                className="gap-2"
+              >
                 <Copy className="h-4 w-4" />
                 <span>{copied ? '已复制' : '复制'}</span>
               </Button>
@@ -1161,7 +1213,10 @@ export function EpisodeWorkflow() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>标题</Label>
-              <Input value={episodeTitleDraft} onChange={(e) => setEpisodeTitleDraft(e.target.value)} />
+              <Input
+                value={episodeTitleDraft}
+                onChange={(e) => setEpisodeTitleDraft(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>一句话概要</Label>
