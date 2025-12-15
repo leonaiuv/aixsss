@@ -10,13 +10,21 @@
 pnpm install
 ```
 
-### 2) 启动依赖服务（Postgres / Redis / MinIO）
+### 2) 构建共享包
+
+```bash
+pnpm -C packages/shared build
+```
+
+> 首次安装或 `packages/shared` 代码变更后需要执行，否则 API 服务无法启动。
+
+### 3) 启动依赖服务（Postgres / Redis / MinIO）
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-### 3) 配置环境变量
+### 4) 配置环境变量
 
 - **API**：见 `apps/api/ENVIRONMENT.md`
 - **Worker**：见 `apps/worker/ENVIRONMENT.md`
@@ -24,7 +32,7 @@ docker compose -f docker-compose.dev.yml up -d
   - `VITE_DATA_MODE=api|local`（默认：开发/生产走 `api`，测试走 `local`）
   - `VITE_API_BASE_PATH=/api`（默认 `/api`，本地由 Vite 代理到 `http://localhost:3001`）
 
-### 4) 数据库迁移（首次）
+### 5) 数据库迁移（首次）
 
 在 `apps/api/.env` 配好 `DATABASE_URL` 后：
 
@@ -32,7 +40,7 @@ docker compose -f docker-compose.dev.yml up -d
 pnpm -C apps/api prisma:migrate
 ```
 
-### 5) 启动开发
+### 6) 启动开发
 
 ```bash
 pnpm dev
