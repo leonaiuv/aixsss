@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
@@ -183,7 +183,7 @@ export async function planEpisodes(args: {
   const episodeCount = parsed.episodeCount;
   const planByOrder = new Map(parsed.episodes.map((e) => [e.order, e] as const));
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     // Upsert 1..N
     for (let order = 1; order <= episodeCount; order += 1) {
       const ep = planByOrder.get(order);

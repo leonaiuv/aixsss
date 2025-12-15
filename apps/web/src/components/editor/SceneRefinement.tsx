@@ -146,6 +146,7 @@ export function SceneRefinement() {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelRequestedRef = useRef(false);
+  const generateAllRunningRef = useRef(false);
 
   const requestCancel = useCallback(() => {
     cancelRequestedRef.current = true;
@@ -883,10 +884,11 @@ export function SceneRefinement() {
   // 一键生成全部 - 优化版本
   const generateAll = async (forceRegenerate = false) => {
     // 防止重复触发或被外部批量操作阻止
-    if (isBatchGenerating || isGenerating || isExternallyBlocked) {
+    if (generateAllRunningRef.current || isBatchGenerating || isGenerating || isExternallyBlocked) {
       return;
     }
 
+    generateAllRunningRef.current = true;
     setIsBatchGenerating(true);
     startBatchGenerating('scene_refinement');
     setError('');
@@ -973,6 +975,7 @@ export function SceneRefinement() {
       setError(errorMessage);
       console.error('一键生成全部失败:', err);
     } finally {
+      generateAllRunningRef.current = false;
       setIsBatchGenerating(false);
       stopBatchGenerating();
       setIsGenerating(false);
