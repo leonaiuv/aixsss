@@ -1,2 +1,2 @@
-echo "🔍 Running pre-commit checks..."
-pnpm run format:check && pnpm run lint
+echo "🔍 Running pre-commit checks on staged files..."
+npx lint-staged

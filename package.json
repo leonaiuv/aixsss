@@ -1,6 +1,7 @@
 {
   "name": "aixsss",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "turbo dev",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "turbo": "^2.5.6"
   }
 }
