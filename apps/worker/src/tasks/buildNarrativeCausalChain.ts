@@ -169,7 +169,12 @@ function buildPhase3Prompt(args: {
 - 信息层级：${layerNames}
 - 角色：${characterNames}
 
-【输出要求】直接输出 JSON，不要 Markdown/代码块/解释。
+【输出要求】
+1) 直接输出 JSON，不要 Markdown/代码块/解释
+2) 以 { 开头，以 } 结尾
+3) actMode 必须是 "three_act" 或 "four_act"
+4) escalation 和 estimatedScenes 必须是整数（如 3），不要加引号
+5) 每幕 3-5 个节拍，三幕/四幕结构
 
 【输出 JSON 结构】
 {
@@ -178,29 +183,43 @@ function buildPhase3Prompt(args: {
     "acts": [
       {
         "act": 1,
-        "actName": "第一幕名称（可空）",
+        "actName": "开端",
         "beats": [
           {
-            "beatName": "动词+名词（如：裂箱/对峙/倒戈）",
-            "surfaceEvent": "角色在做什么（表面事件）",
-            "infoFlow": "谁知道了什么，谁仍被蒙在鼓里",
-            "escalation": 3,
-            "interlock": "与哪条暗线交叉",
-            "location": "场景/地点（如：废弃仓库/家中客厅）",
-            "characters": ["在场角色名A", "角色名B"],
-            "visualHook": "关键画面/动作/道具（如：血迹、撕裂的信封、对视）",
-            "emotionalTone": "情绪基调（如：紧张/温馨/悲壮）",
+            "beatName": "发现",
+            "surfaceEvent": "主角发现异常",
+            "infoFlow": "主角得知秘密，反派不知情",
+            "escalation": 2,
+            "interlock": "与暗线1交叉",
+            "location": "废弃仓库",
+            "characters": ["主角", "配角A"],
+            "visualHook": "撕裂的信封特写",
+            "emotionalTone": "紧张",
             "estimatedScenes": 3
+          },
+          {
+            "beatName": "追查",
+            "surfaceEvent": "主角开始调查",
+            "infoFlow": "主角接近真相，暗中有人监视",
+            "escalation": 4,
+            "interlock": "与暗线2交叉",
+            "location": "城市街道",
+            "characters": ["主角"],
+            "visualHook": "背后的黑影",
+            "emotionalTone": "悬疑",
+            "estimatedScenes": 2
           }
         ]
       },
       {
         "act": 2,
-        "beats": [...]
+        "actName": "发展",
+        "beats": []
       },
       {
         "act": 3,
-        "beats": [...]
+        "actName": "高潮",
+        "beats": []
       }
     ]
   }
@@ -237,23 +256,31 @@ function buildPhase4Prompt(args: {
 【阶段3结果 - 节拍名称】
 ${beatNames}
 
-【输出要求】直接输出 JSON，不要 Markdown/代码块/解释。
+【输出要求】
+1) 直接输出 JSON，不要 Markdown/代码块/解释
+2) 以 { 开头，以 } 结尾
+3) lineType 必须是 "main"、"sub1"、"sub2"、"sub3" 之一
+4) consistencyChecks 中的值必须是 true 或 false（布尔值，不加引号）
+5) plotLines 至少 2-4 条线
 
 【输出 JSON 结构】
 {
   "plotLines": [
     {
       "lineType": "main",
-      "driver": "角色名",
-      "statedGoal": "对外宣称的目的",
-      "trueGoal": "真实目的",
-      "keyInterlocks": ["节拍名A", "节拍名B"],
-      "pointOfNoReturn": "一旦触发，此线无法回头的节拍名"
+      "driver": "主角",
+      "statedGoal": "查明真相",
+      "trueGoal": "复仇",
+      "keyInterlocks": ["发现", "对峙"],
+      "pointOfNoReturn": "揭露"
     },
     {
       "lineType": "sub1",
-      "driver": "...",
-      "..."
+      "driver": "反派",
+      "statedGoal": "维护秩序",
+      "trueGoal": "掩盖罪行",
+      "keyInterlocks": ["监视", "追杀"],
+      "pointOfNoReturn": "暴露"
     }
   ],
   "consistencyChecks": {
@@ -262,7 +289,7 @@ ${beatNames}
     "coreConflictHasThreeWayTension": true,
     "endingIrreversibleTriggeredByMultiLines": true,
     "noRedundantRole": true,
-    "notes": ["若有问题，列出1-3条"]
+    "notes": ["角色X的转变动机可加强", "节拍Y的信息流单向"]
   }
 }
 
@@ -281,8 +308,10 @@ function buildJsonFixPrompt(raw: string, phase: number): string {
     1: `必须包含 outlineSummary(字符串) 和 conflictEngine(对象，含 coreObjectOrEvent)`,
     2: `必须包含 infoVisibilityLayers(数组) 和 characterMatrix(数组)。
 注意：motivation.gain 和 motivation.lossAvoid 必须是数字(如 5)，不是字符串(如 "5")`,
-    3: `必须包含 beatFlow(对象，含 actMode 和 acts 数组)`,
-    4: `必须包含 plotLines(数组) 和 consistencyChecks(对象)`,
+    3: `必须包含 beatFlow(对象，含 actMode 和 acts 数组)。
+注意：escalation 和 estimatedScenes 必须是数字(如 3)，不是字符串(如 "3")`,
+    4: `必须包含 plotLines(数组) 和 consistencyChecks(对象)。
+注意：lineType 必须是 "main"/"sub1"/"sub2"/"sub3" 之一；consistencyChecks 中的值必须是布尔值 true/false（不加引号）`,
   };
 
   return `你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象。
