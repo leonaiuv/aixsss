@@ -33,6 +33,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { JsonViewer } from '@/components/ui/json-viewer';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -871,9 +872,7 @@ ${safeJsonStringify(ep.coreExpression)}
                 <Separator className="my-4" />
 
                 {currentEpisode?.coreExpression ? (
-                  <pre className="text-xs whitespace-pre-wrap rounded-md bg-muted p-4 overflow-auto">
-                    {safeJsonStringify(currentEpisode.coreExpression)}
-                  </pre>
+                  <JsonViewer value={currentEpisode.coreExpression} />
                 ) : (
                   <div className="text-sm text-muted-foreground">尚未生成核心表达。</div>
                 )}
