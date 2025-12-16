@@ -50,13 +50,23 @@ describe('EpisodeWorkflow', () => {
       },
     };
 
-    mockUseProjectStore.mockImplementation(((selector: any) => {
-      return typeof selector === 'function' ? selector(projectState) : projectState;
-    }) as any);
+    mockUseProjectStore.mockImplementation(
+      ((selector?: (state: typeof projectState) => unknown) => {
+        return typeof selector === 'function' ? selector(projectState) : projectState;
+      }) as unknown as typeof useProjectStore,
+    );
 
-    mockUseConfigStore.mockReturnValue({ config: { aiProfileId: 'aip_1' } } as any);
-    mockUseCharacterStore.mockReturnValue({ characters: [], loadCharacters: vi.fn() } as any);
-    mockUseWorldViewStore.mockReturnValue({ elements: [], loadElements: vi.fn() } as any);
+    mockUseConfigStore.mockReturnValue({ config: { aiProfileId: 'aip_1' } } as ReturnType<
+      typeof useConfigStore
+    >);
+    mockUseCharacterStore.mockReturnValue({
+      characters: [],
+      loadCharacters: vi.fn(),
+    } as ReturnType<typeof useCharacterStore>);
+    mockUseWorldViewStore.mockReturnValue({
+      elements: [],
+      loadElements: vi.fn(),
+    } as ReturnType<typeof useWorldViewStore>);
 
     mockUseEpisodeStore.mockReturnValue({
       episodes: [],
@@ -73,7 +83,7 @@ describe('EpisodeWorkflow', () => {
       generateSceneList: vi.fn(),
       createEpisode: vi.fn(),
       deleteEpisode: vi.fn(),
-    } as any);
+    } as ReturnType<typeof useEpisodeStore>);
 
     mockUseEpisodeScenesStore.mockReturnValue({
       scenes: [],
@@ -83,7 +93,7 @@ describe('EpisodeWorkflow', () => {
       updateScene: vi.fn(),
       deleteScene: vi.fn(),
       setScenes: vi.fn(),
-    } as any);
+    } as ReturnType<typeof useEpisodeScenesStore>);
   });
 
   it('应渲染左侧步骤导航', () => {
@@ -101,5 +111,89 @@ describe('EpisodeWorkflow', () => {
     await userEvent.click(screen.getByRole('button', { name: '剧集规划' }));
     expect(screen.getByRole('heading', { name: '剧集规划' })).toBeInTheDocument();
     expect(screen.getByText('Episodes（按集数排序）')).toBeInTheDocument();
+  });
+
+  it('场景锚点应支持复制 ZH/EN（仅复制纯提示词）', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    mockUseEpisodeStore.mockReturnValue({
+      episodes: [
+        {
+          id: 'ep_1',
+          order: 1,
+          title: '第一集',
+          workflowState: 'SCENE_LIST_EDITING',
+          coreExpression: { theme: 'test' },
+        },
+      ],
+      currentEpisodeId: 'ep_1',
+      isLoading: false,
+      isRunningWorkflow: false,
+      lastJobId: null,
+      lastJobProgress: null,
+      error: null,
+      loadEpisodes: vi.fn(),
+      setCurrentEpisode: vi.fn(),
+      updateEpisode: vi.fn(),
+      planEpisodes: vi.fn(),
+      generateCoreExpression: vi.fn(),
+      generateSceneList: vi.fn(),
+      createEpisode: vi.fn(),
+      deleteEpisode: vi.fn(),
+    } as ReturnType<typeof useEpisodeStore>);
+
+    mockUseEpisodeScenesStore.mockReturnValue({
+      scenes: [
+        {
+          id: 'scene_1',
+          order: 1,
+          status: 'done',
+          summary: '测试分镜概要',
+          sceneDescription: [
+            'SCENE_ANCHOR_ZH: 测试场景锚点中文',
+            'SCENE_ANCHOR_EN: test scene anchor english',
+            'LOCK_ZH: 1) 锚点A; 2) 锚点B',
+            'LOCK_EN: 1) anchor A; 2) anchor B',
+            'AVOID_ZH: 不要人物，不要文字',
+            'AVOID_EN: no people, no text',
+          ].join('\n'),
+          shotPrompt: '',
+          motionPrompt: '',
+          dialogues: [],
+          notes: '',
+        },
+      ],
+      isLoading: false,
+      error: null,
+      loadScenes: vi.fn(),
+      updateScene: vi.fn(),
+      deleteScene: vi.fn(),
+      setScenes: vi.fn(),
+    } as ReturnType<typeof useEpisodeScenesStore>);
+
+    render(<EpisodeWorkflow />);
+
+    await userEvent.click(screen.getByRole('button', { name: '单集创作' }));
+    await userEvent.click(screen.getByRole('tab', { name: '分镜列表' }));
+    await userEvent.click(screen.getByRole('button', { name: '查看/编辑' }));
+
+    expect(await screen.findByText('分镜详情（可编辑）')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '复制 ZH' }));
+    await userEvent.click(screen.getByRole('button', { name: '复制 EN' }));
+
+    // 复制内容应包含 SCENE_ANCHOR + LOCK + AVOID（纯文本，无标签）
+    expect(writeText).toHaveBeenNthCalledWith(
+      1,
+      '测试场景锚点中文\n\n1) 锚点A; 2) 锚点B\n\n不要人物，不要文字',
+    );
+    expect(writeText).toHaveBeenNthCalledWith(
+      2,
+      'test scene anchor english\n\n1) anchor A; 2) anchor B\n\nno people, no text',
+    );
   });
 });

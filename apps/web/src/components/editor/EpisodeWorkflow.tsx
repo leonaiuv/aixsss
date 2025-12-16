@@ -12,7 +12,6 @@ import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
 import {
   migrateOldStyleToConfig,
-  DIALOGUE_TYPE_LABELS,
   type DialogueLine,
   type Episode,
   type Project,
@@ -25,6 +24,7 @@ import {
   updateLogWithError,
   updateLogWithResponse,
 } from '@/lib/ai/debugLogger';
+import { parseSceneAnchorText, parseKeyframePromptText, parseMotionPromptText } from '@/lib/ai/promptParsers';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +55,11 @@ import {
   Download,
   Terminal,
   BarChart3,
+  MessageSquare,
+  Quote,
+  User,
+  Mic,
+  Brain,
 } from 'lucide-react';
 
 type WorkflowStep = 'global' | 'plan' | 'episode' | 'export';
@@ -137,6 +142,55 @@ function getSceneStatusLabel(status: Scene['status']): string {
     needs_update: '需更新',
   };
   return labels[status] || status;
+}
+
+function getSceneStatusStyle(
+  status: Scene['status'],
+): { label: string; className: string; dotClass: string } {
+  const baseLabel = getSceneStatusLabel(status);
+  const map: Record<
+    Scene['status'],
+    { className: string; dotClass: string }
+  > = {
+    pending: {
+      className: 'border-amber-200 bg-amber-50 text-amber-700',
+      dotClass: 'bg-amber-500',
+    },
+    scene_generating: {
+      className: 'border-sky-200 bg-sky-50 text-sky-700',
+      dotClass: 'bg-sky-500',
+    },
+    scene_confirmed: {
+      className: 'border-blue-200 bg-blue-50 text-blue-700',
+      dotClass: 'bg-blue-500',
+    },
+    keyframe_generating: {
+      className: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+      dotClass: 'bg-indigo-500',
+    },
+    keyframe_confirmed: {
+      className: 'border-purple-200 bg-purple-50 text-purple-700',
+      dotClass: 'bg-purple-500',
+    },
+    motion_generating: {
+      className: 'border-amber-300 bg-amber-50 text-amber-800',
+      dotClass: 'bg-amber-600',
+    },
+    completed: {
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      dotClass: 'bg-emerald-500',
+    },
+    needs_update: {
+      className: 'border-rose-200 bg-rose-50 text-rose-700',
+      dotClass: 'bg-rose-500',
+    },
+  };
+
+  const style = map[status];
+  if (!style) {
+    return { label: baseLabel, className: 'border-muted bg-muted/30 text-foreground', dotClass: 'bg-muted-foreground' };
+  }
+  return { label: baseLabel, ...style };
 }
 
 export function EpisodeWorkflow() {
@@ -237,11 +291,6 @@ export function EpisodeWorkflow() {
     setCoreExpressionDraftError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEpisode?.id]);
-
-  if (!currentProject) return null;
-
-  const workflowLabel = getWorkflowStateLabel(currentProject.workflowState);
-  const projectCharacters = characters.filter((c) => c.projectId === currentProject.id);
 
   const steps: Array<{ id: WorkflowStep; name: string }> = [
     { id: 'global', name: '全局设定' },
@@ -910,7 +959,19 @@ ${safeJsonStringify(ep.coreExpression)}
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                   <Badge variant="secondary">#{scene.order}</Badge>
-                                  <Badge variant="outline">{scene.status}</Badge>
+                                  {(() => {
+                                    const statusStyle = getSceneStatusStyle(scene.status);
+                                    return (
+                                      <span
+                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyle.className}`}
+                                      >
+                                        <span
+                                          className={`h-2 w-2 rounded-full ${statusStyle.dotClass}`}
+                                        />
+                                        {statusStyle.label}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                               <div className="flex gap-2">
@@ -983,7 +1044,17 @@ ${safeJsonStringify(ep.coreExpression)}
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <Badge variant="secondary">#{scene.order}</Badge>
-                                <Badge variant="outline">{scene.status}</Badge>
+                                {(() => {
+                                  const statusStyle = getSceneStatusStyle(scene.status);
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyle.className}`}
+                                    >
+                                      <span className={`h-2 w-2 rounded-full ${statusStyle.dotClass}`} />
+                                      {statusStyle.label}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <p className="text-sm mt-2 truncate">{scene.summary}</p>
                             </div>
@@ -1076,6 +1147,117 @@ ${safeJsonStringify(ep.coreExpression)}
   const refineScene = selectedSceneId
     ? (scenes.find((s) => s.id === selectedSceneId) ?? null)
     : null;
+
+  // 解析场景锚点
+  const parsedRefineSceneAnchor = useMemo(() => {
+    return parseSceneAnchorText(refineScene?.sceneDescription || '');
+  }, [refineScene?.sceneDescription]);
+
+  // 解析关键帧提示词
+  const parsedRefineKeyframes = useMemo(() => {
+    return parseKeyframePromptText(refineScene?.shotPrompt || '');
+  }, [refineScene?.shotPrompt]);
+
+  // 解析运动提示词
+  const parsedRefineMotion = useMemo(() => {
+    return parseMotionPromptText(refineScene?.motionPrompt || '');
+  }, [refineScene?.motionPrompt]);
+
+  // 场景锚点复制文本：组合 SCENE_ANCHOR + LOCK + AVOID（纯文本，无标签）
+  const refineSceneAnchorCopyText = useMemo(() => {
+    const raw = (refineScene?.sceneDescription || '').trim();
+    if (!raw) return { zh: '', en: '' };
+    if (!parsedRefineSceneAnchor.isStructured) {
+      return { zh: raw, en: raw };
+    }
+    const buildCopyText = (locale: 'zh' | 'en') => {
+      const parts: string[] = [];
+      if (parsedRefineSceneAnchor.sceneAnchor[locale]) {
+        parts.push(parsedRefineSceneAnchor.sceneAnchor[locale]!);
+      }
+      if (parsedRefineSceneAnchor.lock?.[locale]) {
+        parts.push(parsedRefineSceneAnchor.lock[locale]!);
+      }
+      if (parsedRefineSceneAnchor.avoid?.[locale]) {
+        parts.push(parsedRefineSceneAnchor.avoid[locale]!);
+      }
+      return parts.join('\n\n').trim();
+    };
+    return {
+      zh: buildCopyText('zh'),
+      en: buildCopyText('en'),
+    };
+  }, [parsedRefineSceneAnchor, refineScene?.sceneDescription]);
+
+  // 通用复制到剪贴板函数
+  const copyToClipboard = async (text: string, title: string, description?: string) => {
+    if (!text) {
+      toast({ title: '暂无可复制内容', variant: 'destructive' });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title, description });
+    } catch (error) {
+      toast({
+        title: '复制失败',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCopySceneAnchor = async (locale: 'zh' | 'en') => {
+    const text = locale === 'zh' ? refineSceneAnchorCopyText.zh : refineSceneAnchorCopyText.en;
+    if (!text) {
+      toast({
+        title: '暂无可复制内容',
+        description: parsedRefineSceneAnchor.isStructured
+          ? `未检测到 ${locale.toUpperCase()} 的内容。`
+          : '请先填写或生成场景锚点。',
+        variant: 'destructive',
+      });
+      return;
+    }
+    await copyToClipboard(
+      text,
+      '已复制',
+      locale === 'zh'
+        ? '场景锚点（中文，含 LOCK/AVOID）已复制。'
+        : '场景锚点（英文，含 LOCK/AVOID）已复制。',
+    );
+  };
+
+  // 关键帧复制处理
+  const handleCopyKeyframe = async (kfIndex: 0 | 1 | 2, locale: 'zh' | 'en') => {
+    const kfLabels = ['KF0（起始）', 'KF1（中间）', 'KF2（结束）'];
+    const kf = parsedRefineKeyframes.keyframes[kfIndex];
+    const text = kf[locale] || '';
+    await copyToClipboard(text, '已复制', `${kfLabels[kfIndex]} ${locale.toUpperCase()} 已复制。`);
+  };
+
+  const handleCopyKeyframeAvoid = async (locale: 'zh' | 'en') => {
+    const text = parsedRefineKeyframes.avoid?.[locale] || '';
+    await copyToClipboard(text, '已复制', `AVOID ${locale.toUpperCase()} 已复制。`);
+  };
+
+  // 运动提示词复制处理
+  const handleCopyMotion = async (
+    block: 'motionShort' | 'motionBeats' | 'constraints',
+    locale: 'zh' | 'en',
+  ) => {
+    const labels: Record<string, string> = {
+      motionShort: 'MOTION_SHORT',
+      motionBeats: 'MOTION_BEATS',
+      constraints: 'CONSTRAINTS',
+    };
+    const text = parsedRefineMotion[block][locale] || '';
+    await copyToClipboard(text, '已复制', `${labels[block]} ${locale.toUpperCase()} 已复制。`);
+  };
+
+  if (!currentProject) return null;
+  const workflowLabel = getWorkflowStateLabel(currentProject.workflowState);
+  const projectCharacters = characters.filter((c) => c.projectId === currentProject.id);
 
   return (
     <div className="space-y-6">
@@ -1260,7 +1442,31 @@ ${safeJsonStringify(ep.coreExpression)}
               ) : null}
 
               <div className="space-y-2">
-                <Label>场景锚点（Scene Anchor）</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>场景锚点（Scene Anchor）</Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleCopySceneAnchor('zh')}
+                      disabled={!refineSceneAnchorCopyText.zh}
+                      className="gap-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      <span>复制 ZH</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleCopySceneAnchor('en')}
+                      disabled={!refineSceneAnchorCopyText.en}
+                      className="gap-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      <span>复制 EN</span>
+                    </Button>
+                  </div>
+                </div>
                 <Textarea
                   value={refineScene.sceneDescription}
                   onChange={(e) =>
@@ -1274,7 +1480,84 @@ ${safeJsonStringify(ep.coreExpression)}
               </div>
 
               <div className="space-y-2">
-                <Label>关键帧提示词（Shot Prompt）</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>关键帧提示词（Shot Prompt）</Label>
+                </div>
+                {/* 关键帧快速复制区块 */}
+                {parsedRefineKeyframes.isStructured && (
+                  <div className="space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {([0, 1, 2] as const).map((idx) => {
+                        const kf = parsedRefineKeyframes.keyframes[idx];
+                        const labels = ['KF0（起始）', 'KF1（中间）', 'KF2（结束）'];
+                        const hasZh = Boolean(kf.zh);
+                        const hasEn = Boolean(kf.en);
+                        return (
+                          <div
+                            key={idx}
+                            className="rounded-lg border bg-muted/30 p-2 space-y-1"
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-medium">{labels[idx]}</span>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  disabled={!hasZh}
+                                  onClick={() => void handleCopyKeyframe(idx, 'zh')}
+                                >
+                                  ZH
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  disabled={!hasEn}
+                                  onClick={() => void handleCopyKeyframe(idx, 'en')}
+                                >
+                                  EN
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground line-clamp-2">
+                              {hasZh || hasEn
+                                ? (kf.zh || kf.en || '').slice(0, 60) + '...'
+                                : '（未解析到）'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {parsedRefineKeyframes.avoid && (
+                      <div className="rounded-lg border bg-muted/30 p-2">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-medium">AVOID（负面）</span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              disabled={!parsedRefineKeyframes.avoid.zh}
+                              onClick={() => void handleCopyKeyframeAvoid('zh')}
+                            >
+                              ZH
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              disabled={!parsedRefineKeyframes.avoid.en}
+                              onClick={() => void handleCopyKeyframeAvoid('en')}
+                            >
+                              EN
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <Textarea
                   value={refineScene.shotPrompt}
                   onChange={(e) =>
@@ -1288,7 +1571,62 @@ ${safeJsonStringify(ep.coreExpression)}
               </div>
 
               <div className="space-y-2">
-                <Label>时空/运动提示词（Motion Prompt）</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>时空/运动提示词（Motion Prompt）</Label>
+                </div>
+                {/* 运动提示词快速复制区块 */}
+                {parsedRefineMotion.isStructured && (
+                  <div className="space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {(
+                        [
+                          { key: 'motionShort', label: 'SHORT（短版）' },
+                          { key: 'motionBeats', label: 'BEATS（分拍）' },
+                          { key: 'constraints', label: 'CONSTRAINTS' },
+                        ] as const
+                      ).map(({ key, label }) => {
+                        const data = parsedRefineMotion[key];
+                        const hasZh = Boolean(data.zh);
+                        const hasEn = Boolean(data.en);
+                        return (
+                          <div
+                            key={key}
+                            className="rounded-lg border bg-muted/30 p-2 space-y-1"
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-medium">{label}</span>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  disabled={!hasZh}
+                                  onClick={() => void handleCopyMotion(key, 'zh')}
+                                >
+                                  ZH
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  disabled={!hasEn}
+                                  onClick={() => void handleCopyMotion(key, 'en')}
+                                >
+                                  EN
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground line-clamp-2">
+                              {hasZh || hasEn
+                                ? (data.zh || data.en || '').slice(0, 60) + '...'
+                                : '（未解析到）'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <Textarea
                   value={refineScene.motionPrompt}
                   onChange={(e) =>
@@ -1303,7 +1641,7 @@ ${safeJsonStringify(ep.coreExpression)}
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <Label>台词</Label>
+                  <Label>台词（Dialogue）</Label>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1321,27 +1659,110 @@ ${safeJsonStringify(ep.coreExpression)}
                   </Button>
                 </div>
                 {Array.isArray(refineScene.dialogues) && refineScene.dialogues.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {(refineScene.dialogues as DialogueLine[])
                       .slice()
                       .sort((a, b) => a.order - b.order)
-                      .map((line) => (
-                        <Card key={line.id} className="p-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="secondary">#{line.order}</Badge>
-                            <Badge variant="outline">
-                              {DIALOGUE_TYPE_LABELS[line.type] ?? line.type}
-                            </Badge>
-                            {line.characterName ? (
-                              <Badge variant="outline">{line.characterName}</Badge>
-                            ) : null}
+                      .map((line) => {
+                        // 不同台词类型的样式配置
+                        const typeConfig: Record<
+                          string,
+                          { icon: React.ReactNode; bg: string; border: string; label: string }
+                        > = {
+                          dialogue: {
+                            icon: <MessageSquare className="h-4 w-4" />,
+                            bg: 'bg-blue-500/10',
+                            border: 'border-blue-500/30',
+                            label: '对白',
+                          },
+                          monologue: {
+                            icon: <Quote className="h-4 w-4" />,
+                            bg: 'bg-purple-500/10',
+                            border: 'border-purple-500/30',
+                            label: '独白',
+                          },
+                          narration: {
+                            icon: <Mic className="h-4 w-4" />,
+                            bg: 'bg-amber-500/10',
+                            border: 'border-amber-500/30',
+                            label: '旁白',
+                          },
+                          thought: {
+                            icon: <Brain className="h-4 w-4" />,
+                            bg: 'bg-emerald-500/10',
+                            border: 'border-emerald-500/30',
+                            label: '心理',
+                          },
+                        };
+                        const config = typeConfig[line.type] || typeConfig.dialogue;
+
+                        return (
+                          <div
+                            key={line.id}
+                            className={`rounded-lg border ${config.border} ${config.bg} p-4`}
+                          >
+                            {/* 顶部：类型图标 + 角色名 + 情绪 */}
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                {config.icon}
+                                <span className="text-xs font-medium uppercase tracking-wide">
+                                  {config.label}
+                                </span>
+                              </div>
+                              {line.characterName && (
+                                <>
+                                  <span className="text-muted-foreground">·</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <User className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="font-semibold text-foreground">
+                                      {line.characterName}
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+                              {line.emotion && (
+                                <>
+                                  <span className="text-muted-foreground">·</span>
+                                  <Badge variant="outline" className="text-xs px-2 py-0">
+                                    {line.emotion}
+                                  </Badge>
+                                </>
+                              )}
+                            </div>
+                            {/* 台词内容 */}
+                            <div className="pl-6">
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                {line.type === 'narration' ? (
+                                  <span className="italic text-muted-foreground">
+                                    {line.content}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="text-muted-foreground">"</span>
+                                    {line.content}
+                                    <span className="text-muted-foreground">"</span>
+                                  </>
+                                )}
+                              </p>
+                            </div>
+                            {/* 备注（如有） */}
+                            {line.notes && (
+                              <div className="mt-2 pl-6 text-xs text-muted-foreground border-l-2 border-muted ml-1">
+                                <span className="ml-2">导演备注：{line.notes}</span>
+                              </div>
+                            )}
                           </div>
-                          <p className="text-sm mt-2 whitespace-pre-wrap">{line.content}</p>
-                        </Card>
-                      ))}
+                        );
+                      })}
                   </div>
                 ) : (
-                  <div className="text-sm text-muted-foreground">（无台词）</div>
+                  <div className="rounded-lg border border-dashed p-6 text-center">
+                    <Mic className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">暂无台词</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1">
+                      点击「一键细化」可自动生成台词
+                    </p>
+                  </div>
                 )}
               </div>
 

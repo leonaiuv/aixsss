@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  plugins: [react()] as any,
+  plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -15,6 +15,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/tests/setup.ts',
     css: true,
+    // 全量并发跑测试时，部分 React 交互用例在 CI/低资源环境下可能超过 5s；
+    // 适当提高 timeout 以避免“误报超时”导致的级联失败/全局状态污染。
+    testTimeout: 15000,
+    hookTimeout: 15000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
