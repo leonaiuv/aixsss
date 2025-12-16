@@ -26,7 +26,8 @@ export const CreateAIProfileInputSchema = z.object({
     .object({
       temperature: z.number().min(0).max(2).optional(),
       topP: z.number().min(0).max(1).optional(),
-      maxTokens: z.number().int().min(1).max(8192).optional(),
+      // DeepSeek: chat 最大 8K，reasoner 最大 64K；其它供应商上限依模型而定，这里放宽为 64K
+      maxTokens: z.number().int().min(1).max(65536).optional(),
       presencePenalty: z.number().min(-2).max(2).optional(),
       frequencyPenalty: z.number().min(-2).max(2).optional(),
     })
@@ -42,5 +43,4 @@ export const UpdateAIProfileInputSchema = CreateAIProfileInputSchema.partial().e
 });
 
 export type UpdateAIProfileInput = z.infer<typeof UpdateAIProfileInputSchema>;
-
 

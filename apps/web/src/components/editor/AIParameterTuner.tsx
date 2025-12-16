@@ -8,8 +8,8 @@
 // 4. 实时预览效果
 // ==========================================
 
-import { useState } from 'react';
-import { AIGenerationParams } from '@/types';
+import { useMemo, useState } from 'react';
+import { AIGenerationParams, type ProviderType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -25,42 +25,56 @@ import {
 } from '@/components/ui/select';
 import { Sliders, Info, RotateCcw, Sparkles } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { getMaxTokensPolicy } from '@/lib/ai/maxTokensPolicy';
 
 interface AIParameterTunerProps {
+  provider?: ProviderType;
+  model?: string;
   params: AIGenerationParams;
   onParamsChange: (params: AIGenerationParams) => void;
 }
 
-const PRESETS: Record<string, AIGenerationParams> = {
-  creative: {
-    temperature: 0.9,
-    topP: 0.95,
-    maxTokens: 2000,
-    presencePenalty: 0.6,
-    frequencyPenalty: 0.5,
-  },
-  balanced: {
-    temperature: 0.7,
-    topP: 0.9,
-    maxTokens: 1500,
-    presencePenalty: 0.3,
-    frequencyPenalty: 0.3,
-  },
-  conservative: {
-    temperature: 0.3,
-    topP: 0.7,
-    maxTokens: 1000,
-    presencePenalty: 0.1,
-    frequencyPenalty: 0.1,
-  },
-};
+function clampInt(n: number, min: number, max: number): number {
+  const v = Number.isFinite(n) ? Math.floor(n) : min;
+  return Math.max(min, Math.min(max, v));
+}
 
-export function AIParameterTuner({ params, onParamsChange }: AIParameterTunerProps) {
+export function AIParameterTuner({ provider, model, params, onParamsChange }: AIParameterTunerProps) {
   const [preset, setPreset] = useState<string>('balanced');
+  const maxTokensPolicy = useMemo(() => getMaxTokensPolicy(provider, model), [provider, model]);
+
+  const presets = useMemo(() => {
+    const base = maxTokensPolicy.recommendedDefault;
+    const min = maxTokensPolicy.min;
+    const max = maxTokensPolicy.max;
+    return {
+      creative: {
+        temperature: 0.9,
+        topP: 0.95,
+        maxTokens: clampInt(Math.round(base * 1.25), min, max),
+        presencePenalty: 0.6,
+        frequencyPenalty: 0.5,
+      },
+      balanced: {
+        temperature: 0.7,
+        topP: 0.9,
+        maxTokens: clampInt(base, min, max),
+        presencePenalty: 0.3,
+        frequencyPenalty: 0.3,
+      },
+      conservative: {
+        temperature: 0.3,
+        topP: 0.7,
+        maxTokens: clampInt(Math.round(base * 0.75), min, max),
+        presencePenalty: 0.1,
+        frequencyPenalty: 0.1,
+      },
+    } satisfies Record<string, AIGenerationParams>;
+  }, [maxTokensPolicy]);
 
   const handlePresetChange = (presetName: string) => {
     setPreset(presetName);
-    onParamsChange(PRESETS[presetName]);
+    onParamsChange(presets[presetName as keyof typeof presets]);
   };
 
   const handleReset = () => {
@@ -163,11 +177,11 @@ export function AIParameterTuner({ params, onParamsChange }: AIParameterTunerPro
           label="Max Tokens"
           value={params.maxTokens}
           onChange={(value) => updateParam('maxTokens', value)}
-          min={100}
-          max={4000}
-          step={100}
+          min={maxTokensPolicy.min}
+          max={maxTokensPolicy.max}
+          step={maxTokensPolicy.step}
           description="最大生成长度（token数）"
-          tooltip="1 token ≈ 0.75个英文单词 或 0.5个中文字"
+          tooltip={`${maxTokensPolicy.hint}；1 token ≈ 0.75 个英文单词 或 0.5 个中文字`}
         />
 
         <Separator />
@@ -207,7 +221,10 @@ export function AIParameterTuner({ params, onParamsChange }: AIParameterTunerPro
             <EffectIndicator label="创意度" value={calculateCreativity(params)} />
             <EffectIndicator label="稳定性" value={calculateStability(params)} />
             <EffectIndicator label="多样性" value={calculateDiversity(params)} />
-            <EffectIndicator label="长度倾向" value={(params.maxTokens / 4000) * 100} />
+            <EffectIndicator
+              label="长度倾向"
+              value={Math.min(100, (params.maxTokens / maxTokensPolicy.max) * 100)}
+            />
           </div>
         </CardContent>
       </Card>

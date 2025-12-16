@@ -120,6 +120,13 @@ function withMinimumMaxTokens(config: ReturnType<typeof toProviderChatConfig>, m
   };
 }
 
+function deepseekOutputPolicy(model: string): { defaultMaxTokens: number; maxMaxTokens: number } {
+  const m = (model ?? '').toLowerCase();
+  // 业务约定：deepseek-chat 默认 4K / 最大 8K；deepseek-reasoner 默认 32K / 最大 64K
+  if (m.includes('reasoner')) return { defaultMaxTokens: 32768, maxMaxTokens: 65536 };
+  return { defaultMaxTokens: 4096, maxMaxTokens: 8192 };
+}
+
 export async function planEpisodes(args: {
   prisma: PrismaClient;
   teamId: string;
@@ -170,10 +177,19 @@ export async function planEpisodes(args: {
   const baseConfig = toProviderChatConfig(profile);
   baseConfig.apiKey = apiKey;
 
-  // Episode Plan 输出可能很长：为避免被 maxTokens 截断导致 JSON 未闭合，设置一个最低输出上限。
+  // Episode Plan 输出可能很长：为避免被 maxTokens 截断导致 JSON 未闭合，设置“不会低于模型默认值”的最低输出上限。
   const targetCount = args.options?.targetEpisodeCount ?? 12;
-  const minMaxTokens = Math.max(1800, Math.min(7000, targetCount * 240));
-  const providerConfig = withMinimumMaxTokens(baseConfig, minMaxTokens);
+  let providerConfig = baseConfig;
+
+  if (profile.provider === 'deepseek') {
+    const policy = deepseekOutputPolicy(profile.model);
+    const desired = Math.min(policy.maxMaxTokens, Math.max(policy.defaultMaxTokens, targetCount * 320));
+    providerConfig = withMinimumMaxTokens(baseConfig, desired);
+  } else if (typeof baseConfig.params?.maxTokens === 'number') {
+    // 非 DeepSeek：仅在用户显式设置 maxTokens 时做保底，避免把供应商默认值反向压小
+    const desired = Math.max(1800, Math.min(20000, targetCount * 320));
+    providerConfig = withMinimumMaxTokens(baseConfig, desired);
+  }
 
   await updateProgress({ pct: 25, message: '调用 AI 生成剧集规划...' });
 

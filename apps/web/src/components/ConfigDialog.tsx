@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useConfigStore } from '@/stores/configStore';
 import {
   ProviderType,
@@ -39,11 +39,13 @@ import {
   CopyPlus,
 } from 'lucide-react';
 import { AIParameterTuner } from './editor/AIParameterTuner';
+import { clampMaxTokens, getMaxTokensPolicy } from '@/lib/ai/maxTokensPolicy';
 
 const DEFAULT_GENERATION_PARAMS: AIGenerationParams = {
   temperature: 0.7,
   topP: 0.9,
-  maxTokens: 1500,
+  // 兼容多数供应商的默认输出上限（DeepSeek chat 默认 4K）
+  maxTokens: 4096,
   presencePenalty: 0.3,
   frequencyPenalty: 0.3,
 };
@@ -113,10 +115,16 @@ const PROVIDER_PRESETS: Record<
   ],
 };
 
-function normalizeGenerationParams(params: AIGenerationParams | undefined): AIGenerationParams {
+function normalizeGenerationParams(
+  params: AIGenerationParams | undefined,
+  provider?: ProviderType,
+  model?: string,
+): AIGenerationParams {
+  const policy = getMaxTokensPolicy(provider, model);
   return {
     ...DEFAULT_GENERATION_PARAMS,
     ...params,
+    maxTokens: clampMaxTokens(params?.maxTokens ?? policy.recommendedDefault, provider, model),
     presencePenalty: params?.presencePenalty ?? DEFAULT_GENERATION_PARAMS.presencePenalty,
     frequencyPenalty: params?.frequencyPenalty ?? DEFAULT_GENERATION_PARAMS.frequencyPenalty,
   };
@@ -129,7 +137,6 @@ interface ConfigDialogProps {
 
 export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const {
-    config,
     testConnection,
     loadConfig,
     clearConfig,
@@ -146,6 +153,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const usageEvents = useAIUsageStore((state) => state.events);
 
   const activeProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
+  const activeProfileRef = useRef(activeProfile);
+  activeProfileRef.current = activeProfile;
+
   const [provider, setProvider] = useState<ProviderType>('deepseek');
   const [apiKey, setApiKey] = useState('');
   const [baseURL, setBaseURL] = useState('');
@@ -188,6 +198,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const isUnlocked = KeyManager.isInitialized();
   const isLocked = !apiMode && hasCustomPassword && !isUnlocked;
 
+  const pricingUnitRef = useRef<PricingUnit>(pricingUnit);
+  pricingUnitRef.current = pricingUnit;
+
   const lastTest: ConnectionTestResult | undefined = activeProfile?.lastTest;
 
   const formatDuration = (ms: number): string => {
@@ -212,6 +225,35 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     return Object.fromEntries(profiles.map((p) => [p.id, p.pricing]));
   }, [profiles]);
 
+  const parsePricing = useCallback((): AIPricing | undefined => {
+    const inputRaw = pricingInput.trim();
+    const outputRaw = pricingOutput.trim();
+    const cachedRaw = pricingCachedInput.trim();
+
+    if (!inputRaw && !outputRaw && !cachedRaw) return undefined;
+    if (!inputRaw || !outputRaw) return undefined;
+
+    const input = Number(inputRaw);
+    const output = Number(outputRaw);
+    const cached = cachedRaw ? Number(cachedRaw) : undefined;
+
+    if (!Number.isFinite(input) || input < 0) return undefined;
+    if (!Number.isFinite(output) || output < 0) return undefined;
+    if (cachedRaw && (!Number.isFinite(cached) || (cached as number) < 0)) return undefined;
+
+    const factor = pricingUnit === 'per_1M' ? 1000 : 1;
+    const promptPer1K = input / factor;
+    const completionPer1K = output / factor;
+    const cachedPromptPer1K = cachedRaw ? (cached as number) / factor : undefined;
+
+    return {
+      currency: 'USD',
+      promptPer1K,
+      completionPer1K,
+      ...(cachedPromptPer1K !== undefined ? { cachedPromptPer1K } : {}),
+    };
+  }, [pricingCachedInput, pricingInput, pricingOutput, pricingUnit]);
+
   const usage24h = useMemo(() => {
     if (!activeProfileId) return { events: [], stats: calculateUsageStats([]), costUSD: 0 };
     const now = Date.now();
@@ -232,8 +274,12 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     const storedBaseURL = activeProfile.config.baseURL || '';
     const draftBaseURL = provider === 'kimi' ? '' : normalizedBaseURL(baseURL) || '';
 
-    const storedGen = normalizeGenerationParams(activeProfile.config.generationParams);
-    const draftGen = normalizeGenerationParams(generationParams);
+    const storedGen = normalizeGenerationParams(
+      activeProfile.config.generationParams,
+      activeProfile.config.provider,
+      activeProfile.config.model,
+    );
+    const draftGen = normalizeGenerationParams(generationParams, provider, model);
     const sameGen = JSON.stringify(storedGen) === JSON.stringify(draftGen);
 
     const storedPricing = activeProfile.pricing
@@ -263,10 +309,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     baseURL,
     generationParams,
     model,
-    pricingCachedInput,
-    pricingInput,
-    pricingOutput,
-    pricingUnit,
+    parsePricing,
     profileName,
     provider,
   ]);
@@ -274,23 +317,31 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   useEffect(() => {
     if (!open) return;
 
-    if (activeProfile) {
-      setProfileName(activeProfile.name);
-      setProvider(activeProfile.config.provider);
-      setApiKey(activeProfile.config.apiKey);
-      setBaseURL(activeProfile.config.baseURL || '');
-      setModel(activeProfile.config.model);
-      setGenerationParams(normalizeGenerationParams(activeProfile.config.generationParams));
-      const factor = pricingUnit === 'per_1M' ? 1000 : 1;
+    const profile = activeProfileRef.current;
+
+    if (profile) {
+      setProfileName(profile.name);
+      setProvider(profile.config.provider);
+      setApiKey(profile.config.apiKey);
+      setBaseURL(profile.config.baseURL || '');
+      setModel(profile.config.model);
+      setGenerationParams(
+        normalizeGenerationParams(
+          profile.config.generationParams,
+          profile.config.provider,
+          profile.config.model,
+        ),
+      );
+      const factor = pricingUnitRef.current === 'per_1M' ? 1000 : 1;
       setPricingInput(
-        activeProfile.pricing ? String(activeProfile.pricing.promptPer1K * factor) : '',
+        profile.pricing ? String(profile.pricing.promptPer1K * factor) : '',
       );
       setPricingOutput(
-        activeProfile.pricing ? String(activeProfile.pricing.completionPer1K * factor) : '',
+        profile.pricing ? String(profile.pricing.completionPer1K * factor) : '',
       );
       setPricingCachedInput(
-        activeProfile.pricing && typeof activeProfile.pricing.cachedPromptPer1K === 'number'
-          ? String(activeProfile.pricing.cachedPromptPer1K * factor)
+        profile.pricing && typeof profile.pricing.cachedPromptPer1K === 'number'
+          ? String(profile.pricing.cachedPromptPer1K * factor)
           : '',
       );
     } else {
@@ -299,7 +350,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setApiKey('');
       setBaseURL('');
       setModel('deepseek-chat');
-      setGenerationParams(DEFAULT_GENERATION_PARAMS);
+      setGenerationParams(normalizeGenerationParams(undefined, 'deepseek', 'deepseek-chat'));
       setPricingInput('');
       setPricingOutput('');
       setPricingCachedInput('');
@@ -326,6 +377,15 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       // ignore
     }
   }, [PRICING_UNIT_STORAGE_KEY, pricingUnit]);
+
+  // 当 provider/model 变化时，确保 maxTokens 不超过该模型支持范围（避免保存后上游报错/被截断）
+  useEffect(() => {
+    setGenerationParams((prev) => {
+      const next = clampMaxTokens(prev.maxTokens, provider, model);
+      if (next === prev.maxTokens) return prev;
+      return { ...prev, maxTokens: next };
+    });
+  }, [provider, model]);
 
   const handlePricingUnitChange = (next: PricingUnit) => {
     if (next === pricingUnit) return;
@@ -357,35 +417,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     if (!trimmed) return undefined;
     const withoutTrailingSlash = trimmed.replace(/\/$/, '');
     return withoutTrailingSlash.replace(/\/(v1beta|v1)$/, '');
-  }
-
-  function parsePricing(): AIPricing | undefined {
-    const inputRaw = pricingInput.trim();
-    const outputRaw = pricingOutput.trim();
-    const cachedRaw = pricingCachedInput.trim();
-
-    if (!inputRaw && !outputRaw && !cachedRaw) return undefined;
-    if (!inputRaw || !outputRaw) return undefined;
-
-    const input = Number(inputRaw);
-    const output = Number(outputRaw);
-    const cached = cachedRaw ? Number(cachedRaw) : undefined;
-
-    if (!Number.isFinite(input) || input < 0) return undefined;
-    if (!Number.isFinite(output) || output < 0) return undefined;
-    if (cachedRaw && (!Number.isFinite(cached) || (cached as number) < 0)) return undefined;
-
-    const factor = pricingUnit === 'per_1M' ? 1000 : 1;
-    const promptPer1K = input / factor;
-    const completionPer1K = output / factor;
-    const cachedPromptPer1K = cachedRaw ? (cached as number) / factor : undefined;
-
-    return {
-      currency: 'USD',
-      promptPer1K,
-      completionPer1K,
-      ...(cachedPromptPer1K !== undefined ? { cachedPromptPer1K } : {}),
-    };
   }
 
   const getValidationErrors = (): {
@@ -461,6 +492,14 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     if (provider !== 'kimi') {
       setBaseURL(preset.baseURL || '');
     }
+
+    // 选预设通常意味着希望使用该模型的推荐默认输出长度（避免过小导致“输出被截断”）
+    const policy = getMaxTokensPolicy(provider, preset.model);
+    setGenerationParams((prev) => {
+      const clamped = clampMaxTokens(prev.maxTokens, provider, preset.model);
+      const bumped = clamped < policy.recommendedDefault ? policy.recommendedDefault : clamped;
+      return { ...prev, maxTokens: clampMaxTokens(bumped, provider, preset.model) };
+    });
   };
 
   const handleSwitchProfile = async (nextProfileId: string) => {
@@ -1396,7 +1435,12 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               <DialogTitle>AI 参数调优</DialogTitle>
               <DialogDescription>这些参数会影响所有 AI 生成效果。</DialogDescription>
             </DialogHeader>
-            <AIParameterTuner params={generationParams} onParamsChange={setGenerationParams} />
+            <AIParameterTuner
+              provider={provider}
+              model={model}
+              params={generationParams}
+              onParamsChange={setGenerationParams}
+            />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAiTunerOpen(false)}>
                 完成

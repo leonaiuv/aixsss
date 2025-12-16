@@ -141,9 +141,7 @@ export function SceneGeneration() {
           config: {
             provider: config.provider,
             model: config.model,
-            maxTokens: (config as unknown as Record<string, unknown>)?.generationParams as
-              | number
-              | undefined,
+            maxTokens: config.generationParams?.maxTokens,
             profileId: aiProfileId,
           },
         });

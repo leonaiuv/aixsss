@@ -205,9 +205,7 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
-        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as
-          | number
-          | undefined,
+        maxTokens: cfg?.generationParams?.maxTokens,
         profileId: cfg?.aiProfileId ?? input.aiProfileId,
       },
     });
@@ -261,9 +259,7 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
-        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as
-          | number
-          | undefined,
+        maxTokens: cfg?.generationParams?.maxTokens,
         profileId: cfg?.aiProfileId ?? input.aiProfileId,
       },
     });
@@ -312,9 +308,7 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
-        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as
-          | number
-          | undefined,
+        maxTokens: cfg?.generationParams?.maxTokens,
         profileId: cfg?.aiProfileId ?? input.aiProfileId,
       },
     });
