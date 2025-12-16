@@ -98,6 +98,8 @@ const CALL_TYPE_LABELS: Record<string, string> = {
   scene_refine_all: '一键细化',
   character_basic_info: '角色信息生成',
   character_portrait: '角色定妆照生成',
+  narrative_causal_chain: '叙事因果链',
+  build_narrative_causal_chain: '叙事因果链构建',
   custom: '自定义调用',
 };
 

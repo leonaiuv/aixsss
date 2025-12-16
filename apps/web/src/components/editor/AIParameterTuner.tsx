@@ -153,9 +153,9 @@ export function AIParameterTuner({
 
       {/* 参数调整 */}
       <div className="space-y-6">
-        {/* Temperature */}
+        {/* 温度 (Temperature) */}
         <ParameterSlider
-          label="Temperature"
+          label="温度 (Temperature)"
           value={params.temperature}
           onChange={(value) => updateParam('temperature', value)}
           min={0}
@@ -165,9 +165,9 @@ export function AIParameterTuner({
           tooltip="推荐范围: 创意性内容 0.7-1.0，事实性内容 0-0.3"
         />
 
-        {/* Top P */}
+        {/* 核采样 (Top P) */}
         <ParameterSlider
-          label="Top P"
+          label="核采样 (Top P)"
           value={params.topP}
           onChange={(value) => updateParam('topP', value)}
           min={0}
@@ -177,9 +177,9 @@ export function AIParameterTuner({
           tooltip="推荐值: 0.9-0.95 通常效果最好"
         />
 
-        {/* Max Tokens */}
+        {/* 最大 Token 数 */}
         <ParameterSlider
-          label="Max Tokens"
+          label="最大 Token 数"
           value={params.maxTokens}
           onChange={(value) => updateParam('maxTokens', value)}
           min={maxTokensPolicy.min}
@@ -191,9 +191,9 @@ export function AIParameterTuner({
 
         <Separator />
 
-        {/* Presence Penalty */}
+        {/* 主题惩罚 (Presence Penalty) */}
         <ParameterSlider
-          label="Presence Penalty"
+          label="主题惩罚 (Presence Penalty)"
           value={params.presencePenalty || 0}
           onChange={(value) => updateParam('presencePenalty', value)}
           min={-2}
@@ -203,9 +203,9 @@ export function AIParameterTuner({
           tooltip="正值增加探索新主题的可能性"
         />
 
-        {/* Frequency Penalty */}
+        {/* 重复惩罚 (Frequency Penalty) */}
         <ParameterSlider
-          label="Frequency Penalty"
+          label="重复惩罚 (Frequency Penalty)"
           value={params.frequencyPenalty || 0}
           onChange={(value) => updateParam('frequencyPenalty', value)}
           min={-2}

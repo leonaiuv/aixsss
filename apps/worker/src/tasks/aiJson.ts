@@ -107,19 +107,52 @@ export function parseJsonFromText(
   const extracted = extractFirstJson(raw);
   if (!extracted.ok) {
     if (extracted.reason === 'unterminated') {
-      throw new Error('AI 输出看起来被截断（JSON 未闭合）。请提高 AI Profile 的 maxTokens，或减少目标集数后重试。');
+      throw new Error(
+        'AI 输出被截断（JSON 未闭合）。\n' +
+        '【可能原因】\n' +
+        '  1. maxTokens 设置过低，AI 输出在中途被截断\n' +
+        '  2. 请求的内容过于复杂，超出模型单次输出能力\n' +
+        '【解决方案】\n' +
+        '  → 在「设置 → AI 配置档案」中提高 maxTokens（建议 ≥ 8000）\n' +
+        '  → 或减少目标集数 / 简化故事复杂度后重试'
+      );
     }
     if (extracted.reason === 'no-json-start') {
-      throw new Error('AI 输出中未找到 JSON 起始符号（{ 或 [）。请检查模型是否按要求输出 JSON。');
+      throw new Error(
+        'AI 输出中未找到 JSON 起始符号。\n' +
+        '【可能原因】\n' +
+        '  1. 模型未按要求输出 JSON 格式\n' +
+        '  2. 模型输出了解释性文字而非结构化数据\n' +
+        '【解决方案】\n' +
+        '  → 检查模型是否支持 JSON 输出模式\n' +
+        '  → 尝试更换为更稳定的模型（如 gpt-4o / claude-3.5-sonnet）'
+      );
     }
     if (extracted.reason === 'empty') {
-      throw new Error('AI 返回空内容（content 为空），无法解析 JSON');
+      throw new Error(
+        'AI 返回空内容。\n' +
+        '【可能原因】\n' +
+        '  1. API 请求被拒绝或超时\n' +
+        '  2. 模型触发了内容安全过滤\n' +
+        '  3. API Key 额度不足或已过期\n' +
+        '【解决方案】\n' +
+        '  → 检查 AI 配置档案中的 API Key 是否有效\n' +
+        '  → 查看供应商控制台确认额度状态'
+      );
     }
-    throw new Error('AI 输出包含无法匹配的括号，无法提取完整 JSON');
+    throw new Error(
+      'AI 输出格式异常（括号不匹配）。\n' +
+      '【可能原因】模型输出的 JSON 存在语法错误（如多余逗号、缺少引号）\n' +
+      '【解决方案】尝试重新生成，或切换到更稳定的模型'
+    );
   }
 
   if (options?.expectedKind && extracted.kind !== options.expectedKind) {
-    throw new Error(`AI 输出 JSON 类型不匹配：期望 ${options.expectedKind}，但提取到 ${extracted.kind}`);
+    throw new Error(
+      `AI 输出 JSON 类型不匹配。\n` +
+      `【详情】期望 ${options.expectedKind === 'object' ? '对象 {}' : '数组 []'}，但实际输出为 ${extracted.kind === 'object' ? '对象 {}' : '数组 []'}\n` +
+      `【解决方案】重新生成，或检查 Prompt 是否明确要求输出格式`
+    );
   }
 
   const repaired = repairCommonJsonIssues(extracted.jsonText);
@@ -127,7 +160,15 @@ export function parseJsonFromText(
     return { json: JSON.parse(repaired) as unknown, extractedJson: repaired };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`AI 输出 JSON.parse 失败：${message}`);
+    throw new Error(
+      `AI 输出 JSON 解析失败。\n` +
+      `【错误详情】${message}\n` +
+      `【可能原因】\n` +
+      `  1. JSON 中存在未转义的特殊字符（如换行符、引号）\n` +
+      `  2. 数字/布尔值格式错误（如 "true" 应为 true）\n` +
+      `  3. 尾部多余逗号等语法问题\n` +
+      `【解决方案】尝试重新生成`
+    );
   }
 }
 
