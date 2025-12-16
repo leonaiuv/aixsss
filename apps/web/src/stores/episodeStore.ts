@@ -13,6 +13,53 @@ import {
   apiWorkflowGenerateEpisodeSceneList,
   apiWorkflowPlanEpisodes,
 } from '@/lib/api/workflow';
+import {
+  logAICall,
+  updateLogProgress,
+  updateLogWithError,
+  updateLogWithResponse,
+} from '@/lib/ai/debugLogger';
+import { useConfigStore } from '@/stores/configStore';
+
+type NormalizedJobProgress = { pct: number | null; message: string | null };
+
+interface ProgressLike {
+  pct?: unknown;
+  message?: unknown;
+}
+
+interface ResultLike {
+  tokenUsage?: unknown;
+  extractedJson?: unknown;
+  raw?: unknown;
+}
+
+function normalizeJobProgress(progress: unknown): NormalizedJobProgress {
+  const p = progress as ProgressLike | undefined;
+  const pct = typeof p?.pct === 'number' ? p.pct : null;
+  const message = typeof p?.message === 'string' ? p.message : null;
+  return { pct, message };
+}
+
+function normalizeJobTokenUsage(raw: unknown):
+  | { prompt: number; completion: number; total: number }
+  | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const prompt = r.prompt;
+  const completion = r.completion;
+  const total = r.total;
+  if (typeof prompt !== 'number' || typeof completion !== 'number' || typeof total !== 'number') return undefined;
+  return { prompt, completion, total };
+}
+
+function safeJson(value: unknown): string {
+  try {
+    return JSON.stringify(value ?? null, null, 2);
+  } catch {
+    return String(value ?? '');
+  }
+}
 
 interface EpisodeStore {
   episodes: Episode[];
@@ -20,6 +67,7 @@ interface EpisodeStore {
   isLoading: boolean;
   isRunningWorkflow: boolean;
   lastJobId: string | null;
+  lastJobProgress: NormalizedJobProgress | null;
   error: string | null;
 
   loadEpisodes: (projectId: string) => void;
@@ -60,6 +108,7 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
   isLoading: false,
   isRunningWorkflow: false,
   lastJobId: null,
+  lastJobProgress: null,
   error: null,
 
   loadEpisodes: (projectId: string) => {
@@ -143,14 +192,48 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
     if (!isApiMode()) {
       throw new Error('Episode 规划仅在 API 模式可用');
     }
-    set({ isRunningWorkflow: true, error: null, lastJobId: null });
+    set({ isRunningWorkflow: true, error: null, lastJobId: null, lastJobProgress: null });
+
+    const cfg = useConfigStore.getState().config;
+    const logId = logAICall('episode_plan', {
+      skillName: 'workflow:plan_episodes',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/episode-plan',
+      filledPrompt: `POST /workflow/projects/${input.projectId}/episode-plan`,
+      messages: [{ role: 'user', content: safeJson(input) }],
+      context: { projectId: input.projectId },
+      config: {
+        provider: cfg?.provider ?? 'api',
+        model: cfg?.model ?? 'workflow',
+        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as number | undefined,
+        profileId: cfg?.aiProfileId ?? input.aiProfileId,
+      },
+    });
+
     try {
       const job = await apiWorkflowPlanEpisodes(input);
       set({ lastJobId: job.id });
-      await apiWaitForAIJob(job.id);
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          set({ lastJobProgress: next });
+          if (typeof next.pct === 'number') updateLogProgress(logId, next.pct, next.message ?? undefined);
+        },
+      });
+
+      const result = (finished.result ?? null) as ResultLike | null;
+      const tokenUsage = normalizeJobTokenUsage(result?.tokenUsage);
+      const content =
+        typeof result?.extractedJson === 'string'
+          ? result.extractedJson
+          : typeof result?.raw === 'string'
+            ? result.raw
+            : safeJson(result);
+      updateLogWithResponse(logId, { content, tokenUsage });
       get().loadEpisodes(input.projectId);
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      updateLogWithError(logId, message);
+      set({ error: message });
       throw error;
     } finally {
       set({ isRunningWorkflow: false });
@@ -161,14 +244,46 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
     if (!isApiMode()) {
       throw new Error('核心表达生成仅在 API 模式可用');
     }
-    set({ isRunningWorkflow: true, error: null, lastJobId: null });
+    set({ isRunningWorkflow: true, error: null, lastJobId: null, lastJobProgress: null });
+
+    const cfg = useConfigStore.getState().config;
+    const logId = logAICall('episode_core_expression', {
+      skillName: 'workflow:generate_episode_core_expression',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/episodes/{{episodeId}}/core-expression',
+      filledPrompt: `POST /workflow/projects/${input.projectId}/episodes/${input.episodeId}/core-expression`,
+      messages: [{ role: 'user', content: safeJson(input) }],
+      context: { projectId: input.projectId },
+      config: {
+        provider: cfg?.provider ?? 'api',
+        model: cfg?.model ?? 'workflow',
+        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as number | undefined,
+        profileId: cfg?.aiProfileId ?? input.aiProfileId,
+      },
+    });
+
     try {
       const job = await apiWorkflowGenerateEpisodeCoreExpression(input);
       set({ lastJobId: job.id });
-      await apiWaitForAIJob(job.id);
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          set({ lastJobProgress: next });
+          if (typeof next.pct === 'number') updateLogProgress(logId, next.pct, next.message ?? undefined);
+        },
+      });
+
+      const result = (finished.result ?? null) as ResultLike | null;
+      const tokenUsage = normalizeJobTokenUsage(result?.tokenUsage);
+      const content =
+        typeof result?.extractedJson === 'string'
+          ? result.extractedJson
+          : safeJson(result);
+      updateLogWithResponse(logId, { content, tokenUsage });
       get().loadEpisodes(input.projectId);
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      updateLogWithError(logId, message);
+      set({ error: message });
       throw error;
     } finally {
       set({ isRunningWorkflow: false });
@@ -179,14 +294,42 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
     if (!isApiMode()) {
       throw new Error('分镜生成仅在 API 模式可用');
     }
-    set({ isRunningWorkflow: true, error: null, lastJobId: null });
+    set({ isRunningWorkflow: true, error: null, lastJobId: null, lastJobProgress: null });
+
+    const cfg = useConfigStore.getState().config;
+    const logId = logAICall('episode_scene_list', {
+      skillName: 'workflow:generate_episode_scene_list',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/episodes/{{episodeId}}/scene-list',
+      filledPrompt: `POST /workflow/projects/${input.projectId}/episodes/${input.episodeId}/scene-list`,
+      messages: [{ role: 'user', content: safeJson(input) }],
+      context: { projectId: input.projectId },
+      config: {
+        provider: cfg?.provider ?? 'api',
+        model: cfg?.model ?? 'workflow',
+        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as number | undefined,
+        profileId: cfg?.aiProfileId ?? input.aiProfileId,
+      },
+    });
+
     try {
       const job = await apiWorkflowGenerateEpisodeSceneList(input);
       set({ lastJobId: job.id });
-      await apiWaitForAIJob(job.id);
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          set({ lastJobProgress: next });
+          if (typeof next.pct === 'number') updateLogProgress(logId, next.pct, next.message ?? undefined);
+        },
+      });
+
+      const result = (finished.result ?? null) as ResultLike | null;
+      const tokenUsage = normalizeJobTokenUsage(result?.tokenUsage);
+      updateLogWithResponse(logId, { content: safeJson(result), tokenUsage });
       get().loadEpisodes(input.projectId);
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      updateLogWithError(logId, message);
+      set({ error: message });
       throw error;
     } finally {
       set({ isRunningWorkflow: false });

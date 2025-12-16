@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -93,6 +94,8 @@ export function EpisodeWorkflow() {
     isLoading: isEpisodesLoading,
     isRunningWorkflow,
     error: episodeError,
+    lastJobId,
+    lastJobProgress,
     loadEpisodes,
     setCurrentEpisode,
     updateEpisode,
@@ -168,6 +171,7 @@ export function EpisodeWorkflow() {
     if (!currentEpisode) return;
     setCoreExpressionDraft(safeJsonStringify(currentEpisode.coreExpression));
     setCoreExpressionDraftError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEpisode?.id]);
 
   if (!currentProject) return null;
@@ -330,8 +334,18 @@ export function EpisodeWorkflow() {
       } else {
         let md = `# ${currentProject.title}\n\n`;
         md += `## 全局设定\n\n`;
-        md += `### 故事梗概\n\n${currentProject.summary || '-'}\n\n`;
-        md += `### 画风（Full Prompt）\n\n\`\`\`\n${styleFullPrompt || '-'}\n\`\`\`\n\n`;
+        md += `### 故事梗概
+
+${currentProject.summary || '-'}
+
+`;
+        md += `### 画风（Full Prompt）
+
+\`\`\`
+${styleFullPrompt || '-'}
+\`\`\`
+
+`;
 
         md += `### 世界观\n\n`;
         if (worldViewElements.length === 0) md += `- （空）\n\n`;
@@ -361,11 +375,23 @@ export function EpisodeWorkflow() {
           md += `- 工作流状态：${getEpisodeStateLabel(ep.workflowState)}\n\n`;
 
           if (ep.outline) {
-            md += `#### Outline（JSON）\n\n\`\`\`json\n${safeJsonStringify(ep.outline)}\n\`\`\`\n\n`;
+            md += `#### Outline（JSON）
+
+\`\`\`json
+${safeJsonStringify(ep.outline)}
+\`\`\`
+
+`;
           }
 
           if (ep.coreExpression) {
-            md += `#### 核心表达（Core Expression）\n\n\`\`\`json\n${safeJsonStringify(ep.coreExpression)}\n\`\`\`\n\n`;
+            md += `#### 核心表达（Core Expression）
+
+\`\`\`json
+${safeJsonStringify(ep.coreExpression)}
+\`\`\`
+
+`;
           }
 
           const epScenes = sceneMap.get(ep.id) ?? [];
@@ -497,6 +523,16 @@ export function EpisodeWorkflow() {
                 <RefreshCw className="h-4 w-4" />
                 <span>刷新 Episodes</span>
               </Button>
+
+              {isRunningWorkflow ? (
+                <div className="pt-2 space-y-2">
+                  <Progress value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0} />
+                  <div className="text-xs text-muted-foreground">
+                    {lastJobProgress?.message || '排队中...'}
+                    {lastJobId ? `（jobId=${lastJobId}）` : null}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </Card>

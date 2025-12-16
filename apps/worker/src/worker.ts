@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { Worker } from 'bullmq';
+import type { JobProgress } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import { EnvSchema } from './config/env.js';
 import { generateSceneList } from './tasks/generateSceneList.js';
@@ -54,6 +55,14 @@ async function main() {
         },
       });
 
+      const updateProgress = async (progress: JobProgress) => {
+        await job.updateProgress(progress);
+        const pct =
+          isRecord(progress) && typeof progress.pct === 'number' ? Math.floor(progress.pct) : null;
+        const message = isRecord(progress) && typeof progress.message === 'string' ? progress.message : null;
+        console.log('[worker] progress', { id: jobId, name: job.name, pct, message });
+      };
+
       try {
         switch (job.name) {
           case 'llm_chat': {
@@ -63,9 +72,7 @@ async function main() {
               aiProfileId,
               messages: data.messages,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -87,9 +94,7 @@ async function main() {
               projectId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -118,9 +123,7 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               options,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -143,9 +146,7 @@ async function main() {
               episodeId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -175,9 +176,7 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               options,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -200,9 +199,7 @@ async function main() {
               sceneId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -225,9 +222,7 @@ async function main() {
               sceneId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -250,9 +245,7 @@ async function main() {
               sceneId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -275,9 +268,7 @@ async function main() {
               sceneId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({
@@ -300,9 +291,7 @@ async function main() {
               sceneId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
-              updateProgress: async (progress) => {
-                await job.updateProgress(progress);
-              },
+              updateProgress,
             });
 
             await prisma.aIJob.update({

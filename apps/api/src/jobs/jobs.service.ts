@@ -17,14 +17,16 @@ type ApiAIJob = Omit<AIJob, 'createdAt' | 'startedAt' | 'finishedAt'> & {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  progress: unknown | null;
 };
 
-function mapJob(job: AIJob): ApiAIJob {
+function mapJob(job: AIJob, progress: unknown | null = null): ApiAIJob {
   return {
     ...job,
     createdAt: toIso(job.createdAt),
     startedAt: toIsoOrNull(job.startedAt),
     finishedAt: toIsoOrNull(job.finishedAt),
+    progress,
   };
 }
 
@@ -86,7 +88,14 @@ export class JobsService {
   async get(teamId: string, jobId: string) {
     const job = await this.prisma.aIJob.findFirst({ where: { id: jobId, teamId } });
     if (!job) throw new NotFoundException('Job not found');
-    return mapJob(job);
+    let progress: unknown | null = null;
+    try {
+      const queueJob = await this.queue.getJob(jobId);
+      progress = (queueJob?.progress ?? null) as unknown;
+    } catch {
+      progress = null;
+    }
+    return mapJob(job, progress);
   }
 
   async enqueuePlanEpisodes(

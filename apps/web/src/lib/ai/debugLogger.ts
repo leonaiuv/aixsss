@@ -15,6 +15,9 @@ export type AICallType =
   | 'keyframe_prompt' // 关键帧提示词生成（KF0/KF1/KF2）
   | 'motion_prompt' // 时空/运动提示词生成
   | 'dialogue' // 台词生成
+  | 'episode_plan' // 剧集规划生成
+  | 'episode_core_expression' // 单集核心表达生成
+  | 'episode_scene_list' // 单集分镜列表生成
   | 'character_basic_info' // 角色基础信息生成
   | 'character_portrait' // 角色定妆照提示词生成
   | 'custom'; // 自定义调用
@@ -187,6 +190,9 @@ function formatLogOutput(entry: AICallLogEntry): void {
     keyframe_prompt: '🖼️ 关键帧提示词生成（KF0/KF1/KF2）',
     motion_prompt: '🎬 时空/运动提示词生成',
     dialogue: '💬 台词生成',
+    episode_plan: '🎞️ 剧集规划生成',
+    episode_core_expression: '🧠 单集核心表达生成',
+    episode_scene_list: '🗂️ 单集分镜列表生成',
     character_basic_info: '👤 角色信息生成',
     character_portrait: '📷 角色定妆照生成',
     custom: '⚡ 自定义调用',

@@ -3,23 +3,13 @@ import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
-import { styleFullPrompt, toProviderChatConfig } from './common.js';
+import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { EpisodePlanSchema, type EpisodePlan } from '@aixsss/shared';
-
-function extractJsonObject(text: string): string | null {
-  const raw = text?.trim() ?? '';
-  if (!raw) return null;
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start < 0 || end < 0 || end <= start) return null;
-  return raw.slice(start, end + 1);
-}
+import { parseJsonFromText } from './aiJson.js';
 
 function parseEpisodePlan(raw: string): { parsed: EpisodePlan; extractedJson: string } {
-  const extracted = extractJsonObject(raw);
-  if (!extracted) throw new Error('AI 输出中未找到 JSON 对象');
-  const json = JSON.parse(extracted) as unknown;
-  return { parsed: EpisodePlanSchema.parse(json), extractedJson: extracted };
+  const { json, extractedJson } = parseJsonFromText(raw, { expectedKind: 'object' });
+  return { parsed: EpisodePlanSchema.parse(json), extractedJson };
 }
 
 function formatWorldView(items: Array<{ type: string; title: string; content: string; order: number }>): string {
@@ -50,9 +40,13 @@ function buildPrompt(args: {
   characters: string;
   targetEpisodeCount?: number;
 }): string {
-  return `你是专业的剧集策划。请基于以下“全局设定”，生成可执行的 N 集规划。
+  return `你是专业的剧集策划。请基于以下"全局设定"，生成可执行的 N 集规划。
 
-必须严格输出 **一个 JSON 对象**，不要输出任何 Markdown、代码块、解释文字或多余字符。
+【重要】输出要求：
+1. 必须严格输出 **一个 JSON 对象**
+2. 不要输出任何 Markdown、代码块（如 \`\`\`json）、解释文字或多余字符
+3. 所有字段名必须使用英文（如 title, logline, sceneScope），不要用中文字段名
+4. 直接以 { 开头，以 } 结尾
 
 全局设定：
 - 故事梗概：
@@ -72,9 +66,10 @@ ${args.characters}
 ${typeof args.targetEpisodeCount === 'number' ? `- 这次必须输出 ${args.targetEpisodeCount} 集（episodeCount 必须等于该值）` : ''}
 - episodes.order 必须从 1 开始连续递增
 - episodeCount 必须等于 episodes.length
-- mainCharacters 请尽量从“角色库”里的名字中选择；如角色库为空，请输出空数组
+- 每个 episode 必须包含 order, title, logline, mainCharacters, beats, sceneScope 字段
+- mainCharacters 请尽量从"角色库"里的名字中选择；如角色库为空，请输出空数组
 
-输出 JSON Schema（示意）：
+必须严格按照以下 JSON 结构输出（注意：字段名必须是英文）：
 {
   "episodeCount": 8,
   "reasoningBrief": "一句话解释为何是8集",
@@ -82,30 +77,47 @@ ${typeof args.targetEpisodeCount === 'number' ? `- 这次必须输出 ${args.tar
     {
       "order": 1,
       "title": "第1集标题",
-      "logline": "一句话概要",
+      "logline": "一句话概要（必填）",
       "mainCharacters": ["角色A", "角色B"],
       "beats": ["开场...", "冲突升级...", "转折...", "结尾钩子..."],
-      "sceneScope": "主要场景范围/地点/时间段",
+      "sceneScope": "主要场景范围/地点/时间段（必填）",
       "cliffhanger": "结尾钩子（可空）"
     }
   ]
-}`;
+}
+
+请直接输出 JSON：`;
 }
 
 function buildJsonFixPrompt(raw: string): string {
-  return `你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象，不要输出 Markdown/代码块/解释/多余文字。
+  return `你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象。
 
-要求：
-1) 必须是 JSON 对象，且可被 JSON.parse 直接解析
-2) episodeCount 必须等于 episodes.length
-3) episodes.order 必须从 1 开始连续递增
+【重要】修复要求：
+1. 不要输出 Markdown、代码块（如 \`\`\`json）、解释或多余文字
+2. 所有字段名必须使用英文：episodeCount, reasoningBrief, episodes, order, title, logline, mainCharacters, beats, sceneScope, cliffhanger
+3. 直接以 { 开头，以 } 结尾
+4. episodeCount 必须等于 episodes.length
+5. episodes.order 必须从 1 开始连续递增
+6. 每个 episode 必须包含 order, title, logline, sceneScope 字段（都是必填的）
 
 原始输出：
 <<<
 ${raw?.trim() ?? ''}
 >>>
 
-请只输出 JSON：`;
+请只输出修正后的 JSON：`;
+}
+
+function withMinimumMaxTokens(config: ReturnType<typeof toProviderChatConfig>, minMaxTokens: number) {
+  const current = config.params?.maxTokens;
+  if (typeof current === 'number' && current >= minMaxTokens) return config;
+  return {
+    ...config,
+    params: {
+      ...(config.params ?? {}),
+      maxTokens: minMaxTokens,
+    },
+  };
 }
 
 export async function planEpisodes(args: {
@@ -155,25 +167,43 @@ export async function planEpisodes(args: {
   });
 
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
-  const providerConfig = toProviderChatConfig(profile);
-  providerConfig.apiKey = apiKey;
+  const baseConfig = toProviderChatConfig(profile);
+  baseConfig.apiKey = apiKey;
+
+  // Episode Plan 输出可能很长：为避免被 maxTokens 截断导致 JSON 未闭合，设置一个最低输出上限。
+  const targetCount = args.options?.targetEpisodeCount ?? 12;
+  const minMaxTokens = Math.max(1800, Math.min(7000, targetCount * 240));
+  const providerConfig = withMinimumMaxTokens(baseConfig, minMaxTokens);
 
   await updateProgress({ pct: 25, message: '调用 AI 生成剧集规划...' });
 
   const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
   const res = await chatWithProvider(providerConfig, messages);
+  if (!res.content?.trim()) {
+    throw new Error('AI 返回空内容（content 为空）。请检查模型/供应商可用性，或稍后重试。');
+  }
+  let tokenUsage = res.tokenUsage;
 
   await updateProgress({ pct: 55, message: '解析输出...' });
 
   let parsed: EpisodePlan;
   let extractedJson: string;
   let fixed = false;
+  let lastParseError: string | null = null;
   try {
     ({ parsed, extractedJson } = parseEpisodePlan(res.content));
-  } catch {
-    await updateProgress({ pct: 60, message: '尝试修复 JSON 输出...' });
+  } catch (err) {
+    lastParseError = err instanceof Error ? err.message : String(err);
+    await updateProgress({ pct: 60, message: `尝试修复 JSON 输出...（${lastParseError}）` });
+
     const fixMessages: ChatMessage[] = [{ role: 'user', content: buildJsonFixPrompt(res.content) }];
     const fixedRes = await chatWithProvider(providerConfig, fixMessages);
+    if (!fixedRes.content?.trim()) {
+      throw new Error(
+        `AI 修复阶段返回空内容（content 为空）。上一次解析错误：${lastParseError ?? 'unknown'}`,
+      );
+    }
+    tokenUsage = mergeTokenUsage(tokenUsage, fixedRes.tokenUsage);
     ({ parsed, extractedJson } = parseEpisodePlan(fixedRes.content));
     fixed = true;
   }
@@ -223,7 +253,6 @@ export async function planEpisodes(args: {
     raw: res.content,
     extractedJson,
     fixed,
-    tokenUsage: res.tokenUsage ?? null,
+    tokenUsage: tokenUsage ?? null,
   };
 }
-

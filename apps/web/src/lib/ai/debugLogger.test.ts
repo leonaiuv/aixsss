@@ -8,7 +8,7 @@ import {
   getLogHistory,
   clearLogHistory,
   exportLogs,
-  printLogSummary,
+  // printLogSummary, // Currently not tested
   getCallStatsByType,
   getRecentErrors,
   getOptimizationSuggestions,
@@ -18,7 +18,7 @@ import {
   isProgressTrackingEnabled,
   subscribeToAIEvents,
   type AICallType,
-  type AICallLogEntry,
+  // type AICallLogEntry, // Currently not used in tests
 } from './debugLogger';
 
 describe('debugLogger', () => {
@@ -89,6 +89,9 @@ describe('debugLogger', () => {
         'keyframe_prompt',
         'motion_prompt',
         'dialogue',
+        'episode_plan',
+        'episode_core_expression',
+        'episode_scene_list',
         'character_basic_info',
         'character_portrait',
         'custom',

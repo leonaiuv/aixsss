@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
@@ -74,6 +74,7 @@ export function SceneGeneration() {
     if (currentProject) {
       loadScenes(currentProject.id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.id]);
 
   const workflowState = currentProject?.workflowState;
@@ -123,24 +124,71 @@ export function SceneGeneration() {
       setError('');
       setGenerationProgress(0);
 
+      let logId = '';
       try {
-        setGenerationProgress(10);
+        logId = logAICall('scene_list_generation', {
+          skillName: 'workflow:generate_scene_list',
+          promptTemplate: 'POST /workflow/projects/{{projectId}}/scene-list',
+          filledPrompt: `POST /workflow/projects/${currentProject.id}/scene-list`,
+          messages: [{ role: 'user', content: JSON.stringify({ aiProfileId }, null, 2) }],
+          context: {
+            projectId: currentProject.id,
+            projectTitle: currentProject.title,
+            style: currentProject.style,
+            protagonist: currentProject.protagonist,
+            summary: currentProject.summary,
+          },
+          config: {
+            provider: config.provider,
+            model: config.model,
+            maxTokens: (config as Record<string, unknown>)?.generationParams as number | undefined,
+            profileId: aiProfileId,
+          },
+        });
+
         const job = await apiWorkflowGenerateSceneList({
           projectId: currentProject.id,
           aiProfileId,
         });
-        setGenerationProgress(30);
-        await apiWaitForAIJob(job.id);
-        setGenerationProgress(80);
+        const finished = await apiWaitForAIJob(job.id, {
+          onProgress: (progress) => {
+            const progressObj = progress as Record<string, unknown> | undefined;
+            const pct = typeof progressObj?.pct === 'number' ? progressObj.pct : null;
+            const message = typeof progressObj?.message === 'string' ? progressObj.message : undefined;
+            if (typeof pct === 'number') {
+              setGenerationProgress(pct);
+              updateLogProgress(logId, pct, message);
+            }
+          },
+        });
+
         loadScenes(currentProject.id);
 
         updateProject(currentProject.id, {
           workflowState: 'SCENE_LIST_EDITING',
           updatedAt: new Date().toISOString(),
         });
-        setGenerationProgress(100);
+
+        const result = (finished.result ?? null) as Record<string, unknown> | null;
+        const tokenUsageRaw = result?.tokenUsage ?? null;
+        const tokenUsage =
+          tokenUsageRaw &&
+          typeof tokenUsageRaw === 'object' &&
+          typeof tokenUsageRaw.prompt === 'number' &&
+          typeof tokenUsageRaw.completion === 'number' &&
+          typeof tokenUsageRaw.total === 'number'
+            ? {
+                prompt: tokenUsageRaw.prompt,
+                completion: tokenUsageRaw.completion,
+                total: tokenUsageRaw.total,
+              }
+            : undefined;
+
+        updateLogWithResponse(logId, { content: JSON.stringify(result, null, 2), tokenUsage });
       } catch (err) {
-        setError(err instanceof Error ? err.message : '生成失败');
+        const message = err instanceof Error ? err.message : '生成失败';
+        if (logId) updateLogWithError(logId, message);
+        setError(message);
         console.error('生成分镜失败(api workflow):', err);
       } finally {
         setTimeout(() => {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Episode } from '@/types';
 
 vi.mock('@/lib/runtime/mode', () => ({ isApiMode: () => true }));
 
@@ -41,6 +42,7 @@ describe('episodeStore (api)', () => {
       isLoading: false,
       isRunningWorkflow: false,
       lastJobId: null,
+      lastJobProgress: null,
       error: null,
     });
     vi.clearAllMocks();
@@ -61,7 +63,7 @@ describe('episodeStore (api)', () => {
         createdAt: '2025-01-01T00:00:00.000Z',
         updatedAt: '2025-01-01T00:00:00.000Z',
       },
-    ] as any);
+    ] as unknown as Episode[]);
 
     useEpisodeStore.getState().loadEpisodes('proj_1');
     await new Promise((r) => setTimeout(r, 0));
@@ -84,7 +86,7 @@ describe('episodeStore (api)', () => {
       workflowState: 'IDLE',
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z',
-    } as any);
+    } as unknown as Episode);
 
     const created = await useEpisodeStore.getState().createEpisode('proj_1', { order: 2 });
     expect(created.id).toBe('ep_2');
@@ -108,17 +110,17 @@ describe('episodeStore (api)', () => {
           createdAt: '2025-01-01T00:00:00.000Z',
           updatedAt: '2025-01-01T00:00:00.000Z',
         },
-      ] as any,
-    } as any);
+      ] as unknown as Episode[],
+    } as unknown as Partial<typeof useEpisodeStore>);
 
     vi.mocked(apiUpdateEpisode).mockResolvedValue({
       ...useEpisodeStore.getState().episodes[0],
       title: '新标题',
-    } as any);
+    } as unknown as Episode);
 
     const updated = await useEpisodeStore
       .getState()
-      .updateEpisode('proj_1', 'ep_1', { title: '新标题' } as any);
+      .updateEpisode('proj_1', 'ep_1', { title: '新标题' });
     expect(updated.title).toBe('新标题');
     expect(useEpisodeStore.getState().episodes[0].title).toBe('新标题');
   });
@@ -152,11 +154,11 @@ describe('episodeStore (api)', () => {
           createdAt: '2025-01-01T00:00:00.000Z',
           updatedAt: '2025-01-01T00:00:00.000Z',
         },
-      ] as any,
+      ] as unknown as Episode[],
       currentEpisodeId: 'ep_1',
-    } as any);
+    } as unknown as Partial<typeof useEpisodeStore>);
 
-    vi.mocked(apiDeleteEpisode).mockResolvedValue({ ok: true } as any);
+    vi.mocked(apiDeleteEpisode).mockResolvedValue({ ok: true } as unknown as { ok: boolean });
 
     await useEpisodeStore.getState().deleteEpisode('proj_1', 'ep_1');
     expect(apiDeleteEpisode).toHaveBeenCalledWith('proj_1', 'ep_1');
@@ -174,16 +176,16 @@ describe('episodeStore (api)', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
       startedAt: null,
       finishedAt: null,
-    } as any);
-    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded' } as any);
-    vi.mocked(apiListEpisodes).mockResolvedValue([] as any);
+    } as unknown as ReturnType<typeof apiWorkflowPlanEpisodes> extends Promise<infer T> ? T : never);
+    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded', result: null, progress: null } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
+    vi.mocked(apiListEpisodes).mockResolvedValue([] as Episode[]);
 
     await useEpisodeStore.getState().planEpisodes({ projectId: 'proj_1', aiProfileId: 'aip_1' });
     expect(apiWorkflowPlanEpisodes).toHaveBeenCalledWith({
       projectId: 'proj_1',
       aiProfileId: 'aip_1',
     });
-    expect(apiWaitForAIJob).toHaveBeenCalledWith('job_1');
+    expect(apiWaitForAIJob).toHaveBeenCalledWith('job_1', expect.any(Object));
     await new Promise((r) => setTimeout(r, 0));
     expect(apiListEpisodes).toHaveBeenCalledWith('proj_1');
     expect(useEpisodeStore.getState().isRunningWorkflow).toBe(false);
@@ -199,9 +201,9 @@ describe('episodeStore (api)', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
       startedAt: null,
       finishedAt: null,
-    } as any);
-    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded' } as any);
-    vi.mocked(apiListEpisodes).mockResolvedValue([] as any);
+    } as unknown as ReturnType<typeof apiWorkflowGenerateEpisodeCoreExpression> extends Promise<infer T> ? T : never);
+    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded', result: null, progress: null } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
+    vi.mocked(apiListEpisodes).mockResolvedValue([] as Episode[]);
 
     await useEpisodeStore.getState().generateCoreExpression({
       projectId: 'proj_1',
@@ -213,7 +215,7 @@ describe('episodeStore (api)', () => {
       episodeId: 'ep_1',
       aiProfileId: 'aip_1',
     });
-    expect(apiWaitForAIJob).toHaveBeenCalledWith('job_2');
+    expect(apiWaitForAIJob).toHaveBeenCalledWith('job_2', expect.any(Object));
   });
 
   it('generateSceneList 应入队并等待 job 完成', async () => {
@@ -226,9 +228,9 @@ describe('episodeStore (api)', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
       startedAt: null,
       finishedAt: null,
-    } as any);
-    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded' } as any);
-    vi.mocked(apiListEpisodes).mockResolvedValue([] as any);
+    } as unknown as ReturnType<typeof apiWorkflowGenerateEpisodeSceneList> extends Promise<infer T> ? T : never);
+    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded', result: null, progress: null } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
+    vi.mocked(apiListEpisodes).mockResolvedValue([] as Episode[]);
 
     await useEpisodeStore.getState().generateSceneList({
       projectId: 'proj_1',
@@ -242,6 +244,6 @@ describe('episodeStore (api)', () => {
       aiProfileId: 'aip_1',
       sceneCountHint: 12,
     });
-    expect(apiWaitForAIJob).toHaveBeenCalledWith('job_3');
+    expect(apiWaitForAIJob).toHaveBeenCalledWith('job_3', expect.any(Object));
   });
 });

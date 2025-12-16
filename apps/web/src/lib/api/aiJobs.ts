@@ -6,6 +6,7 @@ export type ApiAIJob = {
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
   error: string | null;
   result: unknown;
+  progress: unknown | null;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
@@ -67,17 +68,20 @@ export async function apiWaitForAIJob(
     pollIntervalMs?: number;
     timeoutMs?: number;
     cancelOnAbort?: boolean;
+    onProgress?: (progress: unknown, job: ApiAIJob) => void;
   },
 ) {
   const signal = options?.signal;
   const pollIntervalMs = options?.pollIntervalMs ?? 800;
   const timeoutMs = options?.timeoutMs ?? 10 * 60_000;
   const cancelOnAbort = options?.cancelOnAbort ?? true;
+  const onProgress = options?.onProgress;
 
   throwIfAborted(signal);
 
   const deadline = Date.now() + timeoutMs;
   let lastStatus: ApiAIJob['status'] | null = null;
+  let lastProgressFingerprint: string | null = null;
 
   try {
     while (true) {
@@ -85,6 +89,24 @@ export async function apiWaitForAIJob(
 
       const job = await apiGetAIJob(jobId, { signal });
       lastStatus = job.status;
+
+      if (onProgress) {
+        const fp = (() => {
+          try {
+            return JSON.stringify(job.progress ?? null);
+          } catch {
+            return String(job.progress ?? null);
+          }
+        })();
+        if (fp !== lastProgressFingerprint) {
+          lastProgressFingerprint = fp;
+          try {
+            onProgress(job.progress, job);
+          } catch {
+            // ignore user callback
+          }
+        }
+      }
 
       if (job.status === 'succeeded') return job;
       if (job.status === 'failed' || job.status === 'cancelled') {

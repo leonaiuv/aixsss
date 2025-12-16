@@ -3,23 +3,13 @@ import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
-import { styleFullPrompt, toProviderChatConfig } from './common.js';
+import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { CoreExpressionSchema, type CoreExpression } from '@aixsss/shared';
-
-function extractJsonObject(text: string): string | null {
-  const raw = text?.trim() ?? '';
-  if (!raw) return null;
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start < 0 || end < 0 || end <= start) return null;
-  return raw.slice(start, end + 1);
-}
+import { parseJsonFromText } from './aiJson.js';
 
 function parseCoreExpression(raw: string): { parsed: CoreExpression; extractedJson: string } {
-  const extracted = extractJsonObject(raw);
-  if (!extracted) throw new Error('AI 输出中未找到 JSON 对象');
-  const json = JSON.parse(extracted) as unknown;
-  return { parsed: CoreExpressionSchema.parse(json), extractedJson: extracted };
+  const { json, extractedJson } = parseJsonFromText(raw, { expectedKind: 'object' });
+  return { parsed: CoreExpressionSchema.parse(json), extractedJson };
 }
 
 function formatWorldView(items: Array<{ type: string; title: string; content: string; order: number }>): string {
@@ -161,6 +151,7 @@ export async function generateEpisodeCoreExpression(args: {
 
   const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
   const res = await chatWithProvider(providerConfig, messages);
+  let tokenUsage = res.tokenUsage;
 
   await updateProgress({ pct: 55, message: '解析输出...' });
 
@@ -173,6 +164,7 @@ export async function generateEpisodeCoreExpression(args: {
     await updateProgress({ pct: 60, message: '尝试修复 JSON 输出...' });
     const fixMessages: ChatMessage[] = [{ role: 'user', content: buildJsonFixPrompt(res.content) }];
     const fixedRes = await chatWithProvider(providerConfig, fixMessages);
+    tokenUsage = mergeTokenUsage(tokenUsage, fixedRes.tokenUsage);
     ({ parsed, extractedJson } = parseCoreExpression(fixedRes.content));
     fixed = true;
   }
@@ -195,7 +187,6 @@ export async function generateEpisodeCoreExpression(args: {
     raw: res.content,
     extractedJson,
     fixed,
-    tokenUsage: res.tokenUsage ?? null,
+    tokenUsage: tokenUsage ?? null,
   };
 }
-
