@@ -40,12 +40,78 @@ function formatNarrativeCausalChain(contextCache: unknown): string {
   if (!contextCache || !isRecord(contextCache)) return '-';
   const chain = contextCache['narrativeCausalChain'];
   if (!chain) return '-';
+  if (!isRecord(chain)) return String(chain);
+
+  // 智能策略：若全量 JSON（压缩）足够短，则直接喂给模型（信息最完整，且不会“半截截断”）
   try {
-    const json = JSON.stringify(chain, null, 2);
-    return json.length > 12000 ? json.slice(0, 12000) + '\n...TRUNCATED...' : json;
+    const compact = JSON.stringify(chain);
+    if (compact.length <= 12000) return compact;
   } catch {
-    return String(chain);
+    // fallthrough to summary
   }
+
+  const clip = (v: unknown, max = 140) => {
+    const s = (typeof v === 'string' ? v : v == null ? '' : String(v)).trim();
+    if (!s) return '';
+    return s.length > max ? `${s.slice(0, max)}…` : s;
+  };
+
+  const pushUntil = (lines: string[], maxLen = 12000): string => {
+    let out = '';
+    for (const line of lines) {
+      const next = out ? `${out}\n${line}` : line;
+      if (next.length > maxLen) {
+        return out ? `${out}\n...TRUNCATED...` : '...TRUNCATED...';
+      }
+      out = next;
+    }
+    return out || '-';
+  };
+
+  const lines: string[] = [];
+  lines.push('【叙事因果链摘要】（用于分镜一致性：人物动机/信息差/节拍推进）');
+
+  const beatFlow = chain.beatFlow;
+  if (isRecord(beatFlow)) {
+    const acts = beatFlow.acts;
+    if (Array.isArray(acts) && acts.length) {
+      lines.push('- 节拍（按幕）：');
+      for (const a of acts.slice(0, 4)) {
+        if (!isRecord(a)) continue;
+        const actNo = a.act;
+        const actName = clip(a.actName, 24);
+        lines.push(`  第${typeof actNo === 'number' ? actNo : '-'}幕${actName ? `「${actName}」` : ''}：`);
+        const beats = a.beats;
+        if (!Array.isArray(beats) || beats.length === 0) {
+          lines.push('    （无节拍）');
+          continue;
+        }
+        for (const b of beats.slice(0, 10)) {
+          if (!isRecord(b)) continue;
+          const name = clip(b.beatName, 60) || '未命名节拍';
+          const loc = clip(b.location, 30);
+          const chars = Array.isArray(b.characters) ? b.characters.map((c) => clip(c, 16)).filter(Boolean).join('、') : '';
+          lines.push(`    · ${name}${loc ? ` @${loc}` : ''}${chars ? `（${chars}）` : ''}`);
+        }
+      }
+    }
+  }
+
+  const plotLines = chain.plotLines;
+  if (Array.isArray(plotLines) && plotLines.length) {
+    lines.push('- 叙事线关键咬合点：');
+    for (const pl of plotLines.slice(0, 6)) {
+      if (!isRecord(pl)) continue;
+      const type = clip(pl.lineType, 12) || '-';
+      const driver = clip(pl.driver, 20) || '-';
+      const interlocks = Array.isArray(pl.keyInterlocks)
+        ? pl.keyInterlocks.map((x) => clip(x, 30)).filter(Boolean).join('、')
+        : '';
+      if (interlocks) lines.push(`  - ${type}：${driver}（${interlocks}）`);
+    }
+  }
+
+  return pushUntil(lines, 12000);
 }
 
 function buildPrompt(args: {
@@ -136,7 +202,12 @@ export async function generateEpisodeSceneList(args: {
     select: { name: true, appearance: true, personality: true, background: true },
   });
 
-  const sceneCount = Math.max(8, Math.min(12, args.options?.sceneCountHint ?? 10));
+  // 与 API 校验口径保持一致：6..24；不传则默认 12
+  const sceneCountHint = args.options?.sceneCountHint;
+  const sceneCount =
+    typeof sceneCountHint === 'number'
+      ? Math.max(6, Math.min(24, Math.round(sceneCountHint)))
+      : 12;
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
 

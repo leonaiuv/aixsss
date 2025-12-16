@@ -34,6 +34,13 @@ describe('aiJson', () => {
     expect(parsed.json).toEqual({ a: 1, b: [1, 2] });
   });
 
+  it('parseJsonFromText 会修复字符串中未转义的换行/制表符', () => {
+    const raw = `{"a":"hello
+world\t!"}`;
+    const parsed = parseJsonFromText(raw, { expectedKind: 'object' });
+    expect(parsed.json).toEqual({ a: 'hello\nworld\t!' });
+  });
+
   it('parseJsonFromText 在 JSON 未闭合时给出可操作提示', () => {
     const raw = `{"a": 1, "b": [1,2,3]`;
     expect(() => parseJsonFromText(raw, { expectedKind: 'object' })).toThrow(/被截断/);

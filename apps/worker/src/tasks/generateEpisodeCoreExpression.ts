@@ -37,12 +37,82 @@ function formatNarrativeCausalChain(contextCache: unknown): string {
   if (!contextCache || !isRecord(contextCache)) return '-';
   const chain = contextCache['narrativeCausalChain'];
   if (!chain) return '-';
+  if (!isRecord(chain)) return String(chain);
+
+  // 智能策略：若全量 JSON（压缩）足够短，则直接喂给模型（信息最完整，且不会“半截截断”）
   try {
-    const json = JSON.stringify(chain, null, 2);
-    return json.length > 12000 ? json.slice(0, 12000) + '\n...TRUNCATED...' : json;
+    const compact = JSON.stringify(chain);
+    if (compact.length <= 12000) return compact;
   } catch {
-    return String(chain);
+    // fallthrough to summary
   }
+
+  const clip = (v: unknown, max = 140) => {
+    const s = (typeof v === 'string' ? v : v == null ? '' : String(v)).trim();
+    if (!s) return '';
+    return s.length > max ? `${s.slice(0, max)}…` : s;
+  };
+
+  const pushUntil = (lines: string[], maxLen = 12000): string => {
+    let out = '';
+    for (const line of lines) {
+      const next = out ? `${out}\n${line}` : line;
+      if (next.length > maxLen) {
+        return out ? `${out}\n...TRUNCATED...` : '...TRUNCATED...';
+      }
+      out = next;
+    }
+    return out || '-';
+  };
+
+  const lines: string[] = [];
+  lines.push('【叙事因果链摘要】（用于保持一致性，不要求逐字照搬）');
+
+  if (typeof chain.outlineSummary === 'string' && chain.outlineSummary.trim()) {
+    lines.push(`- 大纲摘要：${clip(chain.outlineSummary, 800)}`);
+  }
+
+  const conflict = chain.conflictEngine;
+  if (isRecord(conflict)) {
+    lines.push(`- 核心冲突物件/事件：${clip(conflict.coreObjectOrEvent, 120) || '-'}`);
+  }
+
+  const beatFlow = chain.beatFlow;
+  if (isRecord(beatFlow)) {
+    const acts = beatFlow.acts;
+    if (Array.isArray(acts) && acts.length) {
+      lines.push('- 节拍名称（按幕）：');
+      for (const a of acts.slice(0, 4)) {
+        if (!isRecord(a)) continue;
+        const actNo = a.act;
+        const actName = clip(a.actName, 24);
+        const beats = Array.isArray(a.beats)
+          ? a.beats
+            .slice(0, 10)
+            .map((b) => (isRecord(b) ? clip(b.beatName, 60) : ''))
+            .filter(Boolean)
+            .join('、')
+          : '';
+        lines.push(`  第${typeof actNo === 'number' ? actNo : '-'}幕${actName ? `「${actName}」` : ''}：${beats || '（无）'}`);
+      }
+    }
+  }
+
+  const plotLines = chain.plotLines;
+  if (Array.isArray(plotLines) && plotLines.length) {
+    lines.push('- 叙事线（驱动者/咬合点）：');
+    for (const pl of plotLines.slice(0, 6)) {
+      if (!isRecord(pl)) continue;
+      const type = clip(pl.lineType, 12) || '-';
+      const driver = clip(pl.driver, 20) || '-';
+      const interlocks = Array.isArray(pl.keyInterlocks)
+        ? pl.keyInterlocks.map((x) => clip(x, 30)).filter(Boolean).join('、')
+        : '';
+      lines.push(`  - ${type}：${driver}${interlocks ? `（${interlocks}）` : ''}`);
+    }
+  }
+
+  return pushUntil(lines, 12000);
 }
 
 function buildPrompt(args: {

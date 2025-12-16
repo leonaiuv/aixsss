@@ -56,6 +56,40 @@ export type Phase2InfoLayers = z.infer<typeof Phase2InfoLayersSchema>;
 
 // ========== 阶段3：节拍流程（增强版：场景化节拍） ==========
 // 每个节拍不仅描述叙事逻辑，还要包含"可分镜化"的场景信息
+const coerceAct = z.preprocess(
+  (val) => (typeof val === 'string' ? parseInt(val, 10) : val),
+  z.number().int().min(1).max(4)
+);
+
+const coerceActMode = z.preprocess(
+  (val) => {
+    if (typeof val !== 'string') return val;
+    const s = val.trim().toLowerCase();
+    const three = new Set(['three_act', 'three-act', '3-act', '3act', '三幕', '三幕式', '三幕结构']);
+    const four = new Set(['four_act', 'four-act', '4-act', '4act', '四幕', '四幕式', '四幕结构']);
+    if (three.has(s)) return 'three_act';
+    if (four.has(s)) return 'four_act';
+    return val;
+  },
+  z.enum(['three_act', 'four_act']).default('three_act')
+);
+
+const coerceStringArray = (maxLen: number) =>
+  z.preprocess(
+    (val) => {
+      if (val === null || typeof val === 'undefined') return undefined;
+      if (Array.isArray(val)) return val;
+      if (typeof val === 'string') {
+        return val
+          .split(/[，,、]/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      return val;
+    },
+    z.array(z.string().max(maxLen)).default([])
+  );
+
 const SceneBeatSchema = z.object({
   beatName: z.string().max(120).describe('节拍名称：动词+名词，如"裂箱/对峙/倒戈"'),
   surfaceEvent: z.string().max(4000).optional().nullable().describe('表面事件：角色在做什么'),
@@ -64,7 +98,7 @@ const SceneBeatSchema = z.object({
   interlock: z.string().max(4000).optional().nullable().describe('咬合点：与哪条暗线交叉'),
   // ===== 新增：场景化字段（用于分镜拆解） =====
   location: z.string().max(400).optional().nullable().describe('场景/地点：这个节拍发生在哪里'),
-  characters: z.array(z.string().max(200)).default([]).describe('参与角色：哪些角色在场'),
+  characters: coerceStringArray(200).describe('参与角色：哪些角色在场'),
   visualHook: z.string().max(1000).optional().nullable().describe('视觉钩子：关键画面/动作/道具描述'),
   emotionalTone: z.string().max(200).optional().nullable().describe('情绪基调：如"紧张/温馨/悲壮"'),
   estimatedScenes: coerceInt.describe('预估分镜数(1-10)'),
@@ -72,12 +106,18 @@ const SceneBeatSchema = z.object({
 
 export const Phase3BeatFlowSchema = z.object({
   beatFlow: z.object({
-    actMode: z.enum(['three_act', 'four_act']).default('three_act'),
-    acts: z.array(z.object({
-      act: z.number().int().min(1).max(4),
-      actName: z.string().max(120).optional().nullable(),
-      beats: z.array(SceneBeatSchema).default([]),
-    })).default([]),
+    actMode: coerceActMode,
+    acts: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.array(z.object({
+        act: coerceAct,
+        actName: z.string().max(120).optional().nullable(),
+        beats: z.preprocess(
+          (val) => (val === null ? undefined : val),
+          z.array(SceneBeatSchema).default([])
+        ),
+      })).default([])
+    ),
   }),
 });
 export type Phase3BeatFlow = z.infer<typeof Phase3BeatFlowSchema>;
@@ -117,7 +157,7 @@ export const Phase4PlotLinesSchema = z.object({
     driver: z.string().max(200).optional().nullable(),
     statedGoal: z.string().max(4000).optional().nullable(),
     trueGoal: z.string().max(4000).optional().nullable(),
-    keyInterlocks: z.array(z.string().max(120)).default([]),
+    keyInterlocks: coerceStringArray(120),
     pointOfNoReturn: z.string().max(120).optional().nullable(),
   })).default([]),
   consistencyChecks: z.object({

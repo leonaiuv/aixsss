@@ -71,11 +71,75 @@ function stripBom(text: string): string {
   return text.replace(/^\uFEFF/, '');
 }
 
+/**
+ * 修复 JSON 字符串中的未转义控制字符（常见：换行/回车/制表符）。
+ * JSON 标准要求字符串内部不能出现原始换行符，需要写成 \\n / \\t。
+ */
+function escapeControlCharsInStrings(text: string): string {
+  let out = '';
+  let inString = false;
+  let escaping = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaping) {
+        out += ch;
+        escaping = false;
+        continue;
+      }
+
+      if (ch === '\\') {
+        out += ch;
+        escaping = true;
+        continue;
+      }
+
+      if (ch === '"') {
+        out += ch;
+        inString = false;
+        continue;
+      }
+
+      // 常见控制字符：换行/回车/制表符
+      if (ch === '\n') {
+        out += '\\n';
+        continue;
+      }
+      if (ch === '\r') {
+        // Windows CRLF：丢弃 \r，由下一位 \n 统一处理
+        continue;
+      }
+      if (ch === '\t') {
+        out += '\\t';
+        continue;
+      }
+
+      out += ch;
+      continue;
+    }
+
+    if (ch === '"') {
+      out += ch;
+      inString = true;
+      continue;
+    }
+
+    out += ch;
+  }
+
+  return out;
+}
+
 function repairCommonJsonIssues(text: string): string {
   let s = stripBom(text.trim());
 
   // 智能引号 -> 标准引号（常见于模型输出/复制粘贴）
   s = s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+  // 字符串内控制字符修复（避免 JSON.parse 因未转义换行失败）
+  s = escapeControlCharsInStrings(s);
 
   // 去掉对象/数组中的 trailing comma
   // e.g. { "a": 1, } 或 [1,2,]

@@ -771,8 +771,10 @@ ${safeJsonStringify(ep.coreExpression)}
                 {phases.map((p) => {
                   const isCompleted = completedPhase >= p.phase;
                   const isNext = completedPhase === p.phase - 1;
-                  const isRunningThisPhase = runningPhase === p.phase; // 当前是否正在运行此阶段
-                  const canRun = canPlan && !isRunningWorkflow && (isNext || isCompleted);
+                  const isRunningThisPhase = runningPhase === p.phase;
+                  // 关键修复：任何阶段运行时禁用所有按钮（防止竞态条件）
+                  const isAnyPhaseRunning = runningPhase !== null || isRunningWorkflow;
+                  const canRun = canPlan && !isAnyPhaseRunning && (isNext || isCompleted);
 
                   return (
                     <Button
@@ -1138,7 +1140,7 @@ ${safeJsonStringify(ep.coreExpression)}
                           const v = e.target.value;
                           setSceneCountHint(v ? Number(v) : '');
                         }}
-                        placeholder="留空默认 10（限制 8..12）"
+                        placeholder="留空默认 12（可选 6..24）"
                       />
                     </div>
                     <Button
