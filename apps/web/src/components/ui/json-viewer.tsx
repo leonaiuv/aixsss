@@ -71,11 +71,7 @@ function JsonNode({
 }: JsonNodeProps) {
   const expandable = isExpandable(value);
   const initialOpen =
-    expandState === 'all'
-      ? true
-      : expandState === 'none'
-        ? false
-        : depth < defaultExpandDepth;
+    expandState === 'all' ? true : expandState === 'none' ? false : depth < defaultExpandDepth;
 
   const [open, setOpen] = React.useState<boolean>(initialOpen);
 
@@ -91,12 +87,12 @@ function JsonNode({
     return (
       <div className="flex items-start gap-2" style={indentStyle}>
         {name ? (
-          <span className={cn('text-xs font-mono', keyClassName())}>
-            {JSON.stringify(name)}
-          </span>
+          <span className={cn('text-xs font-mono', keyClassName())}>{JSON.stringify(name)}</span>
         ) : null}
         {name ? <span className="text-xs text-muted-foreground">:</span> : null}
-        <span className={cn('text-xs font-mono whitespace-pre-wrap break-words', valueClassName(value))}>
+        <span
+          className={cn('text-xs font-mono whitespace-pre-wrap break-words', valueClassName(value))}
+        >
           {valueText(value)}
         </span>
       </div>
@@ -108,16 +104,11 @@ function JsonNode({
     ? (value as unknown[]).map((v, idx) => [String(idx), v])
     : Object.entries(value as Record<string, unknown>);
 
-  const summary =
-    isArrayValue ? `[${childEntries.length}]` : `{${childEntries.length}}`;
+  const summary = isArrayValue ? `[${childEntries.length}]` : `{${childEntries.length}}`;
 
   return (
     <div>
-      <button
-        type="button"
-        className="w-full text-left"
-        onClick={() => setOpen((v) => !v)}
-      >
+      <button type="button" className="w-full text-left" onClick={() => setOpen((v) => !v)}>
         <div className="flex items-start gap-2" style={indentStyle}>
           <span className="mt-[1px] text-xs text-muted-foreground select-none">
             {open ? '▾' : '▸'}
@@ -246,5 +237,3 @@ export function JsonViewer({
     </div>
   );
 }
-
-
