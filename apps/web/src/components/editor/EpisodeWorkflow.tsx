@@ -252,6 +252,7 @@ export function EpisodeWorkflow() {
   const [narrativeDraft, setNarrativeDraft] = useState('');
   const [narrativeDialogOpen, setNarrativeDialogOpen] = useState(false);
   const [narrativeDraftError, setNarrativeDraftError] = useState<string | null>(null);
+  const [runningPhase, setRunningPhase] = useState<number | null>(null); // 追踪当前运行的阶段
 
   const [refineDialogOpen, setRefineDialogOpen] = useState(false);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
@@ -706,6 +707,7 @@ ${safeJsonStringify(ep.coreExpression)}
 
     const handlePhase = async (phase: number) => {
       if (!aiProfileId || !currentProject?.id) return;
+      setRunningPhase(phase); // 记录当前运行的阶段
       try {
         toast({ title: `开始阶段 ${phase}`, description: phases[phase - 1].desc });
         await buildNarrativeCausalChain({ projectId: currentProject.id, aiProfileId, phase });
@@ -713,6 +715,8 @@ ${safeJsonStringify(ep.coreExpression)}
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         toast({ title: `阶段 ${phase} 失败`, description: detail, variant: 'destructive' });
+      } finally {
+        setRunningPhase(null); // 清除运行状态
       }
     };
 
@@ -767,6 +771,7 @@ ${safeJsonStringify(ep.coreExpression)}
                 {phases.map((p) => {
                   const isCompleted = completedPhase >= p.phase;
                   const isNext = completedPhase === p.phase - 1;
+                  const isRunningThisPhase = runningPhase === p.phase; // 当前是否正在运行此阶段
                   const canRun = canPlan && !isRunningWorkflow && (isNext || isCompleted);
 
                   return (
@@ -777,7 +782,7 @@ ${safeJsonStringify(ep.coreExpression)}
                       variant={isCompleted ? 'secondary' : isNext ? 'default' : 'outline'}
                       className="w-full gap-1 text-xs h-auto py-2"
                     >
-                      {isRunningWorkflow && isNext ? (
+                      {isRunningThisPhase ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
                       ) : isCompleted ? (
                         <span className="text-green-600">✓</span>

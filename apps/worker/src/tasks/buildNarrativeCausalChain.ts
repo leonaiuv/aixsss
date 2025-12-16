@@ -154,20 +154,49 @@ function buildPhase3Prompt(args: {
   phase1: Phase1ConflictEngine;
   phase2: Phase2InfoLayers;
 }): string {
-  const layerNames = args.phase2.infoVisibilityLayers.map((l) => l.layerName).join(', ');
-  const characterNames = args.phase2.characterMatrix.map((c) => c.name).join(', ');
+  // 安全获取数组（防止 null/undefined）
+  const layers = args.phase2.infoVisibilityLayers ?? [];
+  const characters = args.phase2.characterMatrix ?? [];
+
+  // 格式化信息层级（包含详细内容）
+  const layersDetail = layers
+    .map((l) => {
+      const roles = l.roles?.join('、') || '无';
+      const trigger = l.motivation?.activationTrigger || '未知';
+      return `  - ${l.layerName || '未命名层'}：角色[${roles}]，盲区[${l.blindSpot || '无'}]，触发点[${trigger}]`;
+    })
+    .join('\n');
+
+  // 格式化角色矩阵（包含目标和软肋）
+  const charactersDetail = characters
+    .map((c) => `  - ${c.name || '未命名'}：目标[${c.goal || '未知'}]，秘密[${c.secret || '无'}]，软肋[${c.vulnerability || '无'}]`)
+    .join('\n');
+
+  // 格式化各方利害
+  const stakesDetail = Object.entries(args.phase1.conflictEngine?.stakesByFaction || {})
+    .map(([faction, stake]) => `  - ${faction}：${stake}`)
+    .join('\n');
 
   return `你是叙事架构师。请基于【阶段1+2结果】生成【阶段3：场景化节拍流程】。
 
 【核心目标】生成"可直接拆解为分镜"的节拍结构。每个节拍不仅描述叙事逻辑，还要包含场景/地点/人物/视觉钩子。
 
-【阶段1结果】
-- 故事大纲：${args.phase1.outlineSummary}
-- 核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}
+【阶段1结果 - 故事骨架】
+故事大纲：${args.phase1.outlineSummary}
 
-【阶段2结果】
-- 信息层级：${layerNames}
-- 角色：${characterNames}
+核心冲突物件：${args.phase1.conflictEngine.coreObjectOrEvent}
+
+各方利害：
+${stakesDetail || '  （无）'}
+
+第一推动因：${args.phase1.conflictEngine.firstMover?.initiator || '未知'} - ${args.phase1.conflictEngine.firstMover?.hiddenIntent || '未知意图'}
+
+【阶段2结果 - 信息与角色】
+信息层级（从高到低）：
+${layersDetail || '  （无）'}
+
+角色矩阵：
+${charactersDetail || '  （无）'}
 
 【输出要求】
 1) 直接输出 JSON，不要 Markdown/代码块/解释
@@ -242,19 +271,37 @@ function buildPhase4Prompt(args: {
   phase2: Phase2InfoLayers;
   phase3: Phase3BeatFlow;
 }): string {
-  const beatNames = args.phase3.beatFlow.acts
-    .flatMap((a) => a.beats.map((b) => b.beatName))
-    .filter(Boolean)
-    .join(', ');
+  // 安全获取数组（防止 null/undefined）
+  const acts = args.phase3.beatFlow?.acts ?? [];
+  const characters = args.phase2.characterMatrix ?? [];
+
+  // 格式化节拍摘要（包含关键信息）
+  const beatsDetail = acts
+    .map((act) => {
+      const actBeats = (act.beats ?? [])
+        .map((b) => `    · ${b.beatName || '未命名'}：${b.surfaceEvent || '无事件'}（${b.characters?.join('、') || '无角色'}）`)
+        .join('\n');
+      return `  第${act.act}幕「${act.actName || ''}」：\n${actBeats || '    （无节拍）'}`;
+    })
+    .join('\n');
+
+  // 格式化角色目标摘要
+  const characterGoals = characters
+    .map((c) => `  - ${c.name || '未命名'}：表面目标[${c.goal || '无'}]，真实意图[${c.secret || '无'}]`)
+    .join('\n');
 
   return `你是叙事架构师。请基于【阶段1+2+3结果】生成【阶段4：叙事线交织 + 自洽校验】。
 
-【阶段1结果】
-- 故事大纲：${args.phase1.outlineSummary}
-- 核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}
+【阶段1结果 - 故事骨架】
+故事大纲：${args.phase1.outlineSummary}
+核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}
+第一推动因：${args.phase1.conflictEngine.firstMover?.initiator || '未知'}
 
-【阶段3结果 - 节拍名称】
-${beatNames}
+【阶段2结果 - 角色目标】
+${characterGoals || '（无）'}
+
+【阶段3结果 - 节拍结构】
+${beatsDetail || '（无）'}
 
 【输出要求】
 1) 直接输出 JSON，不要 Markdown/代码块/解释
@@ -502,12 +549,12 @@ export async function buildNarrativeCausalChain(args: {
     await updateProgress({ pct: 20, message: '阶段3：生成节拍流程...' });
     const prompt = buildPhase3Prompt({
       phase1: {
-        outlineSummary: existingChain!.outlineSummary!,
-        conflictEngine: existingChain!.conflictEngine as Phase1ConflictEngine['conflictEngine'],
+        outlineSummary: existingChain?.outlineSummary ?? '',
+        conflictEngine: (existingChain?.conflictEngine ?? { coreObjectOrEvent: '' }) as Phase1ConflictEngine['conflictEngine'],
       },
       phase2: {
-        infoVisibilityLayers: existingChain!.infoVisibilityLayers as Phase2InfoLayers['infoVisibilityLayers'],
-        characterMatrix: existingChain!.characterMatrix as Phase2InfoLayers['characterMatrix'],
+        infoVisibilityLayers: (existingChain?.infoVisibilityLayers ?? []) as Phase2InfoLayers['infoVisibilityLayers'],
+        characterMatrix: (existingChain?.characterMatrix ?? []) as Phase2InfoLayers['characterMatrix'],
       },
     });
 
@@ -542,15 +589,15 @@ export async function buildNarrativeCausalChain(args: {
     await updateProgress({ pct: 20, message: '阶段4：生成叙事线交织...' });
     const prompt = buildPhase4Prompt({
       phase1: {
-        outlineSummary: existingChain!.outlineSummary!,
-        conflictEngine: existingChain!.conflictEngine as Phase1ConflictEngine['conflictEngine'],
+        outlineSummary: existingChain?.outlineSummary ?? '',
+        conflictEngine: (existingChain?.conflictEngine ?? { coreObjectOrEvent: '' }) as Phase1ConflictEngine['conflictEngine'],
       },
       phase2: {
-        infoVisibilityLayers: existingChain!.infoVisibilityLayers as Phase2InfoLayers['infoVisibilityLayers'],
-        characterMatrix: existingChain!.characterMatrix as Phase2InfoLayers['characterMatrix'],
+        infoVisibilityLayers: (existingChain?.infoVisibilityLayers ?? []) as Phase2InfoLayers['infoVisibilityLayers'],
+        characterMatrix: (existingChain?.characterMatrix ?? []) as Phase2InfoLayers['characterMatrix'],
       },
       phase3: {
-        beatFlow: existingChain!.beatFlow as Phase3BeatFlow['beatFlow'],
+        beatFlow: (existingChain?.beatFlow ?? { actMode: 'three_act', acts: [] }) as Phase3BeatFlow['beatFlow'],
       },
     });
 
