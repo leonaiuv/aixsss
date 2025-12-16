@@ -277,12 +277,20 @@ function parsePhase4(raw: string): Phase4PlotLines {
 // ===================== 通用修复提示 =====================
 
 function buildJsonFixPrompt(raw: string, phase: number): string {
+  const phaseHints: Record<number, string> = {
+    1: `必须包含 outlineSummary(字符串) 和 conflictEngine(对象，含 coreObjectOrEvent)`,
+    2: `必须包含 infoVisibilityLayers(数组) 和 characterMatrix(数组)。
+注意：motivation.gain 和 motivation.lossAvoid 必须是数字(如 5)，不是字符串(如 "5")`,
+    3: `必须包含 beatFlow(对象，含 actMode 和 acts 数组)`,
+    4: `必须包含 plotLines(数组) 和 consistencyChecks(对象)`,
+  };
+
   return `你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象。
 
 【修复要求】
 1) 不要输出 Markdown、代码块、解释或多余文字
 2) 直接以 { 开头，以 } 结尾
-3) 这是阶段${phase}的输出，请确保字段完整
+3) 阶段${phase}的字段要求：${phaseHints[phase] ?? '确保字段完整'}
 
 原始输出：
 <<<

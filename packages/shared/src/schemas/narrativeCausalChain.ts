@@ -60,14 +60,14 @@ const SceneBeatSchema = z.object({
   beatName: z.string().max(120).describe('节拍名称：动词+名词，如"裂箱/对峙/倒戈"'),
   surfaceEvent: z.string().max(4000).optional().nullable().describe('表面事件：角色在做什么'),
   infoFlow: z.string().max(4000).optional().nullable().describe('信息流动：谁知道了什么，谁仍被蒙在鼓里'),
-  escalation: z.number().int().min(1).max(10).optional().nullable().describe('冲突升级值(1-10)'),
+  escalation: coerceInt.describe('冲突升级值(1-10)'),
   interlock: z.string().max(4000).optional().nullable().describe('咬合点：与哪条暗线交叉'),
   // ===== 新增：场景化字段（用于分镜拆解） =====
   location: z.string().max(400).optional().nullable().describe('场景/地点：这个节拍发生在哪里'),
   characters: z.array(z.string().max(200)).default([]).describe('参与角色：哪些角色在场'),
   visualHook: z.string().max(1000).optional().nullable().describe('视觉钩子：关键画面/动作/道具描述'),
   emotionalTone: z.string().max(200).optional().nullable().describe('情绪基调：如"紧张/温馨/悲壮"'),
-  estimatedScenes: z.number().int().min(1).max(10).optional().nullable().describe('预估分镜数(1-10)'),
+  estimatedScenes: coerceInt.describe('预估分镜数(1-10)'),
 });
 
 export const Phase3BeatFlowSchema = z.object({
@@ -83,9 +83,37 @@ export const Phase3BeatFlowSchema = z.object({
 export type Phase3BeatFlow = z.infer<typeof Phase3BeatFlowSchema>;
 
 // ========== 阶段4：叙事线 + 自洽校验 ==========
+// 字符串转布尔值（AI 可能输出 "true"/"false" 字符串）
+const coerceBool = z.preprocess(
+  (val) => {
+    if (typeof val === 'string') {
+      return val.toLowerCase() === 'true';
+    }
+    return val;
+  },
+  z.boolean().optional().nullable()
+);
+
+// lineType 支持中文映射
+const coerceLineType = z.preprocess(
+  (val) => {
+    if (typeof val === 'string') {
+      const map: Record<string, string> = {
+        '主线': 'main', '明线': 'main',
+        '暗线1': 'sub1', '副线1': 'sub1',
+        '暗线2': 'sub2', '副线2': 'sub2',
+        '暗线3': 'sub3', '副线3': 'sub3',
+      };
+      return map[val] ?? val;
+    }
+    return val;
+  },
+  z.enum(['main', 'sub1', 'sub2', 'sub3']).optional().nullable()
+);
+
 export const Phase4PlotLinesSchema = z.object({
   plotLines: z.array(z.object({
-    lineType: z.enum(['main', 'sub1', 'sub2', 'sub3']).optional().nullable(),
+    lineType: coerceLineType,
     driver: z.string().max(200).optional().nullable(),
     statedGoal: z.string().max(4000).optional().nullable(),
     trueGoal: z.string().max(4000).optional().nullable(),
@@ -93,11 +121,11 @@ export const Phase4PlotLinesSchema = z.object({
     pointOfNoReturn: z.string().max(120).optional().nullable(),
   })).default([]),
   consistencyChecks: z.object({
-    blindSpotDrivesAction: z.boolean().optional().nullable(),
-    infoFlowChangesAtLeastTwo: z.boolean().optional().nullable(),
-    coreConflictHasThreeWayTension: z.boolean().optional().nullable(),
-    endingIrreversibleTriggeredByMultiLines: z.boolean().optional().nullable(),
-    noRedundantRole: z.boolean().optional().nullable(),
+    blindSpotDrivesAction: coerceBool,
+    infoFlowChangesAtLeastTwo: coerceBool,
+    coreConflictHasThreeWayTension: coerceBool,
+    endingIrreversibleTriggeredByMultiLines: coerceBool,
+    noRedundantRole: coerceBool,
     notes: z.array(z.string().max(4000)).default([]),
   }).optional().nullable(),
 });
