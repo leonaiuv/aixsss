@@ -619,7 +619,7 @@ ${safeJsonStringify(ep.coreExpression)}
   };
 
   const handleDownloadExport = () => {
-    const filename = `episode-export-${currentProject.id}-${Date.now()}.${exportFormat === 'json' ? 'json' : 'md'}`;
+    const filename = `episode-export-${currentProject?.id ?? 'unknown'}-${Date.now()}.${exportFormat === 'json' ? 'json' : 'md'}`;
     const blob = new Blob([exportContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -636,7 +636,7 @@ ${safeJsonStringify(ep.coreExpression)}
   };
 
   const renderPlanStep = () => {
-    const summaryLen = (currentProject.summary ?? '').trim().length;
+    const summaryLen = (currentProject?.summary ?? '').trim().length;
     const hasStyle = Boolean(styleFullPrompt.trim());
     const missing: string[] = [];
     if (summaryLen < 100) missing.push('故事梗概 ≥ 100 字');
@@ -701,8 +701,8 @@ ${safeJsonStringify(ep.coreExpression)}
               </Button>
               <Button
                 variant="outline"
-                onClick={() => currentProject.id && loadEpisodes(currentProject.id)}
-                disabled={!currentProject.id || isEpisodesLoading}
+                onClick={() => currentProject?.id && loadEpisodes(currentProject.id)}
+                disabled={!currentProject?.id || isEpisodesLoading}
                 className="w-full gap-2"
               >
                 <RefreshCw className="h-4 w-4" />
@@ -920,7 +920,9 @@ ${safeJsonStringify(ep.coreExpression)}
                     <Button
                       variant="outline"
                       onClick={() =>
-                        currentEpisode?.id && loadScenes(currentProject.id, currentEpisode.id)
+                        currentEpisode?.id &&
+                        currentProject?.id &&
+                        loadScenes(currentProject.id, currentEpisode.id)
                       }
                       disabled={!currentEpisode?.id || isScenesLoading}
                       className="w-full gap-2"
@@ -1014,6 +1016,7 @@ ${safeJsonStringify(ep.coreExpression)}
                                 value={scene.summary}
                                 onChange={(e) =>
                                   currentEpisode?.id &&
+                                  currentProject?.id &&
                                   updateScene(currentProject.id, currentEpisode.id, scene.id, {
                                     summary: e.target.value,
                                   })
