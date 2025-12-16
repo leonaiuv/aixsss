@@ -10,9 +10,21 @@ import { apiListEpisodeScenes, apiReorderEpisodeScenes } from '@/lib/api/episode
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
-import { migrateOldStyleToConfig, DIALOGUE_TYPE_LABELS, type DialogueLine, type Episode, type Project, type Scene } from '@/types';
+import {
+  migrateOldStyleToConfig,
+  DIALOGUE_TYPE_LABELS,
+  type DialogueLine,
+  type Episode,
+  type Project,
+  type Scene,
+} from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { logAICall, updateLogProgress, updateLogWithError, updateLogWithResponse } from '@/lib/ai/debugLogger';
+import {
+  logAICall,
+  updateLogProgress,
+  updateLogWithError,
+  updateLogWithResponse,
+} from '@/lib/ai/debugLogger';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -357,7 +369,9 @@ export function EpisodeWorkflow() {
 
       const result = (finished.result ?? null) as unknown;
       const tokenUsage = normalizeJobTokenUsage(
-        result && typeof result === 'object' ? (result as { tokenUsage?: unknown }).tokenUsage : null,
+        result && typeof result === 'object'
+          ? (result as { tokenUsage?: unknown }).tokenUsage
+          : null,
       );
       updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
 
@@ -1209,16 +1223,16 @@ ${safeJsonStringify(ep.coreExpression)}
             <div className="text-sm text-muted-foreground">未选择分镜。</div>
           ) : (
             <div className="space-y-4">
-	              <div className="flex items-center justify-between gap-4">
-	                <div className="min-w-0">
-	                  <div className="flex items-center gap-2">
-	                    <Badge variant="secondary">#{refineScene.order}</Badge>
-	                    <Badge variant="outline">{getSceneStatusLabel(refineScene.status)}</Badge>
-	                  </div>
-	                  <p className="text-sm mt-2">{refineScene.summary}</p>
-	                </div>
-	                <Button
-	                  onClick={() => handleRefineSceneAll(refineScene.id)}
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">#{refineScene.order}</Badge>
+                    <Badge variant="outline">{getSceneStatusLabel(refineScene.status)}</Badge>
+                  </div>
+                  <p className="text-sm mt-2">{refineScene.summary}</p>
+                </div>
+                <Button
+                  onClick={() => handleRefineSceneAll(refineScene.id)}
                   disabled={!aiProfileId || isRefining}
                   className="gap-2"
                 >
@@ -1227,21 +1241,23 @@ ${safeJsonStringify(ep.coreExpression)}
                   ) : (
                     <Sparkles className="h-4 w-4" />
                   )}
-	                  <span>一键细化</span>
-	                </Button>
-	              </div>
+                  <span>一键细化</span>
+                </Button>
+              </div>
 
-	              {isRefining && refiningSceneId === refineScene.id ? (
-	                <div className="space-y-2">
-	                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-	                    <span>{refineJobProgress?.message || '正在细化...'}</span>
-	                    {typeof refineJobProgress?.pct === 'number' ? (
-	                      <span>{Math.round(refineJobProgress.pct)}%</span>
-	                    ) : null}
-	                  </div>
-	                  <Progress value={typeof refineJobProgress?.pct === 'number' ? refineJobProgress.pct : 0} />
-	                </div>
-	              ) : null}
+              {isRefining && refiningSceneId === refineScene.id ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{refineJobProgress?.message || '正在细化...'}</span>
+                    {typeof refineJobProgress?.pct === 'number' ? (
+                      <span>{Math.round(refineJobProgress.pct)}%</span>
+                    ) : null}
+                  </div>
+                  <Progress
+                    value={typeof refineJobProgress?.pct === 'number' ? refineJobProgress.pct : 0}
+                  />
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 <Label>场景锚点（Scene Anchor）</Label>
@@ -1285,49 +1301,49 @@ ${safeJsonStringify(ep.coreExpression)}
                 />
               </div>
 
-	              <div className="space-y-2">
-	                <div className="flex items-center justify-between gap-3">
-	                  <Label>台词</Label>
-	                  <Button
-	                    variant="outline"
-	                    size="sm"
-	                    onClick={() => {
-	                      void handleCopyDialogues(
-	                        Array.isArray(refineScene.dialogues)
-	                          ? (refineScene.dialogues as DialogueLine[])
-	                          : [],
-	                      );
-	                    }}
-	                    className="gap-2"
-	                  >
-	                    <Copy className="h-4 w-4" />
-	                    <span>复制 JSON</span>
-	                  </Button>
-	                </div>
-	                {Array.isArray(refineScene.dialogues) && refineScene.dialogues.length > 0 ? (
-	                  <div className="space-y-2">
-	                    {(refineScene.dialogues as DialogueLine[])
-	                      .slice()
-	                      .sort((a, b) => a.order - b.order)
-	                      .map((line) => (
-	                        <Card key={line.id} className="p-3">
-	                          <div className="flex items-center gap-2 flex-wrap">
-	                            <Badge variant="secondary">#{line.order}</Badge>
-	                            <Badge variant="outline">
-	                              {DIALOGUE_TYPE_LABELS[line.type] ?? line.type}
-	                            </Badge>
-	                            {line.characterName ? (
-	                              <Badge variant="outline">{line.characterName}</Badge>
-	                            ) : null}
-	                          </div>
-	                          <p className="text-sm mt-2 whitespace-pre-wrap">{line.content}</p>
-	                        </Card>
-	                      ))}
-	                  </div>
-	                ) : (
-	                  <div className="text-sm text-muted-foreground">（无台词）</div>
-	                )}
-	              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <Label>台词</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void handleCopyDialogues(
+                        Array.isArray(refineScene.dialogues)
+                          ? (refineScene.dialogues as DialogueLine[])
+                          : [],
+                      );
+                    }}
+                    className="gap-2"
+                  >
+                    <Copy className="h-4 w-4" />
+                    <span>复制 JSON</span>
+                  </Button>
+                </div>
+                {Array.isArray(refineScene.dialogues) && refineScene.dialogues.length > 0 ? (
+                  <div className="space-y-2">
+                    {(refineScene.dialogues as DialogueLine[])
+                      .slice()
+                      .sort((a, b) => a.order - b.order)
+                      .map((line) => (
+                        <Card key={line.id} className="p-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="secondary">#{line.order}</Badge>
+                            <Badge variant="outline">
+                              {DIALOGUE_TYPE_LABELS[line.type] ?? line.type}
+                            </Badge>
+                            {line.characterName ? (
+                              <Badge variant="outline">{line.characterName}</Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-sm mt-2 whitespace-pre-wrap">{line.content}</p>
+                        </Card>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">（无台词）</div>
+                )}
+              </div>
 
               <div className="space-y-2">
                 <Label>备注（Notes）</Label>

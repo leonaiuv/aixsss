@@ -556,7 +556,7 @@ export function DevPanel() {
 
                   {/* 失败分镜列表 */}
                   {batchOperations.failedScenes.length > 0 && (
-                      <div className="space-y-1">
+                    <div className="space-y-1">
                       <div className="text-xs text-red-500">失败分镜</div>
                       <div className="flex flex-wrap gap-1">
                         {batchOperations.failedScenes.map((id) => (
