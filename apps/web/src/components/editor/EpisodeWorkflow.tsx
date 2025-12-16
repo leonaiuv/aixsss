@@ -1215,7 +1215,7 @@ ${safeJsonStringify(ep.coreExpression)}
           if (!open) setSelectedSceneId(null);
         }}
       >
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>分镜详情（可编辑）</DialogTitle>
           </DialogHeader>
