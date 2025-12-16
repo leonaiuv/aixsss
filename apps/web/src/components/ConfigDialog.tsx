@@ -333,12 +333,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         ),
       );
       const factor = pricingUnitRef.current === 'per_1M' ? 1000 : 1;
-      setPricingInput(
-        profile.pricing ? String(profile.pricing.promptPer1K * factor) : '',
-      );
-      setPricingOutput(
-        profile.pricing ? String(profile.pricing.completionPer1K * factor) : '',
-      );
+      setPricingInput(profile.pricing ? String(profile.pricing.promptPer1K * factor) : '');
+      setPricingOutput(profile.pricing ? String(profile.pricing.completionPer1K * factor) : '');
       setPricingCachedInput(
         profile.pricing && typeof profile.pricing.cachedPromptPer1K === 'number'
           ? String(profile.pricing.cachedPromptPer1K * factor)

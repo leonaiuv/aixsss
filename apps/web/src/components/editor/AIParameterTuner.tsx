@@ -39,7 +39,12 @@ function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-export function AIParameterTuner({ provider, model, params, onParamsChange }: AIParameterTunerProps) {
+export function AIParameterTuner({
+  provider,
+  model,
+  params,
+  onParamsChange,
+}: AIParameterTunerProps) {
   const [preset, setPreset] = useState<string>('balanced');
   const maxTokensPolicy = useMemo(() => getMaxTokensPolicy(provider, model), [provider, model]);
 
