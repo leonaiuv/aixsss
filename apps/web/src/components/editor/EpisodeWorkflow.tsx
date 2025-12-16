@@ -692,8 +692,10 @@ ${safeJsonStringify(ep.coreExpression)}
 
     // 分阶段信息
     const completedPhase = (narrative as { completedPhase?: number } | null)?.completedPhase ?? 0;
-    const validationStatus = (narrative as { validationStatus?: string } | null)?.validationStatus ?? 'incomplete';
-    const outlineSummary = (narrative as { outlineSummary?: string } | null)?.outlineSummary ?? null;
+    const validationStatus =
+      (narrative as { validationStatus?: string } | null)?.validationStatus ?? 'incomplete';
+    const outlineSummary =
+      (narrative as { outlineSummary?: string } | null)?.outlineSummary ?? null;
 
     const phases = [
       { phase: 1, name: '核心冲突', desc: '故事大纲 + 冲突引擎' },
@@ -736,7 +738,11 @@ ${safeJsonStringify(ep.coreExpression)}
                 <Badge variant={projectCharacters.length > 0 ? 'secondary' : 'outline'}>
                   角色 {projectCharacters.length}
                 </Badge>
-                <Badge variant={completedPhase >= 4 ? 'default' : completedPhase > 0 ? 'secondary' : 'outline'}>
+                <Badge
+                  variant={
+                    completedPhase >= 4 ? 'default' : completedPhase > 0 ? 'secondary' : 'outline'
+                  }
+                >
                   进度 {completedPhase}/4
                 </Badge>
                 {validationStatus === 'pass' ? (
@@ -807,7 +813,9 @@ ${safeJsonStringify(ep.coreExpression)}
 
               {isRunningWorkflow ? (
                 <div className="pt-2 space-y-2">
-                  <Progress value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0} />
+                  <Progress
+                    value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0}
+                  />
                   <div className="text-xs text-muted-foreground">
                     {lastJobProgress?.message || '排队中...'}
                     {lastJobId ? ` · jobId=${lastJobId}` : null}
@@ -835,7 +843,11 @@ ${safeJsonStringify(ep.coreExpression)}
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">因果链产物（JSON）</h3>
             <div className="text-sm text-muted-foreground">
-              {completedPhase >= 4 ? '全部完成' : completedPhase > 0 ? `已完成 ${completedPhase}/4 阶段` : '暂无产物'}
+              {completedPhase >= 4
+                ? '全部完成'
+                : completedPhase > 0
+                  ? `已完成 ${completedPhase}/4 阶段`
+                  : '暂无产物'}
             </div>
           </div>
           <Separator className="my-4" />

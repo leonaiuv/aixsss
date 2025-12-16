@@ -109,31 +109,34 @@ function buildPhase2Prompt(args: {
 
 【角色库】${args.characters}
 
-【输出要求】直接输出 JSON，不要 Markdown/代码块/解释。
+【输出要求】
+1) 直接输出 JSON，不要 Markdown/代码块/解释
+2) 以 { 开头，以 } 结尾
+3) infoVisibilityLayers 至少 2-4 层（按知情权从高到低排列）
+4) characterMatrix 为角色库中的每个主要角色填写一项
+5) motivation.gain 和 motivation.lossAvoid 必须是 1-10 的整数（不要加引号）
 
 【输出 JSON 结构】
 {
   "infoVisibilityLayers": [
     {
-      "layerName": "顶层/执行层/工具层/祭品层（按知情权分层）",
-      "roles": ["角色名A", "角色名B"],
-      "infoBoundary": "该层能接触到的信息上限",
-      "blindSpot": "该层绝对不知道的关键信息（驱动其误判）",
-      "motivation": {
-        "gain": 5,
-        "lossAvoid": 8,
-        "activationTrigger": "什么事件会让其从被动变主动"
-      }
+      "layerName": "顶层",
+      "roles": ["角色A"],
+      "infoBoundary": "知道全部真相",
+      "blindSpot": "不知道执行层的背叛",
+      "motivation": {"gain": 8, "lossAvoid": 3, "activationTrigger": "发现背叛"}
+    },
+    {
+      "layerName": "执行层",
+      "roles": ["角色B", "角色C"],
+      "infoBoundary": "只知道任务，不知道目的",
+      "blindSpot": "不知道自己是棋子",
+      "motivation": {"gain": 5, "lossAvoid": 7, "activationTrigger": "发现真相"}
     }
   ],
   "characterMatrix": [
-    {
-      "name": "角色名",
-      "identity": "身份/立场",
-      "goal": "目标",
-      "secret": "秘密",
-      "vulnerability": "软肋"
-    }
+    {"name": "角色A", "identity": "身份", "goal": "目标", "secret": "秘密", "vulnerability": "软肋"},
+    {"name": "角色B", "identity": "身份", "goal": "目标", "secret": "秘密", "vulnerability": "软肋"}
   ]
 }
 

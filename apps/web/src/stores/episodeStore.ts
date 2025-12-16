@@ -104,7 +104,11 @@ interface EpisodeStore {
     sceneCountHint?: number;
   }) => Promise<void>;
 
-  buildNarrativeCausalChain: (input: { projectId: string; aiProfileId: string; phase?: number }) => Promise<void>;
+  buildNarrativeCausalChain: (input: {
+    projectId: string;
+    aiProfileId: string;
+    phase?: number;
+  }) => Promise<void>;
 }
 
 export const useEpisodeStore = create<EpisodeStore>((set, get) => ({

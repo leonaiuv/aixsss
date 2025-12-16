@@ -25,6 +25,12 @@ export const Phase1ConflictEngineSchema = z.object({
 export type Phase1ConflictEngine = z.infer<typeof Phase1ConflictEngineSchema>;
 
 // ========== 阶段2：信息能见度层 + 角色矩阵 ==========
+// 优化：放宽数字类型约束，支持字符串自动转换
+const coerceInt = z.preprocess(
+  (val) => (typeof val === 'string' ? parseInt(val, 10) : val),
+  z.number().int().min(1).max(10).optional().nullable()
+);
+
 export const Phase2InfoLayersSchema = z.object({
   infoVisibilityLayers: z.array(z.object({
     layerName: z.string().max(80).optional().nullable(),
@@ -32,13 +38,13 @@ export const Phase2InfoLayersSchema = z.object({
     infoBoundary: z.string().max(4000).optional().nullable(),
     blindSpot: z.string().max(4000).optional().nullable(),
     motivation: z.object({
-      gain: z.number().int().min(1).max(10).optional().nullable(),
-      lossAvoid: z.number().int().min(1).max(10).optional().nullable(),
+      gain: coerceInt,
+      lossAvoid: coerceInt,
       activationTrigger: z.string().max(4000).optional().nullable(),
     }).optional().nullable(),
   })).default([]),
   characterMatrix: z.array(z.object({
-    name: z.string().max(200),
+    name: z.string().max(200).optional().nullable(), // 改为可选，避免校验失败
     identity: z.string().max(800).optional().nullable(),
     goal: z.string().max(4000).optional().nullable(),
     secret: z.string().max(4000).optional().nullable(),
