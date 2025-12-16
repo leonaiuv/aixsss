@@ -24,7 +24,11 @@ import {
   updateLogWithError,
   updateLogWithResponse,
 } from '@/lib/ai/debugLogger';
-import { parseSceneAnchorText, parseKeyframePromptText, parseMotionPromptText } from '@/lib/ai/promptParsers';
+import {
+  parseSceneAnchorText,
+  parseKeyframePromptText,
+  parseMotionPromptText,
+} from '@/lib/ai/promptParsers';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -144,14 +148,13 @@ function getSceneStatusLabel(status: Scene['status']): string {
   return labels[status] || status;
 }
 
-function getSceneStatusStyle(
-  status: Scene['status'],
-): { label: string; className: string; dotClass: string } {
+function getSceneStatusStyle(status: Scene['status']): {
+  label: string;
+  className: string;
+  dotClass: string;
+} {
   const baseLabel = getSceneStatusLabel(status);
-  const map: Record<
-    Scene['status'],
-    { className: string; dotClass: string }
-  > = {
+  const map: Record<Scene['status'], { className: string; dotClass: string }> = {
     pending: {
       className: 'border-amber-200 bg-amber-50 text-amber-700',
       dotClass: 'bg-amber-500',
@@ -188,7 +191,11 @@ function getSceneStatusStyle(
 
   const style = map[status];
   if (!style) {
-    return { label: baseLabel, className: 'border-muted bg-muted/30 text-foreground', dotClass: 'bg-muted-foreground' };
+    return {
+      label: baseLabel,
+      className: 'border-muted bg-muted/30 text-foreground',
+      dotClass: 'bg-muted-foreground',
+    };
   }
   return { label: baseLabel, ...style };
 }
@@ -1050,7 +1057,9 @@ ${safeJsonStringify(ep.coreExpression)}
                                     <span
                                       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyle.className}`}
                                     >
-                                      <span className={`h-2 w-2 rounded-full ${statusStyle.dotClass}`} />
+                                      <span
+                                        className={`h-2 w-2 rounded-full ${statusStyle.dotClass}`}
+                                      />
                                       {statusStyle.label}
                                     </span>
                                   );
@@ -1493,10 +1502,7 @@ ${safeJsonStringify(ep.coreExpression)}
                         const hasZh = Boolean(kf.zh);
                         const hasEn = Boolean(kf.en);
                         return (
-                          <div
-                            key={idx}
-                            className="rounded-lg border bg-muted/30 p-2 space-y-1"
-                          >
+                          <div key={idx} className="rounded-lg border bg-muted/30 p-2 space-y-1">
                             <div className="flex items-center justify-between gap-1">
                               <span className="text-xs font-medium">{labels[idx]}</span>
                               <div className="flex items-center gap-1">
@@ -1589,10 +1595,7 @@ ${safeJsonStringify(ep.coreExpression)}
                         const hasZh = Boolean(data.zh);
                         const hasEn = Boolean(data.en);
                         return (
-                          <div
-                            key={key}
-                            className="rounded-lg border bg-muted/30 p-2 space-y-1"
-                          >
+                          <div key={key} className="rounded-lg border bg-muted/30 p-2 space-y-1">
                             <div className="flex items-center justify-between gap-1">
                               <span className="text-xs font-medium">{label}</span>
                               <div className="flex items-center gap-1">

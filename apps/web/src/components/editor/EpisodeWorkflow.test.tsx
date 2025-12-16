@@ -50,11 +50,11 @@ describe('EpisodeWorkflow', () => {
       },
     };
 
-    mockUseProjectStore.mockImplementation(
-      ((selector?: (state: typeof projectState) => unknown) => {
-        return typeof selector === 'function' ? selector(projectState) : projectState;
-      }) as unknown as typeof useProjectStore,
-    );
+    mockUseProjectStore.mockImplementation(((
+      selector?: (state: typeof projectState) => unknown,
+    ) => {
+      return typeof selector === 'function' ? selector(projectState) : projectState;
+    }) as unknown as typeof useProjectStore);
 
     mockUseConfigStore.mockReturnValue({ config: { aiProfileId: 'aip_1' } } as ReturnType<
       typeof useConfigStore
