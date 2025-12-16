@@ -18,6 +18,7 @@ export type AICallType =
   | 'episode_plan' // 剧集规划生成
   | 'episode_core_expression' // 单集核心表达生成
   | 'episode_scene_list' // 单集分镜列表生成
+  | 'scene_refine_all' // 一键细化（后端工作流）
   | 'character_basic_info' // 角色基础信息生成
   | 'character_portrait' // 角色定妆照提示词生成
   | 'custom'; // 自定义调用
@@ -193,6 +194,7 @@ function formatLogOutput(entry: AICallLogEntry): void {
     episode_plan: '🎞️ 剧集规划生成',
     episode_core_expression: '🧠 单集核心表达生成',
     episode_scene_list: '🗂️ 单集分镜列表生成',
+    scene_refine_all: '✨ 一键细化',
     character_basic_info: '👤 角色信息生成',
     character_portrait: '📷 角色定妆照生成',
     custom: '⚡ 自定义调用',

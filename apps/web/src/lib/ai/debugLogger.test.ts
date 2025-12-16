@@ -92,6 +92,7 @@ describe('debugLogger', () => {
         'episode_plan',
         'episode_core_expression',
         'episode_scene_list',
+        'scene_refine_all',
         'character_basic_info',
         'character_portrait',
         'custom',

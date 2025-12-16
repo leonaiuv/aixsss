@@ -20,6 +20,7 @@ import {
   type AIUsageStatus,
 } from '@/stores/aiUsageStore';
 import { useConfigStore } from '@/stores/configStore';
+import { isApiMode } from '@/lib/runtime/mode';
 import {
   getScenes,
   createBackup,
@@ -91,6 +92,10 @@ const CALL_TYPE_LABELS: Record<string, string> = {
   keyframe_prompt: '关键帧提示词（KF0/KF1/KF2）',
   motion_prompt: '时空/运动提示词',
   dialogue: '台词生成',
+  episode_plan: '剧集规划',
+  episode_core_expression: '单集核心表达',
+  episode_scene_list: '单集分镜列表',
+  scene_refine_all: '一键细化',
   character_basic_info: '角色信息生成',
   character_portrait: '角色定妆照生成',
   custom: '自定义调用',
@@ -233,6 +238,7 @@ function StatCard({
 }
 
 export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanelProps) {
+  const apiMode = isApiMode();
   const { toast } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const pricingProfiles = useConfigStore((state) => state.profiles);
@@ -247,7 +253,7 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
   const [aiCallTypeFilter, setAiCallTypeFilter] = useState<'all' | AIUsageEvent['callType']>('all');
   const [aiProviderFilter, setAiProviderFilter] = useState<'all' | string>('all');
   const [aiModelFilter, setAiModelFilter] = useState<'all' | string>('all');
-  const [storageVersion, setStorageVersion] = useState(0);
+  const [, setStorageVersion] = useState(0);
 
   const targetProject = useMemo(() => {
     if (!projectId) return null;
@@ -570,11 +576,11 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
 
   const refreshStorage = useCallback(() => setStorageVersion((v) => v + 1), []);
 
-  const storage = useMemo(() => getStorageUsageSnapshot(), [storageVersion]);
+  const storage = getStorageUsageSnapshot();
   const storageSeverity = getStorageSeverity(storage.percentage);
   const storageBadge = getBadgeStyle(storageSeverity);
 
-  const largestKeys = useMemo(() => {
+  const largestKeys = (() => {
     if (typeof localStorage === 'undefined') return [];
     const rows: Array<{ key: string; size: number }> = [];
     Object.keys(localStorage).forEach((key) => {
@@ -583,9 +589,9 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
     });
     rows.sort((a, b) => b.size - a.size);
     return rows.slice(0, 8);
-  }, [storageVersion]);
+  })();
 
-  const backups = useMemo(() => getBackups(), [storageVersion]);
+  const backups = getBackups();
 
   const handleCreateBackup = useCallback(() => {
     try {
@@ -684,11 +690,11 @@ export function StatisticsPanel({ projectId, onOpenDataExport }: StatisticsPanel
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs defaultValue={apiMode ? 'ai' : 'overview'} className="w-full">
         <TabsList>
-          <TabsTrigger value="overview">概览</TabsTrigger>
+          {!apiMode ? <TabsTrigger value="overview">概览</TabsTrigger> : null}
           <TabsTrigger value="ai">AI 使用</TabsTrigger>
-          <TabsTrigger value="storage">存储与备份</TabsTrigger>
+          {!apiMode ? <TabsTrigger value="storage">存储与备份</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">

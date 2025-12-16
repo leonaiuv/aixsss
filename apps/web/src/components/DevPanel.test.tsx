@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DevPanel, DevPanelTrigger } from './DevPanel';
-import { useAIProgressStore } from '@/stores/aiProgressStore';
+import { useAIProgressStore, type BatchOperationType } from '@/stores/aiProgressStore';
 import * as debugLogger from '@/lib/ai/debugLogger';
 
 // Mock debugLogger functions
@@ -254,7 +254,7 @@ describe('DevPanel', () => {
       vi.mocked(debugLogger.getRecentErrors).mockReturnValue([
         { id: '1', callType: 'scene_description', status: 'error', error: 'Error 1' },
         { id: '2', callType: 'keyframe_prompt', status: 'error', error: 'Error 2' },
-      ] as any);
+      ] as unknown as ReturnType<typeof debugLogger.getRecentErrors>);
 
       render(<DevPanel />);
 
@@ -724,7 +724,7 @@ describe('DevPanel', () => {
     });
 
     it('应该显示不同的操作类型标签', async () => {
-      const operationTypes = [
+      const operationTypes: Array<{ type: Exclude<BatchOperationType, null>; label: string }> = [
         { type: 'generate', label: '批量生成' },
         { type: 'edit', label: '批量编辑' },
         { type: 'export', label: '批量导出' },
@@ -741,7 +741,7 @@ describe('DevPanel', () => {
             progress: 0,
             currentScene: 0,
             totalScenes: 0,
-            operationType: op.type as any,
+            operationType: op.type,
             startTime: null,
             completedScenes: [],
             failedScenes: [],
@@ -815,7 +815,7 @@ describe('DevPanelTrigger', () => {
   it('should render when panel is hidden', () => {
     render(<DevPanelTrigger />);
 
-    expect(screen.getByText('Dev Panel')).toBeInTheDocument();
+    expect(screen.getByText('AI 面板')).toBeInTheDocument();
   });
 
   it('should not render when panel is visible', () => {
@@ -823,7 +823,7 @@ describe('DevPanelTrigger', () => {
 
     render(<DevPanelTrigger />);
 
-    expect(screen.queryByText('Dev Panel')).not.toBeInTheDocument();
+    expect(screen.queryByText('AI 面板')).not.toBeInTheDocument();
   });
 
   it('should show active tasks count badge', () => {
@@ -857,7 +857,7 @@ describe('DevPanelTrigger', () => {
     const user = userEvent.setup();
     render(<DevPanelTrigger />);
 
-    await user.click(screen.getByText('Dev Panel'));
+    await user.click(screen.getByText('AI 面板'));
 
     expect(useAIProgressStore.getState().isPanelVisible).toBe(true);
   });

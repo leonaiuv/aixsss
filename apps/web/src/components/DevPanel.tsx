@@ -11,12 +11,12 @@ import {
   type AITask,
 } from '@/stores/aiProgressStore';
 import {
-  getLogHistory,
   getCallStatsByType,
   getRecentErrors,
   getOptimizationSuggestions,
   exportLogs,
   clearLogHistory,
+  type AICallLogEntry,
 } from '@/lib/ai/debugLogger';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,6 @@ import {
   X,
   Minimize2,
   Maximize2,
-  RefreshCw,
   Download,
   Trash2,
   ChevronRight,
@@ -41,15 +40,11 @@ import {
   XCircle,
   Zap,
   BarChart3,
-  FileWarning,
   Lightbulb,
   Terminal,
   Copy,
-  Settings,
   Layers,
   Pause,
-  Play,
-  Square,
 } from 'lucide-react';
 
 export function DevPanel() {
@@ -360,12 +355,19 @@ export function DevPanel() {
                 <div className="space-y-2">
                   <h4 className="text-xs font-medium text-muted-foreground">按类型统计</h4>
                   <div className="space-y-2">
-                    {Object.entries(callStats).map(([type, data]) => (
+                    {(
+                      Object.entries(callStats) as Array<
+                        [
+                          Parameters<typeof getTaskTypeLabel>[0],
+                          (typeof callStats)[keyof typeof callStats],
+                        ]
+                      >
+                    ).map(([type, data]) => (
                       <div
                         key={type}
                         className="flex items-center justify-between p-2 rounded bg-muted/30"
                       >
-                        <span className="text-xs">{getTaskTypeLabel(type as any)}</span>
+                        <span className="text-xs">{getTaskTypeLabel(type)}</span>
                         <div className="flex items-center gap-2">
                           <Badge variant="secondary" className="text-[10px]">
                             {data.total} 次
@@ -538,7 +540,7 @@ export function DevPanel() {
                     <div className="space-y-1">
                       <div className="text-xs text-muted-foreground">已完成分镜</div>
                       <div className="flex flex-wrap gap-1">
-                        {batchOperations.completedScenes.slice(-10).map((id, i) => (
+                        {batchOperations.completedScenes.slice(-10).map((id) => (
                           <Badge key={id} variant="secondary" className="text-[10px]">
                             {id.slice(0, 6)}
                           </Badge>
@@ -554,10 +556,10 @@ export function DevPanel() {
 
                   {/* 失败分镜列表 */}
                   {batchOperations.failedScenes.length > 0 && (
-                    <div className="space-y-1">
+                      <div className="space-y-1">
                       <div className="text-xs text-red-500">失败分镜</div>
                       <div className="flex flex-wrap gap-1">
-                        {batchOperations.failedScenes.map((id, i) => (
+                        {batchOperations.failedScenes.map((id) => (
                           <Badge key={id} variant="destructive" className="text-[10px]">
                             {id.slice(0, 6)}
                           </Badge>
@@ -696,7 +698,7 @@ function HistoryItem({ task, onClick }: { task: AITask; onClick: () => void }) {
   );
 }
 
-function ErrorItem({ entry }: { entry: any }) {
+function ErrorItem({ entry }: { entry: AICallLogEntry }) {
   return (
     <div className="p-3 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-900/50">
       <div className="flex items-start gap-2">
@@ -827,7 +829,7 @@ export function DevPanelTrigger() {
       onClick={togglePanel}
     >
       <Terminal className="h-4 w-4" />
-      <span>Dev Panel</span>
+      <span>AI 面板</span>
       {activeTasks.length > 0 && (
         <Badge variant="secondary" className="h-5 px-1.5">
           {activeTasks.length}

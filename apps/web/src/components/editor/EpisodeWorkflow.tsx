@@ -5,12 +5,14 @@ import { useCharacterStore } from '@/stores/characterStore';
 import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useEpisodeStore } from '@/stores/episodeStore';
 import { useEpisodeScenesStore } from '@/stores/episodeScenesStore';
+import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { apiListEpisodeScenes, apiReorderEpisodeScenes } from '@/lib/api/episodeScenes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
-import { migrateOldStyleToConfig, type Episode, type Project, type Scene } from '@/types';
+import { migrateOldStyleToConfig, DIALOGUE_TYPE_LABELS, type DialogueLine, type Episode, type Project, type Scene } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { logAICall, updateLogProgress, updateLogWithError, updateLogWithResponse } from '@/lib/ai/debugLogger';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +31,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { BasicSettings } from './BasicSettings';
 import { SceneSortable } from './SceneSortable';
+import { StatisticsPanel } from './StatisticsPanel';
 import {
   CheckCircle2,
   Circle,
@@ -38,6 +41,8 @@ import {
   FileText,
   Copy,
   Download,
+  Terminal,
+  BarChart3,
 } from 'lucide-react';
 
 type WorkflowStep = 'global' | 'plan' | 'episode' | 'export';
@@ -55,6 +60,33 @@ function safeJsonStringify(value: unknown): string {
   } catch {
     return String(value ?? '');
   }
+}
+
+type NormalizedJobProgress = { pct: number | null; message: string | null };
+
+interface JobProgressLike {
+  pct?: unknown;
+  message?: unknown;
+}
+
+function normalizeJobProgress(progress: unknown): NormalizedJobProgress {
+  const p = progress as JobProgressLike | undefined;
+  const pct = typeof p?.pct === 'number' ? p.pct : null;
+  const message = typeof p?.message === 'string' ? p.message : null;
+  return { pct, message };
+}
+
+function normalizeJobTokenUsage(
+  raw: unknown,
+): { prompt: number; completion: number; total: number } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const prompt = r.prompt;
+  const completion = r.completion;
+  const total = r.total;
+  if (typeof prompt !== 'number' || typeof completion !== 'number' || typeof total !== 'number')
+    return undefined;
+  return { prompt, completion, total };
 }
 
 function isAbortError(error: unknown): boolean {
@@ -81,10 +113,28 @@ function getEpisodeStateLabel(state: Episode['workflowState']): string {
   return labels[state] || state;
 }
 
+function getSceneStatusLabel(status: Scene['status']): string {
+  const labels: Record<string, string> = {
+    pending: '待处理',
+    scene_generating: '生成场景锚点中',
+    scene_confirmed: '场景锚点已就绪',
+    keyframe_generating: '生成关键帧中',
+    keyframe_confirmed: '关键帧已就绪',
+    motion_generating: '生成运动/台词中',
+    completed: '已完成',
+    needs_update: '需更新',
+  };
+  return labels[status] || status;
+}
+
 export function EpisodeWorkflow() {
   const { toast } = useToast();
   const currentProject = useProjectStore((s) => s.currentProject);
   const { config } = useConfigStore();
+  const toggleAIPanel = useAIProgressStore((s) => s.togglePanel);
+  const activeAITaskCount = useAIProgressStore(
+    (s) => s.tasks.filter((t) => t.status === 'running' || t.status === 'queued').length,
+  );
   const { characters, loadCharacters } = useCharacterStore();
   const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
 
@@ -117,6 +167,7 @@ export function EpisodeWorkflow() {
   const [activeStep, setActiveStep] = useState<WorkflowStep>('global');
   const [targetEpisodeCount, setTargetEpisodeCount] = useState<number | ''>('');
   const [sceneCountHint, setSceneCountHint] = useState<number | ''>('');
+  const [statsDialogOpen, setStatsDialogOpen] = useState(false);
 
   const [coreExpressionDraft, setCoreExpressionDraft] = useState('');
   const [coreExpressionDialogOpen, setCoreExpressionDialogOpen] = useState(false);
@@ -126,6 +177,7 @@ export function EpisodeWorkflow() {
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [refiningSceneId, setRefiningSceneId] = useState<string | null>(null);
   const [isRefining, setIsRefining] = useState(false);
+  const [refineJobProgress, setRefineJobProgress] = useState<NormalizedJobProgress | null>(null);
 
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
 
@@ -252,25 +304,75 @@ export function EpisodeWorkflow() {
 
   const handleRefineSceneAll = async (sceneId: string) => {
     if (!aiProfileId || !currentProject?.id) return;
+    const currentScene = scenes.find((s) => s.id === sceneId);
+
+    const logId = logAICall('scene_refine_all', {
+      skillName: 'workflow:refine_scene_all',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/refine-all',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/refine-all`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            sceneId,
+            aiProfileId,
+            sceneOrder: currentScene?.order,
+            sceneSummary: currentScene?.summary,
+          }),
+        },
+      ],
+      context: {
+        projectId: currentProject.id,
+        sceneId,
+        sceneOrder: currentScene?.order,
+        sceneSummary: currentScene?.summary,
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
     setIsRefining(true);
     setRefiningSceneId(sceneId);
+    setRefineJobProgress(null);
     try {
       const job = await apiWorkflowRefineSceneAll({
         projectId: currentProject.id,
         sceneId,
         aiProfileId,
       });
-      await apiWaitForAIJob(job.id);
+
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          setRefineJobProgress(next);
+          if (typeof next.pct === 'number')
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+        },
+      });
+
+      const result = (finished.result ?? null) as unknown;
+      const tokenUsage = normalizeJobTokenUsage(
+        result && typeof result === 'object' ? (result as { tokenUsage?: unknown }).tokenUsage : null,
+      );
+      updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+
       if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
       toast({ title: '分镜细化完成', description: '已更新当前分镜内容。' });
     } catch (error) {
       if (!isAbortError(error)) {
         const detail = error instanceof Error ? error.message : String(error);
+        updateLogWithError(logId, detail);
         toast({ title: '分镜细化失败', description: detail, variant: 'destructive' });
       }
     } finally {
       setIsRefining(false);
       setRefiningSceneId(null);
+      setRefineJobProgress(null);
     }
   };
 
@@ -424,6 +526,19 @@ ${safeJsonStringify(ep.coreExpression)}
       await navigator.clipboard.writeText(exportContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast({
+        title: '复制失败',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCopyDialogues = async (dialogues: DialogueLine[]) => {
+    try {
+      await navigator.clipboard.writeText(safeJsonStringify(dialogues));
+      toast({ title: '已复制', description: '台词 JSON 已复制到剪贴板。' });
     } catch (error) {
       toast({
         title: '复制失败',
@@ -958,7 +1073,25 @@ ${safeJsonStringify(ep.coreExpression)}
               项目工作流：{workflowLabel} · Episodes：{episodes.length}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStatsDialogOpen(true)}
+              className="gap-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">统计分析</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={toggleAIPanel} className="gap-2">
+              <Terminal className="h-4 w-4" />
+              <span className="hidden sm:inline">AI 面板</span>
+              {activeAITaskCount > 0 ? (
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                  {activeAITaskCount}
+                </Badge>
+              ) : null}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setActiveStep('global')}>
               回到全局设定
             </Button>
@@ -1020,6 +1153,21 @@ ${safeJsonStringify(ep.coreExpression)}
         </div>
       </div>
 
+      <Dialog open={statsDialogOpen} onOpenChange={setStatsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>统计分析</DialogTitle>
+          </DialogHeader>
+          <StatisticsPanel
+            projectId={currentProject.id}
+            onOpenDataExport={() => {
+              setStatsDialogOpen(false);
+              setExportDialogOpen(true);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={coreExpressionDialogOpen} onOpenChange={setCoreExpressionDialogOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -1061,16 +1209,16 @@ ${safeJsonStringify(ep.coreExpression)}
             <div className="text-sm text-muted-foreground">未选择分镜。</div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">#{refineScene.order}</Badge>
-                    <Badge variant="outline">{refineScene.status}</Badge>
-                  </div>
-                  <p className="text-sm mt-2">{refineScene.summary}</p>
-                </div>
-                <Button
-                  onClick={() => handleRefineSceneAll(refineScene.id)}
+	              <div className="flex items-center justify-between gap-4">
+	                <div className="min-w-0">
+	                  <div className="flex items-center gap-2">
+	                    <Badge variant="secondary">#{refineScene.order}</Badge>
+	                    <Badge variant="outline">{getSceneStatusLabel(refineScene.status)}</Badge>
+	                  </div>
+	                  <p className="text-sm mt-2">{refineScene.summary}</p>
+	                </div>
+	                <Button
+	                  onClick={() => handleRefineSceneAll(refineScene.id)}
                   disabled={!aiProfileId || isRefining}
                   className="gap-2"
                 >
@@ -1079,9 +1227,21 @@ ${safeJsonStringify(ep.coreExpression)}
                   ) : (
                     <Sparkles className="h-4 w-4" />
                   )}
-                  <span>一键细化</span>
-                </Button>
-              </div>
+	                  <span>一键细化</span>
+	                </Button>
+	              </div>
+
+	              {isRefining && refiningSceneId === refineScene.id ? (
+	                <div className="space-y-2">
+	                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+	                    <span>{refineJobProgress?.message || '正在细化...'}</span>
+	                    {typeof refineJobProgress?.pct === 'number' ? (
+	                      <span>{Math.round(refineJobProgress.pct)}%</span>
+	                    ) : null}
+	                  </div>
+	                  <Progress value={typeof refineJobProgress?.pct === 'number' ? refineJobProgress.pct : 0} />
+	                </div>
+	              ) : null}
 
               <div className="space-y-2">
                 <Label>场景锚点（Scene Anchor）</Label>
@@ -1125,14 +1285,49 @@ ${safeJsonStringify(ep.coreExpression)}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>台词（Dialogues）</Label>
-                <Textarea
-                  value={safeJsonStringify(refineScene.dialogues ?? [])}
-                  readOnly
-                  className="min-h-[160px] font-mono text-xs"
-                />
-              </div>
+	              <div className="space-y-2">
+	                <div className="flex items-center justify-between gap-3">
+	                  <Label>台词</Label>
+	                  <Button
+	                    variant="outline"
+	                    size="sm"
+	                    onClick={() => {
+	                      void handleCopyDialogues(
+	                        Array.isArray(refineScene.dialogues)
+	                          ? (refineScene.dialogues as DialogueLine[])
+	                          : [],
+	                      );
+	                    }}
+	                    className="gap-2"
+	                  >
+	                    <Copy className="h-4 w-4" />
+	                    <span>复制 JSON</span>
+	                  </Button>
+	                </div>
+	                {Array.isArray(refineScene.dialogues) && refineScene.dialogues.length > 0 ? (
+	                  <div className="space-y-2">
+	                    {(refineScene.dialogues as DialogueLine[])
+	                      .slice()
+	                      .sort((a, b) => a.order - b.order)
+	                      .map((line) => (
+	                        <Card key={line.id} className="p-3">
+	                          <div className="flex items-center gap-2 flex-wrap">
+	                            <Badge variant="secondary">#{line.order}</Badge>
+	                            <Badge variant="outline">
+	                              {DIALOGUE_TYPE_LABELS[line.type] ?? line.type}
+	                            </Badge>
+	                            {line.characterName ? (
+	                              <Badge variant="outline">{line.characterName}</Badge>
+	                            ) : null}
+	                          </div>
+	                          <p className="text-sm mt-2 whitespace-pre-wrap">{line.content}</p>
+	                        </Card>
+	                      ))}
+	                  </div>
+	                ) : (
+	                  <div className="text-sm text-muted-foreground">（无台词）</div>
+	                )}
+	              </div>
 
               <div className="space-y-2">
                 <Label>备注（Notes）</Label>
