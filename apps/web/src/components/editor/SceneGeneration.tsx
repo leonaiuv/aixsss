@@ -154,7 +154,8 @@ export function SceneGeneration() {
           onProgress: (progress) => {
             const progressObj = progress as Record<string, unknown> | undefined;
             const pct = typeof progressObj?.pct === 'number' ? progressObj.pct : null;
-            const message = typeof progressObj?.message === 'string' ? progressObj.message : undefined;
+            const message =
+              typeof progressObj?.message === 'string' ? progressObj.message : undefined;
             if (typeof pct === 'number') {
               setGenerationProgress(pct);
               updateLogProgress(logId, pct, message);

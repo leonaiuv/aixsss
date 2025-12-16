@@ -41,15 +41,16 @@ function normalizeJobProgress(progress: unknown): NormalizedJobProgress {
   return { pct, message };
 }
 
-function normalizeJobTokenUsage(raw: unknown):
-  | { prompt: number; completion: number; total: number }
-  | undefined {
+function normalizeJobTokenUsage(
+  raw: unknown,
+): { prompt: number; completion: number; total: number } | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const r = raw as Record<string, unknown>;
   const prompt = r.prompt;
   const completion = r.completion;
   const total = r.total;
-  if (typeof prompt !== 'number' || typeof completion !== 'number' || typeof total !== 'number') return undefined;
+  if (typeof prompt !== 'number' || typeof completion !== 'number' || typeof total !== 'number')
+    return undefined;
   return { prompt, completion, total };
 }
 
@@ -204,7 +205,9 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
-        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as number | undefined,
+        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as
+          | number
+          | undefined,
         profileId: cfg?.aiProfileId ?? input.aiProfileId,
       },
     });
@@ -216,7 +219,8 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
         onProgress: (progress) => {
           const next = normalizeJobProgress(progress);
           set({ lastJobProgress: next });
-          if (typeof next.pct === 'number') updateLogProgress(logId, next.pct, next.message ?? undefined);
+          if (typeof next.pct === 'number')
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
         },
       });
 
@@ -249,14 +253,17 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
     const cfg = useConfigStore.getState().config;
     const logId = logAICall('episode_core_expression', {
       skillName: 'workflow:generate_episode_core_expression',
-      promptTemplate: 'POST /workflow/projects/{{projectId}}/episodes/{{episodeId}}/core-expression',
+      promptTemplate:
+        'POST /workflow/projects/{{projectId}}/episodes/{{episodeId}}/core-expression',
       filledPrompt: `POST /workflow/projects/${input.projectId}/episodes/${input.episodeId}/core-expression`,
       messages: [{ role: 'user', content: safeJson(input) }],
       context: { projectId: input.projectId },
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
-        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as number | undefined,
+        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as
+          | number
+          | undefined,
         profileId: cfg?.aiProfileId ?? input.aiProfileId,
       },
     });
@@ -268,16 +275,15 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
         onProgress: (progress) => {
           const next = normalizeJobProgress(progress);
           set({ lastJobProgress: next });
-          if (typeof next.pct === 'number') updateLogProgress(logId, next.pct, next.message ?? undefined);
+          if (typeof next.pct === 'number')
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
         },
       });
 
       const result = (finished.result ?? null) as ResultLike | null;
       const tokenUsage = normalizeJobTokenUsage(result?.tokenUsage);
       const content =
-        typeof result?.extractedJson === 'string'
-          ? result.extractedJson
-          : safeJson(result);
+        typeof result?.extractedJson === 'string' ? result.extractedJson : safeJson(result);
       updateLogWithResponse(logId, { content, tokenUsage });
       get().loadEpisodes(input.projectId);
     } catch (error) {
@@ -306,7 +312,9 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
-        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as number | undefined,
+        maxTokens: (cfg as unknown as Record<string, unknown>)?.generationParams as
+          | number
+          | undefined,
         profileId: cfg?.aiProfileId ?? input.aiProfileId,
       },
     });
@@ -318,7 +326,8 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
         onProgress: (progress) => {
           const next = normalizeJobProgress(progress);
           set({ lastJobProgress: next });
-          if (typeof next.pct === 'number') updateLogProgress(logId, next.pct, next.message ?? undefined);
+          if (typeof next.pct === 'number')
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
         },
       });
 

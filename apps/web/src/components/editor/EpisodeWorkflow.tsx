@@ -526,7 +526,9 @@ ${safeJsonStringify(ep.coreExpression)}
 
               {isRunningWorkflow ? (
                 <div className="pt-2 space-y-2">
-                  <Progress value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0} />
+                  <Progress
+                    value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0}
+                  />
                   <div className="text-xs text-muted-foreground">
                     {lastJobProgress?.message || '排队中...'}
                     {lastJobId ? `（jobId=${lastJobId}）` : null}

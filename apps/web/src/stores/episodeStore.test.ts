@@ -176,8 +176,14 @@ describe('episodeStore (api)', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
       startedAt: null,
       finishedAt: null,
-    } as unknown as ReturnType<typeof apiWorkflowPlanEpisodes> extends Promise<infer T> ? T : never);
-    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded', result: null, progress: null } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
+    } as unknown as ReturnType<typeof apiWorkflowPlanEpisodes> extends Promise<infer T>
+      ? T
+      : never);
+    vi.mocked(apiWaitForAIJob).mockResolvedValue({
+      status: 'succeeded',
+      result: null,
+      progress: null,
+    } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
     vi.mocked(apiListEpisodes).mockResolvedValue([] as Episode[]);
 
     await useEpisodeStore.getState().planEpisodes({ projectId: 'proj_1', aiProfileId: 'aip_1' });
@@ -201,8 +207,16 @@ describe('episodeStore (api)', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
       startedAt: null,
       finishedAt: null,
-    } as unknown as ReturnType<typeof apiWorkflowGenerateEpisodeCoreExpression> extends Promise<infer T> ? T : never);
-    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded', result: null, progress: null } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
+    } as unknown as ReturnType<typeof apiWorkflowGenerateEpisodeCoreExpression> extends Promise<
+      infer T
+    >
+      ? T
+      : never);
+    vi.mocked(apiWaitForAIJob).mockResolvedValue({
+      status: 'succeeded',
+      result: null,
+      progress: null,
+    } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
     vi.mocked(apiListEpisodes).mockResolvedValue([] as Episode[]);
 
     await useEpisodeStore.getState().generateCoreExpression({
@@ -228,8 +242,14 @@ describe('episodeStore (api)', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
       startedAt: null,
       finishedAt: null,
-    } as unknown as ReturnType<typeof apiWorkflowGenerateEpisodeSceneList> extends Promise<infer T> ? T : never);
-    vi.mocked(apiWaitForAIJob).mockResolvedValue({ status: 'succeeded', result: null, progress: null } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
+    } as unknown as ReturnType<typeof apiWorkflowGenerateEpisodeSceneList> extends Promise<infer T>
+      ? T
+      : never);
+    vi.mocked(apiWaitForAIJob).mockResolvedValue({
+      status: 'succeeded',
+      result: null,
+      progress: null,
+    } as unknown as ReturnType<typeof apiWaitForAIJob> extends Promise<infer T> ? T : never);
     vi.mocked(apiListEpisodes).mockResolvedValue([] as Episode[]);
 
     await useEpisodeStore.getState().generateSceneList({
