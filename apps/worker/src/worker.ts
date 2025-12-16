@@ -13,6 +13,7 @@ import { llmChat } from './tasks/llmChat.js';
 import { planEpisodes } from './tasks/planEpisodes.js';
 import { generateEpisodeCoreExpression } from './tasks/generateEpisodeCoreExpression.js';
 import { generateEpisodeSceneList } from './tasks/generateEpisodeSceneList.js';
+import { buildNarrativeCausalChain } from './tasks/buildNarrativeCausalChain.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -123,6 +124,30 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               options,
+              updateProgress,
+            });
+
+            await prisma.aIJob.update({
+              where: { id: jobId },
+              data: {
+                status: 'succeeded',
+                finishedAt: new Date(),
+                result,
+                error: null,
+              },
+            });
+
+            return result;
+          }
+          case 'build_narrative_causal_chain': {
+            const phase = typeof job.data.phase === 'number' ? job.data.phase : undefined;
+            const result = await buildNarrativeCausalChain({
+              prisma,
+              teamId,
+              projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              phase,
               updateProgress,
             });
 

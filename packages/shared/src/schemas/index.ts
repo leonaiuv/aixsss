@@ -1,6 +1,7 @@
 export * from './project.js';
 export * from './scene.js';
 export * from './episode.js';
+export * from './narrativeCausalChain.js';
 export * from './auth.js';
 export * from './aiProfile.js';
 export * from './character.js';

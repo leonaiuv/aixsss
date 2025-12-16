@@ -24,6 +24,7 @@ export const UpdateProjectInputSchema = CreateProjectInputSchema.partial().exten
   workflowState: WorkflowStateSchema.optional(),
   currentSceneOrder: z.number().int().nonnegative().optional(),
   currentSceneStep: SceneStepSchema.optional(),
+  contextCache: z.unknown().optional(),
 });
 
 export type UpdateProjectInput = z.infer<typeof UpdateProjectInputSchema>;

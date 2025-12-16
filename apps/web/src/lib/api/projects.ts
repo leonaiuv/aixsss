@@ -30,6 +30,7 @@ export async function apiUpdateProject(projectId: string, updates: Partial<ApiPr
     ...(typeof updates.protagonist === 'string' ? { protagonist: updates.protagonist } : {}),
     ...(typeof updates.style === 'string' ? { style: updates.style } : {}),
     ...(updates.artStyleConfig !== undefined ? { artStyleConfig: updates.artStyleConfig } : {}),
+    ...(updates.contextCache !== undefined ? { contextCache: updates.contextCache } : {}),
     ...(typeof updates.workflowState === 'string' ? { workflowState: updates.workflowState } : {}),
     ...(typeof updates.currentSceneOrder === 'number'
       ? { currentSceneOrder: updates.currentSceneOrder }

@@ -3,7 +3,7 @@ import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
-import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
+import { isRecord, mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { EpisodePlanSchema, type EpisodePlan } from '@aixsss/shared';
 import { parseJsonFromText } from './aiJson.js';
 
@@ -33,11 +33,24 @@ function formatCharacters(items: Array<{ name: string; appearance: string; perso
     .join('\n');
 }
 
+function formatNarrativeCausalChain(contextCache: Prisma.JsonValue | null): string {
+  if (!contextCache || !isRecord(contextCache)) return '-';
+  const chain = contextCache['narrativeCausalChain'];
+  if (!chain) return '-';
+  try {
+    const json = JSON.stringify(chain, null, 2);
+    return json.length > 12000 ? json.slice(0, 12000) + '\n...TRUNCATED...' : json;
+  } catch {
+    return String(chain);
+  }
+}
+
 function buildPrompt(args: {
   storySynopsis: string;
   artStyle: string;
   worldView: string;
   characters: string;
+  narrativeCausalChain?: string;
   targetEpisodeCount?: number;
 }): string {
   return `你是专业的剧集策划。请基于以下"全局设定"，生成可执行的 N 集规划。
@@ -60,6 +73,9 @@ ${args.worldView}
 
 - 角色库：
 ${args.characters}
+
+- 叙事因果链（结构化叙事骨架；若提供，请尽量保持一致，避免引入与其冲突的新核心矛盾）：
+${args.narrativeCausalChain ?? '-'}
 
 约束：
 - 推荐集数范围：1..24
@@ -140,7 +156,7 @@ export async function planEpisodes(args: {
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, teamId, deletedAt: null },
-    select: { id: true, summary: true, style: true, artStyleConfig: true },
+    select: { id: true, summary: true, style: true, artStyleConfig: true, contextCache: true },
   });
   if (!project) throw new Error('Project not found');
 
@@ -170,6 +186,7 @@ export async function planEpisodes(args: {
     artStyle: styleFullPrompt(project),
     worldView: formatWorldView(worldViewElements),
     characters: formatCharacters(characters),
+    narrativeCausalChain: formatNarrativeCausalChain(project.contextCache),
     targetEpisodeCount: args.options?.targetEpisodeCount,
   });
 

@@ -20,6 +20,23 @@ export async function apiWorkflowPlanEpisodes(input: {
   );
 }
 
+export async function apiWorkflowBuildNarrativeCausalChain(input: {
+  projectId: string;
+  aiProfileId: string;
+  phase?: number; // 1-4，不传则自动续接下一阶段
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/narrative-causal-chain`,
+    {
+      method: 'POST',
+      body: {
+        aiProfileId: input.aiProfileId,
+        ...(typeof input.phase === 'number' ? { phase: input.phase } : {}),
+      },
+    },
+  );
+}
+
 export async function apiWorkflowGenerateEpisodeCoreExpression(input: {
   projectId: string;
   episodeId: string;

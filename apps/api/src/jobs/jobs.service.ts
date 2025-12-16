@@ -148,6 +148,41 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueBuildNarrativeCausalChain(
+    teamId: string,
+    projectId: string,
+    aiProfileId: string,
+    options?: { phase?: number },
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireAIProfile(teamId, aiProfileId);
+    await this.assertProjectPlannable(teamId, projectId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        aiProfileId,
+        type: 'build_narrative_causal_chain',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'build_narrative_causal_chain',
+      { teamId, projectId, aiProfileId, jobId: jobRow.id, phase: options?.phase },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async enqueueGenerateEpisodeCoreExpression(teamId: string, projectId: string, episodeId: string, aiProfileId: string) {
     await this.requireProject(teamId, projectId);
     await this.requireEpisode(projectId, episodeId);

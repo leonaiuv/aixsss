@@ -3,7 +3,7 @@ import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
-import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
+import { isRecord, mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { CoreExpressionSchema, type CoreExpression } from '@aixsss/shared';
 import { parseJsonFromText } from './aiJson.js';
 
@@ -33,11 +33,24 @@ function formatCharacters(items: Array<{ name: string; appearance: string; perso
     .join('\n');
 }
 
+function formatNarrativeCausalChain(contextCache: unknown): string {
+  if (!contextCache || !isRecord(contextCache)) return '-';
+  const chain = contextCache['narrativeCausalChain'];
+  if (!chain) return '-';
+  try {
+    const json = JSON.stringify(chain, null, 2);
+    return json.length > 12000 ? json.slice(0, 12000) + '\n...TRUNCATED...' : json;
+  } catch {
+    return String(chain);
+  }
+}
+
 function buildPrompt(args: {
   storySynopsis: string;
   artStyle: string;
   worldView: string;
   characters: string;
+  narrativeCausalChain?: string;
   episode: { order: number; title: string; summary: string; outline: unknown };
 }): string {
   return `你是专业编剧/分镜总监。请基于“全局设定 + 本集概要”，生成该集的「核心表达 Core Expression」。
@@ -56,6 +69,9 @@ ${args.worldView}
 
 - 角色库：
 ${args.characters}
+
+- 叙事因果链（结构化叙事骨架；若提供，请与其保持一致）：
+${args.narrativeCausalChain ?? '-'}
 
 本集信息：
 - 集数：第 ${args.episode.order} 集
@@ -104,7 +120,7 @@ export async function generateEpisodeCoreExpression(args: {
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, teamId, deletedAt: null },
-    select: { id: true, summary: true, style: true, artStyleConfig: true },
+    select: { id: true, summary: true, style: true, artStyleConfig: true, contextCache: true },
   });
   if (!project) throw new Error('Project not found');
 
@@ -140,6 +156,7 @@ export async function generateEpisodeCoreExpression(args: {
     artStyle: styleFullPrompt(project),
     worldView: formatWorldView(worldViewElements),
     characters: formatCharacters(characters),
+    narrativeCausalChain: formatNarrativeCausalChain(project.contextCache),
     episode: { order: episode.order, title: episode.title, summary: episode.summary, outline: episode.outline },
   });
 

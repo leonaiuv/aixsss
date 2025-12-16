@@ -310,10 +310,17 @@ export type EpisodeWorkflowState =
 
 // 项目上下文缓存
 export interface ProjectContextCache {
-  styleKeywords: string;
-  protagonistCore: string;
-  storyCore: string;
-  lastUpdated: string;
+  styleKeywords?: string;
+  protagonistCore?: string;
+  storyCore?: string;
+  lastUpdated?: string;
+
+  /**
+   * Project 级叙事因果链（结构化叙事骨架）
+   * 由工作流任务 build_narrative_causal_chain 写入
+   */
+  narrativeCausalChain?: unknown;
+  narrativeCausalChainUpdatedAt?: string;
 }
 
 // 项目实体

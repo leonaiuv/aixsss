@@ -16,6 +16,7 @@ export type AICallType =
   | 'motion_prompt' // 时空/运动提示词生成
   | 'dialogue' // 台词生成
   | 'episode_plan' // 剧集规划生成
+  | 'narrative_causal_chain' // 叙事因果链生成
   | 'episode_core_expression' // 单集核心表达生成
   | 'episode_scene_list' // 单集分镜列表生成
   | 'scene_refine_all' // 一键细化（后端工作流）
@@ -192,6 +193,7 @@ function formatLogOutput(entry: AICallLogEntry): void {
     motion_prompt: '🎬 时空/运动提示词生成',
     dialogue: '💬 台词生成',
     episode_plan: '🎞️ 剧集规划生成',
+    narrative_causal_chain: '🧩 叙事因果链生成',
     episode_core_expression: '🧠 单集核心表达生成',
     episode_scene_list: '🗂️ 单集分镜列表生成',
     scene_refine_all: '✨ 一键细化',

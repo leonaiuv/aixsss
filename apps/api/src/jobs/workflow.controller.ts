@@ -18,6 +18,10 @@ const EpisodeSceneListBodySchema = WorkflowBodySchema.extend({
   sceneCountHint: z.number().int().min(6).max(24).optional(),
 });
 
+const NarrativeCausalChainBodySchema = WorkflowBodySchema.extend({
+  phase: z.number().int().min(1).max(4).optional(),
+});
+
 @UseGuards(JwtAuthGuard)
 @Controller('workflow')
 export class WorkflowController {
@@ -28,6 +32,18 @@ export class WorkflowController {
     const input = parseOrBadRequest(EpisodePlanBodySchema, body);
     return this.jobs.enqueuePlanEpisodes(user.teamId, projectId, input.aiProfileId, {
       targetEpisodeCount: input.targetEpisodeCount,
+    });
+  }
+
+  @Post('projects/:projectId/narrative-causal-chain')
+  buildNarrativeCausalChain(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(NarrativeCausalChainBodySchema, body);
+    return this.jobs.enqueueBuildNarrativeCausalChain(user.teamId, projectId, input.aiProfileId, {
+      phase: input.phase,
     });
   }
 

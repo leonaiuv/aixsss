@@ -79,6 +79,7 @@ describe('EpisodeWorkflow', () => {
       setCurrentEpisode: vi.fn(),
       updateEpisode: vi.fn(),
       planEpisodes: vi.fn(),
+      buildNarrativeCausalChain: vi.fn(),
       generateCoreExpression: vi.fn(),
       generateSceneList: vi.fn(),
       createEpisode: vi.fn(),
@@ -100,6 +101,7 @@ describe('EpisodeWorkflow', () => {
     render(<EpisodeWorkflow />);
     expect(screen.getByText('Episode 工作流')).toBeInTheDocument();
     expect(screen.getByText('全局设定')).toBeInTheDocument();
+    expect(screen.getByText('叙事因果链')).toBeInTheDocument();
     expect(screen.getByText('剧集规划')).toBeInTheDocument();
     expect(screen.getByText('单集创作')).toBeInTheDocument();
     expect(screen.getByText('整合导出')).toBeInTheDocument();
@@ -140,6 +142,7 @@ describe('EpisodeWorkflow', () => {
       setCurrentEpisode: vi.fn(),
       updateEpisode: vi.fn(),
       planEpisodes: vi.fn(),
+      buildNarrativeCausalChain: vi.fn(),
       generateCoreExpression: vi.fn(),
       generateSceneList: vi.fn(),
       createEpisode: vi.fn(),

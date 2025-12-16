@@ -9,6 +9,7 @@ import {
 } from '@/lib/api/episodes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import {
+  apiWorkflowBuildNarrativeCausalChain,
   apiWorkflowGenerateEpisodeCoreExpression,
   apiWorkflowGenerateEpisodeSceneList,
   apiWorkflowPlanEpisodes,
@@ -20,6 +21,7 @@ import {
   updateLogWithResponse,
 } from '@/lib/ai/debugLogger';
 import { useConfigStore } from '@/stores/configStore';
+import { useProjectStore } from '@/stores/projectStore';
 
 type NormalizedJobProgress = { pct: number | null; message: string | null };
 
@@ -101,6 +103,8 @@ interface EpisodeStore {
     aiProfileId: string;
     sceneCountHint?: number;
   }) => Promise<void>;
+
+  buildNarrativeCausalChain: (input: { projectId: string; aiProfileId: string; phase?: number }) => Promise<void>;
 }
 
 export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
@@ -329,6 +333,61 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       const tokenUsage = normalizeJobTokenUsage(result?.tokenUsage);
       updateLogWithResponse(logId, { content: safeJson(result), tokenUsage });
       get().loadEpisodes(input.projectId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateLogWithError(logId, message);
+      set({ error: message });
+      throw error;
+    } finally {
+      set({ isRunningWorkflow: false });
+    }
+  },
+
+  buildNarrativeCausalChain: async (input) => {
+    if (!isApiMode()) {
+      throw new Error('叙事因果链生成仅在 API 模式可用');
+    }
+    set({ isRunningWorkflow: true, error: null, lastJobId: null, lastJobProgress: null });
+
+    const cfg = useConfigStore.getState().config;
+    const logId = logAICall('narrative_causal_chain', {
+      skillName: 'workflow:build_narrative_causal_chain',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/narrative-causal-chain',
+      filledPrompt: `POST /workflow/projects/${input.projectId}/narrative-causal-chain`,
+      messages: [{ role: 'user', content: safeJson(input) }],
+      context: { projectId: input.projectId },
+      config: {
+        provider: cfg?.provider ?? 'api',
+        model: cfg?.model ?? 'workflow',
+        maxTokens: cfg?.generationParams?.maxTokens,
+        profileId: cfg?.aiProfileId ?? input.aiProfileId,
+      },
+    });
+
+    try {
+      const job = await apiWorkflowBuildNarrativeCausalChain(input);
+      set({ lastJobId: job.id });
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          set({ lastJobProgress: next });
+          if (typeof next.pct === 'number')
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+        },
+      });
+
+      const result = (finished.result ?? null) as ResultLike | null;
+      const tokenUsage = normalizeJobTokenUsage(result?.tokenUsage);
+      const content =
+        typeof result?.extractedJson === 'string'
+          ? result.extractedJson
+          : typeof result?.raw === 'string'
+            ? result.raw
+            : safeJson(result);
+      updateLogWithResponse(logId, { content, tokenUsage });
+
+      // 刷新项目以拿到最新的 contextCache.narrativeCausalChain
+      useProjectStore.getState().loadProject(input.projectId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       updateLogWithError(logId, message);

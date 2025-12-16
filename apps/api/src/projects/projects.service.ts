@@ -88,6 +88,9 @@ export class ProjectsService {
         ...(input.artStyleConfig !== undefined
           ? { artStyleConfig: input.artStyleConfig as Prisma.InputJsonValue }
           : {}),
+        ...(input.contextCache !== undefined
+          ? { contextCache: input.contextCache as Prisma.InputJsonValue }
+          : {}),
         ...(input.workflowState
           ? { workflowState: input.workflowState as unknown as ProjectWorkflowState }
           : {}),

@@ -67,7 +67,7 @@ import {
   Brain,
 } from 'lucide-react';
 
-type WorkflowStep = 'global' | 'plan' | 'episode' | 'export';
+type WorkflowStep = 'global' | 'causal' | 'plan' | 'episode' | 'export';
 
 function getStyleFullPrompt(project: Project | null): string {
   if (!project) return '';
@@ -204,6 +204,7 @@ function getSceneStatusStyle(status: Scene['status']): {
 export function EpisodeWorkflow() {
   const { toast } = useToast();
   const currentProject = useProjectStore((s) => s.currentProject);
+  const updateProject = useProjectStore((s) => s.updateProject);
   const { config } = useConfigStore();
   const toggleAIPanel = useAIProgressStore((s) => s.togglePanel);
   const activeAITaskCount = useAIProgressStore(
@@ -226,6 +227,7 @@ export function EpisodeWorkflow() {
     planEpisodes,
     generateCoreExpression,
     generateSceneList,
+    buildNarrativeCausalChain,
   } = useEpisodeStore();
 
   const {
@@ -246,6 +248,10 @@ export function EpisodeWorkflow() {
   const [coreExpressionDraft, setCoreExpressionDraft] = useState('');
   const [coreExpressionDialogOpen, setCoreExpressionDialogOpen] = useState(false);
   const [coreExpressionDraftError, setCoreExpressionDraftError] = useState<string | null>(null);
+
+  const [narrativeDraft, setNarrativeDraft] = useState('');
+  const [narrativeDialogOpen, setNarrativeDialogOpen] = useState(false);
+  const [narrativeDraftError, setNarrativeDraftError] = useState<string | null>(null);
 
   const [refineDialogOpen, setRefineDialogOpen] = useState(false);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
@@ -300,12 +306,43 @@ export function EpisodeWorkflow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEpisode?.id]);
 
+  useEffect(() => {
+    if (!currentProject) return;
+    setNarrativeDraft(safeJsonStringify(currentProject.contextCache?.narrativeCausalChain));
+    setNarrativeDraftError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.id, currentProject?.contextCache?.narrativeCausalChainUpdatedAt]);
+
   const steps: Array<{ id: WorkflowStep; name: string }> = [
     { id: 'global', name: '全局设定' },
+    { id: 'causal', name: '叙事因果链' },
     { id: 'plan', name: '剧集规划' },
     { id: 'episode', name: '单集创作' },
     { id: 'export', name: '整合导出' },
   ];
+
+  const handleSaveNarrativeDraft = async () => {
+    if (!currentProject?.id) return;
+    try {
+      const parsed = JSON.parse(narrativeDraft) as unknown;
+      setNarrativeDraftError(null);
+      const base =
+        currentProject.contextCache && typeof currentProject.contextCache === 'object'
+          ? (currentProject.contextCache as Record<string, unknown>)
+          : {};
+      updateProject(currentProject.id, {
+        contextCache: {
+          ...base,
+          narrativeCausalChain: parsed,
+          narrativeCausalChainUpdatedAt: new Date().toISOString(),
+        },
+      });
+      toast({ title: '已保存', description: '叙事因果链已更新。' });
+      setNarrativeDialogOpen(false);
+    } catch (error) {
+      setNarrativeDraftError(error instanceof Error ? error.message : String(error));
+    }
+  };
 
   const handlePlanEpisodes = async () => {
     if (!aiProfileId || !currentProject?.id) return;
@@ -499,6 +536,7 @@ export function EpisodeWorkflow() {
             artStyleFullPrompt: styleFullPrompt,
             worldView: worldViewElements,
             characters: projectCharacters,
+            narrativeCausalChain: currentProject.contextCache?.narrativeCausalChain ?? null,
           },
           episodes: episodes.map((ep) => ({ ...ep, scenes: sceneMap.get(ep.id) ?? [] })),
           exportedAt: new Date().toISOString(),
@@ -540,6 +578,11 @@ ${styleFullPrompt || '-'}
           });
           md += '\n';
         }
+
+        md += `### 叙事因果链（JSON）\n\n`;
+        md += `\`\`\`json\n`;
+        md += `${safeJsonStringify(currentProject.contextCache?.narrativeCausalChain)}\n`;
+        md += `\`\`\`\n\n`;
 
         md += `## 剧集规划与单集产物\n\n`;
         for (const ep of episodes) {
@@ -632,16 +675,190 @@ ${safeJsonStringify(ep.coreExpression)}
 
   const getStepStatus = (step: WorkflowStep): 'completed' | 'current' | 'pending' => {
     if (step === activeStep) return 'current';
-    const order: WorkflowStep[] = ['global', 'plan', 'episode', 'export'];
+    const order: WorkflowStep[] = ['global', 'causal', 'plan', 'episode', 'export'];
     return order.indexOf(step) < order.indexOf(activeStep) ? 'completed' : 'pending';
   };
 
-  const renderPlanStep = () => {
+  const renderCausalStep = () => {
     const summaryLen = (currentProject?.summary ?? '').trim().length;
     const hasStyle = Boolean(styleFullPrompt.trim());
     const missing: string[] = [];
     if (summaryLen < 100) missing.push('故事梗概 ≥ 100 字');
     if (!hasStyle) missing.push('画风（Full Prompt）');
+    if (!aiProfileId) missing.push('AI Profile（在「设置」中选择）');
+
+    const narrative = currentProject?.contextCache?.narrativeCausalChain ?? null;
+    const updatedAt = currentProject?.contextCache?.narrativeCausalChainUpdatedAt ?? null;
+
+    // 分阶段信息
+    const completedPhase = (narrative as { completedPhase?: number } | null)?.completedPhase ?? 0;
+    const validationStatus = (narrative as { validationStatus?: string } | null)?.validationStatus ?? 'incomplete';
+    const outlineSummary = (narrative as { outlineSummary?: string } | null)?.outlineSummary ?? null;
+
+    const phases = [
+      { phase: 1, name: '核心冲突', desc: '故事大纲 + 冲突引擎' },
+      { phase: 2, name: '信息分层', desc: '信息能见度层 + 角色矩阵' },
+      { phase: 3, name: '节拍流程', desc: '三/四幕结构的节拍设计' },
+      { phase: 4, name: '叙事线交织', desc: '明暗线 + 自洽校验' },
+    ];
+
+    const handlePhase = async (phase: number) => {
+      if (!aiProfileId || !currentProject?.id) return;
+      try {
+        toast({ title: `开始阶段 ${phase}`, description: phases[phase - 1].desc });
+        await buildNarrativeCausalChain({ projectId: currentProject.id, aiProfileId, phase });
+        toast({ title: `阶段 ${phase} 完成`, description: phases[phase - 1].name });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        toast({ title: `阶段 ${phase} 失败`, description: detail, variant: 'destructive' });
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <Card className="p-6">
+          <div className="flex items-start justify-between gap-6">
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold">叙事因果链（分阶段生成）</h2>
+              <p className="text-sm text-muted-foreground">
+                将复杂的因果链拆分为 4 个阶段，每阶段专注一个模块，AI 输出更稳定。
+              </p>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Badge variant={summaryLen >= 100 ? 'default' : 'destructive'}>
+                  梗概 {summaryLen}/100
+                </Badge>
+                <Badge variant={hasStyle ? 'default' : 'destructive'}>
+                  画风 {hasStyle ? 'OK' : '缺失'}
+                </Badge>
+                <Badge variant={worldViewElements.length > 0 ? 'secondary' : 'outline'}>
+                  世界观 {worldViewElements.length}
+                </Badge>
+                <Badge variant={projectCharacters.length > 0 ? 'secondary' : 'outline'}>
+                  角色 {projectCharacters.length}
+                </Badge>
+                <Badge variant={completedPhase >= 4 ? 'default' : completedPhase > 0 ? 'secondary' : 'outline'}>
+                  进度 {completedPhase}/4
+                </Badge>
+                {validationStatus === 'pass' ? (
+                  <Badge variant="default">✓ 自洽校验通过</Badge>
+                ) : validationStatus === 'needs_revision' ? (
+                  <Badge variant="destructive">需修订</Badge>
+                ) : null}
+              </div>
+              {missing.length > 0 ? (
+                <p className="text-sm text-destructive">缺少：{missing.join('、')}</p>
+              ) : null}
+              {updatedAt ? (
+                <p className="text-xs text-muted-foreground">
+                  最近更新：{new Date(updatedAt).toLocaleString('zh-CN')}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="w-full max-w-md space-y-3">
+              {/* 分阶段按钮 */}
+              <div className="grid grid-cols-2 gap-2">
+                {phases.map((p) => {
+                  const isCompleted = completedPhase >= p.phase;
+                  const isNext = completedPhase === p.phase - 1;
+                  const canRun = canPlan && !isRunningWorkflow && (isNext || isCompleted);
+
+                  return (
+                    <Button
+                      key={p.phase}
+                      onClick={() => handlePhase(p.phase)}
+                      disabled={!canRun}
+                      variant={isCompleted ? 'secondary' : isNext ? 'default' : 'outline'}
+                      className="w-full gap-1 text-xs h-auto py-2"
+                    >
+                      {isRunningWorkflow && isNext ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : isCompleted ? (
+                        <span className="text-green-600">✓</span>
+                      ) : (
+                        <span className="opacity-50">{p.phase}</span>
+                      )}
+                      <span className="truncate">{p.name}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setNarrativeDialogOpen(true)}
+                  disabled={!currentProject?.id}
+                  className="flex-1"
+                  size="sm"
+                >
+                  编辑 JSON
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setActiveStep('plan')}
+                  disabled={completedPhase < 1}
+                  className="flex-1"
+                  size="sm"
+                >
+                  下一步
+                </Button>
+              </div>
+
+              {isRunningWorkflow ? (
+                <div className="pt-2 space-y-2">
+                  <Progress value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0} />
+                  <div className="text-xs text-muted-foreground">
+                    {lastJobProgress?.message || '排队中...'}
+                    {lastJobId ? ` · jobId=${lastJobId}` : null}
+                  </div>
+                </div>
+              ) : null}
+
+              <p className="text-xs text-muted-foreground">
+                ⏱ 每阶段约 30-60s。可在「AI 调试面板」查看详细日志。
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        {/* 大纲摘要 */}
+        {outlineSummary ? (
+          <Card className="p-6 border-l-4 border-l-primary">
+            <h3 className="font-semibold mb-2">故事大纲摘要（阶段1产物）</h3>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{outlineSummary}</p>
+          </Card>
+        ) : null}
+
+        {/* 完整 JSON */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold">因果链产物（JSON）</h3>
+            <div className="text-sm text-muted-foreground">
+              {completedPhase >= 4 ? '全部完成' : completedPhase > 0 ? `已完成 ${completedPhase}/4 阶段` : '暂无产物'}
+            </div>
+          </div>
+          <Separator className="my-4" />
+          {narrative ? (
+            <JsonViewer value={narrative} />
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              点击上方按钮开始分阶段生成。建议先完善世界观与角色关系。
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  };
+
+  const renderPlanStep = () => {
+    const summaryLen = (currentProject?.summary ?? '').trim().length;
+    const hasStyle = Boolean(styleFullPrompt.trim());
+    const hasCausalChain = Boolean(currentProject?.contextCache?.narrativeCausalChain);
+    const missing: string[] = [];
+    if (summaryLen < 100) missing.push('故事梗概 ≥ 100 字');
+    if (!hasStyle) missing.push('画风（Full Prompt）');
+    if (!hasCausalChain) missing.push('叙事因果链（请先生成）');
     if (!aiProfileId) missing.push('AI Profile（在「设置」中选择）');
 
     return (
@@ -659,6 +876,9 @@ ${safeJsonStringify(ep.coreExpression)}
                 </Badge>
                 <Badge variant={hasStyle ? 'default' : 'destructive'}>
                   画风 {hasStyle ? 'OK' : '缺失'}
+                </Badge>
+                <Badge variant={hasCausalChain ? 'default' : 'destructive'}>
+                  因果链 {hasCausalChain ? 'OK' : '缺失'}
                 </Badge>
                 <Badge variant={worldViewElements.length > 0 ? 'secondary' : 'outline'}>
                   世界观 {worldViewElements.length}
@@ -690,7 +910,7 @@ ${safeJsonStringify(ep.coreExpression)}
               </div>
               <Button
                 onClick={handlePlanEpisodes}
-                disabled={!canPlan || isRunningWorkflow}
+                disabled={!canPlan || !hasCausalChain || isRunningWorkflow}
                 className="w-full gap-2"
               >
                 {isRunningWorkflow ? (
@@ -1350,10 +1570,11 @@ ${safeJsonStringify(ep.coreExpression)}
           {activeStep === 'global' && (
             <BasicSettings
               minSummaryLength={100}
-              proceedText="确认并进入剧集规划"
-              onProceed={() => setActiveStep('plan')}
+              proceedText="确认并进入叙事因果链"
+              onProceed={() => setActiveStep('causal')}
             />
           )}
+          {activeStep === 'causal' && renderCausalStep()}
           {activeStep === 'plan' && renderPlanStep()}
           {activeStep === 'episode' && renderEpisodeStep()}
           {activeStep === 'export' && renderExportStep()}
@@ -1397,6 +1618,30 @@ ${safeJsonStringify(ep.coreExpression)}
               取消
             </Button>
             <Button onClick={handleSaveCoreExpressionDraft}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={narrativeDialogOpen} onOpenChange={setNarrativeDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>编辑叙事因果链（JSON）</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea
+              value={narrativeDraft}
+              onChange={(e) => setNarrativeDraft(e.target.value)}
+              className="min-h-[420px] font-mono text-xs"
+            />
+            {narrativeDraftError ? (
+              <div className="text-sm text-destructive">JSON 解析失败：{narrativeDraftError}</div>
+            ) : null}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setNarrativeDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleSaveNarrativeDraft}>保存</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
