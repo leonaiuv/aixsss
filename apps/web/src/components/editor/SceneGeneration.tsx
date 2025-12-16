@@ -141,7 +141,9 @@ export function SceneGeneration() {
           config: {
             provider: config.provider,
             model: config.model,
-            maxTokens: (config as Record<string, unknown>)?.generationParams as number | undefined,
+            maxTokens: (config as unknown as Record<string, unknown>)?.generationParams as
+              | number
+              | undefined,
             profileId: aiProfileId,
           },
         });
@@ -171,7 +173,10 @@ export function SceneGeneration() {
         });
 
         const result = (finished.result ?? null) as Record<string, unknown> | null;
-        const tokenUsageRaw = result?.tokenUsage ?? null;
+        const tokenUsageRaw = result?.tokenUsage as
+          | { prompt?: unknown; completion?: unknown; total?: unknown }
+          | null
+          | undefined;
         const tokenUsage =
           tokenUsageRaw &&
           typeof tokenUsageRaw === 'object' &&
