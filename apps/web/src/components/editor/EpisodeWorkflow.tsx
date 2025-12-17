@@ -1583,7 +1583,9 @@ ${safeJsonStringify(ep.coreExpression)}
                   className="w-full h-10 px-3 rounded-md border bg-background text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   value={currentEpisodeId ?? ''}
                   onChange={(e) => setCurrentEpisode(e.target.value || null)}
-                  disabled={isRunningWorkflow || isRefining || isBatchBlocked || isBatchRefineRunning}
+                  disabled={
+                    isRunningWorkflow || isRefining || isBatchBlocked || isBatchRefineRunning
+                  }
                 >
                   <option value="">请选择</option>
                   {episodes.map((ep) => (
@@ -1821,7 +1823,11 @@ ${safeJsonStringify(ep.coreExpression)}
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => (isBatchRefineRunning ? setBatchRefineDialogOpen(true) : openBatchRefineDialog())}
+                      onClick={() =>
+                        isBatchRefineRunning
+                          ? setBatchRefineDialogOpen(true)
+                          : openBatchRefineDialog()
+                      }
                       disabled={!aiProfileId || sortedScenes.length === 0 || isRunningWorkflow}
                       className="gap-2"
                     >
@@ -1845,55 +1851,55 @@ ${safeJsonStringify(ep.coreExpression)}
                 ) : (
                   <div className="space-y-3">
                     {sortedScenes.map((scene) => (
-                        <div key={scene.id} className="rounded-lg border p-4">
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary">#{scene.order}</Badge>
-                                {(() => {
-                                  const statusStyle = getSceneStatusStyle(scene.status);
-                                  return (
+                      <div key={scene.id} className="rounded-lg border p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary">#{scene.order}</Badge>
+                              {(() => {
+                                const statusStyle = getSceneStatusStyle(scene.status);
+                                return (
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyle.className}`}
+                                  >
                                     <span
-                                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyle.className}`}
-                                    >
-                                      <span
-                                        className={`h-2 w-2 rounded-full ${statusStyle.dotClass}`}
-                                      />
-                                      {statusStyle.label}
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                              <p className="text-sm mt-2 truncate">{scene.summary}</p>
+                                      className={`h-2 w-2 rounded-full ${statusStyle.dotClass}`}
+                                    />
+                                    {statusStyle.label}
+                                  </span>
+                                );
+                              })()}
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setRefineDialogOpen(true);
-                                  setSelectedSceneId(scene.id);
-                                }}
-                              >
-                                打开详情
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => handleRefineSceneAll(scene.id)}
-                                disabled={!aiProfileId || isRefining || isBatchBlocked}
-                                className="gap-2"
-                              >
-                                {isRefining && refiningSceneId === scene.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Sparkles className="h-4 w-4" />
-                                )}
-                                <span>一键细化</span>
-                              </Button>
-                            </div>
+                            <p className="text-sm mt-2 truncate">{scene.summary}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setRefineDialogOpen(true);
+                                setSelectedSceneId(scene.id);
+                              }}
+                            >
+                              打开详情
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleRefineSceneAll(scene.id)}
+                              disabled={!aiProfileId || isRefining || isBatchBlocked}
+                              className="gap-2"
+                            >
+                              {isRefining && refiningSceneId === scene.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-4 w-4" />
+                              )}
+                              <span>一键细化</span>
+                            </Button>
                           </div>
                         </div>
-                      ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </Card>
@@ -2414,7 +2420,8 @@ ${safeJsonStringify(ep.coreExpression)}
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">
-                注意：细化会由后端 worker 写回 Scene（可能覆盖 sceneDescription/shotPrompt/motionPrompt/dialogues）。
+                注意：细化会由后端 worker 写回 Scene（可能覆盖
+                sceneDescription/shotPrompt/motionPrompt/dialogues）。
                 建议在开始前完成当前编辑或先关闭详情编辑弹窗。
               </div>
             )}

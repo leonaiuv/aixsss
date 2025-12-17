@@ -47,10 +47,7 @@ import {
 } from '@/lib/ai/debugLogger';
 import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
-import {
-  generateBGMPrompt,
-  generateTransitionPrompt,
-} from '@/lib/ai/multiModalPrompts';
+import { generateBGMPrompt, generateTransitionPrompt } from '@/lib/ai/multiModalPrompts';
 import {
   checkTokenLimit,
   calculateTotalTokens,
@@ -230,20 +227,20 @@ export function SceneRefinement() {
   // 使用 useCallback 优化导航回调 - 必须在条件返回之前
   const goToPrevScene = useCallback(() => {
     if (currentSceneIndex <= 0 || !projectId) return;
-      try {
-        flushScenePatchQueue();
-      } catch {}
-      setCurrentSceneIndex(currentSceneIndex - 1);
-      updateProject(projectId, { currentSceneOrder: currentSceneIndex });
+    try {
+      flushScenePatchQueue();
+    } catch {}
+    setCurrentSceneIndex(currentSceneIndex - 1);
+    updateProject(projectId, { currentSceneOrder: currentSceneIndex });
   }, [currentSceneIndex, projectId, updateProject]);
 
   const goToNextScene = useCallback(() => {
     if (currentSceneIndex >= scenes.length - 1 || !projectId) return;
-      try {
-        flushScenePatchQueue();
-      } catch {}
-      setCurrentSceneIndex(currentSceneIndex + 1);
-      updateProject(projectId, { currentSceneOrder: currentSceneIndex + 2 });
+    try {
+      flushScenePatchQueue();
+    } catch {}
+    setCurrentSceneIndex(currentSceneIndex + 1);
+    updateProject(projectId, { currentSceneOrder: currentSceneIndex + 2 });
   }, [currentSceneIndex, scenes.length, projectId, updateProject]);
 
   const goToScene = useCallback(
@@ -985,7 +982,8 @@ export function SceneRefinement() {
   );
 
   // 检查是否被外部批量操作禁用（如批量面板/单集工作流正在批量执行）
-  const isExternallyBlocked = isGlobalBatchGenerating && batchGeneratingSource !== 'scene_refinement';
+  const isExternallyBlocked =
+    isGlobalBatchGenerating && batchGeneratingSource !== 'scene_refinement';
   const externalBlockMessage = isExternallyBlocked ? '批量操作正在进行中，请等待完成' : '';
 
   function handleShortcutPrevScene() {
