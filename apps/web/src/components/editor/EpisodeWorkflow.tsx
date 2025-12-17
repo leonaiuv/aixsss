@@ -388,7 +388,9 @@ export function EpisodeWorkflow() {
         }
         const updatedTs = Date.parse(updatedAt);
         const latestTs = Date.parse(latestCreatedAt);
-        setHasChainUnversionedChanges(Number.isFinite(updatedTs) && Number.isFinite(latestTs) ? updatedTs > latestTs : false);
+        setHasChainUnversionedChanges(
+          Number.isFinite(updatedTs) && Number.isFinite(latestTs) ? updatedTs > latestTs : false,
+        );
       } catch {
         if (cancelled) return;
         setChainVersionCount(null);
@@ -399,7 +401,11 @@ export function EpisodeWorkflow() {
     return () => {
       cancelled = true;
     };
-  }, [currentProject?.id, currentProject?.contextCache?.narrativeCausalChain, currentProject?.contextCache?.narrativeCausalChainUpdatedAt]);
+  }, [
+    currentProject?.id,
+    currentProject?.contextCache?.narrativeCausalChain,
+    currentProject?.contextCache?.narrativeCausalChainUpdatedAt,
+  ]);
 
   const steps: Array<{ id: WorkflowStep; name: string }> = [
     { id: 'global', name: '全局设定' },
@@ -856,7 +862,10 @@ ${safeJsonStringify(ep.coreExpression)}
         phase,
         ...(isForce ? { force: true } : {}),
       });
-      toast({ title: isForce ? `阶段 ${phase} 已重新生成` : `阶段 ${phase} 完成`, description: meta.name });
+      toast({
+        title: isForce ? `阶段 ${phase} 已重新生成` : `阶段 ${phase} 完成`,
+        description: meta.name,
+      });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       toast({ title: `阶段 ${phase} 失败`, description: detail, variant: 'destructive' });
@@ -1084,7 +1093,6 @@ ${safeJsonStringify(ep.coreExpression)}
             <NarrativeCausalChainReadable value={narrative} />
           </Card>
         ) : null}
-
       </div>
     );
   };

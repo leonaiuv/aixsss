@@ -54,5 +54,3 @@ export async function apiRestoreNarrativeCausalChainVersion(
     { method: 'POST', body: input },
   );
 }
-
-

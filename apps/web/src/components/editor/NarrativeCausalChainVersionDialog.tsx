@@ -5,7 +5,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
@@ -115,7 +121,7 @@ export function NarrativeCausalChainVersionDialog(props: {
     if (!apiEnabled) return;
     const current = selectedId;
     const listHasCurrent = current ? versions.some((v) => v.id === current) : false;
-    const nextId = listHasCurrent ? current : versions[0]?.id ?? null;
+    const nextId = listHasCurrent ? current : (versions[0]?.id ?? null);
     if (!nextId) return;
     if (nextId !== selectedId) setSelectedId(nextId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,7 +210,9 @@ export function NarrativeCausalChainVersionDialog(props: {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm text-muted-foreground">
-                {props.narrativeUpdatedAt ? `当前因果链更新时间：${fmtTime(props.narrativeUpdatedAt)}` : '当前因果链未生成'}
+                {props.narrativeUpdatedAt
+                  ? `当前因果链更新时间：${fmtTime(props.narrativeUpdatedAt)}`
+                  : '当前因果链未生成'}
                 {versions.length ? ` · 共 ${versions.length} 个版本` : ''}
               </div>
               <div className="flex items-center gap-2">
@@ -234,7 +242,9 @@ export function NarrativeCausalChainVersionDialog(props: {
             <Separator />
 
             {listError ? (
-              <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{listError}</div>
+              <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                {listError}
+              </div>
             ) : loadingList ? (
               <div className="text-sm text-muted-foreground">加载版本列表中...</div>
             ) : versions.length === 0 ? (
@@ -242,7 +252,13 @@ export function NarrativeCausalChainVersionDialog(props: {
                 <div className="text-sm text-muted-foreground">
                   当前项目还没有版本记录（可能是旧项目/刚迁移/还没触发自动记录）。
                 </div>
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => setMode('snapshot')} disabled={!hasNarrative || working}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setMode('snapshot')}
+                  disabled={!hasNarrative || working}
+                >
                   <Save className="h-4 w-4" />
                   从当前因果链创建首个版本
                 </Button>
@@ -261,7 +277,9 @@ export function NarrativeCausalChainVersionDialog(props: {
                         const title = v.label?.trim() ? v.label : `版本 ${v.id.slice(0, 8)}`;
                         const meta = [
                           typeof v.phase === 'number' ? `phase=${v.phase}` : null,
-                          typeof v.completedPhase === 'number' ? `进度=${v.completedPhase}/4` : null,
+                          typeof v.completedPhase === 'number'
+                            ? `进度=${v.completedPhase}/4`
+                            : null,
                           v.validationStatus ? `校验=${v.validationStatus}` : null,
                         ]
                           .filter(Boolean)
@@ -278,7 +296,9 @@ export function NarrativeCausalChainVersionDialog(props: {
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <Badge variant={src.variant}>{src.label}</Badge>
-                              {isLatest && idx === 0 ? <Badge variant="secondary">最新</Badge> : null}
+                              {isLatest && idx === 0 ? (
+                                <Badge variant="secondary">最新</Badge>
+                              ) : null}
                               <span className="font-medium truncate">{title}</span>
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
@@ -340,7 +360,12 @@ export function NarrativeCausalChainVersionDialog(props: {
               <Card className="p-4 border-l-4 border-l-primary">
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-medium">创建快照</div>
-                  <Button variant="outline" size="sm" onClick={() => setMode('browse')} disabled={working}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMode('browse')}
+                    disabled={working}
+                  >
                     取消
                   </Button>
                 </div>
@@ -379,13 +404,21 @@ export function NarrativeCausalChainVersionDialog(props: {
               <Card className="p-4 border-l-4 border-l-destructive">
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-medium">确认恢复</div>
-                  <Button variant="outline" size="sm" onClick={() => setMode('browse')} disabled={working}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMode('browse')}
+                    disabled={working}
+                  >
                     取消
                   </Button>
                 </div>
                 <div className="mt-3 space-y-3">
                   <div className="text-sm text-muted-foreground">
-                    将恢复到：{selectedMeta ? `${selectedMeta.label || selectedMeta.id.slice(0, 8)}（${fmtTime(selectedMeta.createdAt)}）` : '未选择'}
+                    将恢复到：
+                    {selectedMeta
+                      ? `${selectedMeta.label || selectedMeta.id.slice(0, 8)}（${fmtTime(selectedMeta.createdAt)}）`
+                      : '未选择'}
                   </div>
                   <div className="text-sm text-destructive">
                     恢复会覆盖当前因果链产物，并可能影响后续剧集规划/单集生成。系统会自动创建一条“恢复”版本记录，便于再次回滚。
@@ -408,7 +441,11 @@ export function NarrativeCausalChainVersionDialog(props: {
                     />
                   </div>
                   <div className="flex justify-end">
-                    <Button variant="destructive" onClick={() => void handleRestore()} disabled={!canRestore}>
+                    <Button
+                      variant="destructive"
+                      onClick={() => void handleRestore()}
+                      disabled={!canRestore}
+                    >
                       确认恢复
                     </Button>
                   </div>
@@ -427,5 +464,3 @@ export function NarrativeCausalChainVersionDialog(props: {
     </Dialog>
   );
 }
-
-
