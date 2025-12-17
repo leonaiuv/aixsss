@@ -6,7 +6,11 @@ import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useEpisodeStore } from '@/stores/episodeStore';
 import { useEpisodeScenesStore } from '@/stores/episodeScenesStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
-import { apiGetEpisodeScene, apiListEpisodeScenes, apiReorderEpisodeScenes } from '@/lib/api/episodeScenes';
+import {
+  apiGetEpisodeScene,
+  apiListEpisodeScenes,
+  apiReorderEpisodeScenes,
+} from '@/lib/api/episodeScenes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
 import { flushApiEpisodeScenePatchQueue } from '@/lib/api/episodeScenePatchQueue';
@@ -883,16 +887,15 @@ export function EpisodeWorkflow() {
             const fresh = await apiGetEpisodeScene(projectId, episodeId, sceneId);
             const current = useEpisodeScenesStore.getState().scenes;
             const prev = current.find((s) => s.id === sceneId) ?? null;
-            const merged: Scene =
-              prev
-                ? ({
-                    ...prev,
-                    ...fresh,
-                    // preserve local editable fields if user changed them mid-run
-                    summary: prev.summary,
-                    notes: prev.notes,
-                  } as Scene)
-                : (fresh as Scene);
+            const merged: Scene = prev
+              ? ({
+                  ...prev,
+                  ...fresh,
+                  // preserve local editable fields if user changed them mid-run
+                  summary: prev.summary,
+                  notes: prev.notes,
+                } as Scene)
+              : (fresh as Scene);
             const next = current.some((s) => s.id === sceneId)
               ? current.map((s) => (s.id === sceneId ? merged : s))
               : [...current, merged];
@@ -2609,8 +2612,8 @@ ${safeJsonStringify(ep.coreExpression)}
 
               {isRefineOverwriteLocked ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  批量细化进行中：本分镜的「场景锚点/关键帧/运动/台词」会被 worker 写回覆盖，已暂时锁定为只读（可复制）。
-                  完成后会自动解锁。
+                  批量细化进行中：本分镜的「场景锚点/关键帧/运动/台词」会被 worker
+                  写回覆盖，已暂时锁定为只读（可复制）。 完成后会自动解锁。
                 </div>
               ) : null}
 
