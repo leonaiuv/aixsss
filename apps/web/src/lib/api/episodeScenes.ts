@@ -10,6 +10,15 @@ export async function apiListEpisodeScenes(projectId: string, episodeId: string)
   );
 }
 
+export async function apiGetEpisodeScene(projectId: string, episodeId: string, sceneId: string) {
+  return apiRequest<ApiEpisodeScene>(
+    `/projects/${encodeURIComponent(projectId)}/episodes/${encodeURIComponent(
+      episodeId,
+    )}/scenes/${encodeURIComponent(sceneId)}`,
+    { method: 'GET' },
+  );
+}
+
 export async function apiCreateEpisodeScene(
   projectId: string,
   episodeId: string,

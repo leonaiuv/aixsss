@@ -6,7 +6,7 @@ import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useEpisodeStore } from '@/stores/episodeStore';
 import { useEpisodeScenesStore } from '@/stores/episodeScenesStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
-import { apiListEpisodeScenes, apiReorderEpisodeScenes } from '@/lib/api/episodeScenes';
+import { apiGetEpisodeScene, apiListEpisodeScenes, apiReorderEpisodeScenes } from '@/lib/api/episodeScenes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
 import { flushApiEpisodeScenePatchQueue } from '@/lib/api/episodeScenePatchQueue';
@@ -116,6 +116,17 @@ function normalizeJobProgress(progress: unknown): NormalizedJobProgress {
   const pct = typeof p?.pct === 'number' ? p.pct : null;
   const message = typeof p?.message === 'string' ? p.message : null;
   return { pct, message };
+}
+
+function deriveSceneStatusFromRefineProgress(pct: number | null): Scene['status'] | null {
+  if (typeof pct !== 'number' || !Number.isFinite(pct)) return null;
+  if (pct >= 100) return 'completed';
+  if (pct >= 60) return 'motion_generating';
+  if (pct >= 55) return 'keyframe_confirmed';
+  if (pct >= 30) return 'keyframe_generating';
+  if (pct >= 25) return 'scene_confirmed';
+  if (pct >= 0) return 'scene_generating';
+  return null;
 }
 
 function normalizeJobTokenUsage(
@@ -379,6 +390,18 @@ export function EpisodeWorkflow() {
   const batchFailedSet = useMemo(() => {
     return new Set(batchOperations.failedScenes);
   }, [batchOperations.failedScenes]);
+
+  const setLocalSceneStatus = (sceneId: string, status: Scene['status']) => {
+    const current = useEpisodeScenesStore.getState().scenes;
+    let changed = false;
+    const next = current.map((s): Scene => {
+      if (s.id !== sceneId) return s;
+      if (s.status === status) return s;
+      changed = true;
+      return { ...s, status };
+    });
+    if (changed) setScenes(next);
+  };
 
   const nextEpisodeOrder = useMemo(() => {
     if (episodes.length === 0) return 1;
@@ -677,14 +700,28 @@ export function EpisodeWorkflow() {
     setIsRefining(true);
     setRefiningSceneId(sceneId);
     setRefineJobProgress(null);
+    let lastPct = -1;
     try {
       await flushApiEpisodeScenePatchQueue().catch(() => {});
-      await runRefineSceneAllJob(sceneId, { onProgress: (next) => setRefineJobProgress(next) });
+      // 先乐观置为“生成中”，避免首个 progress 到来前主列表仍是旧状态
+      setLocalSceneStatus(sceneId, 'scene_generating');
+      await runRefineSceneAllJob(sceneId, {
+        onProgress: (next) => {
+          setRefineJobProgress(next);
+          if (typeof next.pct === 'number') {
+            if (next.pct < lastPct) return;
+            lastPct = next.pct;
+            const status = deriveSceneStatusFromRefineProgress(next.pct);
+            if (status) setLocalSceneStatus(sceneId, status);
+          }
+        },
+      });
       if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
       toast({ title: '分镜细化完成', description: '已更新当前分镜内容。' });
     } catch (error) {
       if (!isAbortError(error)) {
         const detail = error instanceof Error ? error.message : String(error);
+        setLocalSceneStatus(sceneId, 'needs_update');
         toast({ title: '分镜细化失败', description: detail, variant: 'destructive' });
       }
     } finally {
@@ -773,6 +810,7 @@ export function EpisodeWorkflow() {
     let successCount = 0;
     let failCount = 0;
     let cancelled = false;
+    const lastPctByScene: Map<string, number> = new Map();
 
     try {
       for (let i = 0; i < orderedIds.length; i += 1) {
@@ -803,11 +841,21 @@ export function EpisodeWorkflow() {
         });
 
         try {
+          // 进入该分镜：先标记为生成中（避免 UI 延迟）
+          setLocalSceneStatus(sceneId, 'scene_generating');
+          lastPctByScene.set(sceneId, -1);
           await runRefineSceneAllJob(sceneId, {
             signal: abortController.signal,
             extraContext: { batchIndex: i + 1, batchTotal: orderedIds.length, batchMode: 'bulk' },
             onProgress: (next) => {
               setRefineJobProgress(next);
+              if (typeof next.pct === 'number') {
+                const prev = lastPctByScene.get(sceneId) ?? -1;
+                if (next.pct < prev) return; // 防止网络乱序导致“状态跳动”
+                lastPctByScene.set(sceneId, next.pct);
+                const status = deriveSceneStatusFromRefineProgress(next.pct);
+                if (status) setLocalSceneStatus(sceneId, status);
+              }
               const delta = typeof next.pct === 'number' ? next.pct / 100 : 0;
               const overall = Math.round(((i + delta) / orderedIds.length) * 100);
               updateBatchOperations({
@@ -821,6 +869,38 @@ export function EpisodeWorkflow() {
 
           successCount += 1;
           addBatchCompletedScene(sceneId);
+
+          // 增量同步：每个分镜完成后立刻拉取最新 Scene 并更新到 store，
+          // 避免主列表“待处理”滞后，同时尽量不覆盖用户正在编辑的 summary/notes。
+          try {
+            // 先乐观标记 status，避免网络慢时 UI 继续显示旧状态
+            const latestScenes = useEpisodeScenesStore.getState().scenes;
+            const optimistic = latestScenes.map(
+              (s): Scene => (s.id === sceneId ? { ...s, status: 'completed' } : s),
+            );
+            setScenes(optimistic);
+
+            const fresh = await apiGetEpisodeScene(projectId, episodeId, sceneId);
+            const current = useEpisodeScenesStore.getState().scenes;
+            const prev = current.find((s) => s.id === sceneId) ?? null;
+            const merged: Scene =
+              prev
+                ? ({
+                    ...prev,
+                    ...fresh,
+                    // preserve local editable fields if user changed them mid-run
+                    summary: prev.summary,
+                    notes: prev.notes,
+                  } as Scene)
+                : (fresh as Scene);
+            const next = current.some((s) => s.id === sceneId)
+              ? current.map((s) => (s.id === sceneId ? merged : s))
+              : [...current, merged];
+            setScenes(next);
+            sceneById.set(sceneId, merged);
+          } catch {
+            // ignore incremental sync failures; final loadScenes() will reconcile
+          }
         } catch (error) {
           if (isAbortError(error)) {
             cancelled = true;
@@ -828,6 +908,7 @@ export function EpisodeWorkflow() {
           }
           failCount += 1;
           addBatchFailedScene(sceneId);
+          setLocalSceneStatus(sceneId, 'needs_update');
           const detail = error instanceof Error ? error.message : String(error);
           setBatchRefineErrors((prev) => ({ ...prev, [sceneId]: detail }));
         }
@@ -1962,6 +2043,13 @@ ${safeJsonStringify(ep.coreExpression)}
     ? (scenes.find((s) => s.id === selectedSceneId) ?? null)
     : null;
 
+  const isRefineOverwriteLocked =
+    Boolean(refineScene) &&
+    isBatchRefineRunning &&
+    batchOperations.selectedScenes.has(refineScene!.id) &&
+    !batchCompletedSet.has(refineScene!.id) &&
+    !batchFailedSet.has(refineScene!.id);
+
   // 解析场景锚点
   const parsedRefineSceneAnchor = useMemo(() => {
     return parseSceneAnchorText(refineScene?.sceneDescription || '');
@@ -2519,6 +2607,13 @@ ${safeJsonStringify(ep.coreExpression)}
                 </div>
               ) : null}
 
+              {isRefineOverwriteLocked ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  批量细化进行中：本分镜的「场景锚点/关键帧/运动/台词」会被 worker 写回覆盖，已暂时锁定为只读（可复制）。
+                  完成后会自动解锁。
+                </div>
+              ) : null}
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <Label>场景锚点（Scene Anchor）</Label>
@@ -2548,12 +2643,14 @@ ${safeJsonStringify(ep.coreExpression)}
                 <Textarea
                   value={refineScene.sceneDescription}
                   onChange={(e) =>
+                    !isRefineOverwriteLocked &&
                     currentEpisode?.id &&
                     updateScene(currentProject.id, currentEpisode.id, refineScene.id, {
                       sceneDescription: e.target.value,
                     })
                   }
-                  className="min-h-[120px]"
+                  readOnly={isRefineOverwriteLocked}
+                  className={`min-h-[120px] ${isRefineOverwriteLocked ? 'bg-muted/30' : ''}`}
                 />
               </div>
 
@@ -2636,12 +2733,14 @@ ${safeJsonStringify(ep.coreExpression)}
                 <Textarea
                   value={refineScene.shotPrompt}
                   onChange={(e) =>
+                    !isRefineOverwriteLocked &&
                     currentEpisode?.id &&
                     updateScene(currentProject.id, currentEpisode.id, refineScene.id, {
                       shotPrompt: e.target.value,
                     })
                   }
-                  className="min-h-[160px]"
+                  readOnly={isRefineOverwriteLocked}
+                  className={`min-h-[160px] ${isRefineOverwriteLocked ? 'bg-muted/30' : ''}`}
                 />
               </div>
 
@@ -2702,12 +2801,14 @@ ${safeJsonStringify(ep.coreExpression)}
                 <Textarea
                   value={refineScene.motionPrompt}
                   onChange={(e) =>
+                    !isRefineOverwriteLocked &&
                     currentEpisode?.id &&
                     updateScene(currentProject.id, currentEpisode.id, refineScene.id, {
                       motionPrompt: e.target.value,
                     })
                   }
-                  className="min-h-[160px]"
+                  readOnly={isRefineOverwriteLocked}
+                  className={`min-h-[160px] ${isRefineOverwriteLocked ? 'bg-muted/30' : ''}`}
                 />
               </div>
 
@@ -2840,6 +2941,11 @@ ${safeJsonStringify(ep.coreExpression)}
 
               <div className="space-y-2">
                 <Label>备注（Notes）</Label>
+                {isRefineOverwriteLocked ? (
+                  <div className="text-xs text-muted-foreground">
+                    备注不会被批量细化覆盖，可继续编辑。
+                  </div>
+                ) : null}
                 <Textarea
                   value={refineScene.notes}
                   onChange={(e) =>
@@ -2863,6 +2969,7 @@ ${safeJsonStringify(ep.coreExpression)}
                       setRefineDialogOpen(false);
                     })();
                   }}
+                  disabled={isRefineOverwriteLocked}
                 >
                   删除分镜
                 </Button>
