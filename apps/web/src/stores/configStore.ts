@@ -642,8 +642,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               ? { baseURL: normalizedBaseURL }
               : {}),
             ...(cfg.generationParams !== undefined
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ? { generationParams: cfg.generationParams as any }
+              ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                { generationParams: cfg.generationParams as any }
               : {}),
             ...(cfg.apiKey?.trim() ? { apiKey: cfg.apiKey.trim() } : {}),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

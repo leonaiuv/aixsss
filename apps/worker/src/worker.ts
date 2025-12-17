@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Worker } from 'bullmq';
 import type { JobProgress } from 'bullmq';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { EnvSchema } from './config/env.js';
 import { generateSceneList } from './tasks/generateSceneList.js';
 import { generateSceneAnchor } from './tasks/generateSceneAnchor.js';
@@ -54,7 +54,7 @@ async function main() {
           startedAt: new Date(),
           finishedAt: null,
           error: null,
-          result: null,
+          result: Prisma.JsonNull,
           attempts: { increment: 1 },
         },
       });

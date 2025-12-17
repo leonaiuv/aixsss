@@ -97,7 +97,12 @@ export function AIParameterTuner({
     handlePresetChange('balanced');
   };
 
-  type NumericParamKey = 'temperature' | 'topP' | 'maxTokens' | 'presencePenalty' | 'frequencyPenalty';
+  type NumericParamKey =
+    | 'temperature'
+    | 'topP'
+    | 'maxTokens'
+    | 'presencePenalty'
+    | 'frequencyPenalty';
   const updateParam = (key: NumericParamKey, value: number) => {
     onParamsChange({ ...params, [key]: value });
     setPreset('custom');
@@ -205,7 +210,9 @@ export function AIParameterTuner({
                 <Select
                   value={params.reasoningEffort ?? 'default'}
                   onValueChange={(v) =>
-                    updateReasoningEffort(v === 'default' ? undefined : (v as AIGenerationParams['reasoningEffort']))
+                    updateReasoningEffort(
+                      v === 'default' ? undefined : (v as AIGenerationParams['reasoningEffort']),
+                    )
                   }
                 >
                   <SelectTrigger>
@@ -222,7 +229,8 @@ export function AIParameterTuner({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  提示：更高推理强度通常更稳但更慢/更贵；若追求速度可选 none/minimal/low。若供应商返回“不支持该档位”，系统会自动降级。
+                  提示：更高推理强度通常更稳但更慢/更贵；若追求速度可选
+                  none/minimal/low。若供应商返回“不支持该档位”，系统会自动降级。
                 </p>
               </div>
             </CardContent>

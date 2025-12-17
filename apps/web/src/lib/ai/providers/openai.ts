@@ -106,11 +106,7 @@ function mapUsageToTokenUsage(usage: unknown): AIResponse['tokenUsage'] | undefi
         ? (prompt ?? 0) + (completion ?? 0)
         : undefined;
 
-  if (
-    typeof prompt !== 'number' ||
-    typeof completion !== 'number' ||
-    typeof total !== 'number'
-  ) {
+  if (typeof prompt !== 'number' || typeof completion !== 'number' || typeof total !== 'number') {
     return undefined;
   }
   return { prompt, completion, total };
@@ -250,7 +246,10 @@ export class OpenAICompatibleProvider implements AIProvider {
 
     const callResponses = async () => {
       const url = buildResponsesUrl(config.baseURL);
-      const normalizedEffort = normalizeReasoningEffortForModel(config.model, params?.reasoningEffort);
+      const normalizedEffort = normalizeReasoningEffortForModel(
+        config.model,
+        params?.reasoningEffort,
+      );
       const response = await fetch(url, {
         method: 'POST',
         headers: {
