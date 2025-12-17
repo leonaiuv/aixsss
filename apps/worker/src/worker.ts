@@ -141,6 +141,7 @@ async function main() {
           }
           case 'build_narrative_causal_chain': {
             const phase = typeof job.data.phase === 'number' ? job.data.phase : undefined;
+            const force = typeof job.data.force === 'boolean' ? job.data.force : undefined;
             const result = await buildNarrativeCausalChain({
               prisma,
               teamId,
@@ -148,6 +149,7 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               phase,
+              force,
               updateProgress,
             });
 

@@ -3,6 +3,7 @@ import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
+import { randomUUID } from 'node:crypto';
 import { mergeTokenUsage, toProviderChatConfig, styleFullPrompt, isRecord } from './common.js';
 import {
   NarrativeCausalChainSchema,
@@ -20,6 +21,89 @@ import {
 import { parseJsonFromText } from './aiJson.js';
 
 // ===================== 格式化函数 =====================
+
+const MAX_CHAIN_VERSIONS_PER_PROJECT = 50;
+
+async function tryCreateNarrativeCausalChainVersion(args: {
+  prisma: PrismaClient;
+  teamId: string;
+  projectId: string;
+  source: 'ai' | 'manual' | 'restore';
+  phase: number | null;
+  label: string | null;
+  note: string | null;
+  basedOnVersionId: string | null;
+  chain: unknown;
+}) {
+  const { prisma, teamId, projectId } = args;
+
+  // 单测/某些 mock prisma 可能没有 $executeRaw：此功能为 best-effort，不应影响主流程
+  if (typeof (prisma as unknown as { $executeRaw?: unknown }).$executeRaw !== 'function') return;
+
+  const id = randomUUID();
+
+  const chainObj = args.chain as Record<string, unknown> | null;
+  const completedPhase = chainObj && typeof chainObj.completedPhase === 'number' ? chainObj.completedPhase : null;
+  const validationStatus =
+    chainObj && typeof chainObj.validationStatus === 'string' ? chainObj.validationStatus : null;
+  const chainSchemaVersion = chainObj && typeof chainObj.version === 'string' ? chainObj.version : null;
+
+  try {
+    const chainJson = JSON.stringify(args.chain ?? null);
+    await prisma.$executeRaw`
+      INSERT INTO "NarrativeCausalChainVersion" (
+        "id",
+        "teamId",
+        "projectId",
+        "userId",
+        "source",
+        "phase",
+        "completedPhase",
+        "validationStatus",
+        "chainSchemaVersion",
+        "label",
+        "note",
+        "basedOnVersionId",
+        "chain"
+      ) VALUES (
+        ${id},
+        ${teamId},
+        ${projectId},
+        ${null},
+        ${args.source}::"NarrativeCausalChainVersionSource",
+        ${args.phase},
+        ${completedPhase},
+        ${validationStatus},
+        ${chainSchemaVersion},
+        ${args.label},
+        ${args.note},
+        ${args.basedOnVersionId},
+        ${chainJson}::jsonb
+      )
+    `;
+
+    // 裁剪旧版本（best-effort）
+    await prisma.$executeRaw`
+      DELETE FROM "NarrativeCausalChainVersion"
+      WHERE "teamId" = ${teamId}
+        AND "projectId" = ${projectId}
+        AND "id" IN (
+          SELECT "id"
+          FROM "NarrativeCausalChainVersion"
+          WHERE "teamId" = ${teamId} AND "projectId" = ${projectId}
+          ORDER BY "createdAt" DESC
+          OFFSET ${MAX_CHAIN_VERSIONS_PER_PROJECT}
+        )
+    `;
+  } catch (err) {
+    // 兼容：未迁移数据库时不阻断主流程
+    try {
+      console.warn('[worker] NarrativeCausalChainVersion insert failed (maybe not migrated):', err);
+    } catch {
+      // ignore
+    }
+  }
+}
 
 function formatWorldView(items: Array<{ type: string; title: string; content: string; order: number }>): string {
   if (items.length === 0) return '-';
@@ -457,6 +541,7 @@ export async function buildNarrativeCausalChain(args: {
   aiProfileId: string;
   apiKeySecret: string;
   phase?: number; // 1-4，不传则自动续接
+  force?: boolean; // 显式“重新生成”：忽略缓存/达标判断
   updateProgress: (progress: JobProgress) => Promise<void>;
 }) {
   const { prisma, teamId, projectId, aiProfileId, apiKeySecret, updateProgress } = args;
@@ -513,6 +598,7 @@ export async function buildNarrativeCausalChain(args: {
 
   // 执行对应阶段
   let updatedChain: NarrativeCausalChain;
+  const force = args.force === true;
 
   if (targetPhase === 1) {
     await updateProgress({ pct: 20, message: '阶段1：生成核心冲突引擎...' });
@@ -619,11 +705,14 @@ export async function buildNarrativeCausalChain(args: {
 
     // === 3A：生成节拍目录（轻量） ===
     let beatFlow: Phase3BeatFlow['beatFlow'] | null =
-      (existingChain?.beatFlow as Phase3BeatFlow['beatFlow'] | null) ?? null;
+      (force ? null : (existingChain?.beatFlow as Phase3BeatFlow['beatFlow'] | null)) ?? null;
     let phase3Mutated = false;
 
     if (!beatFlow || !Array.isArray(beatFlow.acts) || beatFlow.acts.length === 0) {
-      await updateProgress({ pct: 18, message: '阶段3A：生成节拍目录（轻量）...' });
+      await updateProgress({
+        pct: 18,
+        message: force ? '阶段3A：重新生成节拍目录（强制）...' : '阶段3A：生成节拍目录（轻量）...',
+      });
       const promptA = buildPhase3OutlinePrompt({ phase1, phase2 });
       const resA = await chatWithProvider(providerConfig, [{ role: 'user', content: promptA }]);
       if (!resA.content?.trim()) throw new Error('AI 返回空内容');
@@ -673,7 +762,7 @@ export async function buildNarrativeCausalChain(args: {
       if (beats.length === 0) continue;
 
       const actAlreadyDetailed = beats.every((b) => isBeatDetailedEnough(b as unknown as Record<string, unknown>));
-      if (actAlreadyDetailed) continue;
+      if (!force && actAlreadyDetailed) continue;
 
       await updateProgress({
         pct: 30 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 45),
@@ -775,6 +864,15 @@ export async function buildNarrativeCausalChain(args: {
       ...existingChain!,
       completedPhase: nextCompletedPhase,
       beatFlow: currentBeatFlow,
+      ...(phase3Mutated
+        ? {
+          // 若阶段3发生变更（尤其是 force 重新生成），阶段4产物可能不再自洽：主动清空，避免“看起来还在但其实过期”
+          validationStatus: 'incomplete',
+          revisionSuggestions: [],
+          plotLines: [],
+          consistencyChecks: null,
+        }
+        : {}),
     };
   } else {
     // targetPhase === 4
@@ -845,6 +943,19 @@ export async function buildNarrativeCausalChain(args: {
     data: {
       contextCache: mergeProjectContextCache(contextCacheForWrite, updatedChain),
     },
+  });
+
+  // 版本快照：仅在阶段成功落库后创建一条（避免 phase3 的中间 checkpoint 产生大量版本）
+  await tryCreateNarrativeCausalChainVersion({
+    prisma,
+    teamId,
+    projectId,
+    source: 'ai',
+    phase: targetPhase,
+    label: `AI 阶段${targetPhase}`,
+    note: fixed ? `自动修复输出：${lastParseError ?? ''}`.trim() || null : null,
+    basedOnVersionId: null,
+    chain: updatedChain,
   });
 
   await updateProgress({ pct: 100, message: `阶段 ${targetPhase} 完成` });

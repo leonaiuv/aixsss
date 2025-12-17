@@ -152,7 +152,7 @@ export class JobsService {
     teamId: string,
     projectId: string,
     aiProfileId: string,
-    options?: { phase?: number },
+    options?: { phase?: number; force?: boolean },
   ) {
     await this.requireProject(teamId, projectId);
     await this.requireAIProfile(teamId, aiProfileId);
@@ -170,7 +170,14 @@ export class JobsService {
 
     await this.queue.add(
       'build_narrative_causal_chain',
-      { teamId, projectId, aiProfileId, jobId: jobRow.id, phase: options?.phase },
+      {
+        teamId,
+        projectId,
+        aiProfileId,
+        jobId: jobRow.id,
+        phase: options?.phase,
+        force: options?.force === true,
+      },
       {
         jobId: jobRow.id,
         attempts: 2,

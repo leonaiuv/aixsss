@@ -2,6 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateProjectInput, UpdateProjectInput } from '@aixsss/shared';
 import type { Prisma, Project, ProjectWorkflowState } from '@prisma/client';
+import { NarrativeCausalChainVersionsService } from './narrative-causal-chain-versions.service.js';
 
 function toIso(date: Date): string {
   return date.toISOString();
@@ -24,7 +25,24 @@ function mapProject(project: Project): ApiProject {
 
 @Injectable()
 export class ProjectsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(NarrativeCausalChainVersionsService)
+    private readonly chainVersions: NarrativeCausalChainVersionsService,
+  ) {}
+
+  private extractChainUpdatedAt(cache: unknown): string | null {
+    if (!cache || typeof cache !== 'object') return null;
+    const c = cache as Record<string, unknown>;
+    const ts = c.narrativeCausalChainUpdatedAt;
+    return typeof ts === 'string' ? ts : null;
+  }
+
+  private extractChain(cache: unknown): unknown | null {
+    if (!cache || typeof cache !== 'object') return null;
+    const c = cache as Record<string, unknown>;
+    return c.narrativeCausalChain ?? null;
+  }
 
   async list(teamId: string) {
     const projects = await this.prisma.project.findMany({
@@ -71,12 +89,14 @@ export class ProjectsService {
     return mapProject(project);
   }
 
-  async update(teamId: string, projectId: string, input: UpdateProjectInput) {
+  async update(teamId: string, projectId: string, input: UpdateProjectInput, userId?: string) {
     const existing = await this.prisma.project.findFirst({
       where: { id: projectId, teamId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, contextCache: true },
     });
     if (!existing) throw new NotFoundException('Project not found');
+
+    const prevChainUpdatedAt = this.extractChainUpdatedAt(existing.contextCache);
 
     const project = await this.prisma.project.update({
       where: { id: projectId },
@@ -98,6 +118,33 @@ export class ProjectsService {
         ...(input.currentSceneStep ? { currentSceneStep: input.currentSceneStep } : {}),
       },
     });
+
+    // 若本次更新确实“推进/修改”了叙事因果链，则自动写入一条版本（手动编辑来源）
+    try {
+      const nextCache = input.contextCache !== undefined ? input.contextCache : null;
+      const nextChain = this.extractChain(nextCache);
+      const nextUpdatedAt = this.extractChainUpdatedAt(nextCache);
+      if (nextChain && nextUpdatedAt && nextUpdatedAt !== prevChainUpdatedAt) {
+        const phase = (() => {
+          if (!nextChain || typeof nextChain !== 'object' || Array.isArray(nextChain)) return null;
+          const v = (nextChain as Record<string, unknown>).completedPhase;
+          return typeof v === 'number' ? v : null;
+        })();
+        await this.chainVersions.tryCreateVersion({
+          teamId,
+          projectId,
+          userId: typeof userId === 'string' ? userId : null,
+          source: 'manual',
+          phase: typeof phase === 'number' ? phase : null,
+          label: '手动保存',
+          note: null,
+          basedOnVersionId: null,
+          chain: nextChain,
+        });
+      }
+    } catch {
+      // best-effort：版本写入失败不应阻断主更新
+    }
     return mapProject(project);
   }
 

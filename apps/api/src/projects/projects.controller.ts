@@ -30,7 +30,7 @@ export class ProjectsController {
   @Patch(':projectId')
   update(@CurrentUser() user: AuthUser, @Param('projectId') projectId: string, @Body() body: unknown) {
     const input = parseOrBadRequest(UpdateProjectInputSchema, body);
-    return this.projects.update(user.teamId, projectId, input);
+    return this.projects.update(user.teamId, projectId, input, user.userId);
   }
 
   @Delete(':projectId')

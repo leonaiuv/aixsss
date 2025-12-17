@@ -24,6 +24,11 @@ export async function apiWorkflowBuildNarrativeCausalChain(input: {
   projectId: string;
   aiProfileId: string;
   phase?: number; // 1-4，不传则自动续接下一阶段
+  /**
+   * 显式“重新生成”：忽略已有缓存/达标判断，强制重跑对应阶段
+   * （用于 UI 的 rerun 按钮）
+   */
+  force?: boolean;
 }) {
   return apiRequest<ApiAIJob>(
     `/workflow/projects/${encodeURIComponent(input.projectId)}/narrative-causal-chain`,
@@ -32,6 +37,7 @@ export async function apiWorkflowBuildNarrativeCausalChain(input: {
       body: {
         aiProfileId: input.aiProfileId,
         ...(typeof input.phase === 'number' ? { phase: input.phase } : {}),
+        ...(input.force ? { force: true } : {}),
       },
     },
   );

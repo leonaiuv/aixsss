@@ -65,6 +65,12 @@ enum AIJobStatus {
   cancelled
 }
 
+enum NarrativeCausalChainVersionSource {
+  ai
+  manual
+  restore
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -74,6 +80,7 @@ model User {
 
   memberships  TeamMember[]
   auditLogs    AuditLog[]
+  narrativeCausalChainVersions NarrativeCausalChainVersion[]
 }
 
 model Team {
@@ -87,6 +94,7 @@ model Team {
   aiProfiles AIProfile[]
   auditLogs AuditLog[]
   jobs      AIJob[]
+  narrativeCausalChainVersions NarrativeCausalChainVersion[]
 }
 
 model TeamMember {
@@ -120,6 +128,7 @@ model Project {
   deletedAt        DateTime?
 
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  narrativeCausalChainVersions NarrativeCausalChainVersion[]
   episodes Episode[]
   scenes Scene[]
   characters Character[]
@@ -127,6 +136,39 @@ model Project {
   jobs   AIJob[]
 
   @@index([teamId, updatedAt(sort: Desc)])
+}
+
+model NarrativeCausalChainVersion {
+  id               String   @id @default(cuid())
+  teamId           String
+  projectId        String
+  userId           String?
+  source           NarrativeCausalChainVersionSource
+  /** 触发该版本生成的阶段号（1-4，手动快照可为空） */
+  phase            Int?
+  /** 快照时的因果链完成阶段（0-4） */
+  completedPhase   Int?
+  /** 快照时的自洽校验状态：pass/needs_revision/incomplete */
+  validationStatus String?
+  /** 因果链 schema version（如 2.0.0） */
+  chainSchemaVersion String?
+  /** 用户可读标签（可空） */
+  label            String?
+  /** 备注（可空） */
+  note             String?
+  /** 若是恢复/派生，可指向来源版本 id（不做外键约束，便于软迁移） */
+  basedOnVersionId String?
+  /** 完整的叙事因果链 JSON */
+  chain            Json
+  createdAt        DateTime @default(now())
+
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([teamId, createdAt(sort: Desc)])
+  @@index([userId])
 }
 
 model Episode {

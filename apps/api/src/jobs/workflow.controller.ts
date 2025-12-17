@@ -20,6 +20,7 @@ const EpisodeSceneListBodySchema = WorkflowBodySchema.extend({
 
 const NarrativeCausalChainBodySchema = WorkflowBodySchema.extend({
   phase: z.number().int().min(1).max(4).optional(),
+  force: z.boolean().optional(),
 });
 
 @UseGuards(JwtAuthGuard)
@@ -44,6 +45,7 @@ export class WorkflowController {
     const input = parseOrBadRequest(NarrativeCausalChainBodySchema, body);
     return this.jobs.enqueueBuildNarrativeCausalChain(user.teamId, projectId, input.aiProfileId, {
       phase: input.phase,
+      force: input.force,
     });
   }
 

@@ -10,6 +10,8 @@ import { apiListEpisodeScenes, apiReorderEpisodeScenes } from '@/lib/api/episode
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
+import { isApiMode } from '@/lib/runtime/mode';
+import { apiListNarrativeCausalChainVersions } from '@/lib/api/narrativeCausalChainVersions';
 import {
   migrateOldStyleToConfig,
   type DialogueLine,
@@ -50,6 +52,7 @@ import { BasicSettings } from './BasicSettings';
 import { SceneSortable } from './SceneSortable';
 import { StatisticsPanel } from './StatisticsPanel';
 import { NarrativeCausalChainReadable } from './NarrativeCausalChainReadable';
+import { NarrativeCausalChainVersionDialog } from './NarrativeCausalChainVersionDialog';
 import {
   CheckCircle2,
   Circle,
@@ -58,6 +61,7 @@ import {
   RefreshCw,
   Plus,
   Trash2,
+  History,
   FileText,
   Copy,
   Download,
@@ -285,6 +289,9 @@ export function EpisodeWorkflow() {
   const [newEpisodeSummaryDraft, setNewEpisodeSummaryDraft] = useState('');
   const [deleteEpisodeDialogOpen, setDeleteEpisodeDialogOpen] = useState(false);
   const [pendingDeleteEpisode, setPendingDeleteEpisode] = useState<Episode | null>(null);
+  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [chainVersionCount, setChainVersionCount] = useState<number | null>(null);
+  const [hasChainUnversionedChanges, setHasChainUnversionedChanges] = useState(false);
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'markdown' | 'json'>('markdown');
@@ -345,6 +352,54 @@ export function EpisodeWorkflow() {
     setNarrativeDraftError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.id, currentProject?.contextCache?.narrativeCausalChainUpdatedAt]);
+
+  // 版本管理入口提示：版本数量 + “新变更”提示点
+  useEffect(() => {
+    const projectId = currentProject?.id;
+    const narrative = currentProject?.contextCache?.narrativeCausalChain ?? null;
+    const updatedAt = currentProject?.contextCache?.narrativeCausalChainUpdatedAt ?? null;
+    if (!projectId || !isApiMode()) {
+      setChainVersionCount(null);
+      setHasChainUnversionedChanges(false);
+      return;
+    }
+    if (!narrative) {
+      setChainVersionCount(0);
+      setHasChainUnversionedChanges(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const list = await apiListNarrativeCausalChainVersions(projectId, 50);
+        if (cancelled) return;
+        setChainVersionCount(list.length);
+
+        // “新变更”定义：当前因果链更新时间晚于最新版本创建时间，或当前有因果链但尚无任何版本记录
+        if (!updatedAt) {
+          setHasChainUnversionedChanges(list.length === 0);
+          return;
+        }
+        const latestCreatedAt = list[0]?.createdAt ?? null;
+        if (!latestCreatedAt) {
+          setHasChainUnversionedChanges(true);
+          return;
+        }
+        const updatedTs = Date.parse(updatedAt);
+        const latestTs = Date.parse(latestCreatedAt);
+        setHasChainUnversionedChanges(Number.isFinite(updatedTs) && Number.isFinite(latestTs) ? updatedTs > latestTs : false);
+      } catch {
+        if (cancelled) return;
+        setChainVersionCount(null);
+        setHasChainUnversionedChanges(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentProject?.id, currentProject?.contextCache?.narrativeCausalChain, currentProject?.contextCache?.narrativeCausalChainUpdatedAt]);
 
   const steps: Array<{ id: WorkflowStep; name: string }> = [
     { id: 'global', name: '全局设定' },
@@ -554,7 +609,8 @@ export function EpisodeWorkflow() {
     if (nextEpisodeOrder > 24) {
       toast({
         title: '无法新增',
-        description: '当前 Episode 数量已达到 24（UI 推荐上限）。如需更多集数，请先删除或调整规划。',
+        description:
+          '当前 Episode 数量已达到 24（UI 推荐上限）。如需更多集数，请先删除或调整规划。',
         variant: 'destructive',
       });
       return;
@@ -783,15 +839,24 @@ ${safeJsonStringify(ep.coreExpression)}
     return order.indexOf(step) < order.indexOf(activeStep) ? 'completed' : 'pending';
   };
 
-  const handleCausalPhase = async (phase: number) => {
+  const handleCausalPhase = async (phase: number, opts?: { force?: boolean }) => {
     if (!aiProfileId || !currentProject?.id) return;
     const meta = CAUSAL_CHAIN_PHASES.find((p) => p.phase === phase);
     if (!meta) return;
     setRunningPhase(phase);
     try {
-      toast({ title: `开始阶段 ${phase}`, description: meta.desc });
-      await buildNarrativeCausalChain({ projectId: currentProject.id, aiProfileId, phase });
-      toast({ title: `阶段 ${phase} 完成`, description: meta.name });
+      const isForce = opts?.force === true;
+      toast({
+        title: isForce ? `重新生成阶段 ${phase}` : `开始阶段 ${phase}`,
+        description: isForce ? `强制重生成（忽略缓存）：${meta.desc}` : meta.desc,
+      });
+      await buildNarrativeCausalChain({
+        projectId: currentProject.id,
+        aiProfileId,
+        phase,
+        ...(isForce ? { force: true } : {}),
+      });
+      toast({ title: isForce ? `阶段 ${phase} 已重新生成` : `阶段 ${phase} 完成`, description: meta.name });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       toast({ title: `阶段 ${phase} 失败`, description: detail, variant: 'destructive' });
@@ -927,6 +992,28 @@ ${safeJsonStringify(ep.coreExpression)}
                   编辑 JSON
                 </Button>
                 <Button
+                  variant="outline"
+                  onClick={() => setVersionDialogOpen(true)}
+                  disabled={!currentProject?.id}
+                  className="flex-1 gap-2 relative"
+                  size="sm"
+                >
+                  {hasChainUnversionedChanges ? (
+                    <span
+                      className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-background"
+                      aria-label="有新变更未记录为版本"
+                      title="有新变更未记录为版本"
+                    />
+                  ) : null}
+                  <History className="h-4 w-4" />
+                  版本
+                  {typeof chainVersionCount === 'number' ? (
+                    <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1 text-[11px] font-medium rounded-full bg-muted text-foreground">
+                      {chainVersionCount}
+                    </span>
+                  ) : null}
+                </Button>
+                <Button
                   variant="secondary"
                   onClick={() => setActiveStep('plan')}
                   disabled={completedPhase < 1}
@@ -997,6 +1084,7 @@ ${safeJsonStringify(ep.coreExpression)}
             <NarrativeCausalChainReadable value={narrative} />
           </Card>
         ) : null}
+
       </div>
     );
   };
@@ -1869,7 +1957,7 @@ ${safeJsonStringify(ep.coreExpression)}
               variant="destructive"
               disabled={!pendingRerunPhase || isRunningWorkflow || runningPhase !== null}
               onClick={() => {
-                if (pendingRerunPhase) void handleCausalPhase(pendingRerunPhase);
+                if (pendingRerunPhase) void handleCausalPhase(pendingRerunPhase, { force: true });
                 setRerunPhaseDialogOpen(false);
                 setPendingRerunPhase(null);
               }}
@@ -2392,6 +2480,16 @@ ${safeJsonStringify(ep.coreExpression)}
         </DialogContent>
       </Dialog>
 
+      {currentProject?.id ? (
+        <NarrativeCausalChainVersionDialog
+          open={versionDialogOpen}
+          onOpenChange={setVersionDialogOpen}
+          projectId={currentProject.id}
+          narrative={currentProject.contextCache?.narrativeCausalChain ?? null}
+          narrativeUpdatedAt={currentProject.contextCache?.narrativeCausalChainUpdatedAt ?? null}
+        />
+      ) : null}
+
       <Dialog
         open={createEpisodeDialogOpen}
         onOpenChange={(open) => {
@@ -2460,7 +2558,8 @@ ${safeJsonStringify(ep.coreExpression)}
                 : '将删除所选 Episode。'}
             </div>
             <div className="text-destructive">
-              删除后该集下的分镜/相关数据会一并移除（不可恢复）。同时将自动重排后续集数，保持 order 连续。
+              删除后该集下的分镜/相关数据会一并移除（不可恢复）。同时将自动重排后续集数，保持 order
+              连续。
             </div>
           </div>
           <DialogFooter className="gap-2">

@@ -108,6 +108,7 @@ interface EpisodeStore {
     projectId: string;
     aiProfileId: string;
     phase?: number;
+    force?: boolean;
   }) => Promise<void>;
 }
 
