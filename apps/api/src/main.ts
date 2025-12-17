@@ -4,6 +4,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { ConfigService } from '@nestjs/config';
 import type { Env } from './config/env.js';
 import { AppModule } from './app.module.js';
+import { AllExceptionsFilter } from './common/all-exceptions.filter.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
@@ -18,6 +19,7 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   await app.listen(port, '0.0.0.0');
   console.log(`[api] listening on http://localhost:${port}/api`);

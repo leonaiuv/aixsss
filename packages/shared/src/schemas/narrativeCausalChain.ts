@@ -18,10 +18,10 @@ export const Phase1ConflictEngineSchema = z.object({
       publicReason: z.string().max(4000).optional().nullable(),
       hiddenIntent: z.string().max(4000).optional().nullable(),
       legitimacyMask: z.string().max(4000).optional().nullable(),
-    }).optional().nullable(),
+    }).passthrough().optional().nullable(),
     necessityDerivation: z.array(z.string().max(800)).default([]),
-  }),
-});
+  }).passthrough(),
+}).passthrough();
 export type Phase1ConflictEngine = z.infer<typeof Phase1ConflictEngineSchema>;
 
 // ========== 阶段2：信息能见度层 + 角色矩阵 ==========
@@ -41,8 +41,8 @@ export const Phase2InfoLayersSchema = z.object({
       gain: coerceInt,
       lossAvoid: coerceInt,
       activationTrigger: z.string().max(4000).optional().nullable(),
-    }).optional().nullable(),
-  })).default([]),
+    }).passthrough().optional().nullable(),
+  }).passthrough()).default([]),
   characterMatrix: z.array(z.object({
     name: z.string().max(200).optional().nullable(), // 改为可选，避免校验失败
     identity: z.string().max(800).optional().nullable(),
@@ -50,8 +50,8 @@ export const Phase2InfoLayersSchema = z.object({
     secret: z.string().max(4000).optional().nullable(),
     vulnerability: z.string().max(4000).optional().nullable(),
     assumptions: z.array(z.string().max(800)).optional().nullable(),
-  })).default([]),
-});
+  }).passthrough()).default([]),
+}).passthrough();
 export type Phase2InfoLayers = z.infer<typeof Phase2InfoLayersSchema>;
 
 // ========== 阶段3：节拍流程（增强版：场景化节拍） ==========
@@ -102,7 +102,7 @@ const SceneBeatSchema = z.object({
   visualHook: z.string().max(1000).optional().nullable().describe('视觉钩子：关键画面/动作/道具描述'),
   emotionalTone: z.string().max(200).optional().nullable().describe('情绪基调：如"紧张/温馨/悲壮"'),
   estimatedScenes: coerceInt.describe('预估分镜数(1-10)'),
-});
+}).passthrough();
 
 export const Phase3BeatFlowSchema = z.object({
   beatFlow: z.object({
@@ -116,10 +116,10 @@ export const Phase3BeatFlowSchema = z.object({
           (val) => (val === null ? undefined : val),
           z.array(SceneBeatSchema).default([])
         ),
-      })).default([])
+      }).passthrough()).default([])
     ),
-  }),
-});
+  }).passthrough(),
+}).passthrough();
 export type Phase3BeatFlow = z.infer<typeof Phase3BeatFlowSchema>;
 
 // ========== 阶段4：叙事线 + 自洽校验 ==========
@@ -159,7 +159,7 @@ export const Phase4PlotLinesSchema = z.object({
     trueGoal: z.string().max(4000).optional().nullable(),
     keyInterlocks: coerceStringArray(120),
     pointOfNoReturn: z.string().max(120).optional().nullable(),
-  })).default([]),
+  }).passthrough()).default([]),
   consistencyChecks: z.object({
     blindSpotDrivesAction: coerceBool,
     infoFlowChangesAtLeastTwo: coerceBool,
@@ -167,8 +167,8 @@ export const Phase4PlotLinesSchema = z.object({
     endingIrreversibleTriggeredByMultiLines: coerceBool,
     noRedundantRole: coerceBool,
     notes: z.array(z.string().max(4000)).default([]),
-  }).optional().nullable(),
-});
+  }).passthrough().optional().nullable(),
+}).passthrough();
 export type Phase4PlotLines = z.infer<typeof Phase4PlotLinesSchema>;
 
 // ===================== 完整的叙事因果链（合并所有阶段） =====================
@@ -191,9 +191,9 @@ export const NarrativeCausalChainSchema = z.object({
       publicReason: z.string().max(4000).optional().nullable(),
       hiddenIntent: z.string().max(4000).optional().nullable(),
       legitimacyMask: z.string().max(4000).optional().nullable(),
-    }).optional().nullable(),
+    }).passthrough().optional().nullable(),
     necessityDerivation: z.array(z.string().max(800)).default([]),
-  }).optional().nullable(),
+  }).passthrough().optional().nullable(),
   
   // 阶段2：信息层 + 角色矩阵
   infoVisibilityLayers: z.array(z.object({
@@ -205,8 +205,8 @@ export const NarrativeCausalChainSchema = z.object({
       gain: z.number().int().min(1).max(10).optional().nullable(),
       lossAvoid: z.number().int().min(1).max(10).optional().nullable(),
       activationTrigger: z.string().max(4000).optional().nullable(),
-    }).optional().nullable(),
-  })).default([]),
+    }).passthrough().optional().nullable(),
+  }).passthrough()).default([]),
   characterMatrix: z.array(z.object({
     name: z.string().max(200).optional().nullable(),
     identity: z.string().max(800).optional().nullable(),
@@ -214,7 +214,7 @@ export const NarrativeCausalChainSchema = z.object({
     secret: z.string().max(4000).optional().nullable(),
     vulnerability: z.string().max(4000).optional().nullable(),
     assumptions: z.array(z.string().max(800)).optional().nullable(),
-  })).default([]),
+  }).passthrough()).default([]),
   
   // 阶段3：节拍流程（场景化版本）
   beatFlow: z.object({
@@ -234,9 +234,9 @@ export const NarrativeCausalChainSchema = z.object({
         visualHook: z.string().max(1000).optional().nullable(),
         emotionalTone: z.string().max(200).optional().nullable(),
         estimatedScenes: z.number().int().min(1).max(10).optional().nullable(),
-      })).default([]),
-    })).default([]),
-  }).optional().nullable(),
+      }).passthrough()).default([]),
+    }).passthrough()).default([]),
+  }).passthrough().optional().nullable(),
   
   // 阶段4：叙事线 + 自洽校验
   plotLines: z.array(z.object({
@@ -246,7 +246,7 @@ export const NarrativeCausalChainSchema = z.object({
     trueGoal: z.string().max(4000).optional().nullable(),
     keyInterlocks: z.array(z.string().max(120)).default([]),
     pointOfNoReturn: z.string().max(120).optional().nullable(),
-  })).default([]),
+  }).passthrough()).default([]),
   consistencyChecks: z.object({
     blindSpotDrivesAction: z.boolean().optional().nullable(),
     infoFlowChangesAtLeastTwo: z.boolean().optional().nullable(),
@@ -254,7 +254,7 @@ export const NarrativeCausalChainSchema = z.object({
     endingIrreversibleTriggeredByMultiLines: z.boolean().optional().nullable(),
     noRedundantRole: z.boolean().optional().nullable(),
     notes: z.array(z.string().max(4000)).default([]),
-  }).optional().nullable(),
+  }).passthrough().optional().nullable(),
 }).passthrough();
 
 export type NarrativeCausalChain = z.infer<typeof NarrativeCausalChainSchema>;

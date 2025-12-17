@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { Phase3BeatFlowSchema, Phase4PlotLinesSchema } from './narrativeCausalChain.js';
+import {
+  NarrativeCausalChainSchema,
+  Phase1ConflictEngineSchema,
+  Phase3BeatFlowSchema,
+  Phase4PlotLinesSchema,
+} from './narrativeCausalChain.js';
 
 describe('Narrative Causal Chain schemas', () => {
   it('Phase3BeatFlowSchema 支持 actMode/act/characters 的容错转换', () => {
@@ -63,6 +68,57 @@ describe('Narrative Causal Chain schemas', () => {
     expect(parsed.plotLines[0].keyInterlocks).toEqual(['发现线索', '对峙失控']);
     expect(parsed.consistencyChecks?.blindSpotDrivesAction).toBe(true);
     expect(parsed.consistencyChecks?.infoFlowChangesAtLeastTwo).toBe(false);
+  });
+
+  it('应保留扩展字段（含中文/非预期 key），避免在后续阶段解析时被 strip', () => {
+    const phase1 = Phase1ConflictEngineSchema.parse({
+      outlineSummary: '摘要',
+      extraRoot: 'root-extra',
+      conflictEngine: {
+        coreObjectOrEvent: '账册',
+        stakesByFaction: { 甲: '风险' },
+        extraConflict: 'conflict-extra',
+        firstMover: {
+          initiator: '张三',
+          hiddenIntent: '夺权',
+          '幕后黑手（及少数知情者）': '七大宗室联盟（获得利益集团）',
+        },
+        necessityDerivation: ['若不行动则...'],
+      },
+    });
+
+    expect((phase1 as unknown as Record<string, unknown>).extraRoot).toBe('root-extra');
+    expect((phase1.conflictEngine as unknown as Record<string, unknown>).extraConflict).toBe(
+      'conflict-extra',
+    );
+    expect(
+      (phase1.conflictEngine?.firstMover as unknown as Record<string, unknown>)[
+        '幕后黑手（及少数知情者）'
+      ],
+    ).toBe('七大宗室联盟（获得利益集团）');
+
+    const chain = NarrativeCausalChainSchema.parse({
+      completedPhase: 2,
+      conflictEngine: {
+        coreObjectOrEvent: '账册',
+        stakesByFaction: {},
+        firstMover: {
+          initiator: '张三',
+          '幕后黑手': '七大宗室联盟',
+        },
+        necessityDerivation: [],
+        '额外字段': { note: 'keep-me' },
+      },
+      '根级扩展': { a: 1 },
+    });
+
+    expect((chain as unknown as Record<string, unknown>)['根级扩展']).toEqual({ a: 1 });
+    expect((chain.conflictEngine as unknown as Record<string, unknown>)['额外字段']).toEqual({
+      note: 'keep-me',
+    });
+    expect(
+      (chain.conflictEngine?.firstMover as unknown as Record<string, unknown>)['幕后黑手'],
+    ).toBe('七大宗室联盟');
   });
 });
 

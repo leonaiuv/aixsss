@@ -78,8 +78,10 @@ export async function apiRequest<T>(
   });
 
   if (!res.ok) {
+    const requestId = res.headers.get('x-request-id');
     const detail = await readErrorDetail(res);
-    const message = extractErrorMessage(detail) ?? `API ${res.status} ${res.statusText}`;
+    const baseMessage = extractErrorMessage(detail) ?? `API ${res.status} ${res.statusText}`;
+    const message = requestId ? `${baseMessage}（requestId=${requestId}）` : baseMessage;
     throw new ApiError(message, res.status, detail);
   }
 

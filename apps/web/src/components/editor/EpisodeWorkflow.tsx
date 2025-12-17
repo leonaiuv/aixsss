@@ -49,6 +49,7 @@ import { Badge } from '@/components/ui/badge';
 import { BasicSettings } from './BasicSettings';
 import { SceneSortable } from './SceneSortable';
 import { StatisticsPanel } from './StatisticsPanel';
+import { NarrativeCausalChainReadable } from './NarrativeCausalChainReadable';
 import {
   CheckCircle2,
   Circle,
@@ -866,6 +867,18 @@ ${safeJsonStringify(ep.coreExpression)}
             </div>
           )}
         </Card>
+
+        {/* 可读版：用于快速阅读与兼容扩展字段 */}
+        {narrative ? (
+          <Card className="p-6">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">因果链产物（可读版）</h3>
+              <div className="text-sm text-muted-foreground">结构化阅读 · 扩展字段不丢失</div>
+            </div>
+            <Separator className="my-4" />
+            <NarrativeCausalChainReadable value={narrative} />
+          </Card>
+        ) : null}
       </div>
     );
   };
