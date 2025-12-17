@@ -620,6 +620,7 @@ export async function buildNarrativeCausalChain(args: {
     // === 3A：生成节拍目录（轻量） ===
     let beatFlow: Phase3BeatFlow['beatFlow'] | null =
       (existingChain?.beatFlow as Phase3BeatFlow['beatFlow'] | null) ?? null;
+    let phase3Mutated = false;
 
     if (!beatFlow || !Array.isArray(beatFlow.acts) || beatFlow.acts.length === 0) {
       await updateProgress({ pct: 18, message: '阶段3A：生成节拍目录（轻量）...' });
@@ -647,6 +648,7 @@ export async function buildNarrativeCausalChain(args: {
       }
 
       beatFlow = parsedA.beatFlow;
+      phase3Mutated = true;
 
       // 先把目录写入（便于断点续跑）
       const draftChain: NarrativeCausalChain = { ...existingChain!, beatFlow, completedPhase: 2 };
@@ -742,6 +744,7 @@ export async function buildNarrativeCausalChain(args: {
         return d ? { ...b, ...d, beatName: name } : b;
       });
 
+      phase3Mutated = true;
       currentBeatFlow = mergeActDetailsIntoBeatFlow(currentBeatFlow, actNo, mergedBeats);
 
       // 每补完一幕就写入一次（断点续跑）
@@ -765,9 +768,12 @@ export async function buildNarrativeCausalChain(args: {
       throw new Error('阶段3未完全补全（仍存在缺少 location/visualHook/characters/事件/信息流 的节拍），请重试');
     }
 
+    const nextCompletedPhase = phase3Mutated
+      ? 3
+      : Math.max((existingChain?.completedPhase ?? 0) as number, 3);
     updatedChain = {
       ...existingChain!,
-      completedPhase: 3,
+      completedPhase: nextCompletedPhase,
       beatFlow: currentBeatFlow,
     };
   } else {

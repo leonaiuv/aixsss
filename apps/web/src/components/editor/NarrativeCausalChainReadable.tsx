@@ -1,5 +1,10 @@
 import { useMemo } from 'react';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { JsonViewer } from '@/components/ui/json-viewer';
@@ -29,7 +34,8 @@ function nonEmptyText(value: unknown): string | null {
 
 function asStringArray(value: unknown): string[] {
   if (!value) return [];
-  if (Array.isArray(value)) return value.map((v) => (typeof v === 'string' ? v : toText(v))).filter(Boolean);
+  if (Array.isArray(value))
+    return value.map((v) => (typeof v === 'string' ? v : toText(v))).filter(Boolean);
   if (typeof value === 'string') {
     return value
       .split(/[，,、]/)
@@ -54,7 +60,9 @@ function Kv({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="grid grid-cols-12 gap-3">
       <div className="col-span-12 md:col-span-3 text-sm text-muted-foreground">{label}</div>
-      <div className="col-span-12 md:col-span-9 text-sm whitespace-pre-wrap break-words">{text}</div>
+      <div className="col-span-12 md:col-span-9 text-sm whitespace-pre-wrap break-words">
+        {text}
+      </div>
     </div>
   );
 }
@@ -103,7 +111,8 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
 
   const outlineSummary = chain.outlineSummary;
   const conflictEngine = isRecord(chain.conflictEngine) ? chain.conflictEngine : null;
-  const firstMover = conflictEngine && isRecord(conflictEngine.firstMover) ? conflictEngine.firstMover : null;
+  const firstMover =
+    conflictEngine && isRecord(conflictEngine.firstMover) ? conflictEngine.firstMover : null;
 
   const infoLayers = Array.isArray(chain.infoVisibilityLayers) ? chain.infoVisibilityLayers : [];
   const characterMatrix = Array.isArray(chain.characterMatrix) ? chain.characterMatrix : [];
@@ -127,7 +136,11 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
         </div>
       </Card>
 
-      <Accordion type="multiple" defaultValue={['phase1', 'phase2', 'phase3', 'phase4']} className="w-full">
+      <Accordion
+        type="multiple"
+        defaultValue={['phase1', 'phase2', 'phase3', 'phase4']}
+        className="w-full"
+      >
         <AccordionItem value="phase1">
           <AccordionTrigger>阶段1：核心冲突</AccordionTrigger>
           <AccordionContent>
@@ -176,15 +189,22 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
 
                   <List
                     title="必要性推导（necessityDerivation）"
-                    items={Array.isArray(conflictEngine.necessityDerivation)
-                      ? conflictEngine.necessityDerivation.map((x) => toText(x)).filter(Boolean)
-                      : []}
+                    items={
+                      Array.isArray(conflictEngine.necessityDerivation)
+                        ? conflictEngine.necessityDerivation.map((x) => toText(x)).filter(Boolean)
+                        : []
+                    }
                   />
 
                   <Extras
                     title="冲突引擎 · 扩展字段"
                     obj={conflictEngine}
-                    known={['coreObjectOrEvent', 'stakesByFaction', 'firstMover', 'necessityDerivation']}
+                    known={[
+                      'coreObjectOrEvent',
+                      'stakesByFaction',
+                      'firstMover',
+                      'necessityDerivation',
+                    ]}
                   />
                 </>
               ) : null}
@@ -203,7 +223,9 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
                     {infoLayers.map((layer, idx) => {
                       const l = isRecord(layer) ? layer : null;
                       if (!l) return null;
-                      const roles = Array.isArray(l.roles) ? l.roles.map((r) => toText(r)).filter(Boolean) : [];
+                      const roles = Array.isArray(l.roles)
+                        ? l.roles.map((r) => toText(r)).filter(Boolean)
+                        : [];
                       const motivation = isRecord(l.motivation) ? l.motivation : null;
                       return (
                         <Card key={idx} className="p-4">
@@ -211,7 +233,9 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
                             <div className="text-sm font-medium">
                               {nonEmptyText(l.layerName) ?? `未命名层 #${idx + 1}`}
                             </div>
-                            {roles.length ? <Badge variant="secondary">{roles.join('、')}</Badge> : null}
+                            {roles.length ? (
+                              <Badge variant="secondary">{roles.join('、')}</Badge>
+                            ) : null}
                           </div>
                           <div className="mt-3 space-y-2">
                             <Kv label="信息边界" value={l.infoBoundary} />
@@ -232,7 +256,13 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
                             <Extras
                               title="该层 · 扩展字段"
                               obj={l}
-                              known={['layerName', 'roles', 'infoBoundary', 'blindSpot', 'motivation']}
+                              known={[
+                                'layerName',
+                                'roles',
+                                'infoBoundary',
+                                'blindSpot',
+                                'motivation',
+                              ]}
                             />
                           </div>
                         </Card>
@@ -267,7 +297,14 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
                             <Extras
                               title="该角色 · 扩展字段"
                               obj={r}
-                              known={['name', 'identity', 'goal', 'secret', 'vulnerability', 'assumptions']}
+                              known={[
+                                'name',
+                                'identity',
+                                'goal',
+                                'secret',
+                                'vulnerability',
+                                'assumptions',
+                              ]}
                             />
                           </div>
                         </Card>
@@ -353,7 +390,11 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
                                   </Card>
                                 );
                               })}
-                              <Extras title="该幕 · 扩展字段" obj={a} known={['act', 'actName', 'beats']} />
+                              <Extras
+                                title="该幕 · 扩展字段"
+                                obj={a}
+                                known={['act', 'actName', 'beats']}
+                              />
                             </div>
                           </Card>
                         );
@@ -389,7 +430,9 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
                             <div className="text-sm font-medium">
                               {nonEmptyText(p.lineType) ?? '未标注线类型'}
                             </div>
-                            {nonEmptyText(p.driver) ? <Badge variant="secondary">{String(p.driver)}</Badge> : null}
+                            {nonEmptyText(p.driver) ? (
+                              <Badge variant="secondary">{String(p.driver)}</Badge>
+                            ) : null}
                           </div>
                           <div className="mt-2 space-y-2">
                             <Kv label="表面目标" value={p.statedGoal} />
@@ -399,7 +442,14 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
                             <Extras
                               title="该叙事线 · 扩展字段"
                               obj={p}
-                              known={['lineType', 'driver', 'statedGoal', 'trueGoal', 'keyInterlocks', 'pointOfNoReturn']}
+                              known={[
+                                'lineType',
+                                'driver',
+                                'statedGoal',
+                                'trueGoal',
+                                'keyInterlocks',
+                                'pointOfNoReturn',
+                              ]}
                             />
                           </div>
                         </Card>
@@ -418,9 +468,18 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
                   <div className="text-sm font-medium">自洽校验（consistencyChecks）</div>
                   <div className="space-y-2">
                     <Kv label="盲区驱动行动" value={consistencyChecks.blindSpotDrivesAction} />
-                    <Kv label="信息流至少改变两次" value={consistencyChecks.infoFlowChangesAtLeastTwo} />
-                    <Kv label="核心冲突三方张力" value={consistencyChecks.coreConflictHasThreeWayTension} />
-                    <Kv label="结局由多线触发不可逆" value={consistencyChecks.endingIrreversibleTriggeredByMultiLines} />
+                    <Kv
+                      label="信息流至少改变两次"
+                      value={consistencyChecks.infoFlowChangesAtLeastTwo}
+                    />
+                    <Kv
+                      label="核心冲突三方张力"
+                      value={consistencyChecks.coreConflictHasThreeWayTension}
+                    />
+                    <Kv
+                      label="结局由多线触发不可逆"
+                      value={consistencyChecks.endingIrreversibleTriggeredByMultiLines}
+                    />
                     <Kv label="无冗余角色" value={consistencyChecks.noRedundantRole} />
                     <List title="备注（notes）" items={asStringArray(consistencyChecks.notes)} />
                     <Extras
@@ -470,5 +529,3 @@ export function NarrativeCausalChainReadable({ value }: { value: unknown }) {
     </div>
   );
 }
-
-

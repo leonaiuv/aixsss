@@ -56,6 +56,8 @@ import {
   Sparkles,
   Loader2,
   RefreshCw,
+  Plus,
+  Trash2,
   FileText,
   Copy,
   Download,
@@ -69,6 +71,13 @@ import {
 } from 'lucide-react';
 
 type WorkflowStep = 'global' | 'causal' | 'plan' | 'episode' | 'export';
+
+const CAUSAL_CHAIN_PHASES = [
+  { phase: 1, name: '核心冲突', desc: '故事大纲 + 冲突引擎' },
+  { phase: 2, name: '信息分层', desc: '信息能见度层 + 角色矩阵' },
+  { phase: 3, name: '节拍流程', desc: '三/四幕结构的节拍设计' },
+  { phase: 4, name: '叙事线交织', desc: '明暗线 + 自洽校验' },
+] as const;
 
 function getStyleFullPrompt(project: Project | null): string {
   if (!project) return '';
@@ -224,7 +233,9 @@ export function EpisodeWorkflow() {
     lastJobProgress,
     loadEpisodes,
     setCurrentEpisode,
+    createEpisode,
     updateEpisode,
+    deleteEpisode,
     planEpisodes,
     generateCoreExpression,
     generateSceneList,
@@ -254,6 +265,8 @@ export function EpisodeWorkflow() {
   const [narrativeDialogOpen, setNarrativeDialogOpen] = useState(false);
   const [narrativeDraftError, setNarrativeDraftError] = useState<string | null>(null);
   const [runningPhase, setRunningPhase] = useState<number | null>(null); // 追踪当前运行的阶段
+  const [rerunPhaseDialogOpen, setRerunPhaseDialogOpen] = useState(false);
+  const [pendingRerunPhase, setPendingRerunPhase] = useState<number | null>(null);
 
   const [refineDialogOpen, setRefineDialogOpen] = useState(false);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
@@ -267,6 +280,11 @@ export function EpisodeWorkflow() {
   const [editingEpisodeId, setEditingEpisodeId] = useState<string | null>(null);
   const [episodeTitleDraft, setEpisodeTitleDraft] = useState('');
   const [episodeSummaryDraft, setEpisodeSummaryDraft] = useState('');
+  const [createEpisodeDialogOpen, setCreateEpisodeDialogOpen] = useState(false);
+  const [newEpisodeTitleDraft, setNewEpisodeTitleDraft] = useState('');
+  const [newEpisodeSummaryDraft, setNewEpisodeSummaryDraft] = useState('');
+  const [deleteEpisodeDialogOpen, setDeleteEpisodeDialogOpen] = useState(false);
+  const [pendingDeleteEpisode, setPendingDeleteEpisode] = useState<Episode | null>(null);
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'markdown' | 'json'>('markdown');
@@ -280,6 +298,19 @@ export function EpisodeWorkflow() {
 
   const styleFullPrompt = useMemo(() => getStyleFullPrompt(currentProject), [currentProject]);
   const aiProfileId = config?.aiProfileId ?? null;
+
+  const nextEpisodeOrder = useMemo(() => {
+    if (episodes.length === 0) return 1;
+    const used = new Set<number>();
+    for (const ep of episodes) {
+      if (typeof ep.order === 'number' && ep.order >= 1) used.add(ep.order);
+    }
+    for (let i = 1; i <= 24; i += 1) {
+      if (!used.has(i)) return i;
+    }
+    const max = Math.max(...Array.from(used.values()));
+    return max + 1;
+  }, [episodes]);
 
   const canPlan = useMemo(() => {
     const summary = (currentProject?.summary ?? '').trim();
@@ -512,6 +543,77 @@ export function EpisodeWorkflow() {
     }
   };
 
+  const openCreateEpisodeDialog = () => {
+    setNewEpisodeTitleDraft('');
+    setNewEpisodeSummaryDraft('');
+    setCreateEpisodeDialogOpen(true);
+  };
+
+  const handleCreateEpisodeManual = async () => {
+    if (!currentProject?.id) return;
+    if (nextEpisodeOrder > 24) {
+      toast({
+        title: '无法新增',
+        description: '当前 Episode 数量已达到 24（UI 推荐上限）。如需更多集数，请先删除或调整规划。',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      await createEpisode(currentProject.id, {
+        order: nextEpisodeOrder,
+        title: newEpisodeTitleDraft,
+        summary: newEpisodeSummaryDraft,
+      });
+      toast({ title: '已新增', description: `已创建第 ${nextEpisodeOrder} 集。` });
+      setCreateEpisodeDialogOpen(false);
+      setNewEpisodeTitleDraft('');
+      setNewEpisodeSummaryDraft('');
+    } catch (error) {
+      toast({
+        title: '新增失败',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openDeleteEpisodeConfirm = (episode: Episode) => {
+    setPendingDeleteEpisode(episode);
+    setDeleteEpisodeDialogOpen(true);
+  };
+
+  const handleDeleteEpisodeConfirmed = async () => {
+    if (!currentProject?.id || !pendingDeleteEpisode) return;
+    const toDelete = pendingDeleteEpisode;
+    const deletedOrder = toDelete.order;
+    try {
+      await deleteEpisode(currentProject.id, toDelete.id);
+
+      // 保持 order 连续：将后续集数整体前移一位（避免出现缺口）
+      const toShift = episodes
+        .filter((e) => e.id !== toDelete.id && e.order > deletedOrder)
+        .slice()
+        .sort((a, b) => a.order - b.order);
+      for (const ep of toShift) {
+        await updateEpisode(currentProject.id, ep.id, { order: ep.order - 1 });
+      }
+
+      toast({
+        title: '已删除',
+        description: `已删除第 ${deletedOrder} 集，并自动重排后续集数。`,
+      });
+      setDeleteEpisodeDialogOpen(false);
+      setPendingDeleteEpisode(null);
+    } catch (error) {
+      toast({
+        title: '删除失败',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleBuildExport = async () => {
     if (!currentProject?.id) return;
     setIsExporting(true);
@@ -681,6 +783,23 @@ ${safeJsonStringify(ep.coreExpression)}
     return order.indexOf(step) < order.indexOf(activeStep) ? 'completed' : 'pending';
   };
 
+  const handleCausalPhase = async (phase: number) => {
+    if (!aiProfileId || !currentProject?.id) return;
+    const meta = CAUSAL_CHAIN_PHASES.find((p) => p.phase === phase);
+    if (!meta) return;
+    setRunningPhase(phase);
+    try {
+      toast({ title: `开始阶段 ${phase}`, description: meta.desc });
+      await buildNarrativeCausalChain({ projectId: currentProject.id, aiProfileId, phase });
+      toast({ title: `阶段 ${phase} 完成`, description: meta.name });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: `阶段 ${phase} 失败`, description: detail, variant: 'destructive' });
+    } finally {
+      setRunningPhase(null);
+    }
+  };
+
   const renderCausalStep = () => {
     const summaryLen = (currentProject?.summary ?? '').trim().length;
     const hasStyle = Boolean(styleFullPrompt.trim());
@@ -698,28 +817,6 @@ ${safeJsonStringify(ep.coreExpression)}
       (narrative as { validationStatus?: string } | null)?.validationStatus ?? 'incomplete';
     const outlineSummary =
       (narrative as { outlineSummary?: string } | null)?.outlineSummary ?? null;
-
-    const phases = [
-      { phase: 1, name: '核心冲突', desc: '故事大纲 + 冲突引擎' },
-      { phase: 2, name: '信息分层', desc: '信息能见度层 + 角色矩阵' },
-      { phase: 3, name: '节拍流程', desc: '三/四幕结构的节拍设计' },
-      { phase: 4, name: '叙事线交织', desc: '明暗线 + 自洽校验' },
-    ];
-
-    const handlePhase = async (phase: number) => {
-      if (!aiProfileId || !currentProject?.id) return;
-      setRunningPhase(phase); // 记录当前运行的阶段
-      try {
-        toast({ title: `开始阶段 ${phase}`, description: phases[phase - 1].desc });
-        await buildNarrativeCausalChain({ projectId: currentProject.id, aiProfileId, phase });
-        toast({ title: `阶段 ${phase} 完成`, description: phases[phase - 1].name });
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        toast({ title: `阶段 ${phase} 失败`, description: detail, variant: 'destructive' });
-      } finally {
-        setRunningPhase(null); // 清除运行状态
-      }
-    };
 
     return (
       <div className="space-y-6">
@@ -769,31 +866,52 @@ ${safeJsonStringify(ep.coreExpression)}
             <div className="w-full max-w-md space-y-3">
               {/* 分阶段按钮 */}
               <div className="grid grid-cols-2 gap-2">
-                {phases.map((p) => {
+                {CAUSAL_CHAIN_PHASES.map((p) => {
                   const isCompleted = completedPhase >= p.phase;
                   const isNext = completedPhase === p.phase - 1;
                   const isRunningThisPhase = runningPhase === p.phase;
                   // 关键修复：任何阶段运行时禁用所有按钮（防止竞态条件）
                   const isAnyPhaseRunning = runningPhase !== null || isRunningWorkflow;
-                  const canRun = canPlan && !isAnyPhaseRunning && (isNext || isCompleted);
+                  const canTrigger = canPlan && !isAnyPhaseRunning;
+                  const canRunMain = canTrigger && isNext;
+                  const canRerun = canTrigger && isCompleted;
 
                   return (
-                    <Button
-                      key={p.phase}
-                      onClick={() => handlePhase(p.phase)}
-                      disabled={!canRun}
-                      variant={isCompleted ? 'secondary' : isNext ? 'default' : 'outline'}
-                      className="w-full gap-1 text-xs h-auto py-2"
-                    >
-                      {isRunningThisPhase ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : isCompleted ? (
-                        <span className="text-green-600">✓</span>
-                      ) : (
-                        <span className="opacity-50">{p.phase}</span>
-                      )}
-                      <span className="truncate">{p.name}</span>
-                    </Button>
+                    <div key={p.phase} className="flex w-full gap-2">
+                      <Button
+                        onClick={() => void handleCausalPhase(p.phase)}
+                        disabled={!canRunMain}
+                        variant={isCompleted ? 'secondary' : isNext ? 'default' : 'outline'}
+                        className={`flex-1 gap-1 text-xs h-auto py-2 ${isCompleted ? 'disabled:opacity-100' : ''}`}
+                      >
+                        {isRunningThisPhase ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : isCompleted ? (
+                          <span className="text-green-600">✓</span>
+                        ) : (
+                          <span className="opacity-50">{p.phase}</span>
+                        )}
+                        <span className="truncate">{p.name}</span>
+                      </Button>
+
+                      {/* 仅在“已完成阶段”后显示：独立的重新生成按钮（避免误点主按钮） */}
+                      {isCompleted ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!canRerun}
+                          className="h-auto py-2 px-2 shrink-0"
+                          aria-label={`重新生成阶段 ${p.phase} ${p.name}`}
+                          onClick={() => {
+                            setPendingRerunPhase(p.phase);
+                            setRerunPhaseDialogOpen(true);
+                          }}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>
@@ -980,8 +1098,20 @@ ${safeJsonStringify(ep.coreExpression)}
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">Episodes（按集数排序）</h3>
-            <div className="text-sm text-muted-foreground">
-              {isEpisodesLoading ? '加载中...' : `${episodes.length} 集`}
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">
+                {isEpisodesLoading ? '加载中...' : `${episodes.length} 集`}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={openCreateEpisodeDialog}
+                disabled={!currentProject?.id || isRunningWorkflow}
+                className="gap-1"
+              >
+                <Plus className="h-4 w-4" />
+                新增
+              </Button>
             </div>
           </div>
           <Separator className="my-4" />
@@ -1012,6 +1142,16 @@ ${safeJsonStringify(ep.coreExpression)}
                       </p>
                     </div>
                     <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openDeleteEpisodeConfirm(ep)}
+                        disabled={isRunningWorkflow}
+                        className="gap-1 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        删除
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => openEpisodeEditor(ep)}>
                         编辑
                       </Button>
@@ -1679,6 +1819,68 @@ ${safeJsonStringify(ep.coreExpression)}
       </Dialog>
 
       <Dialog
+        open={rerunPhaseDialogOpen}
+        onOpenChange={(open) => {
+          setRerunPhaseDialogOpen(open);
+          if (!open) setPendingRerunPhase(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {(() => {
+                if (!pendingRerunPhase) return '确认重新生成阶段？';
+                const meta = CAUSAL_CHAIN_PHASES.find((p) => p.phase === pendingRerunPhase);
+                return `确认重新生成：阶段 ${pendingRerunPhase} ${meta?.name ?? ''}`;
+              })()}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <div className="text-muted-foreground">
+              {(() => {
+                if (!pendingRerunPhase) return '将重新调用 AI 生成该阶段产物。';
+                const meta = CAUSAL_CHAIN_PHASES.find((p) => p.phase === pendingRerunPhase);
+                return meta?.desc ?? '将重新调用 AI 生成该阶段产物。';
+              })()}
+            </div>
+            <div className="text-destructive">
+              {(() => {
+                const narrative = currentProject?.contextCache?.narrativeCausalChain ?? null;
+                const completed =
+                  (narrative as { completedPhase?: number } | null)?.completedPhase ?? 0;
+                const phase = pendingRerunPhase ?? 0;
+                if (!phase) return '此操作会覆盖当前阶段内容，请确认。';
+                if (phase === 1) {
+                  return '阶段1会重建因果链骨架，并清空阶段2-4产物（信息分层/节拍流程/叙事线交织）。如只是微调，建议优先使用「编辑 JSON」。';
+                }
+                if (phase === 4) {
+                  return '阶段4会覆盖现有叙事线与自洽校验结果。';
+                }
+                const next = Math.min(4, Math.max(phase, 1));
+                return `将重新生成阶段${phase}并把进度标记回 ${next}/4（后续阶段可能需要重新运行以保持一致性）。当前进度：${completed}/4。`;
+              })()}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRerunPhaseDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!pendingRerunPhase || isRunningWorkflow || runningPhase !== null}
+              onClick={() => {
+                if (pendingRerunPhase) void handleCausalPhase(pendingRerunPhase);
+                setRerunPhaseDialogOpen(false);
+                setPendingRerunPhase(null);
+              }}
+            >
+              重新生成
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={refineDialogOpen}
         onOpenChange={(open) => {
           setRefineDialogOpen(open);
@@ -2185,6 +2387,92 @@ ${safeJsonStringify(ep.coreExpression)}
             </Button>
             <Button onClick={handleSaveEpisodeEdits} disabled={!editingEpisodeId}>
               保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createEpisodeDialogOpen}
+        onOpenChange={(open) => {
+          setCreateEpisodeDialogOpen(open);
+          if (!open) {
+            setNewEpisodeTitleDraft('');
+            setNewEpisodeSummaryDraft('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>新增 Episode</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              将创建：第 <span className="font-medium text-foreground">{nextEpisodeOrder}</span> 集
+            </div>
+            <div className="space-y-2">
+              <Label>标题</Label>
+              <Input
+                value={newEpisodeTitleDraft}
+                onChange={(e) => setNewEpisodeTitleDraft(e.target.value)}
+                placeholder="可留空，后续可编辑"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>一句话概要</Label>
+              <Textarea
+                value={newEpisodeSummaryDraft}
+                onChange={(e) => setNewEpisodeSummaryDraft(e.target.value)}
+                placeholder="可留空，后续可编辑"
+                className="min-h-[120px]"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground">
+              提示：新增/删除会直接影响后续「单集创作」的可选 Episode 列表。
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCreateEpisodeDialogOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={handleCreateEpisodeManual} disabled={!currentProject?.id}>
+              创建
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteEpisodeDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteEpisodeDialogOpen(open);
+          if (!open) setPendingDeleteEpisode(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>确认删除 Episode？</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <div className="text-muted-foreground">
+              {pendingDeleteEpisode
+                ? `将删除第 ${pendingDeleteEpisode.order} 集：${pendingDeleteEpisode.title || '(未命名)'}`
+                : '将删除所选 Episode。'}
+            </div>
+            <div className="text-destructive">
+              删除后该集下的分镜/相关数据会一并移除（不可恢复）。同时将自动重排后续集数，保持 order 连续。
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteEpisodeDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!pendingDeleteEpisode || isRunningWorkflow}
+              onClick={handleDeleteEpisodeConfirmed}
+            >
+              删除
             </Button>
           </DialogFooter>
         </DialogContent>
