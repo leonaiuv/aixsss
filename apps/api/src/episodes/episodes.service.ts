@@ -116,6 +116,28 @@ export class EpisodesService {
     });
     if (!existing) throw new NotFoundException('Episode not found');
 
+    const sceneIds = await this.prisma.scene.findMany({
+      where: { projectId, episodeId },
+      select: { id: true },
+    });
+    const ids = sceneIds.map((s) => s.id);
+    if (ids.length > 0) {
+      const activeJob = await this.prisma.aIJob.findFirst({
+        where: {
+          teamId,
+          projectId,
+          sceneId: { in: ids },
+          status: { in: ['queued', 'running'] },
+        },
+        select: { id: true, type: true, status: true, sceneId: true },
+      });
+      if (activeJob) {
+        throw new BadRequestException(
+          `Episode contains scenes being processed by AI (jobId=${activeJob.id}, sceneId=${activeJob.sceneId}, type=${activeJob.type}, status=${activeJob.status}). Please cancel the job before deleting the episode.`,
+        );
+      }
+    }
+
     await this.prisma.episode.delete({ where: { id: episodeId } });
     return { ok: true };
   }

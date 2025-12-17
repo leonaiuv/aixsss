@@ -216,6 +216,21 @@ export class ScenesService {
     });
     if (!existing) throw new NotFoundException('Scene not found');
 
+    const activeJob = await this.prisma.aIJob.findFirst({
+      where: {
+        teamId,
+        projectId,
+        sceneId,
+        status: { in: ['queued', 'running'] },
+      },
+      select: { id: true, type: true, status: true },
+    });
+    if (activeJob) {
+      throw new BadRequestException(
+        `Scene is being processed by AI (jobId=${activeJob.id}, type=${activeJob.type}, status=${activeJob.status}). Please cancel the job before deleting.`,
+      );
+    }
+
     await this.prisma.scene.delete({ where: { id: sceneId } });
     return { ok: true };
   }
@@ -227,6 +242,21 @@ export class ScenesService {
       select: { id: true },
     });
     if (!existing) throw new NotFoundException('Scene not found');
+
+    const activeJob = await this.prisma.aIJob.findFirst({
+      where: {
+        teamId,
+        projectId,
+        sceneId,
+        status: { in: ['queued', 'running'] },
+      },
+      select: { id: true, type: true, status: true },
+    });
+    if (activeJob) {
+      throw new BadRequestException(
+        `Scene is being processed by AI (jobId=${activeJob.id}, type=${activeJob.type}, status=${activeJob.status}). Please cancel the job before deleting.`,
+      );
+    }
 
     await this.prisma.scene.delete({ where: { id: sceneId } });
     return { ok: true };

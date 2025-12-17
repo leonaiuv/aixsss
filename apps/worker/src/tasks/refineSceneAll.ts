@@ -1,10 +1,29 @@
-import type { PrismaClient } from '@prisma/client';
-import type { JobProgress } from 'bullmq';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { UnrecoverableError, type JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput } from './formatFix.js';
 import { styleFullPrompt, toProviderChatConfig, type TokenUsage, mergeTokenUsage } from './common.js';
+
+function isPrismaNotFoundError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2025';
+}
+
+async function safeUpdateScene(args: {
+  prisma: PrismaClient;
+  projectId: string;
+  sceneId: string;
+  data: Prisma.SceneUpdateManyMutationInput;
+}) {
+  const result = await args.prisma.scene.updateMany({
+    where: { id: args.sceneId, projectId: args.projectId },
+    data: args.data,
+  });
+  if (result.count === 0) {
+    throw new UnrecoverableError('Scene not found');
+  }
+}
 
 function buildSceneAnchorPrompt(args: { style: string; currentSummary: string; prevSummary: string }): string {
   return `你是专业的提示词工程师与分镜助理。请为“当前分镜”输出可复用的「场景锚点 Scene Anchor」，用于保证多张关键帧/多家图生视频的场景一致性。
@@ -155,13 +174,13 @@ export async function refineSceneAll(args: {
     where: { id: projectId, teamId, deletedAt: null },
     select: { id: true, style: true, artStyleConfig: true, protagonist: true },
   });
-  if (!project) throw new Error('Project not found');
+  if (!project) throw new UnrecoverableError('Project not found');
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
     select: { id: true, episodeId: true, order: true, summary: true },
   });
-  if (!scene) throw new Error('Scene not found');
+  if (!scene) throw new UnrecoverableError('Scene not found');
 
   const prev =
     scene.order > 1
@@ -185,7 +204,12 @@ export async function refineSceneAll(args: {
 
   // 1) Scene anchor
   await updateProgress({ pct: 5, message: '生成场景锚点...' });
-  await prisma.scene.update({ where: { id: sceneId }, data: { status: 'scene_generating' } });
+  try {
+    await safeUpdateScene({ prisma, projectId, sceneId, data: { status: 'scene_generating' } });
+  } catch (err) {
+    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+    throw err;
+  }
 
   const anchorRes = await doChat({
     providerConfig,
@@ -205,14 +229,26 @@ export async function refineSceneAll(args: {
   tokens = anchorFixed.tokenUsage;
 
   await updateProgress({ pct: 25, message: '保存场景锚点...' });
-  await prisma.scene.update({
-    where: { id: sceneId },
-    data: { sceneDescription: anchorFixed.content, status: 'scene_confirmed' },
-  });
+  try {
+    await safeUpdateScene({
+      prisma,
+      projectId,
+      sceneId,
+      data: { sceneDescription: anchorFixed.content, status: 'scene_confirmed' },
+    });
+  } catch (err) {
+    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+    throw err;
+  }
 
   // 2) Keyframe
   await updateProgress({ pct: 30, message: '生成关键帧提示词...' });
-  await prisma.scene.update({ where: { id: sceneId }, data: { status: 'keyframe_generating' } });
+  try {
+    await safeUpdateScene({ prisma, projectId, sceneId, data: { status: 'keyframe_generating' } });
+  } catch (err) {
+    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+    throw err;
+  }
 
   const kfRes = await doChat({
     providerConfig,
@@ -233,14 +269,26 @@ export async function refineSceneAll(args: {
   tokens = kfFixed.tokenUsage;
 
   await updateProgress({ pct: 55, message: '保存关键帧...' });
-  await prisma.scene.update({
-    where: { id: sceneId },
-    data: { shotPrompt: kfFixed.content, status: 'keyframe_confirmed' },
-  });
+  try {
+    await safeUpdateScene({
+      prisma,
+      projectId,
+      sceneId,
+      data: { shotPrompt: kfFixed.content, status: 'keyframe_confirmed' },
+    });
+  } catch (err) {
+    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+    throw err;
+  }
 
   // 3) Motion
   await updateProgress({ pct: 60, message: '生成运动提示词...' });
-  await prisma.scene.update({ where: { id: sceneId }, data: { status: 'motion_generating' } });
+  try {
+    await safeUpdateScene({ prisma, projectId, sceneId, data: { status: 'motion_generating' } });
+  } catch (err) {
+    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+    throw err;
+  }
 
   const motionRes = await doChat({
     providerConfig,
@@ -256,10 +304,17 @@ export async function refineSceneAll(args: {
   tokens = motionFixed.tokenUsage;
 
   await updateProgress({ pct: 75, message: '保存运动提示词...' });
-  await prisma.scene.update({
-    where: { id: sceneId },
-    data: { motionPrompt: motionFixed.content, status: 'motion_generating' },
-  });
+  try {
+    await safeUpdateScene({
+      prisma,
+      projectId,
+      sceneId,
+      data: { motionPrompt: motionFixed.content, status: 'motion_generating' },
+    });
+  } catch (err) {
+    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+    throw err;
+  }
 
   // 4) Dialogue
   await updateProgress({ pct: 80, message: '生成台词...' });
@@ -298,10 +353,17 @@ export async function refineSceneAll(args: {
   }
 
   await updateProgress({ pct: 90, message: '保存台词...' });
-  await prisma.scene.update({
-    where: { id: sceneId },
-    data: { dialogues, status: 'completed' },
-  });
+  try {
+    await safeUpdateScene({
+      prisma,
+      projectId,
+      sceneId,
+      data: { dialogues: dialogues as unknown as Prisma.InputJsonValue, status: 'completed' },
+    });
+  } catch (err) {
+    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+    throw err;
+  }
 
   // best-effort: mark episode/project complete
   try {
