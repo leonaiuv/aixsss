@@ -124,7 +124,7 @@ interface AIProgressState {
 
   // 全局批量生成状态（用于防止交叉生成）
   isBatchGenerating: boolean;
-  batchGeneratingSource: 'batch_panel' | 'scene_refinement' | null;
+  batchGeneratingSource: 'batch_panel' | 'scene_refinement' | 'episode_workflow' | null;
 
   // 完整的批量操作状态
   batchOperations: BatchOperationsState;
@@ -166,7 +166,7 @@ interface AIProgressActions {
   resumeQueue: () => void;
 
   // 批量生成状态控制
-  startBatchGenerating: (source: 'batch_panel' | 'scene_refinement') => void;
+  startBatchGenerating: (source: 'batch_panel' | 'scene_refinement' | 'episode_workflow') => void;
   stopBatchGenerating: () => void;
 
   // 批量操作详细状态控制

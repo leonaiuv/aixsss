@@ -32,7 +32,6 @@ import {
   Users,
   MessageSquare,
   Copy,
-  Trash2,
   Maximize2,
   Square,
 } from 'lucide-react';
@@ -51,8 +50,6 @@ import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/w
 import {
   generateBGMPrompt,
   generateTransitionPrompt,
-  BGMPrompt,
-  TransitionPrompt,
 } from '@/lib/ai/multiModalPrompts';
 import {
   checkTokenLimit,
@@ -66,11 +63,11 @@ import {
 } from '@/lib/ai/promptParsers';
 import { isStructuredOutput, mergeTokenUsage, requestFormatFix } from '@/lib/ai/outputFixer';
 import {
-  SceneStep,
   migrateOldStyleToConfig,
-  Project,
   DIALOGUE_TYPE_LABELS,
-  DialogueLine,
+  type Project,
+  type Scene,
+  type SceneStep,
 } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
 import { useConfirm } from '@/hooks/use-confirm';
@@ -132,6 +129,8 @@ function isAbortError(error: unknown): boolean {
 
 export function SceneRefinement() {
   const { currentProject, updateProject } = useProjectStore();
+  const projectId = currentProject?.id ?? null;
+  const currentProjectSceneOrder = currentProject?.currentSceneOrder || 1;
   const { scenes, updateScene, loadScenes } = useStoryboardStore();
   const { config, activeProfileId } = useConfigStore();
   const { characters } = useCharacterStore();
@@ -230,42 +229,34 @@ export function SceneRefinement() {
 
   // 使用 useCallback 优化导航回调 - 必须在条件返回之前
   const goToPrevScene = useCallback(() => {
-    if (currentSceneIndex > 0 && currentProject) {
+    if (currentSceneIndex <= 0 || !projectId) return;
       try {
         flushScenePatchQueue();
       } catch {}
       setCurrentSceneIndex(currentSceneIndex - 1);
-      updateProject(currentProject.id, {
-        currentSceneOrder: currentSceneIndex,
-      });
-    }
-  }, [currentSceneIndex, currentProject?.id, updateProject]);
+      updateProject(projectId, { currentSceneOrder: currentSceneIndex });
+  }, [currentSceneIndex, projectId, updateProject]);
 
   const goToNextScene = useCallback(() => {
-    if (currentSceneIndex < scenes.length - 1 && currentProject) {
+    if (currentSceneIndex >= scenes.length - 1 || !projectId) return;
       try {
         flushScenePatchQueue();
       } catch {}
       setCurrentSceneIndex(currentSceneIndex + 1);
-      updateProject(currentProject.id, {
-        currentSceneOrder: currentSceneIndex + 2,
-      });
-    }
-  }, [currentSceneIndex, scenes.length, currentProject?.id, updateProject]);
+      updateProject(projectId, { currentSceneOrder: currentSceneIndex + 2 });
+  }, [currentSceneIndex, scenes.length, projectId, updateProject]);
 
   const goToScene = useCallback(
     (index: number) => {
-      if (!currentProject) return;
+      if (!projectId) return;
       const safeIndex = Math.max(0, Math.min(index, scenes.length - 1));
       try {
         flushScenePatchQueue();
       } catch {}
       setCurrentSceneIndex(safeIndex);
-      updateProject(currentProject.id, {
-        currentSceneOrder: safeIndex + 1,
-      });
+      updateProject(projectId, { currentSceneOrder: safeIndex + 1 });
     },
-    [currentProject?.id, scenes.length, updateProject],
+    [projectId, scenes.length, updateProject],
   );
 
   const loadScenesRef = useRef(loadScenes);
@@ -287,18 +278,17 @@ export function SceneRefinement() {
   );
 
   useEffect(() => {
-    if (!currentProject) return;
+    if (!projectId) return;
     setIsDataReady(false);
-    loadScenesRef.current(currentProject.id);
-    loadWorldViewElementsRef.current(currentProject.id);
+    loadScenesRef.current(projectId);
+    loadWorldViewElementsRef.current(projectId);
     setIsDataReady(true);
-  }, [currentProject?.id]);
+  }, [projectId]);
 
   useEffect(() => {
-    if (!currentProject) return;
-    const order = currentProject.currentSceneOrder || 1;
-    setCurrentSceneIndex(Math.max(0, order - 1));
-  }, [currentProject?.currentSceneOrder, currentProject?.id]);
+    if (!projectId) return;
+    setCurrentSceneIndex(Math.max(0, currentProjectSceneOrder - 1));
+  }, [currentProjectSceneOrder, projectId]);
 
   // 防止索引越界（例如分镜数量变化/数据迁移导致的 order 不合法）
   useEffect(() => {
@@ -313,7 +303,7 @@ export function SceneRefinement() {
   }, [currentSceneIndex, scenes.length]);
 
   useEffect(() => {
-    if (!currentProject) return;
+    if (!projectId) return;
     if (!currentSceneId) return;
 
     const { scenes: latestScenes } = useStoryboardStore.getState();
@@ -321,7 +311,7 @@ export function SceneRefinement() {
     if (!latestScene) return;
 
     setActiveAccordion(getRecommendedAccordionValue(latestScene));
-  }, [currentProject?.id, currentSceneId]);
+  }, [projectId, currentSceneId]);
 
   // 数据加载中：避免首屏空白
   if (!currentProject) {
@@ -994,8 +984,8 @@ export function SceneRefinement() {
     (scene) => scene.status === 'completed' && (scene.dialogues?.length ?? 0) > 0,
   );
 
-  // 检查是否被外部批量操作禁用（如批量操作面板正在生成）
-  const isExternallyBlocked = isGlobalBatchGenerating && batchGeneratingSource === 'batch_panel';
+  // 检查是否被外部批量操作禁用（如批量面板/单集工作流正在批量执行）
+  const isExternallyBlocked = isGlobalBatchGenerating && batchGeneratingSource !== 'scene_refinement';
   const externalBlockMessage = isExternallyBlocked ? '批量操作正在进行中，请等待完成' : '';
 
   function handleShortcutPrevScene() {
@@ -1115,7 +1105,7 @@ export function SceneRefinement() {
                 if (!promptEditor || promptEditor.kind !== 'field' || !currentScene) return;
                 updateScene(currentProject.id, currentScene.id, {
                   [promptEditor.field]: e.target.value,
-                } as any);
+                } as Partial<Scene>);
               }}
               readOnly={!promptEditor || promptEditor.kind !== 'field'}
               className="h-full min-h-0 resize-none font-mono text-sm leading-relaxed"
@@ -1885,7 +1875,7 @@ export function SceneRefinement() {
                 <div className="space-y-3">
                   {/* 台词列表 */}
                   <div className="space-y-2">
-                    {currentScene.dialogues?.map((dialogue, index) => (
+                    {currentScene.dialogues?.map((dialogue) => (
                       <div
                         key={dialogue.id}
                         className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 group"

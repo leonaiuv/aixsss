@@ -75,4 +75,11 @@ docs/        # 审计/工程/迁移文档
 
 更详细说明见 `docs/migration/local-to-api.md`。
 
+## 许可证（重要）
 
+本项目为 **source-available（可看源码）**，默认采用 **PolyForm Noncommercial 1.0.0**：
+
+- **允许**：个人/研究/学习/非商用自用
+- **禁止**：商业生产使用、对外提供 SaaS/托管服务、商业交付（除非获得商业授权）
+
+商业用途请见 `COMMERCIAL_LICENSE.md`。

@@ -1,6 +1,7 @@
 {
   "name": "@aixsss/api",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
@@ -47,5 +48,3 @@
     "vitest": "^4.0.15"
   }
 }
-
-

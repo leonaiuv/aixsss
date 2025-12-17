@@ -192,7 +192,12 @@ pnpm -C apps/web build
 
 ## 📄 许可证
 
-MIT License
+本项目为 **source-available（可看源码）**，默认采用 **PolyForm Noncommercial 1.0.0**（见仓库根目录 `LICENSE`）。
+
+- **允许**：个人/研究/学习/非商用自用
+- **禁止**：商业生产使用、对外提供 SaaS/托管服务、商业交付（除非获得商业授权）
+
+商业用途请见 `COMMERCIAL_LICENSE.md`。
 
 ## 🤝 贡献
 

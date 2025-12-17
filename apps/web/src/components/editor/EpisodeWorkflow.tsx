@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useCharacterStore } from '@/stores/characterStore';
@@ -9,6 +9,7 @@ import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { apiListEpisodeScenes, apiReorderEpisodeScenes } from '@/lib/api/episodeScenes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
+import { flushApiEpisodeScenePatchQueue } from '@/lib/api/episodeScenePatchQueue';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
 import { isApiMode } from '@/lib/runtime/mode';
 import { apiListNarrativeCausalChainVersions } from '@/lib/api/narrativeCausalChainVersions';
@@ -23,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   logAICall,
   updateLogProgress,
+  updateLogWithCancelled,
   updateLogWithError,
   updateLogWithResponse,
 } from '@/lib/ai/debugLogger';
@@ -37,6 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { JsonViewer } from '@/components/ui/json-viewer';
 import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -48,6 +51,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { BasicSettings } from './BasicSettings';
 import { SceneSortable } from './SceneSortable';
 import { StatisticsPanel } from './StatisticsPanel';
@@ -72,6 +76,8 @@ import {
   User,
   Mic,
   Brain,
+  Layers,
+  XCircle,
 } from 'lucide-react';
 
 type WorkflowStep = 'global' | 'causal' | 'plan' | 'episode' | 'export';
@@ -224,6 +230,15 @@ export function EpisodeWorkflow() {
   const activeAITaskCount = useAIProgressStore(
     (s) => s.tasks.filter((t) => t.status === 'running' || t.status === 'queued').length,
   );
+  const isGlobalBatchGenerating = useAIProgressStore((s) => s.isBatchGenerating);
+  const batchGeneratingSource = useAIProgressStore((s) => s.batchGeneratingSource);
+  const startBatchGenerating = useAIProgressStore((s) => s.startBatchGenerating);
+  const stopBatchGenerating = useAIProgressStore((s) => s.stopBatchGenerating);
+  const batchOperations = useAIProgressStore((s) => s.batchOperations);
+  const updateBatchOperations = useAIProgressStore((s) => s.updateBatchOperations);
+  const setBatchSelectedScenes = useAIProgressStore((s) => s.setBatchSelectedScenes);
+  const addBatchCompletedScene = useAIProgressStore((s) => s.addBatchCompletedScene);
+  const addBatchFailedScene = useAIProgressStore((s) => s.addBatchFailedScene);
   const { characters, loadCharacters } = useCharacterStore();
   const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
 
@@ -277,6 +292,11 @@ export function EpisodeWorkflow() {
   const [refiningSceneId, setRefiningSceneId] = useState<string | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [refineJobProgress, setRefineJobProgress] = useState<NormalizedJobProgress | null>(null);
+  const [batchRefineDialogOpen, setBatchRefineDialogOpen] = useState(false);
+  const [batchRefineSelectedIds, setBatchRefineSelectedIds] = useState<string[]>([]);
+  const [batchRefineErrors, setBatchRefineErrors] = useState<Record<string, string>>({});
+  const batchRefineAbortRef = useRef<AbortController | null>(null);
+  const batchRefineAllowCloseRef = useRef(false);
 
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
 
@@ -305,6 +325,60 @@ export function EpisodeWorkflow() {
 
   const styleFullPrompt = useMemo(() => getStyleFullPrompt(currentProject), [currentProject]);
   const aiProfileId = config?.aiProfileId ?? null;
+  const sortedScenes = useMemo(() => {
+    return scenes.slice().sort((a, b) => a.order - b.order);
+  }, [scenes]);
+  const recommendedBatchRefineIds = useMemo(() => {
+    // 推荐：未“完整完成”的分镜（completed + dialogues>0 视为完整完成）
+    return sortedScenes
+      .filter((s) => {
+        const hasDialogues = Array.isArray(s.dialogues) && s.dialogues.length > 0;
+        return !(s.status === 'completed' && hasDialogues);
+      })
+      .map((s) => s.id);
+  }, [sortedScenes]);
+  const isBatchBlocked = isGlobalBatchGenerating && batchGeneratingSource !== 'episode_workflow';
+  const isBatchRefineRunning =
+    isGlobalBatchGenerating &&
+    batchGeneratingSource === 'episode_workflow' &&
+    batchOperations.isProcessing;
+
+  const openBatchRefineDialog = () => {
+    setBatchRefineErrors({});
+    setBatchRefineSelectedIds(recommendedBatchRefineIds);
+    setBatchRefineDialogOpen(true);
+  };
+
+  const setBatchSelectAll = () => {
+    setBatchRefineSelectedIds(sortedScenes.map((s) => s.id));
+  };
+
+  const setBatchSelectRecommended = () => {
+    setBatchRefineSelectedIds(recommendedBatchRefineIds);
+  };
+
+  const setBatchSelectNone = () => {
+    setBatchRefineSelectedIds([]);
+  };
+
+  const toggleBatchSelect = (sceneId: string, checked: boolean) => {
+    setBatchRefineSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(sceneId);
+      else next.delete(sceneId);
+      return Array.from(next);
+    });
+  };
+
+  const batchRefineSelectedSet = useMemo(() => {
+    return new Set(batchRefineSelectedIds);
+  }, [batchRefineSelectedIds]);
+  const batchCompletedSet = useMemo(() => {
+    return new Set(batchOperations.completedScenes);
+  }, [batchOperations.completedScenes]);
+  const batchFailedSet = useMemo(() => {
+    return new Set(batchOperations.failedScenes);
+  }, [batchOperations.failedScenes]);
 
   const nextEpisodeOrder = useMemo(() => {
     if (episodes.length === 0) return 1;
@@ -338,6 +412,12 @@ export function EpisodeWorkflow() {
     if (!currentEpisodeId) return;
     loadScenes(currentProject.id, currentEpisodeId);
   }, [currentProject?.id, currentEpisodeId, loadScenes]);
+
+  useEffect(() => {
+    return () => {
+      batchRefineAbortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentEpisode) return;
@@ -502,10 +582,18 @@ export function EpisodeWorkflow() {
     }
   };
 
-  const handleRefineSceneAll = async (sceneId: string) => {
-    if (!aiProfileId || !currentProject?.id) return;
-    const currentScene = scenes.find((s) => s.id === sceneId);
+  type RefineAllRunOptions = {
+    signal?: AbortSignal;
+    onProgress?: (next: NormalizedJobProgress) => void;
+    extraContext?: Record<string, unknown>;
+  };
 
+  const runRefineSceneAllJob = async (sceneId: string, options?: RefineAllRunOptions) => {
+    if (!aiProfileId || !currentProject?.id) {
+      throw new Error('缺少 aiProfileId 或 projectId，无法执行分镜细化');
+    }
+
+    const currentScene = scenes.find((s) => s.id === sceneId);
     const logId = logAICall('scene_refine_all', {
       skillName: 'workflow:refine_scene_all',
       promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/refine-all',
@@ -519,6 +607,7 @@ export function EpisodeWorkflow() {
             aiProfileId,
             sceneOrder: currentScene?.order,
             sceneSummary: currentScene?.summary,
+            ...options?.extraContext,
           }),
         },
       ],
@@ -527,6 +616,7 @@ export function EpisodeWorkflow() {
         sceneId,
         sceneOrder: currentScene?.order,
         sceneSummary: currentScene?.summary,
+        ...options?.extraContext,
       },
       config: {
         provider: config?.provider ?? 'api',
@@ -536,9 +626,6 @@ export function EpisodeWorkflow() {
       },
     });
 
-    setIsRefining(true);
-    setRefiningSceneId(sceneId);
-    setRefineJobProgress(null);
     try {
       const job = await apiWorkflowRefineSceneAll({
         projectId: currentProject.id,
@@ -547,11 +634,13 @@ export function EpisodeWorkflow() {
       });
 
       const finished = await apiWaitForAIJob(job.id, {
+        signal: options?.signal,
         onProgress: (progress) => {
           const next = normalizeJobProgress(progress);
-          setRefineJobProgress(next);
-          if (typeof next.pct === 'number')
+          options?.onProgress?.(next);
+          if (typeof next.pct === 'number') {
             updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
         },
       });
 
@@ -562,13 +651,40 @@ export function EpisodeWorkflow() {
           : null,
       );
       updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+      return { result, tokenUsage };
+    } catch (error) {
+      if (isAbortError(error)) {
+        updateLogWithCancelled(logId);
+      } else {
+        const detail = error instanceof Error ? error.message : String(error);
+        updateLogWithError(logId, detail);
+      }
+      throw error;
+    }
+  };
 
+  const handleRefineSceneAll = async (sceneId: string) => {
+    if (!aiProfileId || !currentProject?.id) return;
+    if (isGlobalBatchGenerating && batchGeneratingSource !== 'episode_workflow') {
+      toast({
+        title: '批量任务进行中',
+        description: '当前有其他批量操作正在执行，请等待完成后再细化。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsRefining(true);
+    setRefiningSceneId(sceneId);
+    setRefineJobProgress(null);
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      await runRefineSceneAllJob(sceneId, { onProgress: (next) => setRefineJobProgress(next) });
       if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
       toast({ title: '分镜细化完成', description: '已更新当前分镜内容。' });
     } catch (error) {
       if (!isAbortError(error)) {
         const detail = error instanceof Error ? error.message : String(error);
-        updateLogWithError(logId, detail);
         toast({ title: '分镜细化失败', description: detail, variant: 'destructive' });
       }
     } finally {
@@ -576,6 +692,178 @@ export function EpisodeWorkflow() {
       setRefiningSceneId(null);
       setRefineJobProgress(null);
     }
+  };
+
+  const requestCancelBatchRefine = () => {
+    if (!isBatchRefineRunning) return;
+    updateBatchOperations({
+      cancelRequested: true,
+      statusMessage: '已请求取消（将停止当前分镜细化并取消对应 job）...',
+    });
+    batchRefineAbortRef.current?.abort();
+    toast({ title: '已请求取消', description: '正在停止批量细化...' });
+  };
+
+  const handleStartBatchRefine = async () => {
+    if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
+    if (isBatchBlocked) {
+      toast({
+        title: '批量任务进行中',
+        description: '当前有其他批量操作正在执行，请等待完成后再启动批量细化。',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (isBatchRefineRunning) return;
+
+    const selectedUnique = Array.from(new Set(batchRefineSelectedIds)).filter(Boolean);
+    if (selectedUnique.length === 0) {
+      toast({ title: '未选择分镜', description: '请至少选择 1 个分镜再开始批量细化。' });
+      return;
+    }
+
+    // 按 order 串行执行，避免竞态与资源争抢
+    const orderById = new Map(sortedScenes.map((s) => [s.id, s.order] as const));
+    const sceneById = new Map(sortedScenes.map((s) => [s.id, s] as const));
+    const orderedIds = selectedUnique
+      .slice()
+      .sort(
+        (a, b) =>
+          (orderById.get(a) ?? Number.MAX_SAFE_INTEGER) -
+          (orderById.get(b) ?? Number.MAX_SAFE_INTEGER),
+      );
+
+    // 关键：先 flush 编辑队列，避免“用户编辑 patch”与“worker 写回”交叉覆盖
+    await flushApiEpisodeScenePatchQueue().catch(() => {});
+
+    const projectId = currentProject.id;
+    const episodeId = currentEpisode.id;
+
+    // 初始化全局批量状态（开发者面板/统计分析可见）
+    startBatchGenerating('episode_workflow');
+    setBatchSelectedScenes(orderedIds);
+    updateBatchOperations({
+      isProcessing: true,
+      isPaused: false,
+      cancelRequested: false,
+      progress: 0,
+      currentScene: 0,
+      totalScenes: orderedIds.length,
+      operationType: 'generate',
+      startTime: Date.now(),
+      completedScenes: [],
+      failedScenes: [],
+      currentSceneId: null,
+      statusMessage: '准备开始批量细化...',
+    });
+
+    setIsRefining(true);
+    setRefiningSceneId(null);
+    setRefineJobProgress(null);
+    setBatchRefineErrors({});
+
+    const abortController = new AbortController();
+    batchRefineAbortRef.current = abortController;
+
+    toast({
+      title: '开始批量细化',
+      description: `已入队执行（串行）。共 ${orderedIds.length} 个分镜。`,
+    });
+
+    let successCount = 0;
+    let failCount = 0;
+    let cancelled = false;
+
+    try {
+      for (let i = 0; i < orderedIds.length; i += 1) {
+        const sceneId = orderedIds[i];
+        if (abortController.signal.aborted) {
+          cancelled = true;
+          break;
+        }
+
+        const scene = sceneById.get(sceneId);
+        if (!scene) {
+          failCount += 1;
+          addBatchFailedScene(sceneId);
+          setBatchRefineErrors((prev) => ({
+            ...prev,
+            [sceneId]: '分镜不存在（可能已删除或列表已刷新）',
+          }));
+          continue;
+        }
+
+        setRefiningSceneId(sceneId);
+        setRefineJobProgress(null);
+        updateBatchOperations({
+          currentSceneId: sceneId,
+          currentScene: i + 1,
+          statusMessage: `正在细化 #${scene.order}（${i + 1}/${orderedIds.length}）...`,
+          progress: Math.round((i / orderedIds.length) * 100),
+        });
+
+        try {
+          await runRefineSceneAllJob(sceneId, {
+            signal: abortController.signal,
+            extraContext: { batchIndex: i + 1, batchTotal: orderedIds.length, batchMode: 'bulk' },
+            onProgress: (next) => {
+              setRefineJobProgress(next);
+              const delta = typeof next.pct === 'number' ? next.pct / 100 : 0;
+              const overall = Math.round(((i + delta) / orderedIds.length) * 100);
+              updateBatchOperations({
+                progress: overall,
+                statusMessage: `正在细化 #${scene.order}（${i + 1}/${orderedIds.length}）${
+                  next.message ? `：${next.message}` : ''
+                }`,
+              });
+            },
+          });
+
+          successCount += 1;
+          addBatchCompletedScene(sceneId);
+        } catch (error) {
+          if (isAbortError(error)) {
+            cancelled = true;
+            break;
+          }
+          failCount += 1;
+          addBatchFailedScene(sceneId);
+          const detail = error instanceof Error ? error.message : String(error);
+          setBatchRefineErrors((prev) => ({ ...prev, [sceneId]: detail }));
+        }
+      }
+    } finally {
+      batchRefineAbortRef.current = null;
+      setIsRefining(false);
+      setRefiningSceneId(null);
+      setRefineJobProgress(null);
+
+      const finalProgress = useAIProgressStore.getState().batchOperations.progress;
+      updateBatchOperations({
+        isProcessing: false,
+        currentSceneId: null,
+        statusMessage: cancelled ? '已取消批量细化' : '批量细化完成',
+        progress: cancelled ? finalProgress : 100,
+      });
+      stopBatchGenerating();
+
+      // 刷新一次当前 episode 的 scenes（避免每个 scene 都 reload，减少抖动/请求）
+      loadScenes(projectId, episodeId);
+    }
+
+    if (cancelled) {
+      toast({
+        title: '批量细化已取消',
+        description: `已完成 ${successCount} 个，失败 ${failCount} 个。`,
+      });
+      return;
+    }
+
+    toast({
+      title: '批量细化完成',
+      description: `成功 ${successCount} 个，失败 ${failCount} 个。`,
+      variant: failCount > 0 ? 'destructive' : 'default',
+    });
   };
 
   const openEpisodeEditor = (episode: Episode) => {
@@ -1292,9 +1580,10 @@ ${safeJsonStringify(ep.coreExpression)}
                 <Label htmlFor="episodeSelect">选择 Episode</Label>
                 <select
                   id="episodeSelect"
-                  className="w-full h-10 px-3 rounded-md border bg-background text-sm"
+                  className="w-full h-10 px-3 rounded-md border bg-background text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   value={currentEpisodeId ?? ''}
                   onChange={(e) => setCurrentEpisode(e.target.value || null)}
+                  disabled={isRunningWorkflow || isRefining || isBatchBlocked || isBatchRefineRunning}
                 >
                   <option value="">请选择</option>
                   {episodes.map((ep) => (
@@ -1484,7 +1773,7 @@ ${safeJsonStringify(ep.coreExpression)}
                                 <Button
                                   size="sm"
                                   onClick={() => handleRefineSceneAll(scene.id)}
-                                  disabled={!aiProfileId || isRefining}
+                                  disabled={!aiProfileId || isRefining || isBatchBlocked}
                                   className="gap-2"
                                 >
                                   {isRefining && refiningSceneId === scene.id ? (
@@ -1521,21 +1810,41 @@ ${safeJsonStringify(ep.coreExpression)}
 
             <TabsContent value="refine" className="space-y-4">
               <Card className="p-6">
-                <div className="space-y-2">
-                  <h3 className="font-semibold">分镜细化</h3>
-                  <p className="text-sm text-muted-foreground">
-                    目前提供「一键细化」与字段编辑；细化任务由后端 worker 执行并写回 Scene。
-                  </p>
+                <div className="flex items-start justify-between gap-6">
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">分镜细化</h3>
+                    <p className="text-sm text-muted-foreground">
+                      目前提供「一键细化」与字段编辑；细化任务由后端 worker 执行并写回 Scene。
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => (isBatchRefineRunning ? setBatchRefineDialogOpen(true) : openBatchRefineDialog())}
+                      disabled={!aiProfileId || sortedScenes.length === 0 || isRunningWorkflow}
+                      className="gap-2"
+                    >
+                      {isBatchRefineRunning ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Layers className="h-4 w-4" />
+                      )}
+                      <span>{isBatchRefineRunning ? '批量细化中' : '批量细化'}</span>
+                      {!isBatchRefineRunning && recommendedBatchRefineIds.length > 0 ? (
+                        <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                          待细化 {recommendedBatchRefineIds.length}
+                        </Badge>
+                      ) : null}
+                    </Button>
+                  </div>
                 </div>
                 <Separator className="my-4" />
                 {scenes.length === 0 ? (
                   <div className="text-sm text-muted-foreground">暂无分镜，请先生成分镜列表。</div>
                 ) : (
                   <div className="space-y-3">
-                    {scenes
-                      .slice()
-                      .sort((a, b) => a.order - b.order)
-                      .map((scene) => (
+                    {sortedScenes.map((scene) => (
                         <div key={scene.id} className="rounded-lg border p-4">
                           <div className="flex items-center justify-between gap-4">
                             <div className="min-w-0">
@@ -1571,7 +1880,7 @@ ${safeJsonStringify(ep.coreExpression)}
                               <Button
                                 size="sm"
                                 onClick={() => handleRefineSceneAll(scene.id)}
-                                disabled={!aiProfileId || isRefining}
+                                disabled={!aiProfileId || isRefining || isBatchBlocked}
                                 className="gap-2"
                               >
                                 {isRefining && refiningSceneId === scene.id ? (
@@ -1977,6 +2286,182 @@ ${safeJsonStringify(ep.coreExpression)}
       </Dialog>
 
       <Dialog
+        open={batchRefineDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && isBatchRefineRunning && !batchRefineAllowCloseRef.current) {
+            toast({
+              title: '批量细化进行中',
+              description: '如需关闭窗口请选择「后台运行」，如需停止请点击「取消批量」。',
+            });
+            return;
+          }
+          batchRefineAllowCloseRef.current = false;
+          setBatchRefineDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-5xl w-[96vw] max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>批量细化</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              选择需要批量执行「一键细化」的分镜。将按分镜顺序串行执行，以降低竞态与资源争抢风险。
+            </div>
+
+            {isBatchBlocked ? (
+              <div className="rounded-md border bg-destructive/10 p-3 text-sm text-destructive">
+                当前有其他批量任务正在执行，已暂时禁用启动。你仍可查看列表。
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={setBatchSelectRecommended}
+                  disabled={isBatchRefineRunning}
+                >
+                  仅选未完成
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={setBatchSelectAll}
+                  disabled={isBatchRefineRunning}
+                >
+                  全选
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={setBatchSelectNone}
+                  disabled={isBatchRefineRunning}
+                >
+                  清空
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                已选 {batchRefineSelectedIds.length}/{sortedScenes.length}
+              </div>
+            </div>
+
+            <ScrollArea className="h-[360px] rounded-md border">
+              <div className="p-3 space-y-2">
+                {sortedScenes.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-muted-foreground">
+                    暂无分镜，请先生成分镜列表。
+                  </div>
+                ) : (
+                  sortedScenes.map((scene) => {
+                    const checked = batchRefineSelectedSet.has(scene.id);
+                    const isCurrent =
+                      isBatchRefineRunning && batchOperations.currentSceneId === scene.id;
+                    const isDone = batchCompletedSet.has(scene.id);
+                    const isFail = batchFailedSet.has(scene.id);
+                    const err = batchRefineErrors[scene.id] ?? null;
+
+                    return (
+                      <label
+                        key={scene.id}
+                        className={`flex items-start gap-3 rounded-md border p-3 hover:bg-muted/30 ${
+                          isCurrent ? 'border-primary/50 bg-primary/5' : ''
+                        }`}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => toggleBatchSelect(scene.id, Boolean(v))}
+                          disabled={isBatchRefineRunning}
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">#{scene.order}</Badge>
+                            <Badge variant="outline">{getSceneStatusLabel(scene.status)}</Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {scene.summary || '（无概要）'}
+                          </div>
+                          {err ? (
+                            <div className="text-xs text-destructive truncate">{err}</div>
+                          ) : null}
+                        </div>
+                        <div className="shrink-0 pt-0.5">
+                          {isCurrent ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          ) : isDone ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          ) : isFail ? (
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          ) : null}
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+
+            {isBatchRefineRunning ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{batchOperations.statusMessage || '批量细化中...'}</span>
+                  <span>
+                    {batchOperations.currentScene}/{batchOperations.totalScenes}
+                  </span>
+                </div>
+                <Progress value={batchOperations.progress} />
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">
+                注意：细化会由后端 worker 写回 Scene（可能覆盖 sceneDescription/shotPrompt/motionPrompt/dialogues）。
+                建议在开始前完成当前编辑或先关闭详情编辑弹窗。
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            {isBatchRefineRunning ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    batchRefineAllowCloseRef.current = true;
+                    setBatchRefineDialogOpen(false);
+                  }}
+                >
+                  后台运行
+                </Button>
+                <Button variant="destructive" onClick={requestCancelBatchRefine}>
+                  取消批量
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setBatchRefineDialogOpen(false)}>
+                  关闭
+                </Button>
+                <Button
+                  onClick={() => void handleStartBatchRefine()}
+                  disabled={
+                    !aiProfileId ||
+                    sortedScenes.length === 0 ||
+                    batchRefineSelectedIds.length === 0 ||
+                    isRunningWorkflow ||
+                    isBatchBlocked
+                  }
+                  className="gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>开始批量细化</span>
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={refineDialogOpen}
         onOpenChange={(open) => {
           setRefineDialogOpen(open);
@@ -2001,7 +2486,7 @@ ${safeJsonStringify(ep.coreExpression)}
                 </div>
                 <Button
                   onClick={() => handleRefineSceneAll(refineScene.id)}
-                  disabled={!aiProfileId || isRefining}
+                  disabled={!aiProfileId || isRefining || isBatchBlocked}
                   className="gap-2"
                 >
                   {isRefining ? (

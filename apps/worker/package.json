@@ -1,6 +1,7 @@
 {
   "name": "@aixsss/worker",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/worker.ts",
@@ -30,5 +31,3 @@
     "vitest": "^4.0.15"
   }
 }
-
-

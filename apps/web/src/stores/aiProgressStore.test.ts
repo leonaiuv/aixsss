@@ -4,8 +4,6 @@ import {
   getTaskTypeLabel,
   getTaskStatusLabel,
   getTaskStatusColor,
-  type AITask,
-  type AITaskStatus,
 } from './aiProgressStore';
 
 describe('aiProgressStore', () => {
@@ -936,6 +934,15 @@ describe('批量操作状态管理', () => {
       startBatchGenerating('scene_refinement');
 
       expect(useAIProgressStore.getState().batchGeneratingSource).toBe('scene_refinement');
+    });
+
+    it('应该支持episode_workflow来源', () => {
+      const { startBatchGenerating } = useAIProgressStore.getState();
+
+      startBatchGenerating('episode_workflow');
+
+      expect(useAIProgressStore.getState().batchGeneratingSource).toBe('episode_workflow');
+      expect(useAIProgressStore.getState().isBatchGenerating).toBe(true);
     });
   });
 

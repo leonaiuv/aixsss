@@ -426,7 +426,11 @@ export function DevPanel() {
                       </div>
                       {batchGeneratingSource && (
                         <Badge variant="outline" className="text-xs">
-                          {batchGeneratingSource === 'batch_panel' ? '批量操作面板' : '分镜细化'}
+                          {batchGeneratingSource === 'batch_panel'
+                            ? '批量操作面板'
+                            : batchGeneratingSource === 'scene_refinement'
+                              ? '分镜细化'
+                              : '单集工作流'}
                         </Badge>
                       )}
                     </div>
