@@ -7,6 +7,49 @@ import { isRecord, mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from
 import { CoreExpressionSchema, type CoreExpression } from '@aixsss/shared';
 import { parseJsonFromText } from './aiJson.js';
 
+function jsonSchemaFormat(name: string, schema: Record<string, unknown>) {
+  return {
+    type: 'json_schema' as const,
+    json_schema: {
+      name,
+      strict: true,
+      schema,
+    },
+  };
+}
+
+function schemaCoreExpression(): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['theme', 'emotionalArc', 'coreConflict', 'payoff', 'visualMotifs', 'endingBeat', 'nextHook'],
+    properties: {
+      theme: { type: 'string' },
+      emotionalArc: { type: 'array', minItems: 4, maxItems: 4, items: { type: 'string' } },
+      coreConflict: { type: 'string' },
+      payoff: { type: 'array', items: { type: 'string' } },
+      visualMotifs: { type: 'array', items: { type: 'string' } },
+      endingBeat: { type: 'string' },
+      nextHook: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+    },
+  };
+}
+
+function stableJsonFixConfig(base: ReturnType<typeof toProviderChatConfig>): ReturnType<typeof toProviderChatConfig> {
+  const next = { ...base } as ReturnType<typeof toProviderChatConfig>;
+  const model = String(next.model ?? '').toLowerCase();
+  const effort = model.includes('gpt-5.2') || model.includes('gpt5.2') ? 'none' : ('minimal' as const);
+  next.params = {
+    ...(next.params ?? {}),
+    temperature: 0,
+    topP: 1,
+    presencePenalty: 0,
+    frequencyPenalty: 0,
+    reasoningEffort: effort,
+  };
+  return next;
+}
+
 function parseCoreExpression(raw: string): { parsed: CoreExpression; extractedJson: string } {
   const { json, extractedJson } = parseJsonFromText(raw, { expectedKind: 'object' });
   return { parsed: CoreExpressionSchema.parse(json), extractedJson };
@@ -233,6 +276,7 @@ export async function generateEpisodeCoreExpression(args: {
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
   const providerConfig = toProviderChatConfig(profile);
   providerConfig.apiKey = apiKey;
+  providerConfig.responseFormat = jsonSchemaFormat('episode_core_expression', schemaCoreExpression());
 
   await updateProgress({ pct: 25, message: '调用 AI 生成核心表达...' });
 
@@ -242,18 +286,34 @@ export async function generateEpisodeCoreExpression(args: {
 
   await updateProgress({ pct: 55, message: '解析输出...' });
 
-  let parsed: CoreExpression;
-  let extractedJson: string;
+  let parsed: CoreExpression | null = null;
+  let extractedJson: string | null = null;
   let fixed = false;
   try {
     ({ parsed, extractedJson } = parseCoreExpression(res.content));
-  } catch {
-    await updateProgress({ pct: 60, message: '尝试修复 JSON 输出...' });
-    const fixMessages: ChatMessage[] = [{ role: 'user', content: buildJsonFixPrompt(res.content) }];
-    const fixedRes = await chatWithProvider(providerConfig, fixMessages);
-    tokenUsage = mergeTokenUsage(tokenUsage, fixedRes.tokenUsage);
-    ({ parsed, extractedJson } = parseCoreExpression(fixedRes.content));
+  } catch (err) {
+    const fixConfig = stableJsonFixConfig(providerConfig);
+    let lastErr: unknown = err;
+    let ok = false;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await updateProgress({ pct: 60 + attempt, message: `尝试修复 JSON 输出（第${attempt}/3次）...` });
+      const fixMessages: ChatMessage[] = [{ role: 'user', content: buildJsonFixPrompt(res.content) }];
+      const fixedRes = await chatWithProvider(fixConfig, fixMessages);
+      tokenUsage = mergeTokenUsage(tokenUsage, fixedRes.tokenUsage);
+      try {
+        ({ parsed, extractedJson } = parseCoreExpression(fixedRes.content));
+        ok = true;
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
     fixed = true;
+  }
+
+  if (!parsed || !extractedJson) {
+    throw new Error('核心表达解析失败：结果为空');
   }
 
   await updateProgress({ pct: 85, message: '写入数据库...' });

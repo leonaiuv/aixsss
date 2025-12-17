@@ -678,6 +678,12 @@ export interface AIGenerationParams {
   maxTokens: number;
   presencePenalty?: number;
   frequencyPenalty?: number;
+  /**
+   * 推理强度（Thinking/Reasoning effort）
+   * - 仅 GPT-5 / 推理类模型在 Responses API 下生效
+   * - 参考 AiHubMix Responses API：reasoning.effort
+   */
+  reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 }
 
 // 搜索过滤器

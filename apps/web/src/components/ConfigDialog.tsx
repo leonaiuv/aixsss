@@ -95,6 +95,36 @@ const PROVIDER_PRESETS: Record<
   ],
   'openai-compatible': [
     {
+      id: 'aihubmix-gpt5',
+      label: 'AiHubMix（GPT-5，推荐）',
+      model: 'gpt-5',
+      baseURL: 'https://aihubmix.com',
+    },
+    {
+      id: 'aihubmix-gpt5-mini',
+      label: 'AiHubMix（GPT-5 Mini）',
+      model: 'gpt-5-mini',
+      baseURL: 'https://aihubmix.com',
+    },
+    {
+      id: 'aihubmix-gpt5-nano',
+      label: 'AiHubMix（GPT-5 Nano）',
+      model: 'gpt-5-nano',
+      baseURL: 'https://aihubmix.com',
+    },
+    {
+      id: 'aihubmix-gemini3',
+      label: 'AiHubMix（Gemini 3，示例）',
+      model: 'gemini-3',
+      baseURL: 'https://aihubmix.com',
+    },
+    {
+      id: 'aihubmix-forward',
+      label: 'AiHubMix（通用转发，示例 gpt-4o-mini）',
+      model: 'gpt-4o-mini',
+      baseURL: 'https://aihubmix.com',
+    },
+    {
       id: 'openai-official-mini',
       label: 'OpenAI 官方（gpt-4o-mini）',
       model: 'gpt-4o-mini',

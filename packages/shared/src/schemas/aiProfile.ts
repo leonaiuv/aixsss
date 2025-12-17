@@ -30,6 +30,8 @@ export const CreateAIProfileInputSchema = z.object({
       maxTokens: z.number().int().min(1).max(65536).optional(),
       presencePenalty: z.number().min(-2).max(2).optional(),
       frequencyPenalty: z.number().min(-2).max(2).optional(),
+      // GPT-5 / 推理类模型：推理强度（Responses API: reasoning.effort）
+      reasoningEffort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']).optional(),
     })
     .optional(),
   pricing: AIPricingSchema.optional(),

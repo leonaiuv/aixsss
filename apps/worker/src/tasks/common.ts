@@ -30,12 +30,23 @@ export function styleFullPrompt(project: { style: string; artStyleConfig: JsonVa
 
 function extractGenerationParams(raw: JsonValue | null): GenerationParams | undefined {
   if (!raw || !isRecord(raw)) return undefined;
+  const reasoningEffortRaw = raw.reasoningEffort;
+  const reasoningEffort =
+    reasoningEffortRaw === 'none' ||
+    reasoningEffortRaw === 'minimal' ||
+    reasoningEffortRaw === 'low' ||
+    reasoningEffortRaw === 'medium' ||
+    reasoningEffortRaw === 'high' ||
+    reasoningEffortRaw === 'xhigh'
+      ? reasoningEffortRaw
+      : undefined;
   return {
     ...(typeof raw.temperature === 'number' ? { temperature: raw.temperature } : {}),
     ...(typeof raw.topP === 'number' ? { topP: raw.topP } : {}),
     ...(typeof raw.maxTokens === 'number' ? { maxTokens: raw.maxTokens } : {}),
     ...(typeof raw.presencePenalty === 'number' ? { presencePenalty: raw.presencePenalty } : {}),
     ...(typeof raw.frequencyPenalty === 'number' ? { frequencyPenalty: raw.frequencyPenalty } : {}),
+    ...(reasoningEffort ? { reasoningEffort } : {}),
   };
 }
 

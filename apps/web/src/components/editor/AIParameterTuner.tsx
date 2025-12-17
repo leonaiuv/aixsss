@@ -48,6 +48,15 @@ export function AIParameterTuner({
   const [preset, setPreset] = useState<string>('balanced');
   const maxTokensPolicy = useMemo(() => getMaxTokensPolicy(provider, model), [provider, model]);
 
+  const canTuneReasoningEffort = useMemo(() => {
+    if (provider !== 'openai-compatible') return false;
+    const m = (model ?? '').toLowerCase().trim();
+    if (!m) return false;
+    if (m.includes('gpt-5')) return true;
+    if (/(^|\/)o\d/.test(m)) return true;
+    return false;
+  }, [model, provider]);
+
   const presets = useMemo(() => {
     const base = maxTokensPolicy.recommendedDefault;
     const min = maxTokensPolicy.min;
@@ -79,15 +88,23 @@ export function AIParameterTuner({
 
   const handlePresetChange = (presetName: string) => {
     setPreset(presetName);
-    onParamsChange(presets[presetName as keyof typeof presets]);
+    const next = presets[presetName as keyof typeof presets];
+    // 保留“推理强度”等非数值型参数，避免切换预设后丢失
+    onParamsChange({ ...next, reasoningEffort: params.reasoningEffort });
   };
 
   const handleReset = () => {
     handlePresetChange('balanced');
   };
 
-  const updateParam = (key: keyof AIGenerationParams, value: number) => {
+  type NumericParamKey = 'temperature' | 'topP' | 'maxTokens' | 'presencePenalty' | 'frequencyPenalty';
+  const updateParam = (key: NumericParamKey, value: number) => {
     onParamsChange({ ...params, [key]: value });
+    setPreset('custom');
+  };
+
+  const updateReasoningEffort = (value: AIGenerationParams['reasoningEffort']) => {
+    onParamsChange({ ...params, reasoningEffort: value });
     setPreset('custom');
   };
 
@@ -153,6 +170,65 @@ export function AIParameterTuner({
 
       {/* 参数调整 */}
       <div className="space-y-6">
+        {/* 推理强度（GPT-5/推理模型） */}
+        {canTuneReasoningEffort ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">推理强度（Thinking）</CardTitle>
+              <CardDescription>
+                仅对 GPT-5 / 推理类模型（Responses API）生效，用于控制推理深度与耗时/成本。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Label>推理强度</Label>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Info className="h-4 w-4 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs max-w-xs">
+                            AiHubMix 的 Responses API 支持通过 reasoning.effort 调整推理强度：
+                            none/minimal/low/medium/high/xhigh（不同模型支持的档位可能不同）。
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <Badge variant="outline" className="font-mono">
+                    {params.reasoningEffort ?? 'default'}
+                  </Badge>
+                </div>
+                <Select
+                  value={params.reasoningEffort ?? 'default'}
+                  onValueChange={(v) =>
+                    updateReasoningEffort(v === 'default' ? undefined : (v as AIGenerationParams['reasoningEffort']))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">默认（不指定）</SelectItem>
+                    <SelectItem value="none">none（关闭推理/最省）</SelectItem>
+                    <SelectItem value="minimal">minimal（最少推理）</SelectItem>
+                    <SelectItem value="low">low（低）</SelectItem>
+                    <SelectItem value="medium">medium（中）</SelectItem>
+                    <SelectItem value="high">high（高）</SelectItem>
+                    <SelectItem value="xhigh">xhigh（超高）</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  提示：更高推理强度通常更稳但更慢/更贵；若追求速度可选 none/minimal/low。若供应商返回“不支持该档位”，系统会自动降级。
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         {/* 温度 (Temperature) */}
         <ParameterSlider
           label="温度 (Temperature)"

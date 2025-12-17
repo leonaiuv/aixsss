@@ -24,6 +24,268 @@ import { parseJsonFromText } from './aiJson.js';
 
 const MAX_CHAIN_VERSIONS_PER_PROJECT = 50;
 
+function jsonSchemaFormat(name: string, schema: Record<string, unknown>) {
+  return {
+    type: 'json_schema' as const,
+    json_schema: {
+      name,
+      strict: true,
+      schema,
+    },
+  };
+}
+
+function schemaPhase1ConflictEngine(): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['outlineSummary', 'conflictEngine'],
+    properties: {
+      outlineSummary: { type: 'string' },
+      conflictEngine: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['coreObjectOrEvent', 'stakesByFaction', 'necessityDerivation'],
+        properties: {
+          coreObjectOrEvent: { type: 'string' },
+          stakesByFaction: {
+            type: 'object',
+            additionalProperties: { type: 'string' },
+          },
+          firstMover: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['initiator', 'publicReason', 'hiddenIntent', 'legitimacyMask'],
+            properties: {
+              initiator: { type: 'string' },
+              publicReason: { type: 'string' },
+              hiddenIntent: { type: 'string' },
+              legitimacyMask: { type: 'string' },
+            },
+          },
+          necessityDerivation: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        },
+      },
+    },
+  };
+}
+
+function schemaPhase2InfoLayers(): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['infoVisibilityLayers', 'characterMatrix'],
+    properties: {
+      infoVisibilityLayers: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 6,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['layerName', 'roles', 'infoBoundary', 'blindSpot', 'motivation'],
+          properties: {
+            layerName: { type: 'string' },
+            roles: { type: 'array', items: { type: 'string' } },
+            infoBoundary: { type: 'string' },
+            blindSpot: { type: 'string' },
+            motivation: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['gain', 'lossAvoid', 'activationTrigger'],
+              properties: {
+                gain: { type: 'integer', minimum: 1, maximum: 10 },
+                lossAvoid: { type: 'integer', minimum: 1, maximum: 10 },
+                activationTrigger: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      characterMatrix: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 40,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['name', 'identity', 'goal', 'secret', 'vulnerability'],
+          properties: {
+            name: { type: 'string' },
+            identity: { type: 'string' },
+            goal: { type: 'string' },
+            secret: { type: 'string' },
+            vulnerability: { type: 'string' },
+          },
+        },
+      },
+    },
+  };
+}
+
+function schemaPhase3Outline(): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['beatFlow'],
+    properties: {
+      beatFlow: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['actMode', 'acts'],
+        properties: {
+          actMode: { type: 'string', enum: ['three_act', 'four_act'] },
+          acts: {
+            type: 'array',
+            minItems: 3,
+            maxItems: 4,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['act', 'actName', 'beats'],
+              properties: {
+                act: { type: 'integer', minimum: 1, maximum: 4 },
+                actName: { type: 'string' },
+                beats: {
+                  type: 'array',
+                  minItems: 3,
+                  maxItems: 5,
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['beatName', 'escalation', 'interlock'],
+                    properties: {
+                      beatName: { type: 'string' },
+                      escalation: { type: 'integer', minimum: 1, maximum: 10 },
+                      interlock: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function schemaPhase3ActDetail(args: { actMode: 'three_act' | 'four_act'; act: number; beatNames: string[] }): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['beatFlow'],
+    properties: {
+      beatFlow: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['actMode', 'acts'],
+        properties: {
+          actMode: { type: 'string', const: args.actMode },
+          acts: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['act', 'actName', 'beats'],
+              properties: {
+                act: { type: 'integer', const: args.act },
+                actName: { type: 'string' },
+                beats: {
+                  type: 'array',
+                  minItems: args.beatNames.length,
+                  maxItems: args.beatNames.length,
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: [
+                      'beatName',
+                      'surfaceEvent',
+                      'infoFlow',
+                      'escalation',
+                      'interlock',
+                      'location',
+                      'characters',
+                      'visualHook',
+                      'emotionalTone',
+                      'estimatedScenes',
+                    ],
+                    properties: {
+                      beatName: { type: 'string', enum: args.beatNames },
+                      surfaceEvent: { type: 'string' },
+                      infoFlow: { type: 'string' },
+                      escalation: { type: 'integer', minimum: 1, maximum: 10 },
+                      interlock: { type: 'string' },
+                      location: { type: 'string' },
+                      characters: { type: 'array', minItems: 1, items: { type: 'string' } },
+                      visualHook: { type: 'string' },
+                      emotionalTone: { type: 'string' },
+                      estimatedScenes: { type: 'integer', minimum: 1, maximum: 10 },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function schemaPhase4PlotLines(): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['plotLines', 'consistencyChecks'],
+    properties: {
+      plotLines: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 6,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['lineType', 'driver', 'statedGoal', 'trueGoal', 'keyInterlocks', 'pointOfNoReturn'],
+          properties: {
+            lineType: { type: 'string', enum: ['main', 'sub1', 'sub2', 'sub3'] },
+            driver: { type: 'string' },
+            statedGoal: { type: 'string' },
+            trueGoal: { type: 'string' },
+            keyInterlocks: { type: 'array', items: { type: 'string' } },
+            pointOfNoReturn: { type: 'string' },
+          },
+        },
+      },
+      consistencyChecks: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'blindSpotDrivesAction',
+          'infoFlowChangesAtLeastTwo',
+          'coreConflictHasThreeWayTension',
+          'endingIrreversibleTriggeredByMultiLines',
+          'noRedundantRole',
+          'notes',
+        ],
+        properties: {
+          blindSpotDrivesAction: { type: 'boolean' },
+          infoFlowChangesAtLeastTwo: { type: 'boolean' },
+          coreConflictHasThreeWayTension: { type: 'boolean' },
+          endingIrreversibleTriggeredByMultiLines: { type: 'boolean' },
+          noRedundantRole: { type: 'boolean' },
+          notes: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  };
+}
+
 async function tryCreateNarrativeCausalChainVersion(args: {
   prisma: PrismaClient;
   teamId: string;
@@ -497,6 +759,9 @@ function buildJsonFixPrompt(raw: string, phase: number): string {
 1) 不要输出 Markdown、代码块、解释或多余文字
 2) 直接以 { 开头，以 } 结尾
 3) 阶段${phase}的字段要求：${phaseHints[phase] ?? '确保字段完整'}
+4) 所有字符串字段禁止出现未转义的双引号 " （如需引号请用 \\" 或改用中文引号/改写措辞）
+5) 所有字符串字段禁止出现真实换行符；如需换行请使用 \\n
+6) 严禁尾随逗号（trailing comma）
 
 原始输出：
 <<<
@@ -504,6 +769,25 @@ ${raw?.trim() ?? ''}
 >>>
 
 请只输出修正后的 JSON：`;
+}
+
+function stableJsonFixConfig(base: ReturnType<typeof toProviderChatConfig>): ReturnType<typeof toProviderChatConfig> {
+  // JSON 修复阶段：尽可能确定性输出，减少格式漂移
+  const next = { ...base } as ReturnType<typeof toProviderChatConfig>;
+  const model = String(next.model ?? '').toLowerCase();
+  // AiHubMix 的 gpt-5.2 模式不支持 minimal（会报 400），但支持 none/low/medium/high/xhigh
+  const effort =
+    model.includes('gpt-5.2') || model.includes('gpt5.2') ? 'none' : ('minimal' as const);
+  next.params = {
+    ...(next.params ?? {}),
+    temperature: 0,
+    topP: 1,
+    presencePenalty: 0,
+    frequencyPenalty: 0,
+    // GPT-5 / 推理模型：修复 JSON 时建议使用最少推理，降低“额外解释文字/格式漂移”概率
+    reasoningEffort: effort,
+  };
+  return next;
 }
 
 // ===================== 合并到 contextCache =====================
@@ -602,6 +886,10 @@ export async function buildNarrativeCausalChain(args: {
 
   if (targetPhase === 1) {
     await updateProgress({ pct: 20, message: '阶段1：生成核心冲突引擎...' });
+    const phaseConfig = {
+      ...providerConfig,
+      responseFormat: jsonSchemaFormat('narrative_phase1_conflict_engine', schemaPhase1ConflictEngine()),
+    };
     const prompt = buildPhase1Prompt({
       storySynopsis: project.summary,
       artStyle: styleFullPrompt(project),
@@ -610,11 +898,11 @@ export async function buildNarrativeCausalChain(args: {
     });
 
     const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
-    const res = await chatWithProvider(providerConfig, messages);
+    const res = await chatWithProvider(phaseConfig, messages);
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
 
-    let parsed: Phase1ConflictEngine;
+    let parsed: Phase1ConflictEngine | null = null;
     try {
       ({ parsed, extractedJson } = parsePhase1(res.content));
     } catch (err) {
@@ -623,14 +911,35 @@ export async function buildNarrativeCausalChain(args: {
         pct: 40,
         message: `阶段1解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
       });
-      const fixRes = await chatWithProvider(providerConfig, [
-        { role: 'user', content: buildJsonFixPrompt(res.content, 1) },
-      ]);
-      if (!fixRes.content?.trim()) throw new Error('修复失败');
-      tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
-      ({ parsed, extractedJson } = parsePhase1(fixRes.content));
+      const fixConfig = stableJsonFixConfig(phaseConfig);
+      let lastErr: unknown = err;
+      let ok = false;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        await updateProgress({
+          pct: 40 + attempt,
+          message: `阶段1修复 JSON（第${attempt}/3次）...`,
+        });
+        const fixRes = await chatWithProvider(fixConfig, [
+          { role: 'user', content: buildJsonFixPrompt(res.content, 1) },
+        ]);
+        if (!fixRes.content?.trim()) {
+          lastErr = new Error('修复失败：AI 返回空内容');
+          continue;
+        }
+        tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+        try {
+          ({ parsed, extractedJson } = parsePhase1(fixRes.content));
+          ok = true;
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
       fixed = true;
     }
+
+    if (!parsed) throw new Error('阶段1解析失败：结果为空');
 
     updatedChain = {
       version: NARRATIVE_CAUSAL_CHAIN_VERSION,
@@ -650,6 +959,10 @@ export async function buildNarrativeCausalChain(args: {
       throw new Error('请先完成阶段1');
     }
     await updateProgress({ pct: 20, message: '阶段2：生成信息能见度层...' });
+    const phaseConfig = {
+      ...providerConfig,
+      responseFormat: jsonSchemaFormat('narrative_phase2_info_layers', schemaPhase2InfoLayers()),
+    };
     const prompt = buildPhase2Prompt({
       storySynopsis: project.summary,
       characters: formatCharacters(characters),
@@ -660,11 +973,11 @@ export async function buildNarrativeCausalChain(args: {
     });
 
     const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
-    const res = await chatWithProvider(providerConfig, messages);
+    const res = await chatWithProvider(phaseConfig, messages);
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
 
-    let parsed: Phase2InfoLayers;
+    let parsed: Phase2InfoLayers | null = null;
     try {
       ({ parsed, extractedJson } = parsePhase2(res.content));
     } catch (err) {
@@ -673,14 +986,35 @@ export async function buildNarrativeCausalChain(args: {
         pct: 40,
         message: `阶段2解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
       });
-      const fixRes = await chatWithProvider(providerConfig, [
-        { role: 'user', content: buildJsonFixPrompt(res.content, 2) },
-      ]);
-      if (!fixRes.content?.trim()) throw new Error('修复失败');
-      tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
-      ({ parsed, extractedJson } = parsePhase2(fixRes.content));
+      const fixConfig = stableJsonFixConfig(phaseConfig);
+      let lastErr: unknown = err;
+      let ok = false;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        await updateProgress({
+          pct: 40 + attempt,
+          message: `阶段2修复 JSON（第${attempt}/3次）...`,
+        });
+        const fixRes = await chatWithProvider(fixConfig, [
+          { role: 'user', content: buildJsonFixPrompt(res.content, 2) },
+        ]);
+        if (!fixRes.content?.trim()) {
+          lastErr = new Error('修复失败：AI 返回空内容');
+          continue;
+        }
+        tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+        try {
+          ({ parsed, extractedJson } = parsePhase2(fixRes.content));
+          ok = true;
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
       fixed = true;
     }
+
+    if (!parsed) throw new Error('阶段2解析失败：结果为空');
 
     updatedChain = {
       ...existingChain,
@@ -713,12 +1047,16 @@ export async function buildNarrativeCausalChain(args: {
         pct: 18,
         message: force ? '阶段3A：重新生成节拍目录（强制）...' : '阶段3A：生成节拍目录（轻量）...',
       });
+      const phaseConfigA = {
+        ...providerConfig,
+        responseFormat: jsonSchemaFormat('narrative_phase3_outline', schemaPhase3Outline()),
+      };
       const promptA = buildPhase3OutlinePrompt({ phase1, phase2 });
-      const resA = await chatWithProvider(providerConfig, [{ role: 'user', content: promptA }]);
+      const resA = await chatWithProvider(phaseConfigA, [{ role: 'user', content: promptA }]);
       if (!resA.content?.trim()) throw new Error('AI 返回空内容');
       tokenUsage = mergeTokenUsage(tokenUsage, resA.tokenUsage) ?? tokenUsage;
 
-      let parsedA: Phase3BeatFlow;
+      let parsedA: Phase3BeatFlow | null = null;
       try {
         ({ parsed: parsedA, extractedJson } = parsePhase3(resA.content));
       } catch (err) {
@@ -727,14 +1065,35 @@ export async function buildNarrativeCausalChain(args: {
           pct: 26,
           message: `阶段3A解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
         });
-        const fixRes = await chatWithProvider(providerConfig, [
-          { role: 'user', content: buildJsonFixPrompt(resA.content, 3) },
-        ]);
-        if (!fixRes.content?.trim()) throw new Error('修复失败');
-        tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
-        ({ parsed: parsedA, extractedJson } = parsePhase3(fixRes.content));
+        const fixConfig = stableJsonFixConfig(phaseConfigA);
+        let lastErr: unknown = err;
+        let ok = false;
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          await updateProgress({
+            pct: 26 + attempt,
+            message: `阶段3A修复 JSON（第${attempt}/3次）...`,
+          });
+          const fixRes = await chatWithProvider(fixConfig, [
+            { role: 'user', content: buildJsonFixPrompt(resA.content, 3) },
+          ]);
+          if (!fixRes.content?.trim()) {
+            lastErr = new Error('修复失败：AI 返回空内容');
+            continue;
+          }
+          tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+          try {
+            ({ parsed: parsedA, extractedJson } = parsePhase3(fixRes.content));
+            ok = true;
+            break;
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
         fixed = true;
       }
+
+      if (!parsedA) throw new Error('阶段3A解析失败：结果为空');
 
       beatFlow = parsedA.beatFlow;
       phase3Mutated = true;
@@ -792,11 +1151,22 @@ export async function buildNarrativeCausalChain(args: {
         actMode: currentBeatFlow.actMode,
       });
 
-      const resB = await chatWithProvider(providerConfig, [{ role: 'user', content: promptB }]);
+      const phaseConfigB = {
+        ...providerConfig,
+        responseFormat: jsonSchemaFormat(
+          `narrative_phase3_act${actNo}_detail`,
+          schemaPhase3ActDetail({
+            actMode: currentBeatFlow.actMode,
+            act: actNo,
+            beatNames: actOutline.beats.map((b) => b.beatName),
+          }),
+        ),
+      };
+      const resB = await chatWithProvider(phaseConfigB, [{ role: 'user', content: promptB }]);
       if (!resB.content?.trim()) throw new Error('AI 返回空内容');
       tokenUsage = mergeTokenUsage(tokenUsage, resB.tokenUsage) ?? tokenUsage;
 
-      let parsedB: Phase3BeatFlow;
+      let parsedB: Phase3BeatFlow | null = null;
       try {
         ({ parsed: parsedB, extractedJson } = parsePhase3(resB.content));
       } catch (err) {
@@ -805,14 +1175,35 @@ export async function buildNarrativeCausalChain(args: {
           pct: 38 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 45),
           message: `阶段3B解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
         });
-        const fixRes = await chatWithProvider(providerConfig, [
-          { role: 'user', content: buildJsonFixPrompt(resB.content, 3) },
-        ]);
-        if (!fixRes.content?.trim()) throw new Error('修复失败');
-        tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
-        ({ parsed: parsedB, extractedJson } = parsePhase3(fixRes.content));
+        const fixConfig = stableJsonFixConfig(phaseConfigB);
+        let lastErr: unknown = err;
+        let ok = false;
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          await updateProgress({
+            pct: 40 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 45) + attempt,
+            message: `阶段3B修复 JSON（第${attempt}/3次）...`,
+          });
+          const fixRes = await chatWithProvider(fixConfig, [
+            { role: 'user', content: buildJsonFixPrompt(resB.content, 3) },
+          ]);
+          if (!fixRes.content?.trim()) {
+            lastErr = new Error('修复失败：AI 返回空内容');
+            continue;
+          }
+          tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+          try {
+            ({ parsed: parsedB, extractedJson } = parsePhase3(fixRes.content));
+            ok = true;
+            break;
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
         fixed = true;
       }
+
+      if (!parsedB) throw new Error(`阶段3：第${actNo}幕解析失败：结果为空`);
 
       const detailAct = (parsedB.beatFlow.acts ?? []).find((a) => a.act === actNo) ?? null;
       if (!detailAct || !Array.isArray(detailAct.beats) || detailAct.beats.length === 0) {
@@ -880,6 +1271,10 @@ export async function buildNarrativeCausalChain(args: {
       throw new Error('请先完成阶段3');
     }
     await updateProgress({ pct: 20, message: '阶段4：生成叙事线交织...' });
+    const phaseConfig = {
+      ...providerConfig,
+      responseFormat: jsonSchemaFormat('narrative_phase4_plot_lines', schemaPhase4PlotLines()),
+    };
     const prompt = buildPhase4Prompt({
       phase1: {
         outlineSummary: existingChain?.outlineSummary ?? '',
@@ -895,11 +1290,11 @@ export async function buildNarrativeCausalChain(args: {
     });
 
     const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
-    const res = await chatWithProvider(providerConfig, messages);
+    const res = await chatWithProvider(phaseConfig, messages);
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
 
-    let parsed: Phase4PlotLines;
+    let parsed: Phase4PlotLines | null = null;
     try {
       ({ parsed, extractedJson } = parsePhase4(res.content));
     } catch (err) {
@@ -908,14 +1303,35 @@ export async function buildNarrativeCausalChain(args: {
         pct: 40,
         message: `阶段4解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
       });
-      const fixRes = await chatWithProvider(providerConfig, [
-        { role: 'user', content: buildJsonFixPrompt(res.content, 4) },
-      ]);
-      if (!fixRes.content?.trim()) throw new Error('修复失败');
-      tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
-      ({ parsed, extractedJson } = parsePhase4(fixRes.content));
+      const fixConfig = stableJsonFixConfig(phaseConfig);
+      let lastErr: unknown = err;
+      let ok = false;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        await updateProgress({
+          pct: 40 + attempt,
+          message: `阶段4修复 JSON（第${attempt}/3次）...`,
+        });
+        const fixRes = await chatWithProvider(fixConfig, [
+          { role: 'user', content: buildJsonFixPrompt(res.content, 4) },
+        ]);
+        if (!fixRes.content?.trim()) {
+          lastErr = new Error('修复失败：AI 返回空内容');
+          continue;
+        }
+        tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+        try {
+          ({ parsed, extractedJson } = parsePhase4(fixRes.content));
+          ok = true;
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
       fixed = true;
     }
+
+    if (!parsed) throw new Error('阶段4解析失败：结果为空');
 
     // 判断是否通过自洽校验
     const checks = parsed.consistencyChecks;

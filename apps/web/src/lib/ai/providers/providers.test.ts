@@ -201,7 +201,6 @@ describe('DeepSeekProvider', () => {
       const stream = provider.streamChat([{ role: 'user', content: 'test' }], defaultConfig);
 
       await expect(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _chunk of stream) {
           // consume stream
         }
@@ -362,6 +361,62 @@ describe('OpenAICompatibleProvider', () => {
         provider.chat([{ role: 'user', content: 'test' }], defaultConfig),
       ).rejects.toThrow('OpenAI API error');
     });
+
+    it('gpt-5 优先走 /v1/responses，并使用 max_output_tokens', async () => {
+      const mockResponse = {
+        ok: true,
+        json: async () => ({
+          output_text: 'Hello from GPT-5',
+          usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 },
+        }),
+      } as Response;
+
+      const mockFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
+
+      const config: AIProviderConfig = {
+        provider: 'openai-compatible',
+        apiKey: 'test-key',
+        model: 'gpt-5',
+        baseURL: 'https://aihubmix.com/v1',
+        generationParams: { temperature: 0.7, topP: 0.9, maxTokens: 1234, reasoningEffort: 'low' },
+      };
+
+      const result = await provider.chat([{ role: 'user', content: 'Hello' }], config);
+      expect(result.content).toBe('Hello from GPT-5');
+      expect(result.tokenUsage).toEqual({ prompt: 1, completion: 2, total: 3 });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('aihubmix.com');
+      expect(url).toContain('/v1/responses');
+
+      const requestInit = mockFetch.mock.calls[0][1] as RequestInit;
+      const body = JSON.parse(requestInit.body as string);
+      expect(body.max_output_tokens).toBe(1234);
+      expect(body.reasoning).toEqual({ effort: 'low' });
+      expect(body.temperature).toBeUndefined();
+      expect(body.top_p).toBeUndefined();
+    });
+
+    it('应移除 baseURL 末尾的 /v1（避免 /v1/v1）', async () => {
+      const mockResponse = {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'test' } }],
+        }),
+      } as Response;
+
+      const mockFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
+      const config: AIProviderConfig = {
+        ...defaultConfig,
+        baseURL: 'https://custom.api.com/v1',
+      };
+
+      await provider.chat([{ role: 'user', content: 'test' }], config);
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).not.toContain('/v1/v1/');
+      expect(url).toContain('https://custom.api.com/v1/chat/completions');
+    });
   });
 
   describe('streamChat 方法', () => {
@@ -395,6 +450,34 @@ describe('OpenAICompatibleProvider', () => {
       }
 
       expect(chunks).toEqual(['Stream']);
+    });
+
+    it('gpt-5 在 streamChat 中应兜底为非流式 responses（返回完整内容）', async () => {
+      const mockResponse = {
+        ok: true,
+        json: async () => ({
+          output_text: 'Full content',
+          usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+        }),
+      } as Response;
+
+      const mockFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
+
+      const config: AIProviderConfig = {
+        provider: 'openai-compatible',
+        apiKey: 'test-key',
+        model: 'gpt-5',
+        baseURL: 'https://aihubmix.com',
+      };
+
+      const stream = provider.streamChat([{ role: 'user', content: 'test' }], config);
+      const chunks: string[] = [];
+      for await (const chunk of stream) chunks.push(chunk);
+
+      expect(chunks).toEqual(['Full content']);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain('/v1/responses');
     });
   });
 });
@@ -605,7 +688,6 @@ describe('GeminiProvider', () => {
       const mockFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
       const stream = provider.streamChat([{ role: 'user', content: 'test' }], defaultConfig);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _chunk of stream) {
         // consume stream
       }

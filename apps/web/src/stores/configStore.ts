@@ -114,6 +114,15 @@ function buildConnectionTestResult(
     suggestions.push(
       'OpenAI 兼容：Base URL 填域名根（不要包含 /v1），系统会拼接 `/v1/chat/completions`。',
     );
+    suggestions.push(
+      'AiHubMix（OpenAI 兼容转发）Base URL：`https://aihubmix.com`（也可粘贴 `https://aihubmix.com/v1`，系统会自动规范化）。',
+    );
+    suggestions.push(
+      'AiHubMix 文档参考：`https://docs.aihubmix.com/cn/api/Aihubmix-Integration`（模型 ID 建议从模型广场复制）。',
+    );
+    suggestions.push(
+      'GPT-5 系列建议模型：`gpt-5` / `gpt-5-mini` / `gpt-5-nano`（系统会优先使用 `/v1/responses` 以保证兼容）。',
+    );
     suggestions.push('模型示例：`gpt-4o-mini`、`gpt-4o`、`gpt-3.5-turbo`。');
   }
 
@@ -162,11 +171,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               apiKey: '', // 不在浏览器保存
               baseURL: p.baseURL ?? undefined,
               model: p.model,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               generationParams: (p.generationParams ?? undefined) as any,
               aiProfileId: p.id,
             },
             createdAt: p.createdAt,
             updatedAt: p.updatedAt,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pricing: (p.pricing ?? undefined) as any,
           }));
 
@@ -312,6 +323,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       const provider = config.provider;
       const model = config.model;
       const baseURL = typeof config.baseURL === 'string' ? config.baseURL.trim() : '';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const generationParams = config.generationParams as any;
       const apiKey = config.apiKey?.trim();
 
@@ -320,6 +332,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
         // 若已有服务端档案：可选地更新（当用户输入了 apiKey 才更新密钥）
         if (aiProfileId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const payload: any = {
             provider,
             model,
@@ -354,6 +367,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
                   apiKey: '',
                   baseURL: created.baseURL ?? undefined,
                   model: created.model,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   generationParams: (created.generationParams ?? undefined) as any,
                   aiProfileId: created.id,
                 },
@@ -580,6 +594,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               apiKey,
               baseURL: cfg.provider === 'kimi' ? undefined : (normalizedBaseURL ?? undefined),
               model: cfg.model,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               generationParams: cfg.generationParams as any,
               id: undefined,
               pricing: target.pricing,
@@ -593,11 +608,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
                 apiKey: '', // 不在浏览器保存
                 baseURL: created.baseURL ?? undefined,
                 model: created.model,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 generationParams: (created.generationParams ?? undefined) as any,
                 aiProfileId: created.id,
               },
               createdAt: created.createdAt,
               updatedAt: created.updatedAt,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pricing: (created.pricing ?? target.pricing) as any,
               lastTest: target.lastTest,
             };
@@ -616,6 +633,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             return;
           }
 
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const payload: any = {
             ...(typeof target.name === 'string' ? { name: target.name } : {}),
             ...(cfg.provider ? { provider: cfg.provider } : {}),
@@ -624,9 +642,11 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               ? { baseURL: normalizedBaseURL }
               : {}),
             ...(cfg.generationParams !== undefined
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               ? { generationParams: cfg.generationParams as any }
               : {}),
             ...(cfg.apiKey?.trim() ? { apiKey: cfg.apiKey.trim() } : {}),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pricing: (target.pricing ?? null) as any,
           };
 
@@ -639,11 +659,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               apiKey: '',
               baseURL: updated.baseURL ?? undefined,
               model: updated.model,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               generationParams: (updated.generationParams ?? undefined) as any,
               aiProfileId: updated.id,
             },
             createdAt: updated.createdAt,
             updatedAt: updated.updatedAt,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pricing: (updated.pricing ?? target.pricing) as any,
             lastTest: target.lastTest,
           };

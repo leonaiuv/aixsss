@@ -7,6 +7,66 @@ import { isRecord, mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from
 import { EpisodePlanSchema, type EpisodePlan } from '@aixsss/shared';
 import { parseJsonFromText } from './aiJson.js';
 
+function jsonSchemaFormat(name: string, schema: Record<string, unknown>) {
+  return {
+    type: 'json_schema' as const,
+    json_schema: {
+      name,
+      strict: true,
+      schema,
+    },
+  };
+}
+
+function schemaEpisodePlan(targetEpisodeCount?: number): Record<string, unknown> {
+  const count = typeof targetEpisodeCount === 'number' ? targetEpisodeCount : undefined;
+  const maybeConst = count ? { const: count } : {};
+  const minMax = count ? { minItems: count, maxItems: count } : { minItems: 1, maxItems: 24 };
+
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['episodeCount', 'episodes'],
+    properties: {
+      episodeCount: { type: 'integer', minimum: 1, maximum: 24, ...maybeConst },
+      reasoningBrief: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      episodes: {
+        type: 'array',
+        ...minMax,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['order', 'title', 'logline', 'mainCharacters', 'beats', 'sceneScope', 'cliffhanger'],
+          properties: {
+            order: { type: 'integer', minimum: 1, maximum: 24 },
+            title: { type: 'string' },
+            logline: { type: 'string' },
+            mainCharacters: { type: 'array', items: { type: 'string' } },
+            beats: { type: 'array', items: { type: 'string' } },
+            sceneScope: { type: 'string' },
+            cliffhanger: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          },
+        },
+      },
+    },
+  };
+}
+
+function stableJsonFixConfig(base: ReturnType<typeof toProviderChatConfig>): ReturnType<typeof toProviderChatConfig> {
+  const next = { ...base } as ReturnType<typeof toProviderChatConfig>;
+  const model = String(next.model ?? '').toLowerCase();
+  const effort = model.includes('gpt-5.2') || model.includes('gpt5.2') ? 'none' : ('minimal' as const);
+  next.params = {
+    ...(next.params ?? {}),
+    temperature: 0,
+    topP: 1,
+    presencePenalty: 0,
+    frequencyPenalty: 0,
+    reasoningEffort: effort,
+  };
+  return next;
+}
+
 function parseEpisodePlan(raw: string): { parsed: EpisodePlan; extractedJson: string } {
   const { json, extractedJson } = parseJsonFromText(raw, { expectedKind: 'object' });
   return { parsed: EpisodePlanSchema.parse(json), extractedJson };
@@ -330,6 +390,12 @@ export async function planEpisodes(args: {
     providerConfig = withMinimumMaxTokens(baseConfig, desired);
   }
 
+  // 强制结构化输出：用 JSON Schema 约束模型返回的 JSON（减少语法错误/字段漂移）
+  providerConfig = {
+    ...providerConfig,
+    responseFormat: jsonSchemaFormat('episode_plan', schemaEpisodePlan(args.options?.targetEpisodeCount)),
+  };
+
   await updateProgress({ pct: 25, message: '调用 AI 生成剧集规划...' });
 
   const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
@@ -341,26 +407,44 @@ export async function planEpisodes(args: {
 
   await updateProgress({ pct: 55, message: '解析输出...' });
 
-  let parsed: EpisodePlan;
-  let extractedJson: string;
+  let parsed: EpisodePlan | null = null;
+  let extractedJson: string | null = null;
   let fixed = false;
   let lastParseError: string | null = null;
   try {
     ({ parsed, extractedJson } = parseEpisodePlan(res.content));
   } catch (err) {
     lastParseError = err instanceof Error ? err.message : String(err);
-    await updateProgress({ pct: 60, message: `尝试修复 JSON 输出...（${lastParseError}）` });
+    const fixConfig = stableJsonFixConfig(providerConfig);
+    let lastErr: unknown = err;
+    let ok = false;
 
-    const fixMessages: ChatMessage[] = [{ role: 'user', content: buildJsonFixPrompt(res.content) }];
-    const fixedRes = await chatWithProvider(providerConfig, fixMessages);
-    if (!fixedRes.content?.trim()) {
-      throw new Error(
-        `AI 修复阶段返回空内容（content 为空）。上一次解析错误：${lastParseError ?? 'unknown'}`,
-      );
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      await updateProgress({ pct: 60 + attempt, message: `尝试修复 JSON 输出（第${attempt}/3次）...` });
+      const fixMessages: ChatMessage[] = [{ role: 'user', content: buildJsonFixPrompt(res.content) }];
+      const fixedRes = await chatWithProvider(fixConfig, fixMessages);
+      if (!fixedRes.content?.trim()) {
+        lastErr = new Error(
+          `AI 修复阶段返回空内容（content 为空）。上一次解析错误：${lastParseError ?? 'unknown'}`,
+        );
+        continue;
+      }
+      tokenUsage = mergeTokenUsage(tokenUsage, fixedRes.tokenUsage);
+      try {
+        ({ parsed, extractedJson } = parseEpisodePlan(fixedRes.content));
+        ok = true;
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
     }
-    tokenUsage = mergeTokenUsage(tokenUsage, fixedRes.tokenUsage);
-    ({ parsed, extractedJson } = parseEpisodePlan(fixedRes.content));
+
+    if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
     fixed = true;
+  }
+
+  if (!parsed || !extractedJson) {
+    throw new Error('剧集规划解析失败：结果为空');
   }
 
   await updateProgress({ pct: 80, message: '写入数据库...' });

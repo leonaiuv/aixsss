@@ -52,11 +52,23 @@ async function main() {
         data: {
           status: 'running',
           startedAt: new Date(),
+          finishedAt: null,
+          error: null,
+          result: null,
           attempts: { increment: 1 },
         },
       });
 
       const updateProgress = async (progress: JobProgress) => {
+        // 取消是 best-effort：API 端可能已把 status 置为 cancelled，但 bullmq 的 active job 无法强制中断。
+        // 这里做协作式取消：一旦发现已取消，抛错终止后续步骤，避免继续写入产物/覆盖状态。
+        const latest = await prisma.aIJob.findFirst({
+          where: { id: jobId },
+          select: { status: true },
+        });
+        if (latest?.status === 'cancelled') {
+          throw new Error('Job cancelled');
+        }
         await job.updateProgress(progress);
         const pct =
           isRecord(progress) && typeof progress.pct === 'number' ? Math.floor(progress.pct) : null;
@@ -76,15 +88,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -98,15 +113,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -127,15 +145,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -153,15 +174,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -176,15 +200,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -206,15 +233,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -229,15 +259,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -252,15 +285,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -275,15 +311,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -298,15 +337,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -321,15 +363,18 @@ async function main() {
               updateProgress,
             });
 
-            await prisma.aIJob.update({
-              where: { id: jobId },
-              data: {
-                status: 'succeeded',
-                finishedAt: new Date(),
-                result,
-                error: null,
-              },
-            });
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
 
             return result;
           }
@@ -338,14 +383,48 @@ async function main() {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await prisma.aIJob.update({
-          where: { id: jobId },
-          data: {
-            status: 'failed',
-            finishedAt: new Date(),
-            error: message,
-          },
-        });
+        const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+        if (latest?.status === 'cancelled' || message === 'Job cancelled') {
+          // 不覆盖取消状态；队列层面直接结束（视为已停止）
+          return { cancelled: true };
+        }
+        // BullMQ 可能会自动重试（attempts/backoff）。如果这里把 DB 状态写成 failed，
+        // 前端会立刻停止轮询并报错，但后端实际上仍会继续重试 -> 造成“前端已报错，后端还在跑”的错觉。
+        const maxAttempts =
+          typeof job.opts?.attempts === 'number' && job.opts.attempts > 0 ? job.opts.attempts : 1;
+        const attemptsMade = typeof job.attemptsMade === 'number' ? job.attemptsMade : 0;
+        const currentAttempt = attemptsMade + 1;
+        const willRetry = currentAttempt < maxAttempts;
+
+        if (willRetry) {
+          // 让前端继续等待：把 DB 状态保持在 queued，并通过 progress 提示“将自动重试”
+          try {
+            await job.updateProgress({
+              pct: null,
+              message: `本次尝试失败，将自动重试（${currentAttempt}/${maxAttempts}）：${message}`,
+            } satisfies JobProgress);
+          } catch {
+            // ignore
+          }
+          await prisma.aIJob.update({
+            where: { id: jobId },
+            data: {
+              status: 'queued',
+              // error/finishedAt 不落库，避免 UI 误判为“已失败结束”
+              error: null,
+              finishedAt: null,
+            },
+          });
+        } else {
+          await prisma.aIJob.update({
+            where: { id: jobId },
+            data: {
+              status: 'failed',
+              finishedAt: new Date(),
+              error: message,
+            },
+          });
+        }
         throw err;
       }
     },
