@@ -107,7 +107,7 @@ describe('CharacterManager', () => {
       chat: mockChat,
       streamChat: vi.fn(),
       providerName: 'deepseek',
-    } as any);
+    } as unknown as ReturnType<typeof AIFactory.createClient>);
   });
 
   afterEach(() => {
@@ -482,7 +482,7 @@ describe('CharacterManager', () => {
       await user.click(generateButton);
 
       // 应该显示生成中状态
-      expect(screen.getByText('生成中...')).toBeInTheDocument();
+      expect(await screen.findByText('生成中...')).toBeInTheDocument();
 
       await waitFor(() => {
         expect(screen.queryByText('生成中...')).not.toBeInTheDocument();
