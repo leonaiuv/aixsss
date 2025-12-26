@@ -16,6 +16,7 @@ import { apiListNarrativeCausalChainVersions } from '@/lib/api/narrativeCausalCh
 import {
   buildEpisodeArtifactPatch,
   buildProjectArtifactPatch,
+  buildFinalPromptPack,
   computeEpisodeMetrics,
   computePanelMetrics,
   resolvePanelScript,
@@ -1078,6 +1079,7 @@ export function EpisodeWorkflow() {
                 keyframes: parseKeyframePromptText(s.shotPrompt),
                 motion: parseMotionPromptText(s.motionPrompt),
               },
+              finalPrompts: buildFinalPromptPack(s, styleFullPrompt),
             }));
             return {
               ...ep,
@@ -2268,6 +2270,12 @@ ${safeJsonStringify(ep.coreExpression)}
               currentEpisodeScenes={sortedScenes}
               aiProfileId={aiProfileId}
               onGoToStep={setActiveStep}
+              onGoToScene={(episodeId, sceneId) => {
+                setCurrentEpisode(episodeId);
+                setActiveStep('episode');
+                setSelectedSceneId(sceneId);
+                setRefineDialogOpen(true);
+              }}
               onRunPlanEpisodes={handlePlanEpisodes}
               onRunGenerateCoreExpression={handleGenerateCoreExpression}
               onRunGenerateSceneList={handleGenerateSceneList}

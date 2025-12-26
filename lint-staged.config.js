@@ -24,5 +24,11 @@ export default {
     const relativePaths = files.map((f) => path.relative(cwd, f));
     return `npx eslint --max-warnings=0 -c ${cwd}/eslint.config.js ${relativePaths.map(p => path.join(cwd, p)).join(' ')}`;
   },
-  '**/*.{json,md}': 'prettier --check',
+  '**/*.{json,md}': (files) => {
+    const filtered = files.filter(
+      (f) => !(f === '.trae' || f.startsWith('.trae/') || f.startsWith('.trae\\')),
+    );
+    if (filtered.length === 0) return [];
+    return `prettier --check ${filtered.map((f) => JSON.stringify(f)).join(' ')}`;
+  },
 };

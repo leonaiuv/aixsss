@@ -93,7 +93,7 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
       if (!isApiMode()) {
         saveScenePatchBatched(projectId, sceneId, updates);
       } else {
-        queueApiScenePatch(projectId, sceneId, updates as unknown as Record<string, unknown>);
+        queueApiScenePatch(projectId, sceneId, updates);
       }
 
       set({

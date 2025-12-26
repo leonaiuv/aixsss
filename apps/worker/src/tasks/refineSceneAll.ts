@@ -93,7 +93,43 @@ function getExistingPanelScript(contextSummary: unknown): PanelScriptV1 | null {
   return ps as PanelScriptV1;
 }
 
-function buildSceneAnchorPrompt(args: { style: string; currentSummary: string; prevSummary: string }): string {
+function formatPanelScriptHints(panelScript: PanelScriptV1 | null): string {
+  if (!panelScript) return '';
+  const lines: string[] = [];
+
+  const location =
+    panelScript.location?.label?.trim() ||
+    panelScript.location?.worldViewElementId?.trim() ||
+    '';
+  if (location) lines.push(`- 地点：${location}`);
+
+  const timeOfDay = panelScript.timeOfDay?.trim() || '';
+  if (timeOfDay) lines.push(`- 时间/天气：${timeOfDay}`);
+
+  const camera = panelScript.camera?.trim() || '';
+  if (camera) lines.push(`- 镜头：${camera}`);
+
+  const blocking = panelScript.blocking?.trim() || '';
+  if (blocking) lines.push(`- 站位/视线：${blocking}`);
+
+  const bubble = panelScript.bubbleLayoutNotes?.trim() || '';
+  if (bubble) lines.push(`- 气泡/版面：${bubble}`);
+
+  const props = Array.isArray(panelScript.props)
+    ? panelScript.props.map((p) => (typeof p === 'string' ? p.trim() : '')).filter(Boolean)
+    : [];
+  if (props.length > 0) lines.push(`- 关键道具：${props.join('、')}`);
+
+  if (lines.length === 0) return '';
+  return `\n\n## 用户分镜脚本约束（必须尽量遵守）\n${lines.join('\n')}\n`;
+}
+
+function buildSceneAnchorPrompt(args: {
+  style: string;
+  currentSummary: string;
+  prevSummary: string;
+  panelHints: string;
+}): string {
   return `你是专业的提示词工程师与分镜助理。请为“当前分镜”输出可复用的「场景锚点 Scene Anchor」，用于保证多张关键帧/多家图生视频的场景一致性。
 
 ## 输入
@@ -105,6 +141,7 @@ ${args.currentSummary}
 
 上一分镜概要（仅用于理解衔接，不要把人物/动作写进场景锚点）:
 ${args.prevSummary}
+${args.panelHints}
 
 ## 输出格式（严格按行输出）
 SCENE_ANCHOR_ZH: ...
@@ -120,6 +157,7 @@ function buildKeyframePrompt(args: {
   currentSummary: string;
   sceneAnchor: string;
   characters: string;
+  panelHints: string;
 }): string {
   return `你是专业的绘图/视频关键帧提示词工程师。请在同一背景参考图上输出 3 张「静止」关键帧的“人物差分提示词”：KF0 / KF1 / KF2。
 
@@ -134,6 +172,7 @@ ${args.style}
 
 角色信息:
 ${args.characters}
+${args.panelHints}
 
 输出格式（严格按行输出）
 KF0_ZH: ...
@@ -146,7 +185,7 @@ AVOID_ZH: ...
 AVOID_EN: ...`;
 }
 
-function buildMotionPrompt(args: { sceneAnchor: string; shotPrompt: string }): string {
+function buildMotionPrompt(args: { sceneAnchor: string; shotPrompt: string; panelHints: string }): string {
   return `你是图生视频(I2V)提示词工程师。请基于三关键帧生成“描述变化”的运动/时空提示词。
 
 场景锚点:
@@ -154,6 +193,7 @@ ${args.sceneAnchor}
 
 三关键帧:
 ${args.shotPrompt}
+${args.panelHints}
 
 输出格式（严格按行输出）
 MOTION_SHORT_ZH: ...
@@ -170,6 +210,7 @@ function buildDialoguePrompt(args: {
   shotPrompt: string;
   motionPrompt: string;
   characters: string;
+  panelHints: string;
 }): string {
   return `你是专业影视编剧。请生成可直接用于字幕/配音的台词，确保与关键帧/运动节拍一致且简洁。
 
@@ -187,6 +228,7 @@ ${args.motionPrompt}
 
 角色:
 ${args.characters}
+${args.panelHints}
 
 输出要求：每条台词一行，格式：
 - [对白|情绪] 角色名: 台词内容
@@ -250,6 +292,8 @@ export async function refineSceneAll(args: {
   });
   if (!scene) throw new UnrecoverableError('Scene not found');
 
+  const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary));
+
   const prev =
     scene.order > 1
       ? await prisma.scene.findFirst({
@@ -285,6 +329,7 @@ export async function refineSceneAll(args: {
       style: styleFullPrompt(project),
       currentSummary: scene.summary || '-',
       prevSummary: prev?.summary || '-',
+      panelHints,
     }),
   });
   tokens = mergeTokenUsage(tokens, anchorRes.tokenUsage);
@@ -325,6 +370,7 @@ export async function refineSceneAll(args: {
       currentSummary: scene.summary || '-',
       sceneAnchor: anchorFixed.content,
       characters: project.protagonist || '-',
+      panelHints,
     }),
   });
   tokens = mergeTokenUsage(tokens, kfRes.tokenUsage);
@@ -360,7 +406,11 @@ export async function refineSceneAll(args: {
 
   const motionRes = await doChat({
     providerConfig,
-    prompt: buildMotionPrompt({ sceneAnchor: anchorFixed.content, shotPrompt: kfFixed.content }),
+    prompt: buildMotionPrompt({
+      sceneAnchor: anchorFixed.content,
+      shotPrompt: kfFixed.content,
+      panelHints,
+    }),
   });
   tokens = mergeTokenUsage(tokens, motionRes.tokenUsage);
   const motionFixed = await fixStructuredOutput({
@@ -394,6 +444,7 @@ export async function refineSceneAll(args: {
       shotPrompt: kfFixed.content,
       motionPrompt: motionFixed.content,
       characters: project.protagonist || '-',
+      panelHints,
     }),
   });
   tokens = mergeTokenUsage(tokens, dialogueRes.tokenUsage);
@@ -501,4 +552,3 @@ export async function refineSceneAll(args: {
     tokenUsage: tokens ?? null,
   };
 }
-

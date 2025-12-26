@@ -34,6 +34,33 @@ export interface ContinuityEpisodeSummary {
   missingCharactersPresentCount: number;
   unknownCharacterIdCount: number;
   unknownDialogueCharacterNameCount: number;
+  timeOfDayJumpCount: number;
+  uniquePropCount: number;
+}
+
+export interface ContinuityCharacterStat {
+  characterId: string;
+  name: string;
+  totalPanelCount: number;
+  totalDialogueLineCount: number;
+  byEpisode: Array<{
+    episodeId: string;
+    order: number;
+    title: string;
+    panelCount: number;
+    dialogueLineCount: number;
+  }>;
+}
+
+export interface ContinuityPropStat {
+  prop: string;
+  totalPanelCount: number;
+  byEpisode: Array<{
+    episodeId: string;
+    order: number;
+    title: string;
+    panelCount: number;
+  }>;
 }
 
 export interface ContinuityReport {
@@ -43,6 +70,8 @@ export interface ContinuityReport {
   issueCounts: Record<WorkflowIssueLevel, number>;
   issues: WorkflowIssue[];
   byEpisode: ContinuityEpisodeSummary[];
+  characterStats: ContinuityCharacterStat[];
+  propStats: ContinuityPropStat[];
 }
 
 export function buildContinuityReport(input: {
@@ -64,6 +93,24 @@ export function buildContinuityReport(input: {
   const byEpisode: ContinuityEpisodeSummary[] = [];
   let panelCount = 0;
 
+  const characterPanelCounts = new Map<string, { total: number; byEpisode: Map<string, number> }>();
+  const characterDialogueLineCounts = new Map<
+    string,
+    { total: number; byEpisode: Map<string, number> }
+  >();
+  const propPanelCounts = new Map<string, { total: number; byEpisode: Map<string, number> }>();
+
+  const incCounter = (
+    counter: Map<string, { total: number; byEpisode: Map<string, number> }>,
+    key: string,
+    episodeId: string,
+  ) => {
+    const prev = counter.get(key) ?? { total: 0, byEpisode: new Map<string, number>() };
+    prev.total += 1;
+    prev.byEpisode.set(episodeId, (prev.byEpisode.get(episodeId) ?? 0) + 1);
+    counter.set(key, prev);
+  };
+
   for (const ep of sortedEpisodes) {
     const epScenes = (scenesByEpisode.get(ep.id) ?? []).slice().sort((a, b) => a.order - b.order);
     panelCount += epScenes.length;
@@ -73,6 +120,11 @@ export function buildContinuityReport(input: {
     let missingCharactersPresentCount = 0;
     let unknownCharacterIdCount = 0;
     let unknownDialogueCharacterNameCount = 0;
+    let timeOfDayJumpCount = 0;
+    const seenProps = new Set<string>();
+
+    let prevScene: Scene | null = null;
+    let prevTimeOfDay = '';
 
     for (const scene of epScenes) {
       const ps = getPanelScript(scene);
@@ -101,6 +153,9 @@ export function buildContinuityReport(input: {
       }
 
       const presentIds = ps.charactersPresentIds ?? [];
+      presentIds.forEach((id) => {
+        if (safeTrim(id)) incCounter(characterPanelCounts, id, ep.id);
+      });
       if (presentIds.length === 0) {
         missingCharactersPresentCount += 1;
         const dialogueNames = getDialogueCharacterNames(scene);
@@ -147,6 +202,56 @@ export function buildContinuityReport(input: {
           scope: { ...(projectId ? { projectId } : {}), episodeId: ep.id, sceneId },
         });
       }
+
+      // 对白角色与“出场角色”不一致（缺口提示）
+      const knownDialogueIds = dialogueNames
+        .map((name) => characterByName.get(name)?.id)
+        .filter((id): id is string => Boolean(id));
+      const missingPresentForDialogue = Array.from(new Set(knownDialogueIds)).filter(
+        (id) => !presentIds.includes(id),
+      );
+      if (presentIds.length > 0 && missingPresentForDialogue.length > 0) {
+        const names = missingPresentForDialogue
+          .map((id) => characterById.get(id)?.name ?? id)
+          .filter(Boolean);
+        issues.push({
+          id: `continuity:${sceneId}:characters:dialogueMismatch`,
+          level: 'warn',
+          title: `第 ${ep.order} 集 · 第 ${scene.order} 格：对白角色未包含在出场角色中`,
+          detail: `缺少勾选：${names.join('、')}（建议补勾选，便于跨集统计与一致性检查）。`,
+          scope: { ...(projectId ? { projectId } : {}), episodeId: ep.id, sceneId },
+        });
+      }
+
+      // 对白出场统计（按“台词行”计数）
+      const dialogues = Array.isArray(scene.dialogues) ? scene.dialogues : [];
+      dialogues.forEach((d) => {
+        const name = safeTrim((d as { characterName?: unknown }).characterName);
+        const id = name ? characterByName.get(name)?.id : undefined;
+        if (id) incCounter(characterDialogueLineCounts, id, ep.id);
+      });
+
+      // 道具统计（按“出现的格”计数）
+      const props = (ps.props ?? []).map((p) => safeTrim(p)).filter(Boolean);
+      props.forEach((p) => {
+        seenProps.add(p);
+        incCounter(propPanelCounts, p, ep.id);
+      });
+
+      // 时间/天气跳变（启发式：相邻两格都有值且不同）
+      const timeOfDay = safeTrim(ps.timeOfDay);
+      if (prevScene && prevTimeOfDay && timeOfDay && prevTimeOfDay !== timeOfDay) {
+        timeOfDayJumpCount += 1;
+        issues.push({
+          id: `continuity:${prevScene.id}:${sceneId}:timeOfDayJump`,
+          level: 'info',
+          title: `第 ${ep.order} 集 · 时间/天气跳变：第 ${prevScene.order} 格 → 第 ${scene.order} 格`,
+          detail: `${prevTimeOfDay} → ${timeOfDay}（如为转场/蒙太奇可忽略；否则建议补一句转场说明或在分镜脚本注明）。`,
+          scope: { ...(projectId ? { projectId } : {}), episodeId: ep.id, sceneId },
+        });
+      }
+      prevScene = scene;
+      prevTimeOfDay = timeOfDay;
     }
 
     byEpisode.push({
@@ -159,8 +264,76 @@ export function buildContinuityReport(input: {
       missingCharactersPresentCount,
       unknownCharacterIdCount,
       unknownDialogueCharacterNameCount,
+      timeOfDayJumpCount,
+      uniquePropCount: seenProps.size,
     });
   }
+
+  const episodeMetaById = new Map(sortedEpisodes.map((e) => [e.id, e] as const));
+
+  const characterIds = new Set<string>([
+    ...characterPanelCounts.keys(),
+    ...characterDialogueLineCounts.keys(),
+  ]);
+  const characterStats: ContinuityCharacterStat[] = Array.from(characterIds).map((id) => {
+    const c = characterById.get(id);
+    const panel = characterPanelCounts.get(id);
+    const dlg = characterDialogueLineCounts.get(id);
+    const byEpisodeIds = new Set<string>([
+      ...(panel?.byEpisode.keys() ?? []),
+      ...(dlg?.byEpisode.keys() ?? []),
+    ]);
+    const byEpisode = Array.from(byEpisodeIds)
+      .map((episodeId) => {
+        const ep = episodeMetaById.get(episodeId);
+        return {
+          episodeId,
+          order: ep?.order ?? 0,
+          title: ep?.title ?? '',
+          panelCount: panel?.byEpisode.get(episodeId) ?? 0,
+          dialogueLineCount: dlg?.byEpisode.get(episodeId) ?? 0,
+        };
+      })
+      .sort((a, b) => a.order - b.order);
+    return {
+      characterId: id,
+      name: c?.name ?? id,
+      totalPanelCount: panel?.total ?? 0,
+      totalDialogueLineCount: dlg?.total ?? 0,
+      byEpisode,
+    };
+  });
+
+  characterStats.sort((a, b) => b.totalPanelCount - a.totalPanelCount);
+
+  characterStats.forEach((s) => {
+    if (s.totalDialogueLineCount > 0 && s.totalPanelCount === 0) {
+      issues.push({
+        id: `continuity:character:${s.characterId}:dialogueOnly`,
+        level: 'warn',
+        title: `角色「${s.name}」在对白中出现，但从未标记出场角色`,
+        detail: '建议在相关分镜脚本里勾选出场角色，确保跨集统计与一致性检查有效。',
+        scope: { ...(projectId ? { projectId } : {}) },
+      });
+    }
+  });
+
+  const propStats: ContinuityPropStat[] = Array.from(propPanelCounts.entries())
+    .map(([prop, info]) => {
+      const byEpisode = Array.from(info.byEpisode.entries())
+        .map(([episodeId, count]) => {
+          const ep = episodeMetaById.get(episodeId);
+          return {
+            episodeId,
+            order: ep?.order ?? 0,
+            title: ep?.title ?? '',
+            panelCount: count,
+          };
+        })
+        .sort((a, b) => a.order - b.order);
+      return { prop, totalPanelCount: info.total, byEpisode };
+    })
+    .sort((a, b) => b.totalPanelCount - a.totalPanelCount);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -169,5 +342,7 @@ export function buildContinuityReport(input: {
     issueCounts: issueCounts(issues),
     issues,
     byEpisode,
+    characterStats,
+    propStats,
   };
 }

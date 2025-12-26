@@ -86,7 +86,7 @@ export const useEpisodeScenesStore = create<EpisodeScenesStore>((set, get) => ({
       projectId,
       episodeId,
       sceneId,
-      updates as unknown as Record<string, unknown>,
+      updates,
     );
   },
 

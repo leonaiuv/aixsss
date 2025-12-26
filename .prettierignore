@@ -1,0 +1,15 @@
+.trae/**
+
+# 常见构建产物
+**/dist/**
+**/build/**
+**/coverage/**
+**/.turbo/**
+
+# 依赖与编辑器配置
+**/node_modules/**
+**/.idea/**
+**/.vscode/**
+
+*.log
+

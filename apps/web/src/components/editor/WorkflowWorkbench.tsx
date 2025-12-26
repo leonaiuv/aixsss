@@ -67,6 +67,7 @@ export function WorkflowWorkbench(props: {
   currentEpisodeScenes: Scene[];
   aiProfileId: string | null;
   onGoToStep: (step: StepId) => void;
+  onGoToScene?: (episodeId: string, sceneId: string) => void;
   onRunPlanEpisodes: () => void;
   onRunGenerateCoreExpression: () => void;
   onRunGenerateSceneList: () => void;
@@ -489,9 +490,23 @@ export function WorkflowWorkbench(props: {
                 </div>
                 <div className="shrink-0">
                   {i.scope.sceneId ? (
-                    <Button size="sm" variant="outline" onClick={() => props.onGoToStep('episode')}>
-                      查看
-                    </Button>
+                    props.onGoToScene && i.scope.episodeId ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => props.onGoToScene!(i.scope.episodeId!, i.scope.sceneId!)}
+                      >
+                        打开
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => props.onGoToStep('episode')}
+                      >
+                        查看
+                      </Button>
+                    )
                   ) : i.scope.episodeId ? (
                     <Button size="sm" variant="outline" onClick={() => props.onGoToStep('episode')}>
                       前往
@@ -583,9 +598,49 @@ export function WorkflowWorkbench(props: {
                       未知角色/命名：
                       {ep.unknownCharacterIdCount + ep.unknownDialogueCharacterNameCount}
                     </div>
+                    <div>时间跳变：{ep.timeOfDayJumpCount}</div>
+                    <div>道具数：{ep.uniquePropCount}</div>
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-2">
+              <div className="rounded-md border p-3 space-y-2">
+                <div className="text-sm font-medium">角色出场统计（Top 12）</div>
+                {continuityReport.characterStats.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">（暂无统计数据）</div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {continuityReport.characterStats.slice(0, 12).map((c) => (
+                      <Badge key={c.characterId} variant="secondary" className="h-5">
+                        {c.name} · {c.totalPanelCount} 格
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  提示：对白统计按“台词行”计数；出场统计按“出现的格”计数。
+                </div>
+              </div>
+
+              <div className="rounded-md border p-3 space-y-2">
+                <div className="text-sm font-medium">道具统计（Top 12）</div>
+                {continuityReport.propStats.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">（尚未填写道具 props）</div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {continuityReport.propStats.slice(0, 12).map((p) => (
+                      <Badge key={p.prop} variant="outline" className="h-5">
+                        {p.prop} · {p.totalPanelCount} 格
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  建议对关键道具建立统一命名，方便跨集追踪与一致性检查。
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -603,13 +658,23 @@ export function WorkflowWorkbench(props: {
                   </div>
                   <div className="shrink-0">
                     {i.scope.sceneId || i.scope.episodeId ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => props.onGoToStep('episode')}
-                      >
-                        前往
-                      </Button>
+                      props.onGoToScene && i.scope.sceneId && i.scope.episodeId ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => props.onGoToScene!(i.scope.episodeId!, i.scope.sceneId!)}
+                        >
+                          打开
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => props.onGoToStep('episode')}
+                        >
+                          前往
+                        </Button>
+                      )
                     ) : null}
                   </div>
                 </div>
