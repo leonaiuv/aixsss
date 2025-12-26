@@ -5,8 +5,14 @@ import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput } from './formatFix.js';
 import { styleFullPrompt, toProviderChatConfig } from './common.js';
+import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
 
-function buildPrompt(args: { style: string; currentSummary: string; prevSummary: string }): string {
+function buildPrompt(args: {
+  style: string;
+  currentSummary: string;
+  prevSummary: string;
+  panelHints: string;
+}): string {
   return `你是专业的提示词工程师与分镜助理。请为“当前分镜”输出可复用的「场景锚点 Scene Anchor」，用于保证多张关键帧/多家图生视频的场景一致性。
 
 ## 输入
@@ -18,6 +24,7 @@ ${args.currentSummary}
 
 上一分镜概要（仅用于理解衔接，不要把人物/动作写进场景锚点）:
 ${args.prevSummary}
+${args.panelHints}
 
 ## 重要约束（必须遵守）
 1. 只描述“环境/空间/光线/固定锚点物”，不要出现人物、不要写角色代入、不要写动作、不要写镜头运动。
@@ -53,7 +60,7 @@ export async function generateSceneAnchor(args: {
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
-    select: { id: true, episodeId: true, order: true, summary: true },
+    select: { id: true, episodeId: true, order: true, summary: true, contextSummary: true },
   });
   if (!scene) throw new Error('Scene not found');
 
@@ -73,11 +80,22 @@ export async function generateSceneAnchor(args: {
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
 
+  const characterRows = await prisma.character.findMany({
+    where: { projectId },
+    select: { id: true, name: true },
+  });
+  const characterNameById = new Map(characterRows.map((c) => [c.id, c.name]));
+  const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary), {
+    characterNameById,
+    includeAssets: false,
+  });
+
   const style = styleFullPrompt(project);
   const prompt = buildPrompt({
     style,
     currentSummary: scene.summary || '-',
     prevSummary: prev?.summary || '-',
+    panelHints,
   });
 
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
@@ -117,5 +135,4 @@ export async function generateSceneAnchor(args: {
     tokenUsage: fixed.tokenUsage ?? null,
   };
 }
-
 

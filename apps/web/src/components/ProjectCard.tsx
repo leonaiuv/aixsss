@@ -63,7 +63,7 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename }: ProjectCa
   );
 
   return (
-    <Card className="hover:shadow-xl transition-all duration-300 hover:ring-2 hover:ring-primary cursor-pointer group">
+    <Card className="cursor-pointer group transition-colors hover:bg-muted/40">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex-1" onClick={handleOpen}>
@@ -109,7 +109,7 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename }: ProjectCa
             </div>
             <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-500"
+                className="h-full bg-primary/80 transition-all duration-500"
                 style={{ width: `${progressPercentage}%` }}
               />
             </div>

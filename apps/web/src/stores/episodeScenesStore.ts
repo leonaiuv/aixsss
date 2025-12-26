@@ -9,6 +9,26 @@ import {
 } from '@/lib/api/episodeScenes';
 import { queueApiEpisodeScenePatch } from '@/lib/api/episodeScenePatchQueue';
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function deepMergeObjects(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...a };
+  for (const [key, value] of Object.entries(b)) {
+    const prevValue = out[key];
+    if (isPlainObject(prevValue) && isPlainObject(value)) {
+      out[key] = deepMergeObjects(prevValue, value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 interface EpisodeScenesStore {
   scenes: Scene[];
   isLoading: boolean;
@@ -78,16 +98,26 @@ export const useEpisodeScenesStore = create<EpisodeScenesStore>((set, get) => ({
     const scene = scenes.find((s) => s.id === sceneId);
     if (!scene) return;
 
-    const updatedScene: Scene = { ...scene, ...updates };
+    const mergedContextSummary = (() => {
+      if (!('contextSummary' in updates)) return scene.contextSummary;
+      const next = updates.contextSummary;
+      if (next === undefined) return undefined;
+      const prev = scene.contextSummary;
+      if (isPlainObject(prev) && isPlainObject(next)) {
+        return deepMergeObjects(prev, next) as Scene['contextSummary'];
+      }
+      return next;
+    })();
+
+    const updatedScene: Scene = {
+      ...scene,
+      ...updates,
+      contextSummary: mergedContextSummary,
+    };
     set({ scenes: scenes.map((s) => (s.id === sceneId ? updatedScene : s)) });
 
     if (!isApiMode()) return;
-    queueApiEpisodeScenePatch(
-      projectId,
-      episodeId,
-      sceneId,
-      updates,
-    );
+    queueApiEpisodeScenePatch(projectId, episodeId, sceneId, updates);
   },
 
   deleteScene: async (projectId, episodeId, sceneId) => {

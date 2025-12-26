@@ -4,6 +4,7 @@ import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { toProviderChatConfig } from './common.js';
+import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
 
 type DialogueType = 'dialogue' | 'monologue' | 'narration' | 'thought';
 
@@ -78,6 +79,7 @@ function buildPrompt(args: {
   shotPrompt: string;
   motionPrompt: string;
   characters: string;
+  panelHints: string;
 }): string {
   return `你是专业影视编剧。请基于分镜信息生成可直接用于字幕/配音的台词，确保与关键帧/运动节拍一致且简洁有力。
 
@@ -95,6 +97,7 @@ ${args.motionPrompt}
 
 ## 场景中的角色
 ${args.characters}
+${args.panelHints}
 
 ## 台词类型说明
 1. 对白: 角色之间的对话
@@ -151,7 +154,14 @@ export async function generateDialogue(args: {
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
-    select: { id: true, summary: true, sceneDescription: true, shotPrompt: true, motionPrompt: true },
+    select: {
+      id: true,
+      summary: true,
+      sceneDescription: true,
+      shotPrompt: true,
+      motionPrompt: true,
+      contextSummary: true,
+    },
   });
   if (!scene) throw new Error('Scene not found');
   if (!scene.sceneDescription?.trim()) throw new Error('Scene anchor missing');
@@ -166,12 +176,16 @@ export async function generateDialogue(args: {
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
 
+  const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary), {
+    includeAssets: false,
+  });
   const prompt = buildPrompt({
     sceneSummary: scene.summary || '-',
     sceneAnchor: scene.sceneDescription,
     shotPrompt: scene.shotPrompt,
     motionPrompt: scene.motionPrompt,
     characters: project.protagonist || '-',
+    panelHints,
   });
 
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
@@ -248,6 +262,5 @@ export async function generateDialogue(args: {
     tokenUsage: res.tokenUsage ?? null,
   };
 }
-
 
 

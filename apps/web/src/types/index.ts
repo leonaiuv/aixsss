@@ -382,6 +382,55 @@ export interface Project {
   updatedAt: string;
 }
 
+// ==========================================
+// 资产引用（图生图/图生视频输入清单）
+// ==========================================
+
+export interface AssetImageRefV1 {
+  id: string;
+  url: string;
+  label?: string;
+  weight?: number;
+  notes?: string;
+}
+
+export interface PanelCharacterAssetBindingV1 {
+  characterId: string;
+  /** 可为空：表示沿用角色库里配置的参考图 */
+  imageRefs?: AssetImageRefV1[];
+  /** 建议权重（0-1），供下游工具参考 */
+  weight?: number;
+  /** 该格“差量指令”（不重复外观，强调表情/姿势/服装变化/交互） */
+  expression?: string;
+  pose?: string;
+  costume?: string;
+  interaction?: string;
+  notes?: string;
+}
+
+export interface PanelAssetBindingsV1 {
+  version: 1;
+  /** 背景/场景参考图（通常 1 张，可多张） */
+  sceneRefs?: AssetImageRefV1[];
+  /** 出场角色绑定：参考图 + 差量指令 */
+  characters?: PanelCharacterAssetBindingV1[];
+  /** 可选：关键道具参考图（需要固定造型/纹样时） */
+  propRefs?: AssetImageRefV1[];
+  /** 可选：inpaint/mask */
+  maskRefs?: AssetImageRefV1[];
+  /** 可选：布局草图/草稿（空间/气泡布局） */
+  layoutRefs?: AssetImageRefV1[];
+  /** 下游图生图参数建议（不绑定供应商，仅做提示） */
+  params?: {
+    denoiseStrength?: number;
+    cfgScale?: number;
+    steps?: number;
+    seed?: number;
+    notes?: string;
+  };
+  notes?: string;
+}
+
 // 分镜上下文摘要
 export interface PanelScriptV1 {
   version: 1;
@@ -404,6 +453,9 @@ export interface PanelScriptV1 {
   charactersPresentIds?: string[];
   /** 关键道具/物件标签（自由文本，用于连续性检查） */
   props?: string[];
+
+  /** 资产绑定：输入图片清单 + 权重建议（供图生图/图生视频工具链使用） */
+  assets?: PanelAssetBindingsV1;
 
   /** Worker/AI 生成的原始结构化块（保留，便于可逆导出） */
   prompts?: {
@@ -679,6 +731,11 @@ export interface PortraitPrompts {
   stableDiffusion: string;
   /** 通用格式 */
   general: string;
+  /**
+   * 角色参考图资产（可选）
+   * 用于“角色=资产引用”的图生图工作流：提示词不再重复外观描述，而是引用参考图来锁定一致性。
+   */
+  referenceImages?: AssetImageRefV1[];
 }
 
 // 角色实体

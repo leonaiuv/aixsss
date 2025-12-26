@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import {
   Character,
   PortraitPrompts,
+  type AssetImageRefV1,
   type CharacterRelationship,
   type SceneAppearance,
 } from '@/types';
@@ -17,25 +18,51 @@ function safeString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function normalizeReferenceImages(value: unknown): AssetImageRefV1[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const now = Date.now();
+  const refs = value
+    .map((raw, idx) => {
+      if (typeof raw === 'string') {
+        const url = raw.trim();
+        if (!url) return null;
+        return { id: `img_${now}_${idx}`, url } satisfies AssetImageRefV1;
+      }
+      if (!raw || typeof raw !== 'object') return null;
+      const v = raw as Record<string, unknown>;
+      const url = safeString(v.url).trim();
+      if (!url) return null;
+      const id = safeString(v.id).trim() || `img_${now}_${idx}`;
+      const label = safeString(v.label).trim() || undefined;
+      const notes = safeString(v.notes).trim() || undefined;
+      const weight = typeof v.weight === 'number' ? v.weight : undefined;
+      return { id, url, label, notes, weight } satisfies AssetImageRefV1;
+    })
+    .filter((v): v is AssetImageRefV1 => Boolean(v));
+  return refs.length > 0 ? refs : undefined;
+}
+
 function normalizePortraitPrompts(value: unknown): PortraitPrompts | undefined {
   if (!value || typeof value !== 'object') return undefined;
-  const v = value as any;
+  const v = value as Record<string, unknown>;
   const midjourney = safeString(v.midjourney).trim();
   const stableDiffusion = safeString(v.stableDiffusion).trim();
   const general = safeString(v.general).trim();
-  if (!midjourney && !stableDiffusion && !general) return undefined;
+  const referenceImages = normalizeReferenceImages(v.referenceImages);
+  if (!midjourney && !stableDiffusion && !general && !referenceImages) return undefined;
   return {
     midjourney,
     stableDiffusion,
     general,
+    ...(referenceImages ? { referenceImages } : {}),
   };
 }
 
 function normalizeRelationships(value: unknown): CharacterRelationship[] {
   if (!Array.isArray(value)) return [];
   return value
-    .map((v) => (v && typeof v === 'object' ? (v as any) : null))
-    .filter(Boolean)
+    .map((v) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null))
+    .filter((v): v is Record<string, unknown> => Boolean(v))
     .map((v) => ({
       targetCharacterId: safeString(v.targetCharacterId),
       relationshipType: safeString(v.relationshipType),
@@ -47,19 +74,27 @@ function normalizeRelationships(value: unknown): CharacterRelationship[] {
 function normalizeAppearances(value: unknown): SceneAppearance[] {
   if (!Array.isArray(value)) return [];
   return value
-    .map((v) => (v && typeof v === 'object' ? (v as any) : null))
-    .filter(Boolean)
-    .map((v) => ({
-      sceneId: safeString(v.sceneId),
-      role: (safeString(v.role) as any) || 'supporting',
-      notes: safeString(v.notes),
-    }))
+    .map((v) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : null))
+    .filter((v): v is Record<string, unknown> => Boolean(v))
+    .map((v) => {
+      const roleRaw = safeString(v.role);
+      const role: SceneAppearance['role'] =
+        roleRaw === 'main' || roleRaw === 'supporting' || roleRaw === 'background'
+          ? roleRaw
+          : 'supporting';
+      return {
+        sceneId: safeString(v.sceneId),
+        role,
+        notes: safeString(v.notes),
+      };
+    })
     .filter((a) => a.sceneId);
 }
 
 function normalizeCharacter(raw: unknown, projectId: string): Character {
   const now = new Date().toISOString();
-  const v = raw && typeof raw === 'object' ? (raw as any) : ({} as any);
+  const v: Record<string, unknown> =
+    raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
 
   const id = safeString(v.id) || `char_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 

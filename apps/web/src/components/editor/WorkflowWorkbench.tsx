@@ -496,7 +496,7 @@ export function WorkflowWorkbench(props: {
                         variant="outline"
                         onClick={() => props.onGoToScene!(i.scope.episodeId!, i.scope.sceneId!)}
                       >
-                        打开
+                        打开详情
                       </Button>
                     ) : (
                       <Button
@@ -528,7 +528,7 @@ export function WorkflowWorkbench(props: {
           <div className="space-y-1">
             <div className="font-medium">跨集连续性报告</div>
             <div className="text-xs text-muted-foreground">
-              手动拉取所有剧集分镜，检查地点绑定/角色出场/命名一致性（避免测试环境自动请求）。
+              手动拉取所有剧集分镜，检查地点/角色出场/资产引用/命名一致性（避免测试环境自动请求）。
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -598,6 +598,8 @@ export function WorkflowWorkbench(props: {
                       未知角色/命名：
                       {ep.unknownCharacterIdCount + ep.unknownDialogueCharacterNameCount}
                     </div>
+                    <div>缺场景图：{ep.missingSceneRefCount}</div>
+                    <div>缺角色图：{ep.missingCharacterRefCount}</div>
                     <div>时间跳变：{ep.timeOfDayJumpCount}</div>
                     <div>道具数：{ep.uniquePropCount}</div>
                   </div>
@@ -664,7 +666,7 @@ export function WorkflowWorkbench(props: {
                           variant="outline"
                           onClick={() => props.onGoToScene!(i.scope.episodeId!, i.scope.sceneId!)}
                         >
-                          打开
+                          打开详情
                         </Button>
                       ) : (
                         <Button

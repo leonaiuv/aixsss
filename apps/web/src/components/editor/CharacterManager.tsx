@@ -22,7 +22,6 @@ import { useToast } from '@/hooks/use-toast';
 import { AIFactory } from '@/lib/ai/factory';
 import { logAICall, updateLogWithResponse, updateLogWithError } from '@/lib/ai/debugLogger';
 import { parseFirstJSONObject } from '@/lib/ai/jsonExtractor';
-import { buildWorldViewContext } from '@/lib/ai/contextBuilder';
 import { getInjectionSettings, shouldInjectAtCharacter } from '@/lib/ai/worldViewInjection';
 import {
   buildCharacterBasicInfoPrompt,
@@ -41,6 +40,7 @@ import {
   type CharacterCreateDraft,
 } from '@/lib/characterCreateDraft';
 import {
+  AssetImageRefV1,
   PortraitPrompts,
   ART_STYLE_PRESETS,
   migrateOldStyleToConfig,
@@ -103,15 +103,6 @@ import {
 type GeneratingState = 'idle' | 'generating_basic' | 'generating_portrait';
 
 type AbortReason = 'user' | 'timeout';
-
-// 角色生成任务接口
-interface CharacterGenerationTask {
-  characterId?: string; // 编辑时的角色ID
-  briefDescription: string;
-  taskId?: string; // aiProgressStore 中的任务ID
-  status: GeneratingState;
-  error?: string;
-}
 
 // 批量生成状态接口
 interface BatchGenerationState {
@@ -206,18 +197,6 @@ function pickString(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function buildProjectContext(project: Project | null, styleDesc: string): string {
-  if (!project) return '';
-
-  const lines = [
-    project.summary?.trim() ? `故事背景：${project.summary.trim()}` : null,
-    styleDesc?.trim() ? `视觉风格：${styleDesc.trim()}` : null,
-    project.protagonist?.trim() ? `主角特征：${project.protagonist.trim()}` : null,
-  ].filter(Boolean);
-
-  return lines.length ? `\n${lines.join('\n')}` : '';
-}
-
 function deriveNameFromBrief(briefDescription: string): string {
   const trimmed = briefDescription.trim();
   if (!trimmed) return '';
@@ -231,6 +210,21 @@ function isAbortError(error: unknown): boolean {
   if (error instanceof Error && error.name === 'AbortError') return true;
   const message = error instanceof Error ? error.message : String(error);
   return /aborted|abort/i.test(message);
+}
+
+function hasPortraitPromptText(prompts?: PortraitPrompts): prompts is PortraitPrompts {
+  return Boolean(
+    prompts &&
+    (prompts.midjourney?.trim() || prompts.stableDiffusion?.trim() || prompts.general?.trim()),
+  );
+}
+
+function createId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 export function CharacterManager({ projectId }: CharacterManagerProps) {
@@ -277,6 +271,34 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const [error, setError] = useState<string | null>(null);
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
   const [dialogStep, setDialogStep] = useState<'basic' | 'portrait'>('basic');
+  const portraitReferenceImages = formData.portraitPrompts?.referenceImages ?? [];
+
+  const updatePortraitReferenceImages = useCallback(
+    (updater: (prev: AssetImageRefV1[]) => AssetImageRefV1[]) => {
+      setFormData((prev) => {
+        const prevPrompts = prev.portraitPrompts;
+        const base: PortraitPrompts = {
+          midjourney: prevPrompts?.midjourney ?? '',
+          stableDiffusion: prevPrompts?.stableDiffusion ?? '',
+          general: prevPrompts?.general ?? '',
+          referenceImages: prevPrompts?.referenceImages ?? [],
+        };
+        const nextRefs = updater(base.referenceImages ?? []);
+        const next: PortraitPrompts = {
+          ...base,
+          referenceImages: nextRefs.length > 0 ? nextRefs : undefined,
+        };
+        const hasText = hasPortraitPromptText(next);
+        const hasRefs = Boolean(next.referenceImages?.length);
+        const keep = hasText || hasRefs;
+        return {
+          ...prev,
+          portraitPrompts: keep ? next : undefined,
+        };
+      });
+    },
+    [],
+  );
 
   // 批量生成状态
   const [batchGeneration, setBatchGeneration] = useState<BatchGenerationState>({
@@ -366,14 +388,10 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   }, []);
 
   // 获取当前项目画风的完整描述（英文提示词）
-  const getStyleDescription = () => {
-    return getProjectStylePrompt(currentProject);
-  };
+  const styleDescription = useMemo(() => getProjectStylePrompt(currentProject), [currentProject]);
 
   // 获取画风标签（中文名称）
-  const getStyleLabelText = () => {
-    return getStyleLabel(currentProject);
-  };
+  const styleLabelText = useMemo(() => getStyleLabel(currentProject), [currentProject]);
 
   const projectCharacters = characters.filter((c) => c.projectId === projectId);
   const projectWorldViewElements = useMemo(
@@ -555,6 +573,9 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                   midjourney: midjourney || '',
                   stableDiffusion: stableDiffusion || '',
                   general: general || '',
+                  ...(nextFormData.portraitPrompts?.referenceImages?.length
+                    ? { referenceImages: nextFormData.portraitPrompts.referenceImages }
+                    : {}),
                 },
               };
               nextDialogStep = 'portrait';
@@ -877,7 +898,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
     try {
       const client = AIFactory.createClient(config);
-      const styleDesc = getStyleDescription();
+      const styleDesc = styleDescription;
       const injectionSettings = getInjectionSettings(projectId);
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
       const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
@@ -1225,7 +1246,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
     try {
       const client = AIFactory.createClient(config);
-      const styleDesc = getStyleDescription();
+      const styleDesc = styleDescription;
 
       const injectionSettings = getInjectionSettings(projectId);
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
@@ -1295,10 +1316,16 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         raw: string,
         tokenUsage?: { prompt: number; completion: number; total: number },
       ) => {
+        const preservedReferenceImages = next.referenceImages?.length
+          ? next.referenceImages
+          : (formData.portraitPrompts?.referenceImages ??
+            baseFormData.portraitPrompts?.referenceImages);
+
         const mergedPortraitPrompts: PortraitPrompts = {
           midjourney: next.midjourney,
           stableDiffusion: next.stableDiffusion,
           general: next.general,
+          ...(preservedReferenceImages ? { referenceImages: preservedReferenceImages } : {}),
         };
 
         if (targetCharacterId) {
@@ -1344,6 +1371,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                 prev.portraitPrompts?.stableDiffusion ||
                 '',
               general: mergedPortraitPrompts.general || prev.portraitPrompts?.general || '',
+              ...(mergedPortraitPrompts.referenceImages?.length
+                ? { referenceImages: mergedPortraitPrompts.referenceImages }
+                : prev.portraitPrompts?.referenceImages?.length
+                  ? { referenceImages: prev.portraitPrompts.referenceImages }
+                  : {}),
             },
           }));
           setDialogStep('portrait');
@@ -1486,7 +1518,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
     try {
       const client = AIFactory.createClient(config);
-      const styleDesc = getStyleDescription();
+      const styleDesc = styleDescription;
       const injectionSettings = getInjectionSettings(projectId);
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
       const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
@@ -1553,7 +1585,15 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         raw: string,
         tokenUsage?: { prompt: number; completion: number; total: number },
       ) => {
-        updateCharacter(projectId, character.id, { portraitPrompts: next });
+        const preservedReferenceImages = next.referenceImages?.length
+          ? next.referenceImages
+          : character.portraitPrompts?.referenceImages;
+        updateCharacter(projectId, character.id, {
+          portraitPrompts: {
+            ...next,
+            ...(preservedReferenceImages ? { referenceImages: preservedReferenceImages } : {}),
+          },
+        });
         completeTask(taskId, { content: raw, tokenUsage });
       };
 
@@ -1676,7 +1716,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       showPanel();
 
       const client = AIFactory.createClient(config);
-      const styleDesc = getStyleDescription();
+      const styleDesc = styleDescription;
       const injectionSettings = getInjectionSettings(projectId);
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
       const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
@@ -1764,7 +1804,13 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
           const attempt1 = parseCharacterPortraitPrompts(firstResponseContent);
           if (attempt1.ok) {
-            updateCharacter(projectId, character.id, { portraitPrompts: attempt1.value });
+            const preservedReferenceImages = character.portraitPrompts?.referenceImages;
+            updateCharacter(projectId, character.id, {
+              portraitPrompts: {
+                ...attempt1.value,
+                ...(preservedReferenceImages ? { referenceImages: preservedReferenceImages } : {}),
+              },
+            });
             completeTask(taskId, { content: firstResponseContent, tokenUsage: mergedTokenUsage });
             setBatchGeneration((prev) => ({
               ...prev,
@@ -1831,7 +1877,13 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
             throw new Error(`AI返回格式错误：${attempt2.error.reason}`);
           }
 
-          updateCharacter(projectId, character.id, { portraitPrompts: attempt2.value });
+          const preservedReferenceImages = character.portraitPrompts?.referenceImages;
+          updateCharacter(projectId, character.id, {
+            portraitPrompts: {
+              ...attempt2.value,
+              ...(preservedReferenceImages ? { referenceImages: preservedReferenceImages } : {}),
+            },
+          });
           completeTask(taskId, { content: repairedContent, tokenUsage: mergedTokenUsage });
           setBatchGeneration((prev) => ({
             ...prev,
@@ -1875,6 +1927,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       projectId,
       projectWorldViewElements,
       showPanel,
+      styleDescription,
       updateCharacter,
       updateProgress,
       updateTask,
@@ -2090,7 +2143,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                       <Sparkles className="h-4 w-4 text-primary flex-shrink-0" />
                       <span className="text-sm text-muted-foreground">
                         当前画风：
-                        <span className="text-foreground font-medium">{getStyleLabelText()}</span>
+                        <span className="text-foreground font-medium">{styleLabelText}</span>
                       </span>
                     </div>
                   )}
@@ -2276,7 +2329,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                   )}
 
                   {/* 生成定妆照按钮 */}
-                  {!formData.portraitPrompts && (
+                  {!hasPortraitPromptText(formData.portraitPrompts) && (
                     <div className="space-y-3">
                       <div className="flex justify-center py-2 gap-2">
                         <Button
@@ -2340,7 +2393,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                   )}
 
                   {/* 定妆照提示词展示 */}
-                  {formData.portraitPrompts && (
+                  {hasPortraitPromptText(formData.portraitPrompts) && (
                     <Tabs defaultValue="midjourney" className="w-full">
                       <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="midjourney">Midjourney</TabsTrigger>
@@ -2442,8 +2495,114 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                     </Tabs>
                   )}
 
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-xs text-muted-foreground">参考图资产（可多张）</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1"
+                        onClick={() =>
+                          updatePortraitReferenceImages((prev) => [
+                            ...prev,
+                            { id: createId('charRef'), url: '', weight: 0.85 },
+                          ])
+                        }
+                      >
+                        <Plus className="h-3 w-3" />
+                        添加
+                      </Button>
+                    </div>
+                    {portraitReferenceImages.length === 0 ? (
+                      <div className="text-xs text-muted-foreground">
+                        （把你生成的白底图/三视图链接贴在这里，后续分镜可直接引用，不用反复写外观描述）
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {portraitReferenceImages.map((ref) => (
+                          <div key={ref.id} className="grid gap-2 md:grid-cols-6">
+                            <div className="md:col-span-4">
+                              <Input
+                                value={ref.url}
+                                placeholder="粘贴参考图 URL / 文件名"
+                                onChange={(e) =>
+                                  updatePortraitReferenceImages((prev) =>
+                                    prev.map((r) =>
+                                      r.id === ref.id ? { ...r, url: e.target.value } : r,
+                                    ),
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="md:col-span-1">
+                              <Input
+                                value={ref.weight ?? ''}
+                                placeholder="权重"
+                                inputMode="decimal"
+                                onChange={(e) => {
+                                  const raw = e.target.value.trim();
+                                  const weight = raw ? clamp01(Number(raw)) : undefined;
+                                  updatePortraitReferenceImages((prev) =>
+                                    prev.map((r) => (r.id === ref.id ? { ...r, weight } : r)),
+                                  );
+                                }}
+                              />
+                            </div>
+                            <div className="md:col-span-1 flex justify-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9"
+                                onClick={() =>
+                                  updatePortraitReferenceImages((prev) =>
+                                    prev.filter((r) => r.id !== ref.id),
+                                  )
+                                }
+                                title="删除"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="md:col-span-6 grid gap-2 md:grid-cols-2">
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">标签</Label>
+                                <Input
+                                  value={ref.label ?? ''}
+                                  placeholder="例如：front / side / back / expression"
+                                  onChange={(e) =>
+                                    updatePortraitReferenceImages((prev) =>
+                                      prev.map((r) =>
+                                        r.id === ref.id ? { ...r, label: e.target.value } : r,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">备注</Label>
+                                <Input
+                                  value={ref.notes ?? ''}
+                                  placeholder="可选：用于下游工具参数/团队协作说明"
+                                  onChange={(e) =>
+                                    updatePortraitReferenceImages((prev) =>
+                                      prev.map((r) =>
+                                        r.id === ref.id ? { ...r, notes: e.target.value } : r,
+                                      ),
+                                    )
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   {/* 重新生成按钮 */}
-                  {formData.portraitPrompts && (
+                  {hasPortraitPromptText(formData.portraitPrompts) && (
                     <div className="flex justify-center gap-2">
                       <Button
                         variant="outline"
@@ -2643,7 +2802,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
                           </Button>
                         </div>
                       </div>
-                    ) : character.portraitPrompts ? (
+                    ) : hasPortraitPromptText(character.portraitPrompts) ? (
                       <div className="space-y-2">
                         <div className="flex gap-1">
                           <Button

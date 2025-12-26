@@ -5,6 +5,7 @@ import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput } from './formatFix.js';
 import { styleFullPrompt, toProviderChatConfig, type TokenUsage, mergeTokenUsage } from './common.js';
+import { formatPanelScriptHints, getExistingPanelScript, type PanelScriptV1 } from './panelScriptHints.js';
 
 function isPrismaNotFoundError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2025';
@@ -57,73 +58,6 @@ function computeDialogueMetrics(dialogues: Array<{ content?: unknown }>): {
   };
 }
 
-type PanelScriptV1 = {
-  version: 1;
-  location?: {
-    worldViewElementId?: string;
-    label?: string;
-    notes?: string;
-  };
-  timeOfDay?: string;
-  camera?: string;
-  blocking?: string;
-  bubbleLayoutNotes?: string;
-  charactersPresentIds?: string[];
-  props?: string[];
-  prompts?: {
-    sceneAnchor?: string;
-    keyframes?: string;
-    motion?: string;
-  };
-  metrics?: {
-    dialogueLineCount?: number;
-    dialogueCharCount?: number;
-    estimatedSeconds?: number;
-  };
-  createdAt?: string;
-  updatedAt?: string;
-  source?: 'ai' | 'manual' | 'import';
-};
-
-function getExistingPanelScript(contextSummary: unknown): PanelScriptV1 | null {
-  if (!isRecord(contextSummary)) return null;
-  const ps = (contextSummary as { panelScript?: unknown }).panelScript;
-  if (!isRecord(ps)) return null;
-  if ((ps as { version?: unknown }).version !== 1) return null;
-  return ps as PanelScriptV1;
-}
-
-function formatPanelScriptHints(panelScript: PanelScriptV1 | null): string {
-  if (!panelScript) return '';
-  const lines: string[] = [];
-
-  const location =
-    panelScript.location?.label?.trim() ||
-    panelScript.location?.worldViewElementId?.trim() ||
-    '';
-  if (location) lines.push(`- 地点：${location}`);
-
-  const timeOfDay = panelScript.timeOfDay?.trim() || '';
-  if (timeOfDay) lines.push(`- 时间/天气：${timeOfDay}`);
-
-  const camera = panelScript.camera?.trim() || '';
-  if (camera) lines.push(`- 镜头：${camera}`);
-
-  const blocking = panelScript.blocking?.trim() || '';
-  if (blocking) lines.push(`- 站位/视线：${blocking}`);
-
-  const bubble = panelScript.bubbleLayoutNotes?.trim() || '';
-  if (bubble) lines.push(`- 气泡/版面：${bubble}`);
-
-  const props = Array.isArray(panelScript.props)
-    ? panelScript.props.map((p) => (typeof p === 'string' ? p.trim() : '')).filter(Boolean)
-    : [];
-  if (props.length > 0) lines.push(`- 关键道具：${props.join('、')}`);
-
-  if (lines.length === 0) return '';
-  return `\n\n## 用户分镜脚本约束（必须尽量遵守）\n${lines.join('\n')}\n`;
-}
-
 function buildSceneAnchorPrompt(args: {
   style: string;
   currentSummary: string;
@@ -159,8 +93,17 @@ function buildKeyframePrompt(args: {
   characters: string;
   panelHints: string;
 }): string {
-  return `你是专业的绘图/视频关键帧提示词工程师。请在同一背景参考图上输出 3 张「静止」关键帧的“人物差分提示词”：KF0 / KF1 / KF2。
+  return `你是专业的绘图/视频关键帧提示词工程师。请在同一背景参考图（img2img/图生图）上输出 3 张「静止」关键帧的“人物差分提示词”：KF0 / KF1 / KF2。
 
+## 关键规则（必须遵守）
+1) 三帧默认同一镜头/构图/透视/光照，背景参考图不变：不要改背景、不要新增场景物件。
+2) 每个关键帧都是“定格瞬间”：禁止 then/after/随后/开始/逐渐 等连续过程词。
+3) 输出重点是“差量指令”：位置（left/right/foreground/background）、姿势/手部/道具状态、遮挡关系、留白（给气泡）。
+4) 角色一致性由参考图资产保证：不要重复外观描述（发型/脸/服装款式/细节），只点名角色资产并写差量（表情/姿势/交互）。
+5) 场景定位只允许引用场景锚点中的 LOCK_* 锚点名（2-4 个即可），不要复述环境长段落。
+6) AVOID 不要写 no people/no characters/no hands，避免与图生图冲突；可写 no text/no watermark/no extra objects 等。
+
+## 输入
 当前分镜概要:
 ${args.currentSummary}
 
@@ -170,11 +113,11 @@ ${args.sceneAnchor}
 视觉风格参考:
 ${args.style}
 
-角色信息:
+出场角色（仅用于点名，不要写长外观描述）:
 ${args.characters}
 ${args.panelHints}
 
-输出格式（严格按行输出）
+## 输出格式（严格按行输出）
 KF0_ZH: ...
 KF0_EN: ...
 KF1_ZH: ...
@@ -292,7 +235,13 @@ export async function refineSceneAll(args: {
   });
   if (!scene) throw new UnrecoverableError('Scene not found');
 
-  const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary));
+  const characterRows = await prisma.character.findMany({
+    where: { projectId },
+    select: { id: true, name: true },
+  });
+  const characterNameById = new Map(characterRows.map((c) => [c.id, c.name]));
+  const panelScript = getExistingPanelScript(scene.contextSummary);
+  const panelHints = formatPanelScriptHints(panelScript, { characterNameById });
 
   const prev =
     scene.order > 1

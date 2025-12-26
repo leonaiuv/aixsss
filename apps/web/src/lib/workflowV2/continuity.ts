@@ -1,6 +1,7 @@
 import type { Character, Episode, Scene, WorldViewElement } from '@/types';
 import type { WorkflowIssue, WorkflowIssueLevel } from './analysis';
 import { getPanelScript } from './panelScript';
+import { resolvePanelAssetManifest } from './assets';
 
 function safeTrim(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -34,6 +35,8 @@ export interface ContinuityEpisodeSummary {
   missingCharactersPresentCount: number;
   unknownCharacterIdCount: number;
   unknownDialogueCharacterNameCount: number;
+  missingSceneRefCount: number;
+  missingCharacterRefCount: number;
   timeOfDayJumpCount: number;
   uniquePropCount: number;
 }
@@ -120,6 +123,8 @@ export function buildContinuityReport(input: {
     let missingCharactersPresentCount = 0;
     let unknownCharacterIdCount = 0;
     let unknownDialogueCharacterNameCount = 0;
+    let missingSceneRefCount = 0;
+    let missingCharacterRefCount = 0;
     let timeOfDayJumpCount = 0;
     const seenProps = new Set<string>();
 
@@ -129,6 +134,7 @@ export function buildContinuityReport(input: {
     for (const scene of epScenes) {
       const ps = getPanelScript(scene);
       const sceneId = scene.id;
+      const assetManifest = resolvePanelAssetManifest(scene, characters);
 
       const locId = safeTrim(ps.location?.worldViewElementId);
       const locLabel = safeTrim(ps.location?.label);
@@ -238,6 +244,39 @@ export function buildContinuityReport(input: {
         incCounter(propPanelCounts, p, ep.id);
       });
 
+      // 资产引用检查（图生图输入）
+      if (assetManifest.sceneRefs.length === 0) {
+        missingSceneRefCount += 1;
+        issues.push({
+          id: `continuity:${sceneId}:assets:missingSceneRef`,
+          level: 'info',
+          title: `第 ${ep.order} 集 · 第 ${scene.order} 格：未绑定场景参考图`,
+          detail:
+            '如果你的工作流是“场景参考图 + 角色参考图”图生图拼装，建议在分镜脚本里绑定背景/基底图 URL，便于一键复制与导出。',
+          scope: { ...(projectId ? { projectId } : {}), episodeId: ep.id, sceneId },
+        });
+      }
+
+      if (presentIds.length > 0) {
+        const missingNames = presentIds
+          .filter((id) => {
+            const resolved = assetManifest.characters.find((c) => c.characterId === id);
+            return !resolved || resolved.source === 'none' || resolved.imageRefs.length === 0;
+          })
+          .map((id) => characterById.get(id)?.name ?? id)
+          .filter(Boolean);
+        if (missingNames.length > 0) {
+          missingCharacterRefCount += missingNames.length;
+          issues.push({
+            id: `continuity:${sceneId}:assets:missingCharacterRefs`,
+            level: 'info',
+            title: `第 ${ep.order} 集 · 第 ${scene.order} 格：出场角色缺少参考图资产`,
+            detail: `缺少：${Array.from(new Set(missingNames)).join('、')}（建议在“角色管理”里补参考图，或在该格资产绑定里覆盖填写）。`,
+            scope: { ...(projectId ? { projectId } : {}), episodeId: ep.id, sceneId },
+          });
+        }
+      }
+
       // 时间/天气跳变（启发式：相邻两格都有值且不同）
       const timeOfDay = safeTrim(ps.timeOfDay);
       if (prevScene && prevTimeOfDay && timeOfDay && prevTimeOfDay !== timeOfDay) {
@@ -264,6 +303,8 @@ export function buildContinuityReport(input: {
       missingCharactersPresentCount,
       unknownCharacterIdCount,
       unknownDialogueCharacterNameCount,
+      missingSceneRefCount,
+      missingCharacterRefCount,
       timeOfDayJumpCount,
       uniquePropCount: seenProps.size,
     });

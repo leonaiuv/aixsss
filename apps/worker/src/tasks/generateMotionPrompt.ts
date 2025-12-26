@@ -5,8 +5,9 @@ import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput } from './formatFix.js';
 import { toProviderChatConfig } from './common.js';
+import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
 
-function buildPrompt(args: { sceneAnchor: string; shotPrompt: string }): string {
+function buildPrompt(args: { sceneAnchor: string; shotPrompt: string; panelHints: string }): string {
   return `你是图生视频(I2V)提示词工程师。请基于「三张静止关键帧 KF0/KF1/KF2」生成“描述变化”的运动/时空提示词，用于多家视频模型。
 
 ## 输入
@@ -15,6 +16,7 @@ ${args.sceneAnchor}
 
 三关键帧（静止描述，包含 KF0/KF1/KF2）:
 ${args.shotPrompt}
+${args.panelHints}
 
 ## 关键规则（必须遵守）
 1. 只描述“从 KF0→KF1→KF2 发生了什么变化”，不要重述静态画面细节。
@@ -45,7 +47,7 @@ export async function generateMotionPrompt(args: {
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
-    select: { id: true, sceneDescription: true, shotPrompt: true },
+    select: { id: true, sceneDescription: true, shotPrompt: true, contextSummary: true },
   });
   if (!scene) throw new Error('Scene not found');
   if (!scene.sceneDescription?.trim()) throw new Error('Scene anchor missing');
@@ -59,7 +61,14 @@ export async function generateMotionPrompt(args: {
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
 
-  const prompt = buildPrompt({ sceneAnchor: scene.sceneDescription, shotPrompt: scene.shotPrompt });
+  const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary), {
+    includeAssets: false,
+  });
+  const prompt = buildPrompt({
+    sceneAnchor: scene.sceneDescription,
+    shotPrompt: scene.shotPrompt,
+    panelHints,
+  });
 
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
   const providerConfig = toProviderChatConfig(profile);
@@ -99,6 +108,5 @@ export async function generateMotionPrompt(args: {
     tokenUsage: fixed.tokenUsage ?? null,
   };
 }
-
 
 
