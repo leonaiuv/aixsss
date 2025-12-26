@@ -163,49 +163,101 @@
 @layer utilities {
   /* 入场动画 */
   @keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes fade-in-up {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   @keyframes fade-in-down {
-    from { opacity: 0; transform: translateY(-16px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(-16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   @keyframes fade-in-left {
-    from { opacity: 0; transform: translateX(-16px); }
-    to { opacity: 1; transform: translateX(0); }
+    from {
+      opacity: 0;
+      transform: translateX(-16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   @keyframes fade-in-right {
-    from { opacity: 0; transform: translateX(16px); }
-    to { opacity: 1; transform: translateX(0); }
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   @keyframes scale-in {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-6px); }
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
   }
 
   @keyframes pulse-soft {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
   }
 
   /* 墨韵扩散效果 */
   @keyframes ink-spread {
-    from { opacity: 0; transform: scale(0.8); filter: blur(4px); }
-    to { opacity: 1; transform: scale(1); filter: blur(0); }
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+      filter: blur(4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+      filter: blur(0);
+    }
   }
 
   .animate-fade-in {
@@ -245,33 +297,58 @@
   }
 
   /* 动画延迟工具类 */
-  .animation-delay-50 { animation-delay: 50ms; }
-  .animation-delay-100 { animation-delay: 100ms; }
-  .animation-delay-150 { animation-delay: 150ms; }
-  .animation-delay-200 { animation-delay: 200ms; }
-  .animation-delay-250 { animation-delay: 250ms; }
-  .animation-delay-300 { animation-delay: 300ms; }
-  .animation-delay-400 { animation-delay: 400ms; }
-  .animation-delay-500 { animation-delay: 500ms; }
-  .animation-delay-600 { animation-delay: 600ms; }
-  .animation-delay-700 { animation-delay: 700ms; }
-  .animation-delay-800 { animation-delay: 800ms; }
+  .animation-delay-50 {
+    animation-delay: 50ms;
+  }
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+  .animation-delay-150 {
+    animation-delay: 150ms;
+  }
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  .animation-delay-250 {
+    animation-delay: 250ms;
+  }
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+  .animation-delay-700 {
+    animation-delay: 700ms;
+  }
+  .animation-delay-800 {
+    animation-delay: 800ms;
+  }
 
   /* 背景纹理 */
   .bg-paper-texture {
-    background-image: 
+    background-image:
       radial-gradient(circle at 15% 85%, hsl(var(--primary) / 0.03) 0%, transparent 45%),
       radial-gradient(circle at 85% 20%, hsl(var(--bamboo) / 0.04) 0%, transparent 40%);
   }
 
   .bg-ink-wash {
-    background-image: 
-      radial-gradient(ellipse at 50% 0%, hsl(var(--muted) / 0.5) 0%, transparent 50%);
+    background-image: radial-gradient(
+      ellipse at 50% 0%,
+      hsl(var(--muted) / 0.5) 0%,
+      transparent 50%
+    );
   }
 
   /* 网格纹理 */
   .bg-grid-subtle {
-    background-image: 
+    background-image:
       linear-gradient(hsl(var(--border) / 0.5) 1px, transparent 1px),
       linear-gradient(90deg, hsl(var(--border) / 0.5) 1px, transparent 1px);
     background-size: 24px 24px;
@@ -299,7 +376,7 @@
 
   .hover-lift:hover {
     @apply -translate-y-1;
-    box-shadow: 
+    box-shadow:
       0 4px 6px -1px hsl(var(--foreground) / 0.05),
       0 10px 15px -3px hsl(var(--foreground) / 0.08);
   }

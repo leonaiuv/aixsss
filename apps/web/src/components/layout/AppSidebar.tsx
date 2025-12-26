@@ -56,12 +56,8 @@ export function AppSidebar({ onSearch, onConfig }: AppSidebarProps) {
           </div>
           {!isCollapsed && (
             <div className="flex flex-col">
-              <span className="font-display text-sm font-semibold tracking-tight">
-                漫剧创作
-              </span>
-              <span className="text-[10px] text-sidebar-foreground/60">
-                AI 分镜助手
-              </span>
+              <span className="font-display text-sm font-semibold tracking-tight">漫剧创作</span>
+              <span className="text-[10px] text-sidebar-foreground/60">AI 分镜助手</span>
             </div>
           )}
         </div>
@@ -88,9 +84,7 @@ export function AppSidebar({ onSearch, onConfig }: AppSidebarProps) {
                 <SidebarMenuButton onClick={onSearch} tooltip="搜索 (⌘K)">
                   <Search className="h-4 w-4" />
                   <span className="flex-1">搜索</span>
-                  {!isCollapsed && (
-                    <Kbd className="ml-auto opacity-60">⌘K</Kbd>
-                  )}
+                  {!isCollapsed && <Kbd className="ml-auto opacity-60">⌘K</Kbd>}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -130,12 +124,11 @@ export function AppSidebar({ onSearch, onConfig }: AppSidebarProps) {
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={toggleMode} tooltip={theme === 'dark' ? '切换到浅色' : '切换到深色'}>
-              {theme === 'dark' ? (
-                <Moon className="h-4 w-4" />
-              ) : (
-                <Sun className="h-4 w-4" />
-              )}
+            <SidebarMenuButton
+              onClick={toggleMode}
+              tooltip={theme === 'dark' ? '切换到浅色' : '切换到深色'}
+            >
+              {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
               <span>{theme === 'dark' ? '深色模式' : '浅色模式'}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -164,4 +157,3 @@ export function AppSidebar({ onSearch, onConfig }: AppSidebarProps) {
     </Sidebar>
   );
 }
-

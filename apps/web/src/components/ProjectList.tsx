@@ -194,9 +194,9 @@ export function ProjectList() {
             <Download className="mr-2 h-4 w-4" />
             批量导出
           </Button>
-          <Button 
-            onClick={() => setCreateDialogOpen(true)} 
-            size="lg" 
+          <Button
+            onClick={() => setCreateDialogOpen(true)}
+            size="lg"
             className="shadow-sm opacity-0 animate-fade-in animation-delay-200"
           >
             <Plus className="mr-2 h-5 w-5" />
@@ -328,9 +328,7 @@ export function ProjectList() {
                 <Search className="h-6 w-6" />
               </EmptyMedia>
               <EmptyTitle>没有找到匹配的项目</EmptyTitle>
-              <EmptyDescription>
-                试试调整搜索条件或筛选项，或者创建一个新项目。
-              </EmptyDescription>
+              <EmptyDescription>试试调整搜索条件或筛选项，或者创建一个新项目。</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
               <Button

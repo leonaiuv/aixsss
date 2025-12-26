@@ -22,7 +22,13 @@ interface ProjectCardProps {
   index?: number;
 }
 
-function ProjectCardComponent({ project, onOpen, onDelete, onRename, index = 0 }: ProjectCardProps) {
+function ProjectCardComponent({
+  project,
+  onOpen,
+  onDelete,
+  onRename,
+  index = 0,
+}: ProjectCardProps) {
   // 使用 useMemo 缓存进度计算
   const progressPercentage = useMemo(() => {
     switch (project.workflowState) {
@@ -70,13 +76,13 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename, index = 0 }
   const animationDelay = `${index * 50}ms`;
 
   return (
-    <Card 
+    <Card
       className={cn(
-        "group cursor-pointer transition-all duration-300 ease-out",
-        "hover:-translate-y-1 hover:shadow-lift",
-        "border-border/60 hover:border-primary/20",
-        "opacity-0 animate-fade-in-up",
-        "bg-card/80 backdrop-blur-sm"
+        'group cursor-pointer transition-all duration-300 ease-out',
+        'hover:-translate-y-1 hover:shadow-lift',
+        'border-border/60 hover:border-primary/20',
+        'opacity-0 animate-fade-in-up',
+        'bg-card/80 backdrop-blur-sm',
       )}
       style={{ animationDelay }}
     >
@@ -93,9 +99,9 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename, index = 0 }
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <MoreVertical className="h-4 w-4" data-testid="more-icon" />
@@ -106,7 +112,10 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename, index = 0 }
                 <Edit3 className="mr-2 h-4 w-4" />
                 重命名
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
+              <DropdownMenuItem
+                onClick={handleDelete}
+                className="text-destructive focus:text-destructive"
+              >
                 <Trash2 className="mr-2 h-4 w-4" />
                 删除
               </DropdownMenuItem>
@@ -119,7 +128,10 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename, index = 0 }
           {/* 标签区域 */}
           <div className="flex items-center gap-2 flex-wrap">
             {project.style && (
-              <Badge variant="secondary" className="gap-1 text-xs font-normal bg-primary/10 text-primary border-0">
+              <Badge
+                variant="secondary"
+                className="gap-1 text-xs font-normal bg-primary/10 text-primary border-0"
+              >
                 <Palette className="h-3 w-3" />
                 {project.style.length > 10 ? project.style.slice(0, 10) + '...' : project.style}
               </Badge>
@@ -141,7 +153,7 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename, index = 0 }
                 style={{ width: `${progressPercentage}%` }}
               />
               {/* 进度条光泽效果 */}
-              <div 
+              <div
                 className="absolute inset-y-0 left-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-full"
                 style={{ width: `${progressPercentage}%` }}
               />

@@ -60,7 +60,7 @@ export function AuthPage() {
         <div className="absolute inset-0 bg-paper-texture" />
         <div className="absolute top-1/4 -left-20 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-accent/10 rounded-full blur-3xl" />
-        
+
         {/* 网格装饰 */}
         <div className="absolute inset-0 bg-grid-subtle opacity-30" />
 
@@ -72,12 +72,8 @@ export function AuthPage() {
                 <BookOpen className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-display font-bold tracking-tight">
-                  漫剧创作助手
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  AI 驱动的分镜创作工具
-                </p>
+                <h1 className="text-2xl font-display font-bold tracking-tight">漫剧创作助手</h1>
+                <p className="text-sm text-muted-foreground">AI 驱动的分镜创作工具</p>
               </div>
             </div>
           </div>
@@ -90,8 +86,7 @@ export function AuthPage() {
               <span className="text-primary">跃然纸上</span>
             </h2>
             <p className="text-lg text-muted-foreground max-w-md">
-              借助人工智能的力量，将你的故事创意转化为生动的漫剧分镜脚本。
-              专业、高效、充满灵感。
+              借助人工智能的力量，将你的故事创意转化为生动的漫剧分镜脚本。 专业、高效、充满灵感。
             </p>
           </div>
 
@@ -136,9 +131,7 @@ export function AuthPage() {
                 {mode === 'login' ? '欢迎回来' : '创建账号'}
               </CardTitle>
               <CardDescription>
-                {mode === 'login'
-                  ? '登录你的账号，继续创作之旅'
-                  : '注册新账号，开始你的创作'}
+                {mode === 'login' ? '登录你的账号，继续创作之旅' : '注册新账号，开始你的创作'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -172,9 +165,9 @@ export function AuthPage() {
               {mode === 'register' && (
                 <div className="space-y-2 animate-fade-in">
                   <Label htmlFor="team">团队名称</Label>
-                  <Input 
-                    id="team" 
-                    value={teamName} 
+                  <Input
+                    id="team"
+                    value={teamName}
                     onChange={(e) => setTeamName(e.target.value)}
                     className="h-11"
                     placeholder="输入团队名称"
@@ -198,8 +191,10 @@ export function AuthPage() {
                     <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                     处理中...
                   </span>
+                ) : mode === 'login' ? (
+                  '登录'
                 ) : (
-                  mode === 'login' ? '登录' : '注册'
+                  '注册'
                 )}
               </Button>
 
