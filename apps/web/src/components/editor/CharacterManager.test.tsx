@@ -454,23 +454,13 @@ describe('CharacterManager', () => {
     it('生成过程中应显示加载状态', async () => {
       const user = userEvent.setup();
 
-      // 延迟AI响应
+      // 通过手动 resolve 避免定时器/并发导致用例波动
+      let resolveChat: ((value: { content: string }) => void) | null = null;
       mockChat.mockImplementation(
         () =>
-          new Promise((resolve) =>
-            setTimeout(
-              () =>
-                resolve({
-                  content: JSON.stringify({
-                    name: '测试',
-                    appearance: '测试',
-                    personality: '测试',
-                    background: '测试',
-                  }),
-                }),
-              100,
-            ),
-          ),
+          new Promise((resolve) => {
+            resolveChat = resolve;
+          }),
       );
 
       render(<CharacterManager projectId="test-project-1" />);
@@ -483,6 +473,18 @@ describe('CharacterManager', () => {
 
       // 应该显示生成中状态
       expect(await screen.findByText('生成中...')).toBeInTheDocument();
+
+      await act(async () => {
+        if (!resolveChat) throw new Error('resolveChat not set');
+        resolveChat({
+          content: JSON.stringify({
+            name: '测试',
+            appearance: '测试',
+            personality: '测试',
+            background: '测试',
+          }),
+        });
+      });
 
       await waitFor(() => {
         expect(screen.queryByText('生成中...')).not.toBeInTheDocument();
