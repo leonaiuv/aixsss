@@ -8,7 +8,6 @@ import { isApiMode } from './lib/runtime/mode';
 import { flushApiScenePatchQueue } from './lib/api/scenePatchQueue';
 import { flushApiEpisodeScenePatchQueue } from './lib/api/episodeScenePatchQueue';
 import { ProjectList } from './components/ProjectList';
-import { ThemeToggle } from './components/ThemeToggle';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts';
 import { Toaster } from './components/ui/toaster';
 import { AIProgressToast, AIProgressIndicator } from './components/AIProgressToast';
@@ -271,19 +270,16 @@ function BackendApp() {
     [setCurrentProject, navigate],
   );
 
-  // If user is not logged in, render simple layout (or AuthPage)
+  // If user is not logged in, render AuthPage with full-screen layout
   if (!user) {
     return (
-      <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-        <main className="container mx-auto px-6 py-8">
-          <Routes>
-            <Route path="/login" element={<AuthPage />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </main>
-        <ThemeToggle className="fixed bottom-4 right-4" />
+      <>
+        <Routes>
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
         <Toaster />
-      </div>
+      </>
     );
   }
 

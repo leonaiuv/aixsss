@@ -4,7 +4,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { ProjectCard } from './ProjectCard';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Plus, FileText, Search, Filter, X, Download } from 'lucide-react';
+import { Plus, Search, Filter, X, Download, BookOpen, Sparkles } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,15 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DataExporter } from './editor/DataExporter';
 import { LocalDataMigrationBanner } from './LocalDataMigrationBanner';
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+  EmptyMedia,
+} from './ui/empty';
+import { Skeleton } from './ui/skeleton';
 
 export function ProjectList() {
   const navigate = useNavigate();
@@ -166,10 +175,13 @@ export function ProjectList() {
         isServerLoading={isLoading}
         onImported={loadProjects}
       />
-      {/* 操作栏 */}
-      <div className="flex items-center justify-between">
+
+      {/* 页面头部 - 带入场动画 */}
+      <div className="flex items-center justify-between opacity-0 animate-fade-in-down">
         <div>
-          <h2 className="text-3xl font-bold text-foreground">我的项目</h2>
+          <h1 className="text-3xl font-display font-bold text-foreground tracking-tight">
+            我的项目
+          </h1>
           <p className="text-muted-foreground mt-1">管理你的漫剧创作项目</p>
         </div>
         <div className="flex items-center gap-2">
@@ -177,11 +189,16 @@ export function ProjectList() {
             variant="outline"
             onClick={() => setExportDialogOpen(true)}
             disabled={projects.length === 0}
+            className="opacity-0 animate-fade-in animation-delay-100"
           >
             <Download className="mr-2 h-4 w-4" />
             批量导出
           </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} size="lg" className="shadow-sm">
+          <Button 
+            onClick={() => setCreateDialogOpen(true)} 
+            size="lg" 
+            className="shadow-sm opacity-0 animate-fade-in animation-delay-200"
+          >
             <Plus className="mr-2 h-5 w-5" />
             新建项目
           </Button>
@@ -190,14 +207,14 @@ export function ProjectList() {
 
       {/* 搜索和过滤栏 */}
       {projects.length > 0 && (
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 opacity-0 animate-fade-in-up animation-delay-100">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索项目名称、剧情、风格..."
-              className="pl-10 bg-muted border-border"
+              className="pl-10 bg-background/60 backdrop-blur-sm"
             />
             {searchQuery && (
               <Button
@@ -212,7 +229,7 @@ export function ProjectList() {
           </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px] bg-muted border-border">
+            <SelectTrigger className="w-[140px] bg-background/60 backdrop-blur-sm">
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue placeholder="状态" />
             </SelectTrigger>
@@ -226,7 +243,7 @@ export function ProjectList() {
           </Select>
 
           <Select value={sortBy} onValueChange={(v: 'date' | 'name') => setSortBy(v)}>
-            <SelectTrigger className="w-[120px] bg-muted border-border">
+            <SelectTrigger className="w-[120px] bg-background/60 backdrop-blur-sm">
               <SelectValue placeholder="排序" />
             </SelectTrigger>
             <SelectContent>
@@ -253,7 +270,7 @@ export function ProjectList() {
 
       {/* 结果统计 */}
       {hasActiveFilters && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground animate-fade-in">
           <span>
             找到 <span className="font-semibold text-foreground">{filteredProjects.length}</span>{' '}
             个项目
@@ -262,46 +279,82 @@ export function ProjectList() {
         </div>
       )}
 
+      {/* 加载状态 */}
+      {isLoading && projects.length === 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="space-y-3 p-6 rounded-lg border bg-card">
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <div className="flex gap-2 pt-2">
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              <div className="pt-2">
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* 项目列表 */}
-      {filteredProjects.length === 0 ? (
+      {!isLoading && filteredProjects.length === 0 ? (
         projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center">
-              <FileText className="h-10 w-10 text-muted-foreground" />
-            </div>
-            <div className="text-center">
-              <h3 className="text-xl font-semibold text-foreground mb-2">还没有项目</h3>
-              <p className="text-muted-foreground mb-4">开始创建你的第一个漫剧项目吧</p>
-              <Button
-                onClick={() => setCreateDialogOpen(true)}
-                size="lg"
-                className="bg-gradient-to-r from-indigo-500 to-purple-600"
-              >
-                <Plus className="mr-2 h-5 w-5" />
-                创建项目
+          // 空状态 - 无项目
+          <Empty className="py-20 animate-fade-in-up border-0 bg-transparent">
+            <EmptyHeader>
+              <EmptyMedia variant="icon" className="bg-primary/10 text-primary">
+                <BookOpen className="h-6 w-6" />
+              </EmptyMedia>
+              <EmptyTitle className="font-display">开始你的创作之旅</EmptyTitle>
+              <EmptyDescription>
+                使用 AI 智能分镜技术，将你的故事创意转化为生动的漫剧脚本。
+                立即创建第一个项目，体验全新的创作方式。
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button onClick={() => setCreateDialogOpen(true)} size="lg" className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                创建第一个项目
               </Button>
-            </div>
-          </div>
+            </EmptyContent>
+          </Empty>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-              <Search className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-foreground mb-2">没有找到匹配的项目</h3>
-              <p className="text-muted-foreground">试试调整搜索条件或筛选项</p>
-            </div>
-          </div>
+          // 空状态 - 搜索无结果
+          <Empty className="py-16 animate-fade-in border-0 bg-transparent">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Search className="h-6 w-6" />
+              </EmptyMedia>
+              <EmptyTitle>没有找到匹配的项目</EmptyTitle>
+              <EmptyDescription>
+                试试调整搜索条件或筛选项，或者创建一个新项目。
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                }}
+              >
+                清除筛选条件
+              </Button>
+            </EmptyContent>
+          </Empty>
         )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProjects.map((project) => (
+          {filteredProjects.map((project, index) => (
             <ProjectCard
               key={project.id}
               project={project}
               onOpen={handleOpenProject}
               onDelete={handleDeleteClick}
               onRename={handleRenameClick}
+              index={index}
             />
           ))}
         </div>
@@ -311,7 +364,7 @@ export function ProjectList() {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>创建新项目</DialogTitle>
+            <DialogTitle className="font-display">创建新项目</DialogTitle>
             <DialogDescription>为你的漫剧项目起个响亮的名字</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -360,7 +413,7 @@ export function ProjectList() {
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>重命名项目</DialogTitle>
+            <DialogTitle className="font-display">重命名项目</DialogTitle>
             <DialogDescription>为项目输入一个新的名称</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -398,7 +451,7 @@ export function ProjectList() {
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
           <DialogHeader>
-            <DialogTitle>批量导出项目</DialogTitle>
+            <DialogTitle className="font-display">批量导出项目</DialogTitle>
             <DialogDescription>选择要导出的项目和格式</DialogDescription>
           </DialogHeader>
           <DataExporter projects={projects} />

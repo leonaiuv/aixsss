@@ -57,7 +57,7 @@ describe('ProjectCard', () => {
       expect(screen.getByText('watercolor')).toBeInTheDocument();
     });
 
-    it('当风格为空时应显示默认文本', () => {
+    it('当风格为空时不应显示风格标签', () => {
       render(
         <ProjectCard
           project={createTestProject({ style: '' })}
@@ -67,7 +67,8 @@ describe('ProjectCard', () => {
         />,
       );
 
-      expect(screen.getByText('未设置风格')).toBeInTheDocument();
+      // 新版 UI 中，当风格为空时不显示风格 Badge
+      expect(screen.queryByText('未设置风格')).not.toBeInTheDocument();
     });
 
     it('应显示创建日期', () => {

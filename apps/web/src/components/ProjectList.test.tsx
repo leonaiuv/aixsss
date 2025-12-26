@@ -15,6 +15,10 @@ vi.mock('@/lib/storage', () => ({
   deleteProject: () => {},
   getProject: () => null,
 }));
+// Mock LocalDataMigrationBanner to avoid interference with empty state tests
+vi.mock('./LocalDataMigrationBanner', () => ({
+  LocalDataMigrationBanner: () => null,
+}));
 
 const mockUseProjectStore = vi.mocked(useProjectStore);
 const mockUseToast = vi.mocked(useToast);
@@ -49,10 +53,9 @@ describe('ProjectList', () => {
     toast: vi.fn(),
   };
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockUseToast.mockReturnValue(mockToast);
-    mockUseProjectStore.mockReturnValue({
+  // Helper to create a store mock that handles both direct access and selector calls
+  const createStoreMock = (overrides: Record<string, unknown> = {}) => {
+    const state = {
       projects: mockProjects,
       createProject: vi.fn(),
       deleteProject: vi.fn(),
@@ -62,7 +65,21 @@ describe('ProjectList', () => {
       loadProject: vi.fn(),
       currentProject: null,
       isLoading: false,
-    } as any);
+      ...overrides,
+    };
+    // Return a function that handles selector calls or returns the full state
+    return (selector?: (s: typeof state) => unknown) => {
+      if (typeof selector === 'function') {
+        return selector(state);
+      }
+      return state;
+    };
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseToast.mockReturnValue(mockToast);
+    mockUseProjectStore.mockImplementation(createStoreMock());
   });
 
   it('应该渲染项目列表', () => {
@@ -92,7 +109,8 @@ describe('ProjectList', () => {
   });
 
   it('应该在没有项目时显示空状态', () => {
-    mockUseProjectStore.mockReturnValue({
+    // Use the helper to create a proper mock with selector support
+    const emptyState = {
       projects: [],
       createProject: vi.fn(),
       deleteProject: vi.fn(),
@@ -102,7 +120,13 @@ describe('ProjectList', () => {
       loadProject: vi.fn(),
       currentProject: null,
       isLoading: false,
-    } as any);
+    };
+    mockUseProjectStore.mockImplementation((selector?: (s: typeof emptyState) => unknown) => {
+      if (typeof selector === 'function') {
+        return selector(emptyState);
+      }
+      return emptyState;
+    });
 
     render(
       <MemoryRouter>
@@ -110,8 +134,9 @@ describe('ProjectList', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('还没有项目')).toBeInTheDocument();
-    expect(screen.getByText('开始创建你的第一个漫剧项目吧')).toBeInTheDocument();
+    // 新版 UI 使用 Empty 组件，文案已更新
+    expect(screen.getByText('开始你的创作之旅')).toBeInTheDocument();
+    expect(screen.getByText('创建第一个项目')).toBeInTheDocument();
   });
 
   it('应该显示重命名菜单选项', async () => {
@@ -137,10 +162,11 @@ describe('ProjectList', () => {
 
   it('应该调用重命名回调', async () => {
     const mockUpdateProject = vi.fn();
-    mockUseProjectStore.mockReturnValue({
-      ...mockUseProjectStore(),
-      updateProject: mockUpdateProject,
-    } as any);
+    mockUseProjectStore.mockImplementation(
+      createStoreMock({
+        updateProject: mockUpdateProject,
+      }),
+    );
 
     render(
       <MemoryRouter>
@@ -162,10 +188,11 @@ describe('ProjectList', () => {
 
   it('应该调用删除回调', async () => {
     const mockDeleteProject = vi.fn();
-    mockUseProjectStore.mockReturnValue({
-      ...mockUseProjectStore(),
-      deleteProject: mockDeleteProject,
-    } as any);
+    mockUseProjectStore.mockImplementation(
+      createStoreMock({
+        deleteProject: mockDeleteProject,
+      }),
+    );
 
     render(
       <MemoryRouter>

@@ -25,9 +25,8 @@ describe('AppLayout', () => {
       </AppLayout>,
     );
 
-    // Check for Sidebar presence (we'll look for navigation items or a specific role)
-    // For now, assuming we'll have a "Projects" link
-    expect(screen.getByText('漫剧创作助手')).toBeInTheDocument();
+    // Check for Sidebar presence - new UI has split text "漫剧创作" and "AI 分镜助手"
+    expect(screen.getByText('漫剧创作')).toBeInTheDocument();
 
     // Check for Main Content
     expect(screen.getByTestId('main-content')).toBeInTheDocument();
@@ -41,5 +40,7 @@ describe('AppLayout', () => {
     );
     // Assuming default breadcrumb or empty state
     // We might need to mock useLocation to test dynamic breadcrumbs
+    // Check for home breadcrumb
+    expect(screen.getByText('首页')).toBeInTheDocument();
   });
 });
