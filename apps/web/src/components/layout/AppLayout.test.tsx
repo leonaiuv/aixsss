@@ -22,13 +22,13 @@ describe('AppLayout', () => {
     renderWithRouter(
       <AppLayout onSearch={() => {}} onConfig={() => {}}>
         <div data-testid="main-content">Main Content</div>
-      </AppLayout>
+      </AppLayout>,
     );
 
     // Check for Sidebar presence (we'll look for navigation items or a specific role)
     // For now, assuming we'll have a "Projects" link
     expect(screen.getByText('漫剧创作助手')).toBeInTheDocument();
-    
+
     // Check for Main Content
     expect(screen.getByTestId('main-content')).toBeInTheDocument();
   });
@@ -37,7 +37,7 @@ describe('AppLayout', () => {
     renderWithRouter(
       <AppLayout onSearch={() => {}} onConfig={() => {}}>
         <div>Content</div>
-      </AppLayout>
+      </AppLayout>,
     );
     // Assuming default breadcrumb or empty state
     // We might need to mock useLocation to test dynamic breadcrumbs

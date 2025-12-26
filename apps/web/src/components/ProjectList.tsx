@@ -181,11 +181,7 @@ export function ProjectList() {
             <Download className="mr-2 h-4 w-4" />
             批量导出
           </Button>
-          <Button
-            onClick={() => setCreateDialogOpen(true)}
-            size="lg"
-            className="shadow-sm"
-          >
+          <Button onClick={() => setCreateDialogOpen(true)} size="lg" className="shadow-sm">
             <Plus className="mr-2 h-5 w-5" />
             新建项目
           </Button>

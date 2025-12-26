@@ -28,7 +28,7 @@ export function AppLayout({ children, onSearch, onConfig }: AppLayoutProps) {
         onSearch={onSearch}
         onConfig={onConfig}
       />
-      
+
       <div className="flex flex-1 flex-col overflow-hidden transition-all duration-300">
         {/* Top Bar (Breadcrumbs) */}
         <header className="flex h-12 items-center border-b px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -48,7 +48,7 @@ export function AppLayout({ children, onSearch, onConfig }: AppLayoutProps) {
 
         {/* Main Content */}
         <main className="flex-1 overflow-auto p-6">
-          <div className={cn("mx-auto h-full", isEditor ? "max-w-[1600px]" : "max-w-7xl")}>
+          <div className={cn('mx-auto h-full', isEditor ? 'max-w-[1600px]' : 'max-w-7xl')}>
             {children}
           </div>
         </main>

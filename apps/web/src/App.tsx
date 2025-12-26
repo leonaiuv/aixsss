@@ -276,7 +276,7 @@ function BackendApp() {
     return (
       <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
         <main className="container mx-auto px-6 py-8">
-           <Routes>
+          <Routes>
             <Route path="/login" element={<AuthPage />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>

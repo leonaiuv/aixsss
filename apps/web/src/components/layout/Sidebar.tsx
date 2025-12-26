@@ -46,11 +46,16 @@ export function Sidebar({
       className={cn(
         'group relative flex flex-col border-r bg-muted/30 transition-all duration-300 ease-in-out',
         isCollapsed ? 'w-14' : 'w-64',
-        className
+        className,
       )}
     >
       {/* Header / Logo */}
-      <div className={cn('flex h-14 items-center px-3', isCollapsed ? 'justify-center' : 'justify-between')}>
+      <div
+        className={cn(
+          'flex h-14 items-center px-3',
+          isCollapsed ? 'justify-center' : 'justify-between',
+        )}
+      >
         {!isCollapsed && (
           <div className="flex items-center gap-2 font-semibold overflow-hidden">
             <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -66,7 +71,11 @@ export function Sidebar({
           onClick={toggleCollapse}
           title={isCollapsed ? '展开侧边栏' : '收起侧边栏'}
         >
-          {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          {isCollapsed ? (
+            <PanelLeftOpen className="h-4 w-4" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" />
+          )}
         </Button>
       </div>
 
@@ -147,7 +156,10 @@ export function Sidebar({
             <Button
               variant="ghost"
               size={isCollapsed ? 'icon' : 'sm'}
-              className={cn('justify-start text-destructive hover:text-destructive hover:bg-destructive/10', isCollapsed && 'justify-center')}
+              className={cn(
+                'justify-start text-destructive hover:text-destructive hover:bg-destructive/10',
+                isCollapsed && 'justify-center',
+              )}
               onClick={logout}
               title="退出登录"
             >

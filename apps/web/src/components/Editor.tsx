@@ -9,14 +9,7 @@ import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { isApiMode } from '@/lib/runtime/mode';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import {
-  CheckCircle2,
-  History,
-  BarChart3,
-  Download,
-  Layers,
-  GitCompare,
-} from 'lucide-react';
+import { CheckCircle2, History, BarChart3, Download, Layers, GitCompare } from 'lucide-react';
 import { BasicSettings } from './editor/BasicSettings';
 import { SceneGeneration } from './editor/SceneGeneration';
 import { SceneRefinement } from './editor/SceneRefinement';
@@ -88,8 +81,6 @@ function LegacyEditor() {
       setActiveStep('export');
     }
   }, [currentProject]);
-
-
 
   if (!currentProject) {
     return (
@@ -878,16 +869,23 @@ ${dialoguesText}
                   onClick={() => handleStepClick(step.id)}
                   disabled={!isClickable}
                   className={cn(
-                    "flex w-full items-center gap-3 px-2 py-2 text-sm font-medium rounded-md transition-colors",
-                    isCurrent ? "bg-secondary text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                    !isClickable && "opacity-50 cursor-not-allowed hover:bg-transparent"
+                    'flex w-full items-center gap-3 px-2 py-2 text-sm font-medium rounded-md transition-colors',
+                    isCurrent
+                      ? 'bg-secondary text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                    !isClickable && 'opacity-50 cursor-not-allowed hover:bg-transparent',
                   )}
                 >
-                  <div className={cn(
-                    "flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
-                    isCurrent ? "border-primary bg-primary text-primary-foreground" : 
-                    status === 'completed' ? "border-primary text-primary" : "border-muted-foreground"
-                  )}>
+                  <div
+                    className={cn(
+                      'flex h-5 w-5 items-center justify-center rounded-full border text-[10px]',
+                      isCurrent
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : status === 'completed'
+                          ? 'border-primary text-primary'
+                          : 'border-muted-foreground',
+                    )}
+                  >
                     {status === 'completed' ? <CheckCircle2 className="h-3 w-3" /> : index + 1}
                   </div>
                   {step.name}
@@ -897,10 +895,10 @@ ${dialoguesText}
           </div>
 
           <div className="mt-8 px-2">
-             <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-                <p className="font-medium text-foreground mb-1">当前项目</p>
-                <p className="line-clamp-2">{currentProject.title}</p>
-             </div>
+            <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">当前项目</p>
+              <p className="line-clamp-2">{currentProject.title}</p>
+            </div>
           </div>
         </div>
 

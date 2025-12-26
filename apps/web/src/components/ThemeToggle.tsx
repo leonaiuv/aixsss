@@ -36,7 +36,13 @@ function ThemeToggleComponent({ className }: ThemeToggleProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="切换主题" title="切换主题" className={cn(className)}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="切换主题"
+          title="切换主题"
+          className={cn(className)}
+        >
           {theme === 'light' && <Sun className="h-5 w-5" />}
           {theme === 'dark' && <Moon className="h-5 w-5" />}
           {theme === 'system' && <Monitor className="h-5 w-5" />}
