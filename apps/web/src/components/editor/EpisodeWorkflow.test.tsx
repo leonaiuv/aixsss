@@ -100,6 +100,7 @@ describe('EpisodeWorkflow', () => {
   it('应渲染左侧步骤导航', () => {
     render(<EpisodeWorkflow />);
     expect(screen.getByText('Episode 工作流')).toBeInTheDocument();
+    expect(screen.getAllByText('工作台').length).toBeGreaterThan(0);
     expect(screen.getByText('全局设定')).toBeInTheDocument();
     expect(screen.getByText('叙事因果链')).toBeInTheDocument();
     expect(screen.getByText('剧集规划')).toBeInTheDocument();

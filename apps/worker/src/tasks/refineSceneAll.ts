@@ -10,6 +10,10 @@ function isPrismaNotFoundError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2025';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 async function safeUpdateScene(args: {
   prisma: PrismaClient;
   projectId: string;
@@ -23,6 +27,70 @@ async function safeUpdateScene(args: {
   if (result.count === 0) {
     throw new UnrecoverableError('Scene not found');
   }
+}
+
+function countChineseLikeChars(text: string): number {
+  // 粗略：去掉空白后按字符计数（含中英文/标点），用于“气泡承载”估算
+  return text.replace(/\s+/gu, '').length;
+}
+
+function computeDialogueMetrics(dialogues: Array<{ content?: unknown }>): {
+  dialogueLineCount: number;
+  dialogueCharCount: number;
+  estimatedSeconds: number;
+} {
+  const lines = dialogues
+    .map((d) => (typeof d.content === 'string' ? d.content.trim() : ''))
+    .filter((c) => c.length > 0);
+  const dialogueLineCount = lines.length;
+  const dialogueCharCount = lines.reduce((sum, line) => sum + countChineseLikeChars(line), 0);
+
+  const base = 2.5;
+  const reading = dialogueCharCount > 0 ? dialogueCharCount / 6 : 0;
+  const bubbleBuffer = dialogueLineCount * 0.5;
+  const estimatedSeconds = Math.max(base, Math.min(15, reading + bubbleBuffer));
+
+  return {
+    dialogueLineCount,
+    dialogueCharCount,
+    estimatedSeconds: Number(estimatedSeconds.toFixed(1)),
+  };
+}
+
+type PanelScriptV1 = {
+  version: 1;
+  location?: {
+    worldViewElementId?: string;
+    label?: string;
+    notes?: string;
+  };
+  timeOfDay?: string;
+  camera?: string;
+  blocking?: string;
+  bubbleLayoutNotes?: string;
+  charactersPresentIds?: string[];
+  props?: string[];
+  prompts?: {
+    sceneAnchor?: string;
+    keyframes?: string;
+    motion?: string;
+  };
+  metrics?: {
+    dialogueLineCount?: number;
+    dialogueCharCount?: number;
+    estimatedSeconds?: number;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+  source?: 'ai' | 'manual' | 'import';
+};
+
+function getExistingPanelScript(contextSummary: unknown): PanelScriptV1 | null {
+  if (!isRecord(contextSummary)) return null;
+  const ps = (contextSummary as { panelScript?: unknown }).panelScript;
+  if (!isRecord(ps)) return null;
+  if ((ps as { version?: unknown }).version !== 1) return null;
+  return ps as PanelScriptV1;
 }
 
 function buildSceneAnchorPrompt(args: { style: string; currentSummary: string; prevSummary: string }): string {
@@ -178,7 +246,7 @@ export async function refineSceneAll(args: {
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
-    select: { id: true, episodeId: true, order: true, summary: true },
+    select: { id: true, episodeId: true, order: true, summary: true, contextSummary: true },
   });
   if (!scene) throw new UnrecoverableError('Scene not found');
 
@@ -354,11 +422,45 @@ export async function refineSceneAll(args: {
 
   await updateProgress({ pct: 90, message: '保存台词...' });
   try {
+    const nowIso = new Date().toISOString();
+    const baseSummary = isRecord(scene.contextSummary) ? scene.contextSummary : {};
+    const prevPanelScript = getExistingPanelScript(baseSummary) ?? { version: 1 as const };
+    const metrics = computeDialogueMetrics(dialogues);
+
+    const nextPanelScript: PanelScriptV1 = {
+      ...prevPanelScript,
+      version: 1,
+      prompts: {
+        ...(isRecord(prevPanelScript.prompts) ? prevPanelScript.prompts : {}),
+        sceneAnchor: anchorFixed.content,
+        keyframes: kfFixed.content,
+        motion: motionFixed.content,
+      },
+      metrics: {
+        ...(isRecord(prevPanelScript.metrics) ? prevPanelScript.metrics : {}),
+        dialogueLineCount: metrics.dialogueLineCount,
+        dialogueCharCount: metrics.dialogueCharCount,
+        estimatedSeconds: metrics.estimatedSeconds,
+      },
+      createdAt: prevPanelScript.createdAt ?? nowIso,
+      updatedAt: nowIso,
+      source: 'ai',
+    };
+
+    const nextContextSummary: Record<string, unknown> = {
+      ...(isRecord(baseSummary) ? baseSummary : {}),
+      panelScript: nextPanelScript as unknown as Record<string, unknown>,
+    };
+
     await safeUpdateScene({
       prisma,
       projectId,
       sceneId,
-      data: { dialogues: dialogues as unknown as Prisma.InputJsonValue, status: 'completed' },
+      data: {
+        dialogues: dialogues as unknown as Prisma.InputJsonValue,
+        contextSummary: nextContextSummary as unknown as Prisma.InputJsonValue,
+        status: 'completed',
+      },
     });
   } catch (err) {
     if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
@@ -399,5 +501,4 @@ export async function refineSceneAll(args: {
     tokenUsage: tokens ?? null,
   };
 }
-
 

@@ -259,6 +259,41 @@ export type WorkflowState =
 export type SceneStep = 'scene_description' | 'keyframe_prompt' | 'motion_prompt' | 'dialogue'; // 台词生成阶段
 
 // ==========================================
+// 工作流 V2：产物(Artifacts)+任务(Tasks) 视角
+// ==========================================
+
+/** 产物成熟度状态（用于替代/补充线性 workflowState） */
+export type ArtifactStatus = 'draft' | 'review' | 'locked';
+
+export interface WorkflowV2ArtifactState {
+  status: ArtifactStatus;
+  updatedAt?: string;
+  lockedAt?: string;
+}
+
+export interface WorkflowV2ProjectState {
+  version: 1;
+  artifacts: {
+    /** 项目圣经：画风/角色/世界观/空间卡/术语表等 */
+    bible: WorkflowV2ArtifactState;
+    /** 可选：季/主线弧线（多集时建议） */
+    seasonArc?: WorkflowV2ArtifactState;
+  };
+}
+
+export interface WorkflowV2EpisodeState {
+  version: 1;
+  artifacts: {
+    /** 单集策划/beat sheet/outline */
+    outline: WorkflowV2ArtifactState;
+    /** 静态漫画分镜（Panel 级） */
+    storyboard: WorkflowV2ArtifactState;
+    /** 提示词包（可导出给外部生图/图生视频工具链） */
+    promptPack: WorkflowV2ArtifactState;
+  };
+}
+
+// ==========================================
 // 台词相关类型
 // ==========================================
 
@@ -321,6 +356,12 @@ export interface ProjectContextCache {
    */
   narrativeCausalChain?: unknown;
   narrativeCausalChainUpdatedAt?: string;
+
+  /**
+   * 工作流 V2：产物视角（可选）
+   * 注意：该结构仅影响前端工作台体验，后端以 Json 透传。
+   */
+  workflowV2?: WorkflowV2ProjectState;
 }
 
 // 项目实体
@@ -342,10 +383,52 @@ export interface Project {
 }
 
 // 分镜上下文摘要
+export interface PanelScriptV1 {
+  version: 1;
+  location?: {
+    /** 关联 WorldViewElement（推荐用于“空间一致性/跨集连续性”） */
+    worldViewElementId?: string;
+    /** 兜底：当未关联 worldViewElementId 时的手写地点名 */
+    label?: string;
+    notes?: string;
+  };
+  /** 昼夜/时间（例如：清晨/黄昏/深夜/雨天） */
+  timeOfDay?: string;
+  /** 镜头说明（静态漫画：景别/机位/构图；可中英混写） */
+  camera?: string;
+  /** 站位/视线/道具位置（用于空间匹配） */
+  blocking?: string;
+  /** 气泡与版面说明（无需配音：关注读者阅读节奏与留白） */
+  bubbleLayoutNotes?: string;
+  /** 该格出场角色（建议填 characterId，便于跨集统计） */
+  charactersPresentIds?: string[];
+  /** 关键道具/物件标签（自由文本，用于连续性检查） */
+  props?: string[];
+
+  /** Worker/AI 生成的原始结构化块（保留，便于可逆导出） */
+  prompts?: {
+    sceneAnchor?: string;
+    keyframes?: string;
+    motion?: string;
+  };
+
+  /** 粗略节奏指标（给图生视频节奏/分镜密度参考） */
+  metrics?: {
+    dialogueLineCount?: number;
+    dialogueCharCount?: number;
+    estimatedSeconds?: number;
+  };
+
+  createdAt?: string;
+  updatedAt?: string;
+  source?: 'ai' | 'manual' | 'import';
+}
+
 export interface SceneContextSummary {
-  mood: string;
-  keyElement: string;
-  transition: string;
+  mood?: string;
+  keyElement?: string;
+  transition?: string;
+  panelScript?: PanelScriptV1;
 }
 
 // 分镜实体
@@ -380,10 +463,14 @@ export interface Episode {
   summary: string;
   outline: unknown | null;
   coreExpression: unknown | null;
-  contextCache: unknown | null;
+  contextCache: EpisodeContextCache | null;
   workflowState: EpisodeWorkflowState;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EpisodeContextCache {
+  workflowV2?: WorkflowV2EpisodeState;
 }
 
 // ==========================================

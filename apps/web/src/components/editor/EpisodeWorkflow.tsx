@@ -14,7 +14,15 @@ import { getWorkflowStateLabel } from '@/lib/workflowLabels';
 import { isApiMode } from '@/lib/runtime/mode';
 import { apiListNarrativeCausalChainVersions } from '@/lib/api/narrativeCausalChainVersions';
 import {
+  buildEpisodeArtifactPatch,
+  buildProjectArtifactPatch,
+  computeEpisodeMetrics,
+  computePanelMetrics,
+  resolvePanelScript,
+} from '@/lib/workflowV2';
+import {
   migrateOldStyleToConfig,
+  type ArtifactStatus,
   type DialogueLine,
   type Episode,
   type Project,
@@ -57,6 +65,8 @@ import { SceneSortable } from './SceneSortable';
 import { StatisticsPanel } from './StatisticsPanel';
 import { NarrativeCausalChainReadable } from './NarrativeCausalChainReadable';
 import { NarrativeCausalChainVersionDialog } from './NarrativeCausalChainVersionDialog';
+import { WorkflowWorkbench } from './WorkflowWorkbench';
+import { PanelScriptEditor } from './PanelScriptEditor';
 import {
   CheckCircle2,
   Circle,
@@ -80,7 +90,7 @@ import {
   XCircle,
 } from 'lucide-react';
 
-type WorkflowStep = 'global' | 'causal' | 'plan' | 'episode' | 'export';
+type WorkflowStep = 'workbench' | 'global' | 'causal' | 'plan' | 'episode' | 'export';
 
 const CAUSAL_CHAIN_PHASES = [
   { phase: 1, name: '核心冲突', desc: '故事大纲 + 冲突引擎' },
@@ -271,7 +281,7 @@ export function EpisodeWorkflow() {
     setScenes,
   } = useEpisodeScenesStore();
 
-  const [activeStep, setActiveStep] = useState<WorkflowStep>('global');
+  const [activeStep, setActiveStep] = useState<WorkflowStep>('workbench');
   const [targetEpisodeCount, setTargetEpisodeCount] = useState<number | ''>('');
   const [sceneCountHint, setSceneCountHint] = useState<number | ''>('');
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
@@ -488,6 +498,7 @@ export function EpisodeWorkflow() {
   ]);
 
   const steps: Array<{ id: WorkflowStep; name: string }> = [
+    { id: 'workbench', name: '工作台' },
     { id: 'global', name: '全局设定' },
     { id: 'causal', name: '叙事因果链' },
     { id: 'plan', name: '剧集规划' },
@@ -579,6 +590,51 @@ export function EpisodeWorkflow() {
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       toast({ title: '分镜生成失败', description: detail, variant: 'destructive' });
+    }
+  };
+
+  const handleSetProjectArtifactStatus = (
+    artifact: 'bible' | 'seasonArc',
+    status: ArtifactStatus,
+  ) => {
+    if (!currentProject?.id) return;
+    updateProject(currentProject.id, buildProjectArtifactPatch(currentProject, artifact, status));
+    const artifactLabel = artifact === 'bible' ? '项目圣经' : '主线弧线';
+    const statusLabel = status === 'draft' ? '草稿' : status === 'review' ? '评审' : '锁定';
+    toast({
+      title: '已更新产物状态',
+      description: `「${artifactLabel}」已设为「${statusLabel}」。`,
+    });
+  };
+
+  const handleSetEpisodeArtifactStatus = async (
+    artifact: 'outline' | 'storyboard' | 'promptPack',
+    status: ArtifactStatus,
+  ) => {
+    if (!currentProject?.id || !currentEpisode?.id) return;
+    try {
+      await updateEpisode(
+        currentProject.id,
+        currentEpisode.id,
+        buildEpisodeArtifactPatch(currentEpisode, artifact, status),
+      );
+      const artifactLabel =
+        artifact === 'outline'
+          ? '本集 Outline'
+          : artifact === 'storyboard'
+            ? '分镜脚本'
+            : '提示词包';
+      const statusLabel = status === 'draft' ? '草稿' : status === 'review' ? '评审' : '锁定';
+      toast({
+        title: '已更新产物状态',
+        description: `「${artifactLabel}」已设为「${statusLabel}」。`,
+      });
+    } catch (error) {
+      toast({
+        title: '更新失败',
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
     }
   };
 
@@ -704,7 +760,7 @@ export function EpisodeWorkflow() {
     toast({ title: '已请求取消', description: '正在停止批量细化...' });
   };
 
-  const handleStartBatchRefine = async () => {
+  const startBatchRefine = async (sceneIds: string[]) => {
     if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
     if (isBatchBlocked) {
       toast({
@@ -716,7 +772,7 @@ export function EpisodeWorkflow() {
     }
     if (isBatchRefineRunning) return;
 
-    const selectedUnique = Array.from(new Set(batchRefineSelectedIds)).filter(Boolean);
+    const selectedUnique = Array.from(new Set(sceneIds)).filter(Boolean);
     if (selectedUnique.length === 0) {
       toast({ title: '未选择分镜', description: '请至少选择 1 个分镜再开始批量细化。' });
       return;
@@ -866,6 +922,10 @@ export function EpisodeWorkflow() {
     });
   };
 
+  const handleStartBatchRefine = async () => {
+    await startBatchRefine(batchRefineSelectedIds);
+  };
+
   const openEpisodeEditor = (episode: Episode) => {
     setEditingEpisodeId(episode.id);
     setEpisodeTitleDraft(episode.title || '');
@@ -985,14 +1045,48 @@ export function EpisodeWorkflow() {
 
       if (exportFormat === 'json') {
         const data = {
+          schema: {
+            name: 'aixsss.workflowExport',
+            version: 2,
+          },
           project: currentProject,
+          workflowV2: currentProject.contextCache?.workflowV2 ?? null,
           globalSettings: {
             artStyleFullPrompt: styleFullPrompt,
             worldView: worldViewElements,
             characters: projectCharacters,
             narrativeCausalChain: currentProject.contextCache?.narrativeCausalChain ?? null,
           },
-          episodes: episodes.map((ep) => ({ ...ep, scenes: sceneMap.get(ep.id) ?? [] })),
+          episodes: episodes.map((ep) => {
+            const epScenes = sceneMap.get(ep.id) ?? [];
+            const metrics = computeEpisodeMetrics(epScenes);
+            const scenesWithMetrics = epScenes.map((s) => ({
+              ...s,
+              panelMetrics: computePanelMetrics(s),
+            }));
+            const panels = epScenes.map((s) => ({
+              id: s.id,
+              order: s.order,
+              status: s.status,
+              summary: s.summary,
+              notes: s.notes,
+              dialogues: Array.isArray(s.dialogues) ? (s.dialogues as DialogueLine[]) : [],
+              panelMetrics: computePanelMetrics(s),
+              panelScript: resolvePanelScript(s),
+              promptBlocks: {
+                sceneAnchor: parseSceneAnchorText(s.sceneDescription),
+                keyframes: parseKeyframePromptText(s.shotPrompt),
+                motion: parseMotionPromptText(s.motionPrompt),
+              },
+            }));
+            return {
+              ...ep,
+              workflowV2: ep.contextCache?.workflowV2 ?? null,
+              metrics,
+              panels,
+              scenes: scenesWithMetrics,
+            };
+          }),
           exportedAt: new Date().toISOString(),
         };
         setExportContent(JSON.stringify(data, null, 2));
@@ -1065,6 +1159,14 @@ ${safeJsonStringify(ep.coreExpression)}
           }
 
           const epScenes = sceneMap.get(ep.id) ?? [];
+          const metrics = computeEpisodeMetrics(epScenes);
+          const minutes = metrics.totalEstimatedSeconds / 60;
+          md += `#### 本集节奏估算（粗略）\n\n`;
+          md += `- 格数：${metrics.panelCount}\n`;
+          md += `- 估算时长：${Number.isFinite(minutes) ? `${minutes.toFixed(1)} 分钟` : '-'}\n`;
+          md += `- 平均/格：${metrics.avgSecondsPerPanel}s\n`;
+          md += `- 对白字数：${metrics.totalDialogueChars}\n\n`;
+
           md += `#### 分镜列表（${epScenes.length}）\n\n`;
           if (epScenes.length === 0) {
             md += `- （空）\n\n`;
@@ -1073,7 +1175,12 @@ ${safeJsonStringify(ep.coreExpression)}
               .slice()
               .sort((a, b) => a.order - b.order)
               .forEach((s) => {
-                md += `- ${s.order}. ${s.summary}\n`;
+                const panel = computePanelMetrics(s);
+                const meta =
+                  panel.dialogueCharCount > 0
+                    ? `（对白 ${panel.dialogueCharCount} 字 / 气泡 ${panel.dialogueLineCount} / ${panel.estimatedSeconds}s）`
+                    : `（${panel.estimatedSeconds}s）`;
+                md += `- ${s.order}. ${s.summary} ${meta}\n`;
               });
             md += '\n';
           }
@@ -1129,7 +1236,7 @@ ${safeJsonStringify(ep.coreExpression)}
 
   const getStepStatus = (step: WorkflowStep): 'completed' | 'current' | 'pending' => {
     if (step === activeStep) return 'current';
-    const order: WorkflowStep[] = ['global', 'causal', 'plan', 'episode', 'export'];
+    const order: WorkflowStep[] = ['workbench', 'global', 'causal', 'plan', 'episode', 'export'];
     return order.indexOf(step) < order.indexOf(activeStep) ? 'completed' : 'pending';
   };
 
@@ -2150,6 +2257,25 @@ ${safeJsonStringify(ep.coreExpression)}
         </Card>
 
         <div className="space-y-6">
+          {activeStep === 'workbench' && (
+            <WorkflowWorkbench
+              project={currentProject}
+              styleFullPrompt={styleFullPrompt}
+              characters={projectCharacters}
+              worldViewElements={worldViewElements}
+              episodes={episodes}
+              currentEpisode={currentEpisode}
+              currentEpisodeScenes={sortedScenes}
+              aiProfileId={aiProfileId}
+              onGoToStep={setActiveStep}
+              onRunPlanEpisodes={handlePlanEpisodes}
+              onRunGenerateCoreExpression={handleGenerateCoreExpression}
+              onRunGenerateSceneList={handleGenerateSceneList}
+              onRunBatchRefineAll={() => startBatchRefine(recommendedBatchRefineIds)}
+              onSetProjectArtifactStatus={handleSetProjectArtifactStatus}
+              onSetEpisodeArtifactStatus={handleSetEpisodeArtifactStatus}
+            />
+          )}
           {activeStep === 'global' && (
             <BasicSettings
               minSummaryLength={100}
@@ -2518,6 +2644,16 @@ ${safeJsonStringify(ep.coreExpression)}
                   />
                 </div>
               ) : null}
+
+              <PanelScriptEditor
+                scene={refineScene}
+                characters={projectCharacters}
+                worldViewElements={worldViewElements}
+                onUpdateScene={(updates) => {
+                  if (!currentEpisode?.id) return;
+                  updateScene(currentProject.id, currentEpisode.id, refineScene.id, updates);
+                }}
+              />
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">

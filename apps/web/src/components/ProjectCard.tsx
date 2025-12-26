@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { getWorkflowStateLabel } from '@/lib/workflowLabels';
 
 interface ProjectCardProps {
   project: Project;
@@ -56,6 +57,10 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename }: ProjectCa
   const handleOpen = useCallback(() => onOpen(project), [onOpen, project]);
   const handleDelete = useCallback(() => onDelete(project.id), [onDelete, project.id]);
   const handleRename = useCallback(() => onRename(project.id, project.title), [onRename, project]);
+  const statusLabel = useMemo(
+    () => getWorkflowStateLabel(project.workflowState),
+    [project.workflowState],
+  );
 
   return (
     <Card className="hover:shadow-xl transition-all duration-300 hover:ring-2 hover:ring-primary cursor-pointer group">
@@ -91,6 +96,9 @@ function ProjectCardComponent({ project, onOpen, onDelete, onRename }: ProjectCa
           <div className="flex items-center gap-2 text-sm">
             <div className="px-2 py-1 rounded bg-primary/20 text-primary text-xs font-medium">
               {project.style || '未设置风格'}
+            </div>
+            <div className="px-2 py-1 rounded bg-secondary text-secondary-foreground text-xs font-medium">
+              {statusLabel}
             </div>
           </div>
 
