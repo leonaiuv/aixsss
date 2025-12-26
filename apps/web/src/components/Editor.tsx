@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useConfigStore } from '@/stores/configStore';
@@ -6,12 +7,10 @@ import { useCharacterStore } from '@/stores/characterStore';
 import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { isApiMode } from '@/lib/runtime/mode';
-import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import {
   CheckCircle2,
-  Circle,
   History,
   BarChart3,
   Download,
@@ -60,9 +59,7 @@ function LegacyEditor() {
   const {
     startBatchGenerating,
     stopBatchGenerating,
-    batchOperations,
     updateBatchOperations,
-    resetBatchOperations,
     setBatchSelectedScenes,
     addBatchCompletedScene,
     addBatchFailedScene,
@@ -77,40 +74,22 @@ function LegacyEditor() {
 
     const state = currentProject.workflowState;
 
-    if (state === 'IDLE' || state === 'DATA_COLLECTING') {
+    if (state === 'IDLE' || state === 'DATA_COLLECTING' || state === 'DATA_COLLECTED') {
       setActiveStep('basic');
     } else if (
-      state === 'DATA_COLLECTED' ||
       state === 'SCENE_LIST_GENERATING' ||
-      state === 'SCENE_LIST_EDITING'
+      state === 'SCENE_LIST_EDITING' ||
+      state === 'SCENE_LIST_CONFIRMED'
     ) {
       setActiveStep('generation');
-    } else if (state === 'SCENE_LIST_CONFIRMED' || state === 'SCENE_PROCESSING') {
+    } else if (state === 'SCENE_PROCESSING') {
       setActiveStep('refinement');
     } else if (state === 'ALL_SCENES_COMPLETE' || state === 'EXPORTING') {
       setActiveStep('export');
     }
-  }, [currentProject?.workflowState]);
-
-  // 监听自定义事件来切换步骤
-  useEffect(() => {
-    const handleNextStep = () => {
-      if (!currentProject) return;
-
-      const state = currentProject.workflowState;
-
-      if (state === 'DATA_COLLECTED') {
-        setActiveStep('generation');
-      } else if (state === 'SCENE_LIST_CONFIRMED' || state === 'SCENE_PROCESSING') {
-        setActiveStep('refinement');
-      } else if (state === 'ALL_SCENES_COMPLETE') {
-        setActiveStep('export');
-      }
-    };
-
-    window.addEventListener('workflow:next-step', handleNextStep);
-    return () => window.removeEventListener('workflow:next-step', handleNextStep);
   }, [currentProject]);
+
+
 
   if (!currentProject) {
     return (
@@ -826,124 +805,107 @@ ${dialoguesText}
   return (
     <div className="space-y-6">
       {/* 顶部工具栏 */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold">{currentProject.title}</h2>
-            <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
-              <span title={currentProject.workflowState}>{workflowLabel}</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiveDialog('version')}
-              className="gap-2"
-            >
-              <History className="h-4 w-4" />
-              <span className="hidden sm:inline">版本历史</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiveDialog('statistics')}
-              className="gap-2"
-            >
-              <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">统计分析</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiveDialog('compare')}
-              className="gap-2"
-            >
-              <GitCompare className="h-4 w-4" />
-              <span className="hidden sm:inline">分镜对比</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiveDialog('batch')}
-              className="gap-2"
-            >
-              <Layers className="h-4 w-4" />
-              <span className="hidden sm:inline">批量操作</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiveDialog('export')}
-              className="gap-2"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">导出数据</span>
-            </Button>
-          </div>
+      <div className="flex items-center justify-between pb-6 border-b">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-semibold tracking-tight">{currentProject.title}</h2>
+          <span className="text-xs font-medium text-muted-foreground px-2 py-0.5 bg-secondary rounded-full">
+            <span title={currentProject.workflowState}>{workflowLabel}</span>
+          </span>
         </div>
-      </Card>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveDialog('version')}
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">版本历史</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveDialog('statistics')}
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">统计分析</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveDialog('compare')}
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <GitCompare className="h-4 w-4" />
+            <span className="hidden sm:inline">分镜对比</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveDialog('batch')}
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <Layers className="h-4 w-4" />
+            <span className="hidden sm:inline">批量操作</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveDialog('export')}
+            className="gap-2 shadow-sm"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">导出数据</span>
+          </Button>
+        </div>
+      </div>
 
       {/* 主内容区域 */}
-      <div className="grid grid-cols-[240px_1fr] gap-6 min-h-[calc(100vh-260px)]">
+      <div className="grid grid-cols-[200px_1fr] gap-8 min-h-[calc(100vh-200px)]">
         {/* 左侧步骤导航 */}
-        <Card className="p-6 h-fit sticky top-24">
-          <h3 className="font-semibold mb-4">创作流程</h3>
-          <div className="space-y-4">
+        <div className="h-fit sticky top-0 py-2">
+          <h3 className="text-sm font-medium text-muted-foreground mb-4 px-2">创作流程</h3>
+          <div className="space-y-1">
             {steps.map((step, index) => {
               const status = getStepStatus(step);
               const isClickable = status === 'current' || status === 'completed';
+              const isCurrent = status === 'current';
 
               return (
-                <div key={step.id} className="flex items-start gap-3">
-                  <div className="flex flex-col items-center">
-                    {status === 'completed' ? (
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                    ) : status === 'current' ? (
-                      <div className="h-5 w-5 rounded-full border-2 border-primary bg-primary/20" />
-                    ) : (
-                      <Circle className="h-5 w-5 text-muted-foreground" />
-                    )}
-                    {index < steps.length - 1 && (
-                      <div
-                        className={`w-0.5 h-8 mt-2 ${
-                          status === 'completed' ? 'bg-primary' : 'bg-border'
-                        }`}
-                      />
-                    )}
+                <button
+                  key={step.id}
+                  onClick={() => handleStepClick(step.id)}
+                  disabled={!isClickable}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-2 py-2 text-sm font-medium rounded-md transition-colors",
+                    isCurrent ? "bg-secondary text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                    !isClickable && "opacity-50 cursor-not-allowed hover:bg-transparent"
+                  )}
+                >
+                  <div className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded-full border text-[10px]",
+                    isCurrent ? "border-primary bg-primary text-primary-foreground" : 
+                    status === 'completed' ? "border-primary text-primary" : "border-muted-foreground"
+                  )}>
+                    {status === 'completed' ? <CheckCircle2 className="h-3 w-3" /> : index + 1}
                   </div>
-                  <button
-                    onClick={() => handleStepClick(step.id)}
-                    disabled={!isClickable}
-                    className={`text-left transition-colors ${
-                      isClickable ? 'cursor-pointer hover:text-primary' : 'cursor-not-allowed'
-                    }`}
-                  >
-                    <p
-                      className={`text-sm font-medium ${
-                        status === 'current'
-                          ? 'text-primary'
-                          : status === 'completed'
-                            ? 'text-foreground'
-                            : 'text-muted-foreground'
-                      }`}
-                    >
-                      {step.name}
-                    </p>
-                  </button>
-                </div>
+                  {step.name}
+                </button>
               );
             })}
           </div>
 
-          <div className="mt-6 pt-6 border-t space-y-2">
-            <p className="text-xs text-muted-foreground">当前项目</p>
-            <p className="font-medium text-sm">{currentProject.title}</p>
+          <div className="mt-8 px-2">
+             <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground mb-1">当前项目</p>
+                <p className="line-clamp-2">{currentProject.title}</p>
+             </div>
           </div>
-        </Card>
+        </div>
 
         {/* 右侧主内容区 */}
-        <div className="space-y-6">
+        <div className="space-y-6 py-2">
           {activeStep === 'basic' && <BasicSettings />}
           {activeStep === 'generation' && <SceneGeneration />}
           {activeStep === 'refinement' && <SceneRefinement />}

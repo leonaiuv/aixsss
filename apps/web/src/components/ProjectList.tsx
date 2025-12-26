@@ -184,7 +184,7 @@ export function ProjectList() {
           <Button
             onClick={() => setCreateDialogOpen(true)}
             size="lg"
-            className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+            className="shadow-sm"
           >
             <Plus className="mr-2 h-5 w-5" />
             新建项目

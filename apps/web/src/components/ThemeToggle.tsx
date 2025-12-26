@@ -10,6 +10,7 @@
 import { memo, useCallback } from 'react';
 import { useThemeStore } from '@/stores/themeStore';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +19,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Sun, Moon, Monitor } from 'lucide-react';
 
-function ThemeToggleComponent() {
+interface ThemeToggleProps {
+  className?: string;
+}
+
+function ThemeToggleComponent({ className }: ThemeToggleProps) {
   // 使用选择器优化
   const theme = useThemeStore((state) => state.mode);
   const setTheme = useThemeStore((state) => state.setMode);
@@ -31,7 +36,7 @@ function ThemeToggleComponent() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="切换主题" title="切换主题">
+        <Button variant="ghost" size="icon" aria-label="切换主题" title="切换主题" className={cn(className)}>
           {theme === 'light' && <Sun className="h-5 w-5" />}
           {theme === 'dark' && <Moon className="h-5 w-5" />}
           {theme === 'system' && <Monitor className="h-5 w-5" />}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useProjectStore } from './stores/projectStore';
 import { useConfigStore } from './stores/configStore';
 import { useThemeStore } from './stores/themeStore';
@@ -14,10 +14,8 @@ import { Toaster } from './components/ui/toaster';
 import { AIProgressToast, AIProgressIndicator } from './components/AIProgressToast';
 import { initProgressBridge } from './lib/ai/progressBridge';
 import { initAIUsageAnalytics } from './lib/ai/usageAnalytics';
-import { Settings, Search, Terminal, Loader2 } from 'lucide-react';
-import { Button } from './components/ui/button';
+import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent } from './components/ui/dialog';
-import { useAIProgressStore } from './stores/aiProgressStore';
 import {
   useKeyboardShortcut,
   GLOBAL_SHORTCUTS,
@@ -25,6 +23,7 @@ import {
 } from './hooks/useKeyboardShortcut';
 import { useAuthStore } from './stores/authStore';
 import { AuthPage } from './components/AuthPage';
+import { AppLayout } from './components/layout/AppLayout';
 
 // 懒加载重型组件
 const Editor = lazy(() => import('./components/Editor').then((m) => ({ default: m.Editor })));
@@ -71,20 +70,15 @@ function EditorRouteLoader() {
 function LocalApp() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
-  const isInEditor = location.pathname.startsWith('/projects/');
 
   // 使用选择器优化，避免订阅整个 store
   const loadProjects = useProjectStore((state) => state.loadProjects);
-  const currentProject = useProjectStore((state) => state.currentProject);
   const projects = useProjectStore((state) => state.projects);
   const setCurrentProject = useProjectStore((state) => state.setCurrentProject);
   const loadConfig = useConfigStore((state) => state.loadConfig);
   const initTheme = useThemeStore((state) => state.initTheme);
   const toggleThemeMode = useThemeStore((state) => state.toggleMode);
-  const togglePanel = useAIProgressStore((state) => state.togglePanel);
-  const isPanelVisible = useAIProgressStore((state) => state.isPanelVisible);
 
   useEffect(() => {
     initStorage();
@@ -141,11 +135,6 @@ function LocalApp() {
     () => toggleThemeMode(),
   );
 
-  // 使用 useCallback 缓存回调函数
-  const handleBackToList = useCallback(() => {
-    setCurrentProject(null);
-    navigate('/');
-  }, [navigate, setCurrentProject]);
   const handleOpenConfig = useCallback(() => setConfigDialogOpen(true), []);
   const handleOpenSearch = useCallback(() => setSearchDialogOpen(true), []);
 
@@ -159,62 +148,13 @@ function LocalApp() {
   );
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-      {/* 顶部导航栏 */}
-      <header className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border transition-colors duration-300">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">漫</span>
-            </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              漫剧创作助手
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isInEditor && (
-              <Button variant="ghost" size="sm" onClick={handleBackToList}>
-                返回项目列表
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleOpenSearch}
-              title="搜索 (Ctrl+K)"
-              aria-label="搜索项目 (Ctrl+K)"
-            >
-              <Search className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={togglePanel}
-              title="开发者面板"
-              className={isPanelVisible ? 'bg-muted' : ''}
-              aria-label="开发者面板"
-            >
-              <Terminal className="h-5 w-5" />
-            </Button>
-            <KeyboardShortcuts />
-            <ThemeToggle />
-            <Button variant="ghost" size="icon" onClick={handleOpenConfig} aria-label="设置">
-              <Settings className="h-5 w-5" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* 主内容区 */}
-      <main className="container mx-auto px-6 py-8">
-        <Routes>
-          <Route path="/" element={<ProjectList />} />
-          <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
-          <Route path="/login" element={<Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+    <AppLayout onSearch={handleOpenSearch} onConfig={handleOpenConfig}>
+      <Routes>
+        <Route path="/" element={<ProjectList />} />
+        <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
 
       {/* API配置弹窗 */}
       <Suspense fallback={null}>
@@ -232,6 +172,7 @@ function LocalApp() {
 
       {/* Toast通知 */}
       <Toaster />
+      <KeyboardShortcuts />
 
       {/* AI进度提醒 */}
       <AIProgressToast />
@@ -242,30 +183,24 @@ function LocalApp() {
         <DevPanel />
         <DevPanelTrigger />
       </Suspense>
-    </div>
+    </AppLayout>
   );
 }
 
 function BackendApp() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
-  const isInEditor = location.pathname.startsWith('/projects/');
 
   const loadProjects = useProjectStore((state) => state.loadProjects);
-  const currentProject = useProjectStore((state) => state.currentProject);
   const projects = useProjectStore((state) => state.projects);
   const setCurrentProject = useProjectStore((state) => state.setCurrentProject);
   const loadConfig = useConfigStore((state) => state.loadConfig);
   const initTheme = useThemeStore((state) => state.initTheme);
   const toggleThemeMode = useThemeStore((state) => state.toggleMode);
-  const togglePanel = useAIProgressStore((state) => state.togglePanel);
-  const isPanelVisible = useAIProgressStore((state) => state.isPanelVisible);
 
   const user = useAuthStore((s) => s.user);
   const loadAuth = useAuthStore((s) => s.loadFromStorage);
-  const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
     // 本地存储仍用于部分“离线/缓存/兼容”数据（例如：旧数据迁移、开发面板日志等）
@@ -324,10 +259,6 @@ function BackendApp() {
     () => toggleThemeMode(),
   );
 
-  const handleBackToList = useCallback(() => {
-    setCurrentProject(null);
-    navigate('/');
-  }, [navigate, setCurrentProject]);
   const handleOpenConfig = useCallback(() => setConfigDialogOpen(true), []);
   const handleOpenSearch = useCallback(() => setSearchDialogOpen(true), []);
 
@@ -340,108 +271,52 @@ function BackendApp() {
     [setCurrentProject, navigate],
   );
 
+  // If user is not logged in, render simple layout (or AuthPage)
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
+        <main className="container mx-auto px-6 py-8">
+           <Routes>
+            <Route path="/login" element={<AuthPage />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </main>
+        <ThemeToggle className="fixed bottom-4 right-4" />
+        <Toaster />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-      <header className="sticky top-0 z-50 backdrop-blur-lg bg-background/80 border-b border-border transition-colors duration-300">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">漫</span>
-            </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              漫剧创作助手
-            </h1>
-          </div>
+    <AppLayout onSearch={handleOpenSearch} onConfig={handleOpenConfig}>
+      <Routes>
+        <Route path="/" element={<ProjectList />} />
+        <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
 
-          <div className="flex items-center gap-3">
-            {user ? (
-              <>
-                {isInEditor ? (
-                  <Button variant="ghost" size="sm" onClick={handleBackToList}>
-                    返回项目列表
-                  </Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleOpenSearch}
-                  title="搜索 (Ctrl+K)"
-                  aria-label="搜索项目 (Ctrl+K)"
-                >
-                  <Search className="h-5 w-5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={togglePanel}
-                  title="开发者面板"
-                  className={isPanelVisible ? 'bg-muted' : ''}
-                  aria-label="开发者面板"
-                >
-                  <Terminal className="h-5 w-5" />
-                </Button>
-                <KeyboardShortcuts />
-                <ThemeToggle />
-                <Button variant="ghost" size="icon" onClick={handleOpenConfig} aria-label="设置">
-                  <Settings className="h-5 w-5" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={logout}>
-                  退出
-                </Button>
-              </>
-            ) : (
-              <>
-                <KeyboardShortcuts />
-                <ThemeToggle />
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <Suspense fallback={null}>
+        <ConfigDialog open={configDialogOpen} onOpenChange={setConfigDialogOpen} />
+      </Suspense>
 
-      <main className="container mx-auto px-6 py-8">
-        <Routes>
-          <Route path="/login" element={user ? <Navigate to="/" replace /> : <AuthPage />} />
-          <Route path="/" element={user ? <ProjectList /> : <Navigate to="/login" replace />} />
-          <Route
-            path="/projects/:projectId"
-            element={user ? <EditorRouteLoader /> : <Navigate to="/login" replace />}
-          />
-          <Route path="*" element={<Navigate to={user ? '/' : '/login'} replace />} />
-        </Routes>
-      </main>
-
-      {user ? (
-        <Suspense fallback={null}>
-          <ConfigDialog open={configDialogOpen} onOpenChange={setConfigDialogOpen} />
-        </Suspense>
-      ) : null}
-
-      {user ? (
-        <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <Suspense fallback={<LoadingFallback />}>
-              <ProjectSearch projects={projects} onSelect={handleSearchResultClick} />
-            </Suspense>
-          </DialogContent>
-        </Dialog>
-      ) : null}
+      <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <Suspense fallback={<LoadingFallback />}>
+            <ProjectSearch projects={projects} onSelect={handleSearchResultClick} />
+          </Suspense>
+        </DialogContent>
+      </Dialog>
 
       <Toaster />
-      {user ? (
-        <>
-          <AIProgressToast />
-          <AIProgressIndicator />
-        </>
-      ) : null}
+      <KeyboardShortcuts />
+      <AIProgressToast />
+      <AIProgressIndicator />
 
-      {user ? (
-        <Suspense fallback={null}>
-          <DevPanel />
-          <DevPanelTrigger />
-        </Suspense>
-      ) : null}
-    </div>
+      <Suspense fallback={null}>
+        <DevPanel />
+        <DevPanelTrigger />
+      </Suspense>
+    </AppLayout>
   );
 }
 
