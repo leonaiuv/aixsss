@@ -579,7 +579,10 @@ export function WorkflowWorkbench(props: {
                     <div>缺地点：{ep.missingLocationCount}</div>
                     <div>坏地点引用：{ep.unknownLocationRefCount}</div>
                     <div>未勾选出场：{ep.missingCharactersPresentCount}</div>
-                    <div>未知角色/命名：{ep.unknownCharacterIdCount + ep.unknownDialogueCharacterNameCount}</div>
+                    <div>
+                      未知角色/命名：
+                      {ep.unknownCharacterIdCount + ep.unknownDialogueCharacterNameCount}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -600,7 +603,11 @@ export function WorkflowWorkbench(props: {
                   </div>
                   <div className="shrink-0">
                     {i.scope.sceneId || i.scope.episodeId ? (
-                      <Button size="sm" variant="outline" onClick={() => props.onGoToStep('episode')}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => props.onGoToStep('episode')}
+                      >
                         前往
                       </Button>
                     ) : null}

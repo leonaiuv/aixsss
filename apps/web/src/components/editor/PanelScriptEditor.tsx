@@ -136,7 +136,9 @@ export function PanelScriptEditor(props: {
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">地点备注（空间卡/可用机位/动线）</Label>
+            <Label className="text-xs text-muted-foreground">
+              地点备注（空间卡/可用机位/动线）
+            </Label>
             <Textarea
               value={panelScript.location?.notes ?? ''}
               placeholder="例如：门口右侧是公告栏，走廊尽头有窗；可用机位：门外逆光/走廊长焦…"

@@ -13,9 +13,7 @@ function normalizeString(value: unknown): string | undefined {
 
 function normalizeStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const items = value
-    .map((v) => normalizeString(v))
-    .filter((v): v is string => Boolean(v));
+  const items = value.map((v) => normalizeString(v)).filter((v): v is string => Boolean(v));
   return items.length > 0 ? items : undefined;
 }
 
@@ -40,7 +38,11 @@ function normalizeMetrics(value: unknown): PanelScriptV1['metrics'] | undefined 
     typeof value.dialogueCharCount === 'number' ? value.dialogueCharCount : undefined;
   const estimatedSeconds =
     typeof value.estimatedSeconds === 'number' ? value.estimatedSeconds : undefined;
-  if (dialogueLineCount === undefined && dialogueCharCount === undefined && estimatedSeconds === undefined)
+  if (
+    dialogueLineCount === undefined &&
+    dialogueCharCount === undefined &&
+    estimatedSeconds === undefined
+  )
     return undefined;
   return { dialogueLineCount, dialogueCharCount, estimatedSeconds };
 }
@@ -74,9 +76,10 @@ function normalizePanelScript(value: unknown): PanelScriptV1 | null {
   const metrics = normalizeMetrics(value.metrics);
   const createdAt = normalizeString(value.createdAt);
   const updatedAt = normalizeString(value.updatedAt);
-  const source = value.source === 'ai' || value.source === 'manual' || value.source === 'import'
-    ? value.source
-    : undefined;
+  const source =
+    value.source === 'ai' || value.source === 'manual' || value.source === 'import'
+      ? value.source
+      : undefined;
 
   return {
     version: 1,
