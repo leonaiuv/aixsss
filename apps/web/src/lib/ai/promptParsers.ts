@@ -144,13 +144,16 @@ function tryParseJson<T>(text: string): { valid: boolean; data?: T } {
 /**
  * 将场景锚点 JSON 拼接为完整的提示词字符串
  */
-export function buildSceneAnchorPromptFromJson(json: SceneAnchorJsonData, locale: PromptLocale): string {
+export function buildSceneAnchorPromptFromJson(
+  json: SceneAnchorJsonData,
+  locale: PromptLocale,
+): string {
   const parts: string[] = [];
-  
+
   // 场景描述
   const scene = json.scene?.[locale];
   if (scene) parts.push(scene);
-  
+
   // 位置信息
   if (json.location) {
     const loc = json.location;
@@ -160,7 +163,7 @@ export function buildSceneAnchorPromptFromJson(json: SceneAnchorJsonData, locale
     if (loc.details) locParts.push(loc.details);
     if (locParts.length) parts.push(locParts.join(', '));
   }
-  
+
   // 光照信息
   if (json.lighting) {
     const light = json.lighting;
@@ -170,12 +173,12 @@ export function buildSceneAnchorPromptFromJson(json: SceneAnchorJsonData, locale
     if (light.color) lightParts.push(light.color);
     if (light.intensity) lightParts.push(light.intensity);
     if (lightParts.length) {
-      parts.push(locale === 'zh' 
-        ? `光照: ${lightParts.join(', ')}`
-        : `Lighting: ${lightParts.join(', ')}`);
+      parts.push(
+        locale === 'zh' ? `光照: ${lightParts.join(', ')}` : `Lighting: ${lightParts.join(', ')}`,
+      );
     }
   }
-  
+
   // 氛围信息
   if (json.atmosphere) {
     const atm = json.atmosphere;
@@ -184,20 +187,26 @@ export function buildSceneAnchorPromptFromJson(json: SceneAnchorJsonData, locale
     if (atm.weather && atm.weather !== '不适用') atmParts.push(atm.weather);
     if (atm.timeOfDay) atmParts.push(atm.timeOfDay);
     if (atmParts.length) {
-      parts.push(locale === 'zh'
-        ? `氛围: ${atmParts.join(', ')}`
-        : `Atmosphere: ${atmParts.join(', ')}`);
+      parts.push(
+        locale === 'zh' ? `氛围: ${atmParts.join(', ')}` : `Atmosphere: ${atmParts.join(', ')}`,
+      );
     }
   }
-  
+
   // 锚点列表
   const anchors = json.anchors?.[locale];
   if (anchors && anchors.length) {
-    parts.push(locale === 'zh'
-      ? `场景锚点: ${anchors.join(', ')}`
-      : `Scene anchors: ${anchors.join(', ')}`);
+    parts.push(
+      locale === 'zh' ? `场景锚点: ${anchors.join(', ')}` : `Scene anchors: ${anchors.join(', ')}`,
+    );
   }
-  
+
+  // 避免项
+  const avoid = json.avoid?.[locale];
+  if (avoid) {
+    parts.push(avoid);
+  }
+
   return parts.join('\n');
 }
 
@@ -207,12 +216,12 @@ export function buildSceneAnchorPromptFromJson(json: SceneAnchorJsonData, locale
 export function buildKeyframePromptFromJson(
   kfData: KeyframeLocaleData | undefined,
   camera: KeyframeJsonData['camera'],
-  locale: PromptLocale
+  locale: PromptLocale,
 ): string {
   if (!kfData) return '';
-  
+
   const parts: string[] = [];
-  
+
   // 镜头信息
   if (camera) {
     const camParts: string[] = [];
@@ -220,12 +229,12 @@ export function buildKeyframePromptFromJson(
     if (camera.angle) camParts.push(camera.angle);
     if (camera.aspectRatio) camParts.push(camera.aspectRatio);
     if (camParts.length) {
-      parts.push(locale === 'zh'
-        ? `镜头: ${camParts.join(', ')}`
-        : `Camera: ${camParts.join(', ')}`);
+      parts.push(
+        locale === 'zh' ? `镜头: ${camParts.join(', ')}` : `Camera: ${camParts.join(', ')}`,
+      );
     }
   }
-  
+
   // 主体描述
   if (kfData.subjects && kfData.subjects.length) {
     for (const subject of kfData.subjects) {
@@ -240,28 +249,30 @@ export function buildKeyframePromptFromJson(
       if (subjectParts.length) parts.push(subjectParts.join(', '));
     }
   }
-  
+
   // 使用的锚点
   if (kfData.usedAnchors && kfData.usedAnchors.length) {
-    parts.push(locale === 'zh'
-      ? `场景锚点: ${kfData.usedAnchors.join(', ')}`
-      : `Scene anchors: ${kfData.usedAnchors.join(', ')}`);
+    parts.push(
+      locale === 'zh'
+        ? `场景锚点: ${kfData.usedAnchors.join(', ')}`
+        : `Scene anchors: ${kfData.usedAnchors.join(', ')}`,
+    );
   }
-  
+
   // 构图
   if (kfData.composition) {
-    parts.push(locale === 'zh'
-      ? `构图: ${kfData.composition}`
-      : `Composition: ${kfData.composition}`);
+    parts.push(
+      locale === 'zh' ? `构图: ${kfData.composition}` : `Composition: ${kfData.composition}`,
+    );
   }
-  
+
   // 气泡留白
   if (kfData.bubbleSpace) {
-    parts.push(locale === 'zh'
-      ? `气泡留白: ${kfData.bubbleSpace}`
-      : `Bubble space: ${kfData.bubbleSpace}`);
+    parts.push(
+      locale === 'zh' ? `气泡留白: ${kfData.bubbleSpace}` : `Bubble space: ${kfData.bubbleSpace}`,
+    );
   }
-  
+
   return parts.join(', ');
 }
 
@@ -270,11 +281,11 @@ export function buildKeyframePromptFromJson(
  */
 export function buildMotionPromptFromJson(json: MotionJsonData, locale: PromptLocale): string {
   const parts: string[] = [];
-  
+
   // 简短描述
   const motionShort = json.motion?.short?.[locale];
   if (motionShort) parts.push(motionShort);
-  
+
   // 时间节拍
   const beats = json.motion?.beats?.[locale];
   if (beats) {
@@ -284,43 +295,47 @@ export function buildMotionPromptFromJson(json: MotionJsonData, locale: PromptLo
     if (beats['2-3s']) beatParts.push(`2-3s: ${beats['2-3s']}`);
     if (beatParts.length) parts.push(beatParts.join('; '));
   }
-  
+
   // 变化描述
   if (json.changes) {
     const changeLines: string[] = [];
-    
+
     const subjectChanges = json.changes.subject?.[locale];
     if (subjectChanges && subjectChanges.length) {
-      changeLines.push(locale === 'zh'
-        ? `主体变化: ${subjectChanges.join(', ')}`
-        : `Subject changes: ${subjectChanges.join(', ')}`);
+      changeLines.push(
+        locale === 'zh'
+          ? `主体变化: ${subjectChanges.join(', ')}`
+          : `Subject changes: ${subjectChanges.join(', ')}`,
+      );
     }
-    
+
     const cameraChanges = json.changes.camera?.[locale];
     if (cameraChanges && cameraChanges.length) {
-      changeLines.push(locale === 'zh'
-        ? `镜头变化: ${cameraChanges.join(', ')}`
-        : `Camera changes: ${cameraChanges.join(', ')}`);
+      changeLines.push(
+        locale === 'zh'
+          ? `镜头变化: ${cameraChanges.join(', ')}`
+          : `Camera changes: ${cameraChanges.join(', ')}`,
+      );
     }
-    
+
     const envChanges = json.changes.environment?.[locale];
     if (envChanges && envChanges.length) {
-      changeLines.push(locale === 'zh'
-        ? `环境变化: ${envChanges.join(', ')}`
-        : `Environment changes: ${envChanges.join(', ')}`);
+      changeLines.push(
+        locale === 'zh'
+          ? `环境变化: ${envChanges.join(', ')}`
+          : `Environment changes: ${envChanges.join(', ')}`,
+      );
     }
-    
+
     if (changeLines.length) parts.push(changeLines.join('\n'));
   }
-  
+
   // 约束条件
   const constraints = json.constraints?.[locale];
   if (constraints) {
-    parts.push(locale === 'zh'
-      ? `约束: ${constraints}`
-      : `Constraints: ${constraints}`);
+    parts.push(locale === 'zh' ? `约束: ${constraints}` : `Constraints: ${constraints}`);
   }
-  
+
   return parts.join('\n');
 }
 
@@ -381,7 +396,7 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
   if (jsonResult.valid && jsonResult.data) {
     const json = jsonResult.data;
     const kfs = json.keyframes || {};
-    
+
     // 将 JSON 结构转换为拼接后的字符串
     const buildKfText = (kfKey: 'KF0' | 'KF1' | 'KF2'): LocaleText => {
       const kf = kfs[kfKey];
@@ -390,7 +405,7 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
         en: buildKeyframePromptFromJson(kf?.en, json.camera, 'en') || undefined,
       };
     };
-    
+
     return {
       keyframes: [buildKfText('KF0'), buildKfText('KF1'), buildKfText('KF2')],
       avoid: json.avoid,
@@ -448,19 +463,21 @@ export function parseSceneAnchorText(text: string): ParsedSceneAnchorText {
   const jsonResult = tryParseJson<SceneAnchorJsonData>(text);
   if (jsonResult.valid && jsonResult.data) {
     const json = jsonResult.data;
-    
+
     // 将 JSON 结构转换为拼接后的完整提示词
     const sceneAnchor: LocaleText = {
       zh: buildSceneAnchorPromptFromJson(json, 'zh') || json.scene?.zh,
       en: buildSceneAnchorPromptFromJson(json, 'en') || json.scene?.en,
     };
-    
+
     // 锚点列表转为字符串
-    const lock: LocaleText | undefined = json.anchors ? {
-      zh: json.anchors.zh?.join(', '),
-      en: json.anchors.en?.join(', '),
-    } : undefined;
-    
+    const lock: LocaleText | undefined = json.anchors
+      ? {
+          zh: json.anchors.zh?.join(', '),
+          en: json.anchors.en?.join(', '),
+        }
+      : undefined;
+
     return {
       sceneAnchor,
       lock,
@@ -523,7 +540,7 @@ export function parseMotionPromptText(text: string): ParsedMotionPromptText {
   const jsonResult = tryParseJson<MotionJsonData>(text);
   if (jsonResult.valid && jsonResult.data) {
     const json = jsonResult.data;
-    
+
     // 将 beats 对象转换为字符串
     const formatBeats = (locale: PromptLocale): string | undefined => {
       const beats = json.motion?.beats?.[locale];
@@ -534,7 +551,7 @@ export function parseMotionPromptText(text: string): ParsedMotionPromptText {
       if (beats['2-3s']) parts.push(`2-3s: ${beats['2-3s']}`);
       return parts.length ? parts.join('; ') : undefined;
     };
-    
+
     return {
       motionShort: json.motion?.short || {},
       motionBeats: {

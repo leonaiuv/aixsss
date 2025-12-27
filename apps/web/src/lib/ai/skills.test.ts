@@ -37,15 +37,13 @@ describe('技能定义', () => {
   });
 
   describe('SceneDescriptionSkill', () => {
-    it('应输出场景锚点（中英双语）', () => {
+    it('应输出场景锚点（中英双语，JSON格式）', () => {
       expect(SceneDescriptionSkill.name).toBe('scene-description');
-      expect(SceneDescriptionSkill.outputFormat.type).toBe('text');
-      expect(SceneDescriptionSkill.outputFormat.maxLength).toBe(1500);
-      expect(SceneDescriptionSkill.maxTokens).toBe(800);
-      expect(SceneDescriptionSkill.promptTemplate).toContain('SCENE_ANCHOR_ZH');
-      expect(SceneDescriptionSkill.promptTemplate).toContain('SCENE_ANCHOR_EN');
-      expect(SceneDescriptionSkill.promptTemplate).toContain('LOCK_ZH');
-      expect(SceneDescriptionSkill.promptTemplate).toContain('LOCK_EN');
+      expect(SceneDescriptionSkill.outputFormat.type).toBe('json');
+      expect(SceneDescriptionSkill.outputFormat.maxLength).toBe(2000);
+      expect(SceneDescriptionSkill.maxTokens).toBe(1000);
+      expect(SceneDescriptionSkill.promptTemplate).toContain('scene');
+      expect(SceneDescriptionSkill.promptTemplate).toContain('anchors');
       expect(SceneDescriptionSkill.promptTemplate).toContain('{style}');
       expect(SceneDescriptionSkill.promptTemplate).toContain('{current_scene_summary}');
       expect(SceneDescriptionSkill.promptTemplate).toContain('{prev_scene_summary}');
@@ -53,14 +51,14 @@ describe('技能定义', () => {
   });
 
   describe('KeyframePromptSkill', () => {
-    it('应输出三关键帧（起/中/终）且中英双语', () => {
+    it('应输出三关键帧（起/中/终）且中英双语（JSON格式）', () => {
       expect(KeyframePromptSkill.name).toBe('keyframe-prompt');
-      expect(KeyframePromptSkill.outputFormat.maxLength).toBe(4000);
-      expect(KeyframePromptSkill.maxTokens).toBe(1200);
-      expect(KeyframePromptSkill.promptTemplate).toContain('KF0_ZH');
-      expect(KeyframePromptSkill.promptTemplate).toContain('KF0_EN');
-      expect(KeyframePromptSkill.promptTemplate).toContain('KF1_ZH');
-      expect(KeyframePromptSkill.promptTemplate).toContain('KF2_ZH');
+      expect(KeyframePromptSkill.outputFormat.type).toBe('json');
+      expect(KeyframePromptSkill.outputFormat.maxLength).toBe(5000);
+      expect(KeyframePromptSkill.maxTokens).toBe(1500);
+      expect(KeyframePromptSkill.promptTemplate).toContain('KF0');
+      expect(KeyframePromptSkill.promptTemplate).toContain('KF1');
+      expect(KeyframePromptSkill.promptTemplate).toContain('KF2');
       expect(KeyframePromptSkill.promptTemplate).toContain('{scene_description}');
       expect(KeyframePromptSkill.promptTemplate).toContain('{characters}');
       expect(KeyframePromptSkill.promptTemplate).toContain('{style}');
@@ -74,15 +72,16 @@ describe('技能定义', () => {
   });
 
   describe('MotionPromptSkill', () => {
-    it('应基于三关键帧差分输出运动提示词（短版+分拍版，中英双语）', () => {
+    it('应基于三关键帧差分输出运动提示词（短版+分拍版，中英双语，JSON格式）', () => {
       expect(MotionPromptSkill.name).toBe('motion-prompt');
-      expect(MotionPromptSkill.outputFormat.maxLength).toBe(2000);
-      expect(MotionPromptSkill.maxTokens).toBe(800);
+      expect(MotionPromptSkill.outputFormat.type).toBe('json');
+      expect(MotionPromptSkill.outputFormat.maxLength).toBe(2500);
+      expect(MotionPromptSkill.maxTokens).toBe(1000);
       expect(MotionPromptSkill.promptTemplate).toContain('{scene_description}');
       expect(MotionPromptSkill.promptTemplate).toContain('{shot_prompt}');
-      expect(MotionPromptSkill.promptTemplate).toContain('MOTION_SHORT_ZH');
-      expect(MotionPromptSkill.promptTemplate).toContain('MOTION_BEATS_EN');
-      expect(MotionPromptSkill.promptTemplate).toContain('CONSTRAINTS_EN');
+      expect(MotionPromptSkill.promptTemplate).toContain('motion');
+      expect(MotionPromptSkill.promptTemplate).toContain('beats');
+      expect(MotionPromptSkill.promptTemplate).toContain('constraints');
     });
   });
 

@@ -2376,7 +2376,12 @@ ${safeJsonStringify(ep.coreExpression)}
 
   // 关键帧复制文本：使用新的 JSON 拼接工具函数
   const refineKeyframeCopyTexts = useMemo(() => {
-    if (!refineScene) return [{ zh: '', en: '' }, { zh: '', en: '' }, { zh: '', en: '' }] as const;
+    if (!refineScene)
+      return [
+        { zh: '', en: '' },
+        { zh: '', en: '' },
+        { zh: '', en: '' },
+      ] as const;
     return [
       buildKeyframeCopyText(refineScene, 0),
       buildKeyframeCopyText(refineScene, 1),
@@ -2456,7 +2461,11 @@ ${safeJsonStringify(ep.coreExpression)}
   const handleCopyKeyframe = async (kfIndex: 0 | 1 | 2, locale: 'zh' | 'en') => {
     const kfLabels = ['KF0（起始）', 'KF1（中间）', 'KF2（结束）'];
     const text = refineKeyframeCopyTexts[kfIndex][locale] || '';
-    await copyToClipboard(text, '已复制', `${kfLabels[kfIndex]} ${locale.toUpperCase()} 已复制（完整提示词）。`);
+    await copyToClipboard(
+      text,
+      '已复制',
+      `${kfLabels[kfIndex]} ${locale.toUpperCase()} 已复制（完整提示词）。`,
+    );
   };
 
   const handleCopyKeyframeAvoid = async (locale: 'zh' | 'en') => {
@@ -2475,14 +2484,14 @@ ${safeJsonStringify(ep.coreExpression)}
       constraints: '约束条件',
       full: '完整运动提示词',
     };
-    
+
     // 完整复制使用拼接后的提示词
     if (block === 'full') {
       const text = refineMotionCopyText[locale] || '';
       await copyToClipboard(text, '已复制', `${labels[block]} ${locale.toUpperCase()} 已复制。`);
       return;
     }
-    
+
     // 分块复制
     const text = parsedRefineMotion[block][locale] || '';
     await copyToClipboard(text, '已复制', `${labels[block]} ${locale.toUpperCase()} 已复制。`);

@@ -28,12 +28,12 @@ function joinBlocks(blocks: Array<string | null | undefined>): string {
  */
 function buildAnchorMain(scene: Scene, locale: PromptLocale): string {
   const parsed = parseSceneAnchorText(scene.sceneDescription || '');
-  
+
   // 如果是 JSON 格式且有原始数据，使用拼接函数
   if (parsed.isJson && parsed.rawJson) {
     return buildSceneAnchorPromptFromJson(parsed.rawJson, locale);
   }
-  
+
   // 旧格式：拼接 sceneAnchor + lock
   const anchor = pickLocale(parsed.sceneAnchor, locale);
   const lock = pickLocale(parsed.lock, locale);
@@ -62,14 +62,14 @@ function buildKeyframeAvoid(scene: Scene, locale: PromptLocale): string {
  */
 function buildKeyframePrompt(scene: Scene, kfIndex: 0 | 1 | 2, locale: PromptLocale): string {
   const parsed = parseKeyframePromptText(scene.shotPrompt || '');
-  
+
   // 如果是 JSON 格式且有原始数据，使用拼接函数
   if (parsed.isJson && parsed.rawJson) {
     const kfKey = ['KF0', 'KF1', 'KF2'][kfIndex] as 'KF0' | 'KF1' | 'KF2';
     const kfData = parsed.rawJson.keyframes?.[kfKey]?.[locale];
     return buildKeyframePromptFromJson(kfData, parsed.rawJson.camera, locale);
   }
-  
+
   // 旧格式
   const kf = parsed.keyframes[kfIndex];
   return pickLocale(kf, locale);
@@ -81,12 +81,12 @@ function buildKeyframePrompt(scene: Scene, kfIndex: 0 | 1 | 2, locale: PromptLoc
  */
 function buildMotionPrompt(scene: Scene, locale: PromptLocale): string {
   const parsed = parseMotionPromptText(scene.motionPrompt || '');
-  
+
   // 如果是 JSON 格式且有原始数据，使用拼接函数
   if (parsed.isJson && parsed.rawJson) {
     return buildMotionPromptFromJson(parsed.rawJson, locale);
   }
-  
+
   // 旧格式
   const motionShort = pickLocale(parsed.motionShort, locale);
   const motionBeats = pickLocale(parsed.motionBeats, locale);
@@ -101,39 +101,51 @@ function buildMotionPrompt(scene: Scene, locale: PromptLocale): string {
  */
 export function buildSceneAnchorCopyText(scene: Scene): { zh: string; en: string } {
   const parsed = parseSceneAnchorText(scene.sceneDescription || '');
-  
+
   if (parsed.isJson && parsed.rawJson) {
     return {
       zh: buildSceneAnchorPromptFromJson(parsed.rawJson, 'zh'),
       en: buildSceneAnchorPromptFromJson(parsed.rawJson, 'en'),
     };
   }
-  
+
   // 旧格式
   const buildText = (locale: PromptLocale): string => {
     const parts: string[] = [];
     if (parsed.sceneAnchor[locale]) parts.push(parsed.sceneAnchor[locale]!);
     if (parsed.lock?.[locale]) parts.push(parsed.lock[locale]!);
+    if (parsed.avoid?.[locale]) parts.push(parsed.avoid[locale]!);
     return parts.join('\n\n');
   };
-  
+
   return { zh: buildText('zh'), en: buildText('en') };
 }
 
 /**
  * 构建完整的关键帧提示词复制文本（单个关键帧）
  */
-export function buildKeyframeCopyText(scene: Scene, kfIndex: 0 | 1 | 2): { zh: string; en: string } {
+export function buildKeyframeCopyText(
+  scene: Scene,
+  kfIndex: 0 | 1 | 2,
+): { zh: string; en: string } {
   const parsed = parseKeyframePromptText(scene.shotPrompt || '');
-  
+
   if (parsed.isJson && parsed.rawJson) {
     const kfKey = ['KF0', 'KF1', 'KF2'][kfIndex] as 'KF0' | 'KF1' | 'KF2';
     return {
-      zh: buildKeyframePromptFromJson(parsed.rawJson.keyframes?.[kfKey]?.zh, parsed.rawJson.camera, 'zh'),
-      en: buildKeyframePromptFromJson(parsed.rawJson.keyframes?.[kfKey]?.en, parsed.rawJson.camera, 'en'),
+      zh: buildKeyframePromptFromJson(
+        parsed.rawJson.keyframes?.[kfKey]?.zh,
+        parsed.rawJson.camera,
+        'zh',
+      ),
+      en: buildKeyframePromptFromJson(
+        parsed.rawJson.keyframes?.[kfKey]?.en,
+        parsed.rawJson.camera,
+        'en',
+      ),
     };
   }
-  
+
   // 旧格式
   const kf = parsed.keyframes[kfIndex];
   return { zh: kf.zh || '', en: kf.en || '' };
@@ -144,14 +156,14 @@ export function buildKeyframeCopyText(scene: Scene, kfIndex: 0 | 1 | 2): { zh: s
  */
 export function buildMotionCopyText(scene: Scene): { zh: string; en: string } {
   const parsed = parseMotionPromptText(scene.motionPrompt || '');
-  
+
   if (parsed.isJson && parsed.rawJson) {
     return {
       zh: buildMotionPromptFromJson(parsed.rawJson, 'zh'),
       en: buildMotionPromptFromJson(parsed.rawJson, 'en'),
     };
   }
-  
+
   // 旧格式
   const buildText = (locale: PromptLocale): string => {
     const parts: string[] = [];
@@ -160,7 +172,7 @@ export function buildMotionCopyText(scene: Scene): { zh: string; en: string } {
     if (parsed.constraints[locale]) parts.push(parsed.constraints[locale]!);
     return parts.join('\n\n');
   };
-  
+
   return { zh: buildText('zh'), en: buildText('en') };
 }
 
