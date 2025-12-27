@@ -8,7 +8,7 @@
 // ==========================================
 
 import { useMemo, useState } from 'react';
-import type { Character, Scene, WorldViewElement } from '@/types';
+import type { Character, Scene, SceneStatus, WorldViewElement } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -55,21 +55,21 @@ interface DialogueLine {
 
 // 关键帧解析结果
 interface ParsedKeyframe {
-  zh: string;
-  en: string;
+  zh?: string;
+  en?: string;
 }
 
 interface ParsedKeyframes {
   isStructured: boolean;
   keyframes: [ParsedKeyframe, ParsedKeyframe, ParsedKeyframe];
-  avoid?: { zh: string; en: string };
+  avoid?: { zh?: string; en?: string };
 }
 
 interface ParsedMotion {
   isStructured: boolean;
-  motionShort: { zh: string; en: string };
-  motionBeats: { zh: string; en: string };
-  constraints: { zh: string; en: string };
+  motionShort: { zh?: string; en?: string };
+  motionBeats: { zh?: string; en?: string };
+  constraints: { zh?: string; en?: string };
 }
 
 // 差量项
@@ -87,9 +87,9 @@ interface SceneDetailModalProps {
   characters: Character[];
   worldViewElements: WorldViewElement[];
   isRefining: boolean;
-  refineProgress?: { message?: string; pct?: number };
+  refineProgress?: { message?: string | null; pct?: number | null };
   isBatchBlocked: boolean;
-  aiProfileId?: string;
+  aiProfileId?: string | null;
   onUpdateScene: (sceneId: string, updates: Partial<Scene>) => void;
   onRefineScene: (sceneId: string) => void;
   onDeleteScene: (sceneId: string) => void;
@@ -105,7 +105,7 @@ interface SceneDetailModalProps {
   onCopySceneAnchor: (lang: 'zh' | 'en') => Promise<void>;
   onCopyDialogues: (dialogues: DialogueLine[]) => Promise<void>;
   sceneAnchorCopyText: { zh: string; en: string };
-  getSceneStatusLabel: (status: string) => string;
+  getSceneStatusLabel: (status: SceneStatus) => string;
 }
 
 // 可折叠区块组件
@@ -247,7 +247,7 @@ function MotionCard({
 }: {
   label: string;
   dataKey: 'motionShort' | 'motionBeats' | 'constraints';
-  data: { zh: string; en: string };
+  data: { zh?: string; en?: string };
   icon: React.ReactNode;
   onCopy: (key: 'motionShort' | 'motionBeats' | 'constraints', lang: 'zh' | 'en') => void;
 }) {
@@ -476,7 +476,7 @@ export function SceneDetailModal({
   const dialogues = useMemo<DialogueLine[]>(() => {
     if (!scene) return [];
 
-    const rawDialogues = scene.dialogues;
+    const rawDialogues: unknown = scene.dialogues;
 
     if (!rawDialogues) return [];
 
