@@ -99,21 +99,19 @@ describe('EpisodeWorkflow', () => {
 
   it('应渲染左侧步骤导航', () => {
     render(<EpisodeWorkflow />);
-    expect(screen.getByText('Episode 工作流')).toBeInTheDocument();
     expect(screen.getAllByText('工作台').length).toBeGreaterThan(0);
     expect(screen.getByText('全局设定')).toBeInTheDocument();
-    expect(screen.getByText('叙事因果链')).toBeInTheDocument();
+    expect(screen.getByText('因果链')).toBeInTheDocument();
     expect(screen.getByText('剧集规划')).toBeInTheDocument();
     expect(screen.getByText('单集创作')).toBeInTheDocument();
-    expect(screen.getByText('整合导出')).toBeInTheDocument();
+    expect(screen.getByText('导出')).toBeInTheDocument();
   });
 
   it('点击步骤应切换到剧集规划面板', async () => {
     render(<EpisodeWorkflow />);
 
-    await userEvent.click(screen.getByRole('button', { name: '剧集规划' }));
-    expect(screen.getByRole('heading', { name: '剧集规划' })).toBeInTheDocument();
-    expect(screen.getByText('Episodes（按集数排序）')).toBeInTheDocument();
+    await userEvent.click(screen.getByText('剧集规划'));
+    expect(screen.getByText('剧集规划中心')).toBeInTheDocument();
   });
 
   it('场景锚点应支持复制 ZH/EN（仅复制纯提示词）', async () => {
@@ -181,9 +179,9 @@ describe('EpisodeWorkflow', () => {
 
     render(<EpisodeWorkflow />);
 
-    await userEvent.click(screen.getByRole('button', { name: '单集创作' }));
-    await userEvent.click(screen.getByRole('tab', { name: '分镜列表' }));
-    await userEvent.click(screen.getByRole('button', { name: '查看/编辑' }));
+    await userEvent.click(screen.getByText('单集创作'));
+    await userEvent.click(screen.getByRole('tab', { name: '2. 分镜列表' }));
+    await userEvent.click(screen.getByRole('button', { name: '详情' }));
 
     expect(await screen.findByText('分镜详情（可编辑）')).toBeInTheDocument();
 

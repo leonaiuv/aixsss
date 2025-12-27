@@ -10,52 +10,160 @@ import {
   getProjectWorkflowV2,
   type ContinuityReport,
   type WorkflowIssue,
-  type WorkflowIssueLevel,
 } from '@/lib/workflowV2';
 import { apiListEpisodeScenes } from '@/lib/api/episodeScenes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { CheckCircle2, Circle, Lock, AlertTriangle, Info, RefreshCw, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  CheckCircle2,
+  Circle,
+  Lock,
+  AlertTriangle,
+  Info,
+  RefreshCw,
+  Loader2,
+  FileText,
+  Clock,
+  LayoutGrid,
+  Type,
+  ArrowRight,
+  ChevronRight,
+  AlertCircle,
+  BookOpen,
+  Clapperboard,
+  Image as ImageIcon,
+  Check,
+  XCircle,
+  Timer,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type StepId = 'workbench' | 'global' | 'causal' | 'plan' | 'episode' | 'export';
 
-function statusLabel(status: ArtifactStatus): string {
-  if (status === 'draft') return '草稿';
-  if (status === 'review') return '评审';
-  return '锁定';
+// --- Utility Components ---
+
+function StatusBadge({ status, onClick }: { status: ArtifactStatus; onClick?: () => void }) {
+  const styles = {
+    draft: 'bg-muted text-muted-foreground hover:bg-muted/80',
+    review: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50',
+    locked: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50',
+  };
+
+  const labels = {
+    draft: '草稿',
+    review: '评审',
+    locked: '锁定',
+  };
+
+  return (
+    <Badge
+      variant="outline"
+      className={cn("cursor-pointer transition-colors border-transparent", styles[status])}
+      onClick={onClick}
+    >
+      {status === 'locked' && <Lock className="w-3 h-3 mr-1" />}
+      {labels[status]}
+    </Badge>
+  );
 }
 
-function statusBadgeVariant(status: ArtifactStatus): 'default' | 'secondary' | 'outline' {
-  if (status === 'locked') return 'default';
-  if (status === 'review') return 'secondary';
-  return 'outline';
+function MetricCard({ label, value, icon, subValue }: { label: string; value: string | number; icon: React.ReactNode; subValue?: string }) {
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-4 flex items-center justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          <div className="flex items-baseline gap-2">
+            <h4 className="text-2xl font-bold">{value}</h4>
+            {subValue && <span className="text-xs text-muted-foreground">{subValue}</span>}
+          </div>
+        </div>
+        <div className="p-2 bg-primary/5 rounded-lg text-primary">
+          {icon}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
-function issueIcon(level: WorkflowIssueLevel) {
-  if (level === 'error') return <AlertTriangle className="h-4 w-4 text-destructive" />;
-  if (level === 'warn') return <AlertTriangle className="h-4 w-4 text-amber-600" />;
-  return <Info className="h-4 w-4 text-muted-foreground" />;
+function WorkflowStageItem({
+  label,
+  status,
+  icon,
+  onSetStatus,
+  isLast = false
+}: {
+  label: string;
+  status: ArtifactStatus;
+  icon: React.ReactNode;
+  onSetStatus: (s: ArtifactStatus) => void;
+  isLast?: boolean;
+}) {
+  return (
+    <div className="flex items-start gap-4 group">
+      <div className="flex flex-col items-center">
+        <div className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center border transition-colors",
+          status === 'locked' ? "bg-emerald-500 text-white border-emerald-500" :
+          status === 'review' ? "bg-amber-100 text-amber-600 border-amber-200" :
+          "bg-muted text-muted-foreground border-border"
+        )}>
+          {status === 'locked' ? <Check className="w-4 h-4" /> : icon}
+        </div>
+        {!isLast && <div className={cn("w-0.5 h-12 my-1", status === 'locked' ? "bg-emerald-200" : "bg-border")} />}
+      </div>
+      <div className="flex-1 pt-1 pb-6">
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="text-sm font-medium">{label}</h4>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onSetStatus('draft')} title="设为草稿"><Circle className="w-3 h-3" /></Button>
+             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onSetStatus('review')} title="设为评审"><AlertCircle className="w-3 h-3" /></Button>
+             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onSetStatus('locked')} title="设为锁定"><Lock className="w-3 h-3" /></Button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+           <StatusBadge status={status} />
+           <span className="text-xs text-muted-foreground">
+             {status === 'draft' ? '内容正在撰写中...' :
+              status === 'review' ? '等待确认核心要素...' :
+              '已定稿，下游可依赖'}
+           </span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function issueLevelLabel(level: WorkflowIssueLevel): string {
-  if (level === 'error') return '阻塞';
-  if (level === 'warn') return '注意';
-  return '建议';
+function IssueItem({ issue, onAction }: { issue: WorkflowIssue; onAction?: () => void }) {
+  const styles = {
+    error: 'border-l-red-500 bg-red-50/50 dark:bg-red-900/10',
+    warn: 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-900/10',
+    info: 'border-l-blue-500 bg-blue-50/50 dark:bg-blue-900/10',
+  };
+
+  return (
+    <div className={cn("flex items-start gap-3 p-3 text-sm border rounded-r-md border-l-4", styles[issue.level])}>
+      <div className="mt-0.5">
+        {issue.level === 'error' && <XCircle className="w-4 h-4 text-red-500" />}
+        {issue.level === 'warn' && <AlertTriangle className="w-4 h-4 text-amber-500" />}
+        {issue.level === 'info' && <Info className="w-4 h-4 text-blue-500" />}
+      </div>
+      <div className="flex-1 space-y-1">
+        <div className="font-medium text-foreground">{issue.title}</div>
+        {issue.detail && <p className="text-muted-foreground text-xs">{issue.detail}</p>}
+      </div>
+      {onAction && (
+        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onAction}>
+          处理 <ChevronRight className="w-3 h-3 ml-1" />
+        </Button>
+      )}
+    </div>
+  );
 }
 
-function issueLevelBadgeVariant(level: WorkflowIssueLevel): 'default' | 'secondary' | 'outline' {
-  if (level === 'error') return 'default';
-  if (level === 'warn') return 'secondary';
-  return 'outline';
-}
-
-function groupIssues(issues: WorkflowIssue[]) {
-  const grouped: Record<WorkflowIssueLevel, WorkflowIssue[]> = { error: [], warn: [], info: [] };
-  issues.forEach((i) => grouped[i.level].push(i));
-  return grouped;
-}
+// --- Main Component ---
 
 export function WorkflowWorkbench(props: {
   project: Project | null;
@@ -91,7 +199,6 @@ export function WorkflowWorkbench(props: {
 
   const projectV2 = useMemo(() => getProjectWorkflowV2(project), [project]);
   const episodeV2 = useMemo(() => getEpisodeWorkflowV2(currentEpisode), [currentEpisode]);
-
   const hasNarrativeCausalChain = Boolean(project?.contextCache?.narrativeCausalChain);
 
   const projectIssues = useMemo(
@@ -151,13 +258,12 @@ export function WorkflowWorkbench(props: {
     () => [...projectIssues, ...episodeIssues],
     [projectIssues, episodeIssues],
   );
-  const grouped = useMemo(() => groupIssues(issues), [issues]);
 
   const episodeMinutes = episodeMetrics.totalEstimatedSeconds / 60;
   const canRunAI = Boolean(aiProfileId);
 
   const [continuityReport, setContinuityReport] = useState<ContinuityReport | null>(null);
-  const [continuityError, setContinuityError] = useState<string | null>(null);
+  const [, setContinuityError] = useState<string | null>(null);
   const [isContinuityLoading, setIsContinuityLoading] = useState(false);
 
   const handleBuildContinuityReport = async () => {
@@ -194,497 +300,288 @@ export function WorkflowWorkbench(props: {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold">工作台</h2>
-          <p className="text-sm text-muted-foreground">
-            面向多集静态漫画分镜的产物/任务/校验视图（提示词与剧本输出为主）。
+          <h2 className="text-3xl font-bold tracking-tight">工作台</h2>
+          <p className="text-muted-foreground mt-1">
+            项目 {project?.title ? `"${project.title}"` : ''} 的全景视图与质量控制中心
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={canRunAI ? 'secondary' : 'outline'}>
-            {canRunAI ? 'AI 可用' : 'AI 未配置'}
-          </Badge>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-xs font-medium text-muted-foreground">
+            <span className={cn("w-2 h-2 rounded-full", canRunAI ? "bg-green-500" : "bg-amber-500")} />
+            {canRunAI ? 'AI 就绪' : 'AI 未配置'}
+          </div>
           <Button variant="outline" onClick={() => props.onGoToStep('export')}>
-            去导出
+            <FileText className="w-4 h-4 mr-2" />
+            导出产物
           </Button>
         </div>
       </div>
 
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="text-sm font-medium">本集节奏估算（粗略）</div>
-            <div className="text-xs text-muted-foreground">
-              基于对白字数/气泡数量估算每格展示时间，用于图生视频节奏参考（非配音口播）。
+      {/* Top Metrics Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="分镜总数"
+          value={episodeMetrics.panelCount}
+          subValue="Panels"
+          icon={<LayoutGrid className="w-5 h-5" />}
+        />
+        <MetricCard
+          label="估算时长"
+          value={Number.isFinite(episodeMinutes) ? `${episodeMinutes.toFixed(1)}m` : '-'}
+          subValue="Duration"
+          icon={<Timer className="w-5 h-5" />}
+        />
+        <MetricCard
+          label="平均节奏"
+          value={`${episodeMetrics.avgSecondsPerPanel}s`}
+          subValue="/ Panel"
+          icon={<Clock className="w-5 h-5" />}
+        />
+        <MetricCard
+          label="对白字数"
+          value={episodeMetrics.totalDialogueChars}
+          subValue="Chars"
+          icon={<Type className="w-5 h-5" />}
+        />
             </div>
+
+      {/* Main Content Layout */}
+      <div className="grid gap-6 lg:grid-cols-12">
+        
+        {/* Left Column: Workflow Status (4 cols) */}
+        <div className="lg:col-span-4 space-y-6">
+          <Card className="h-full border-l-4 border-l-primary/50">
+            <CardHeader>
+              <CardTitle className="text-lg">产物流水线</CardTitle>
+              <CardDescription>管理各阶段产物的状态与版本</CardDescription>
+            </CardHeader>
+            <CardContent className="pl-6">
+              <div className="relative">
+                {/* Project Level */}
+                <div className="mb-6">
+                  <h5 className="text-xs font-bold text-muted-foreground uppercase mb-4 tracking-wider">Project Level</h5>
+                  <WorkflowStageItem
+                    label="项目圣经 (Bible)"
+                    status={projectV2.artifacts.bible.status}
+                    icon={<BookOpen className="w-4 h-4" />}
+                    onSetStatus={(s) => props.onSetProjectArtifactStatus('bible', s)}
+                  />
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm">
+                
+                {/* Episode Level */}
             <div>
-              <div className="text-muted-foreground text-xs">分镜格数</div>
-              <div className="font-semibold">{episodeMetrics.panelCount}</div>
+                  <h5 className="text-xs font-bold text-muted-foreground uppercase mb-4 tracking-wider">Episode Level</h5>
+                  <WorkflowStageItem
+                    label="本集大纲 (Outline)"
+                    status={episodeV2.artifacts.outline.status}
+                    icon={<FileText className="w-4 h-4" />}
+                    onSetStatus={(s) => props.onSetEpisodeArtifactStatus('outline', s)}
+                  />
+                  <WorkflowStageItem
+                    label="分镜脚本 (Storyboard)"
+                    status={episodeV2.artifacts.storyboard.status}
+                    icon={<Clapperboard className="w-4 h-4" />}
+                    onSetStatus={(s) => props.onSetEpisodeArtifactStatus('storyboard', s)}
+                  />
+                  <WorkflowStageItem
+                    label="提示词包 (Prompts)"
+                    status={episodeV2.artifacts.promptPack.status}
+                    icon={<ImageIcon className="w-4 h-4" />}
+                    onSetStatus={(s) => props.onSetEpisodeArtifactStatus('promptPack', s)}
+                    isLast
+                  />
             </div>
-            <div>
-              <div className="text-muted-foreground text-xs">估算时长</div>
-              <div className="font-semibold">
-                {Number.isFinite(episodeMinutes) ? `${episodeMinutes.toFixed(1)} 分钟` : '-'}
               </div>
-            </div>
-            <div>
-              <div className="text-muted-foreground text-xs">平均/格</div>
-              <div className="font-semibold">{episodeMetrics.avgSecondsPerPanel}s</div>
-            </div>
-            <div>
-              <div className="text-muted-foreground text-xs">对白字数</div>
-              <div className="font-semibold">{episodeMetrics.totalDialogueChars}</div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-      </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-4 space-y-3">
+        {/* Right Column: Actions & Issues (8 cols) */}
+        <div className="lg:col-span-8 space-y-6">
+
+          {/* Active Tasks */}
+          <Card>
+            <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <div className="font-medium">产物状态</div>
-            <Button variant="ghost" size="sm" onClick={() => props.onGoToStep('global')}>
-              去编辑
-            </Button>
-          </div>
-          <Separator />
-
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium">项目圣经</div>
-                <Badge variant={statusBadgeVariant(projectV2.artifacts.bible.status)}>
-                  {statusLabel(projectV2.artifacts.bible.status)}
-                </Badge>
+                <CardTitle className="text-lg">待办任务</CardTitle>
+                <Badge variant="secondary" className="rounded-full">{tasks.filter(t => t.status !== 'done').length} Pending</Badge>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => props.onSetProjectArtifactStatus('bible', 'draft')}
-                >
-                  草稿
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => props.onSetProjectArtifactStatus('bible', 'review')}
-                >
-                  评审
-                </Button>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => props.onSetProjectArtifactStatus('bible', 'locked')}
-                >
-                  <Lock className="mr-2 h-4 w-4" />
-                  锁定
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium">本集 Outline</div>
-                <Badge variant={statusBadgeVariant(episodeV2.artifacts.outline.status)}>
-                  {statusLabel(episodeV2.artifacts.outline.status)}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => props.onSetEpisodeArtifactStatus('outline', 'draft')}
-                >
-                  草稿
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => props.onSetEpisodeArtifactStatus('outline', 'review')}
-                >
-                  评审
-                </Button>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => props.onSetEpisodeArtifactStatus('outline', 'locked')}
-                >
-                  <Lock className="mr-2 h-4 w-4" />
-                  锁定
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium">分镜脚本（Panel）</div>
-                <Badge variant={statusBadgeVariant(episodeV2.artifacts.storyboard.status)}>
-                  {statusLabel(episodeV2.artifacts.storyboard.status)}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => props.onSetEpisodeArtifactStatus('storyboard', 'draft')}
-                >
-                  草稿
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => props.onSetEpisodeArtifactStatus('storyboard', 'review')}
-                >
-                  评审
-                </Button>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => props.onSetEpisodeArtifactStatus('storyboard', 'locked')}
-                >
-                  <Lock className="mr-2 h-4 w-4" />
-                  锁定
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium">提示词包（Prompt Pack）</div>
-                <Badge variant={statusBadgeVariant(episodeV2.artifacts.promptPack.status)}>
-                  {statusLabel(episodeV2.artifacts.promptPack.status)}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => props.onSetEpisodeArtifactStatus('promptPack', 'draft')}
-                >
-                  草稿
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => props.onSetEpisodeArtifactStatus('promptPack', 'review')}
-                >
-                  评审
-                </Button>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => props.onSetEpisodeArtifactStatus('promptPack', 'locked')}
-                >
-                  <Lock className="mr-2 h-4 w-4" />
-                  锁定
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="font-medium">任务清单</div>
-            <Button variant="ghost" size="sm" onClick={() => props.onGoToStep('plan')}>
-              去规划
-            </Button>
-          </div>
-          <Separator />
-
-          <div className="space-y-2">
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2">
             {tasks.map((t) => {
-              const icon =
-                t.status === 'done' ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                ) : t.status === 'blocked' ? (
-                  <Lock className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Circle className="h-4 w-4 text-muted-foreground" />
-                );
-
+                  const isDone = t.status === 'done';
               const action =
                 t.id === 'task:planEpisodes'
-                  ? { label: '执行', onClick: props.onRunPlanEpisodes }
+                      ? { label: '执行规划', onClick: props.onRunPlanEpisodes }
                   : t.id === 'task:causalChain'
-                    ? { label: '前往', onClick: () => props.onGoToStep('causal') }
+                        ? { label: '编辑因果链', onClick: () => props.onGoToStep('causal') }
                     : t.id === 'task:episode:coreExpression'
-                      ? { label: '执行', onClick: props.onRunGenerateCoreExpression }
+                          ? { label: '生成核心表达', onClick: props.onRunGenerateCoreExpression }
                       : t.id === 'task:episode:sceneList'
-                        ? { label: '执行', onClick: props.onRunGenerateSceneList }
+                            ? { label: '生成分镜表', onClick: props.onRunGenerateSceneList }
                         : t.id === 'task:episode:shotPrompt' || t.id === 'task:episode:dialogue'
-                          ? { label: '批量细化', onClick: props.onRunBatchRefineAll }
+                              ? { label: '一键细化', onClick: props.onRunBatchRefineAll }
                           : t.id === 'task:bible'
-                            ? { label: '前往', onClick: () => props.onGoToStep('global') }
+                                ? { label: '编辑圣经', onClick: () => props.onGoToStep('global') }
                             : t.id === 'task:worldView'
-                              ? { label: '前往', onClick: () => props.onGoToStep('global') }
+                                  ? { label: '编辑世界观', onClick: () => props.onGoToStep('global') }
                               : null;
 
               return (
                 <div
                   key={t.id}
-                  className="flex items-start justify-between gap-3 rounded-md border p-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5">{icon}</div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm font-medium">{t.title}</div>
-                        <Badge variant={issueLevelBadgeVariant(t.level)} className="h-5">
-                          {issueLevelLabel(t.level)}
+                      className={cn(
+                        "flex flex-col justify-between p-4 rounded-lg border transition-all hover:shadow-sm",
+                        isDone ? "bg-muted/30 opacity-60" : "bg-card hover:border-primary/30"
+                      )}
+                    >
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center justify-between">
+                          <Badge variant={isDone ? 'outline' : 'default'} className="text-[10px] h-5">
+                            {t.level === 'error' ? '必做' : t.level === 'warn' ? '推荐' : '可选'}
                         </Badge>
+                          {isDone && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                        </div>
+                        <h4 className="font-semibold text-sm">{t.title}</h4>
+                        <p className="text-xs text-muted-foreground line-clamp-2" title={t.description}>
+                          {t.description}
+                        </p>
                       </div>
-                      <div className="text-xs text-muted-foreground">{t.description}</div>
-                    </div>
-                  </div>
-                  <div className="shrink-0">
-                    {action && (
-                      <Button
-                        size="sm"
-                        variant={t.status === 'done' ? 'outline' : 'default'}
-                        onClick={action.onClick}
-                        disabled={t.status === 'blocked' || t.status === 'done'}
-                      >
-                        {action.label}
+                      {action && !isDone && (
+                        <Button size="sm" className="w-full text-xs" onClick={action.onClick} disabled={t.status === 'blocked'}>
+                          {action.label} <ArrowRight className="w-3 h-3 ml-1" />
                       </Button>
                     )}
-                  </div>
                 </div>
               );
             })}
           </div>
+            </CardContent>
         </Card>
-      </div>
 
-      <Card className="p-4 space-y-3">
+          {/* Quality Issues */}
+          <Card>
+            <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <div className="font-medium">质量检查</div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>阻塞 {grouped.error.length}</span>
-            <span>注意 {grouped.warn.length}</span>
-            <span>建议 {grouped.info.length}</span>
+                <CardTitle className="text-lg">质量检查</CardTitle>
+                {issues.length > 0 ? (
+                   <span className="text-sm text-destructive font-medium flex items-center gap-1">
+                     <AlertCircle className="w-4 h-4" />
+                     {issues.length} 个问题需要关注
+                   </span>
+                ) : (
+                   <span className="text-sm text-emerald-600 font-medium flex items-center gap-1">
+                     <CheckCircle2 className="w-4 h-4" />
+                     状态良好
+                   </span>
+                )}
           </div>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[200px] pr-4">
+                <div className="space-y-2">
+                  {issues.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full py-8 text-muted-foreground">
+                      <CheckCircle2 className="w-8 h-8 mb-2 opacity-20" />
+                      <p>未发现明显问题</p>
         </div>
-        <Separator />
-
-        {issues.length === 0 ? (
-          <div className="text-sm text-muted-foreground">暂无问题。</div>
-        ) : (
-          <div className="space-y-2">
-            {issues.map((i) => (
-              <div key={i.id} className="flex items-start gap-3 rounded-md border p-3">
-                <div className="mt-0.5">{issueIcon(i.level)}</div>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={issueLevelBadgeVariant(i.level)} className="h-5">
-                      {issueLevelLabel(i.level)}
-                    </Badge>
-                    <div className="text-sm font-medium">{i.title}</div>
-                  </div>
-                  {i.detail && <div className="text-xs text-muted-foreground">{i.detail}</div>}
+                  ) : (
+                    issues.map((i) => (
+                      <IssueItem
+                        key={i.id}
+                        issue={i}
+                        onAction={() => {
+                          if (i.scope.sceneId && props.onGoToScene && i.scope.episodeId) {
+                            props.onGoToScene(i.scope.episodeId, i.scope.sceneId);
+                          } else if (i.scope.episodeId) {
+                            props.onGoToStep('episode');
+                          } else if (i.scope.projectId) {
+                            props.onGoToStep('global');
+                          }
+                        }}
+                      />
+                    ))
+                  )}
                 </div>
-                <div className="shrink-0">
-                  {i.scope.sceneId ? (
-                    props.onGoToScene && i.scope.episodeId ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => props.onGoToScene!(i.scope.episodeId!, i.scope.sceneId!)}
-                      >
-                        打开详情
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => props.onGoToStep('episode')}
-                      >
-                        查看
-                      </Button>
-                    )
-                  ) : i.scope.episodeId ? (
-                    <Button size="sm" variant="outline" onClick={() => props.onGoToStep('episode')}>
-                      前往
-                    </Button>
-                  ) : i.scope.projectId ? (
-                    <Button size="sm" variant="outline" onClick={() => props.onGoToStep('global')}>
-                      前往
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+              </ScrollArea>
+            </CardContent>
+          </Card>
 
-      <Card className="p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="font-medium">跨集连续性报告</div>
-            <div className="text-xs text-muted-foreground">
-              手动拉取所有剧集分镜，检查地点/角色出场/资产引用/命名一致性（避免测试环境自动请求）。
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {continuityReport ? (
-              <div className="text-xs text-muted-foreground">
-                生成于 {new Date(continuityReport.generatedAt).toLocaleString('zh-CN')}
-              </div>
-            ) : null}
+          {/* Continuity Report (Collapsible/Detailed) */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">一致性报告</CardTitle>
+                  <CardDescription className="mt-1">
+                    检查跨集角色、道具、场景的一致性
+                  </CardDescription>
+                </div>
             <Button
+                  variant="secondary"
               size="sm"
-              variant="outline"
               onClick={() => void handleBuildContinuityReport()}
               disabled={!project || episodes.length === 0 || isContinuityLoading}
-              className="gap-2"
-            >
-              {isContinuityLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span>{continuityReport ? '重新生成' : '生成报告'}</span>
+                >
+                  {isContinuityLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                  生成报告
             </Button>
-          </div>
-        </div>
-        <Separator />
-
-        {episodes.length === 0 ? (
-          <div className="text-sm text-muted-foreground">暂无 Episode，无需生成报告。</div>
-        ) : continuityError ? (
-          <div className="text-sm text-destructive">{continuityError}</div>
-        ) : !continuityReport ? (
-          <div className="text-sm text-muted-foreground">
-            点击“生成报告”，将检查每格分镜的地点绑定与角色出场，输出跨集一致性问题清单。
-          </div>
-        ) : continuityReport.issues.length === 0 ? (
-          <div className="text-sm text-muted-foreground">未发现跨集连续性问题。</div>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-              <div className="flex flex-wrap items-center gap-3">
-                <span>集数 {continuityReport.episodeCount}</span>
-                <span>格数 {continuityReport.panelCount}</span>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <span>阻塞 {continuityReport.issueCounts.error}</span>
-                <span>注意 {continuityReport.issueCounts.warn}</span>
-                <span>建议 {continuityReport.issueCounts.info}</span>
+            </CardHeader>
+            {continuityReport && (
+              <CardContent className="space-y-6">
+                {/* Report Stats */}
+                <div className="flex gap-4 p-4 bg-muted/30 rounded-lg">
+                   <div className="text-center px-4 border-r">
+                      <div className="text-2xl font-bold">{continuityReport.episodeCount}</div>
+                      <div className="text-xs text-muted-foreground uppercase">Episodes</div>
               </div>
+                   <div className="text-center px-4 border-r">
+                      <div className="text-2xl font-bold">{continuityReport.issueCounts.error}</div>
+                      <div className="text-xs text-destructive font-bold uppercase">Errors</div>
+            </div>
+                   <div className="text-center px-4">
+                      <div className="text-2xl font-bold text-amber-600">{continuityReport.issueCounts.warn}</div>
+                      <div className="text-xs text-amber-600 font-bold uppercase">Warnings</div>
+                  </div>
             </div>
 
-            <div className="grid gap-2 md:grid-cols-2">
-              {continuityReport.byEpisode.map((ep) => (
-                <div key={ep.episodeId} className="rounded-md border p-3 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium">
-                      第 {ep.order} 集{ep.title ? `：${ep.title}` : ''}
-                    </div>
-                    <Badge variant="outline" className="h-5">
-                      {ep.panelCount} 格
-                    </Badge>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                    <div>缺地点：{ep.missingLocationCount}</div>
-                    <div>坏地点引用：{ep.unknownLocationRefCount}</div>
-                    <div>未勾选出场：{ep.missingCharactersPresentCount}</div>
-                    <div>
-                      未知角色/命名：
-                      {ep.unknownCharacterIdCount + ep.unknownDialogueCharacterNameCount}
-                    </div>
-                    <div>缺场景图：{ep.missingSceneRefCount}</div>
-                    <div>缺角色图：{ep.missingCharacterRefCount}</div>
-                    <div>时间跳变：{ep.timeOfDayJumpCount}</div>
-                    <div>道具数：{ep.uniquePropCount}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-2">
-              <div className="rounded-md border p-3 space-y-2">
-                <div className="text-sm font-medium">角色出场统计（Top 12）</div>
-                {continuityReport.characterStats.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">（暂无统计数据）</div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {continuityReport.characterStats.slice(0, 12).map((c) => (
-                      <Badge key={c.characterId} variant="secondary" className="h-5">
-                        {c.name} · {c.totalPanelCount} 格
-                      </Badge>
-                    ))}
+                {/* Report Details List */}
+                <div className="space-y-4">
+                   {continuityReport.issues.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-4">完美！未发现一致性问题。</p>
+                   ) : (
+                      <div className="space-y-2">
+                         {continuityReport.issues.slice(0, 5).map(i => (
+                            <IssueItem 
+                              key={i.id} 
+                              issue={i} 
+                              onAction={() => {
+                                if (i.scope.sceneId && props.onGoToScene && i.scope.episodeId) {
+                                  props.onGoToScene(i.scope.episodeId, i.scope.sceneId);
+                                }
+                              }}
+                            />
+                         ))}
+                         {continuityReport.issues.length > 5 && (
+                            <p className="text-center text-xs text-muted-foreground pt-2">
+                               还有 {continuityReport.issues.length - 5} 个问题...
+                            </p>
+                         )}
                   </div>
                 )}
-                <div className="text-xs text-muted-foreground">
-                  提示：对白统计按“台词行”计数；出场统计按“出现的格”计数。
                 </div>
-              </div>
+              </CardContent>
+            )}
+          </Card>
 
-              <div className="rounded-md border p-3 space-y-2">
-                <div className="text-sm font-medium">道具统计（Top 12）</div>
-                {continuityReport.propStats.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">（尚未填写道具 props）</div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {continuityReport.propStats.slice(0, 12).map((p) => (
-                      <Badge key={p.prop} variant="outline" className="h-5">
-                        {p.prop} · {p.totalPanelCount} 格
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <div className="text-xs text-muted-foreground">
-                  建议对关键道具建立统一命名，方便跨集追踪与一致性检查。
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {continuityReport.issues.map((i) => (
-                <div key={i.id} className="flex items-start gap-3 rounded-md border p-3">
-                  <div className="mt-0.5">{issueIcon(i.level)}</div>
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={issueLevelBadgeVariant(i.level)} className="h-5">
-                        {issueLevelLabel(i.level)}
-                      </Badge>
-                      <div className="text-sm font-medium">{i.title}</div>
-                    </div>
-                    {i.detail && <div className="text-xs text-muted-foreground">{i.detail}</div>}
-                  </div>
-                  <div className="shrink-0">
-                    {i.scope.sceneId || i.scope.episodeId ? (
-                      props.onGoToScene && i.scope.sceneId && i.scope.episodeId ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => props.onGoToScene!(i.scope.episodeId!, i.scope.sceneId!)}
-                        >
-                          打开详情
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => props.onGoToStep('episode')}
-                        >
-                          前往
-                        </Button>
-                      )
-                    ) : null}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
-        )}
-      </Card>
     </div>
   );
 }

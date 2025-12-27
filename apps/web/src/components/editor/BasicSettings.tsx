@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useCustomStyleStore } from '@/stores/customStyleStore';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -53,6 +55,10 @@ import {
   Edit2,
   Trash2,
   Save,
+  BookOpen,
+  Lightbulb,
+  History,
+  Wand2,
 } from 'lucide-react';
 import { WorldViewBuilder } from './WorldViewBuilder';
 import { CharacterManager } from './CharacterManager';
@@ -140,6 +146,7 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
       });
       setStyleConfig(getInitialStyleConfig());
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.id]);
 
   const minSummaryLength = props.minSummaryLength ?? 50;
@@ -377,402 +384,335 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="p-8">
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold mb-2">基础设定</h2>
-            <p className="text-sm text-muted-foreground">
-              输入剧本梗概、选择画风、描述主角,为AI生成分镜做准备
-            </p>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-            <Sparkles className="h-3 w-3" />
-            <span>AI辅助创作</span>
-          </div>
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">全局设定</h1>
+          <p className="text-muted-foreground mt-2 text-lg">
+            定义故事的核心基调、世界观与主要角色，为智能创作注入灵魂。
+          </p>
         </div>
+        <div className="flex flex-col items-end gap-3">
+           <div className="flex items-center gap-3">
+             {/* Status Indicator */}
+             <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors", 
+                 canProceed ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" : "bg-muted text-muted-foreground border-border")}>
+                 {canProceed ? <Check className="w-4 h-4" /> : <Wand2 className="w-4 h-4" />}
+                 {canProceed ? "准备就绪" : "待完善"}
+             </div>
+             
+             {/* Main Action Button */}
+             <Button 
+                size="default" 
+                className={cn("font-semibold shadow-md transition-all", canProceed ? "shadow-primary/25 hover:shadow-primary/40" : "")} 
+                onClick={handleProceed} 
+                disabled={!canProceed}
+             >
+                 {props.proceedText ?? '确认并生成分镜'} <ArrowRight className="ml-2 w-4 h-4" />
+             </Button>
+           </div>
+           
+           {/* Save Status Line */}
+           <div className="flex items-center gap-3 text-xs text-muted-foreground">
+               <span className="flex items-center gap-1.5">
+                   <span className={cn("w-1.5 h-1.5 rounded-full transition-colors", hasDraftChanges ? "bg-amber-500 animate-pulse" : "bg-green-500")} />
+                   {hasDraftChanges ? '未保存修改' : '已保存'}
+               </span>
+               <span className="text-border/50">|</span>
+               <button 
+                  className="hover:text-primary transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" 
+                  onClick={handleSaveDraft} 
+                  disabled={!hasDraftChanges}
+               >
+                    <Save className="w-3 h-3" /> 手动保存
+               </button>
+               {lastSavedAt && (
+                   <>
+                       <span className="text-border/50">|</span>
+                       <span className="flex items-center gap-1 opacity-70">
+                         <History className="w-3 h-3" /> {lastSavedAt}
+                       </span>
+                   </>
+               )}
+           </div>
+        </div>
+      </div>
 
-        {/* Tabs结构：基本信息/世界观/角色 */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="basic" className="gap-2">
-              <Sparkles className="h-4 w-4" />
-              基本信息
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <div className="bg-muted/30 p-1.5 rounded-xl border inline-flex">
+          <TabsList className="bg-transparent h-10 w-full justify-start p-0">
+            <TabsTrigger 
+              value="basic" 
+              className="px-6 h-10 rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
+            >
+              <Wand2 className="w-4 h-4 mr-2" /> 基础信息
             </TabsTrigger>
-            <TabsTrigger value="worldview" className="gap-2">
-              <Globe className="h-4 w-4" />
-              世界观 (可选)
+            <TabsTrigger 
+              value="worldview" 
+              className="px-6 h-10 rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
+            >
+              <Globe className="w-4 h-4 mr-2" /> 世界观
             </TabsTrigger>
-            <TabsTrigger value="characters" className="gap-2">
-              <Users className="h-4 w-4" />
-              角色 (可选)
+            <TabsTrigger 
+              value="characters" 
+              className="px-6 h-10 rounded-lg data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
+            >
+              <Users className="w-4 h-4 mr-2" /> 角色管理
             </TabsTrigger>
           </TabsList>
+        </div>
 
-          {/* 基本信息Tab */}
-          <TabsContent value="basic">
-            {/* 剧本输入 */}
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="summary" className="text-base font-semibold">
-                  剧本梗概 *
-                </Label>
-                <p className="text-sm text-muted-foreground mb-2">
-                  简述故事情节、冲突、转折点(建议{minSummaryLength}-{maxSummaryLength}字)
-                </p>
-                <Textarea
-                  id="summary"
-                  placeholder="示例: 在未来都市,黑客少女发现了政府隐藏的真相。她潜入数据中心,解开层层加密,最终揭露了控制人类意识的阴谋。在追击中,她必须在信任同伴与独自逃亡之间做出抉择..."
-                  value={formData.summary}
-                  onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
-                  className="min-h-[180px] resize-none"
-                />
-                <div className="flex justify-between items-center">
-                  <p className="text-xs text-muted-foreground">
-                    {formData.summary.length < minSummaryLength && (
-                      <span className="text-yellow-500">
-                        还需 {minSummaryLength - formData.summary.length} 字
-                      </span>
-                    )}
-                    {formData.summary.length >= minSummaryLength &&
-                      formData.summary.length < maxSummaryLength && (
-                        <span className="text-green-500">✓ 长度合适</span>
-                      )}
-                    {formData.summary.length >= maxSummaryLength && (
-                      <span className="text-orange-500">建议精简至{maxSummaryLength}字以内</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formData.summary.length} / {maxSummaryLength}
-                  </p>
-                </div>
-              </div>
-
-              {/* 风格选择 - 重构版 */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="style" className="text-base font-semibold">
-                    画风选择 *
+        <TabsContent value="basic" className="space-y-8 focus-visible:outline-none">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            {/* Left Column: Input Forms */}
+            <div className="lg:col-span-8 space-y-8">
+              
+              {/* Story Synopsis Section */}
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="summary" className="text-xl font-semibold flex items-center gap-2 text-foreground">
+                    <BookOpen className="w-5 h-5 text-primary" /> 剧本梗概
                   </Label>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    选择预设画风，或创建自定义画风
-                  </p>
-                  <div className="flex gap-2">
-                    <Select value={styleConfig.presetId} onValueChange={handlePresetChange}>
-                      <SelectTrigger id="style" className="h-12 flex-1">
-                        <SelectValue placeholder="选择画风预设..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {/* 内置预设 */}
-                        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                          内置预设
-                        </div>
-                        {ART_STYLE_PRESETS.map((preset) => (
-                          <SelectItem key={preset.id} value={preset.id}>
-                            <div className="flex flex-col items-start py-1">
-                              <span className="font-medium">{preset.label}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {preset.description}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                        {/* 自定义画风 */}
-                        {customStyles.length > 0 && (
-                          <>
-                            <div className="h-px bg-border my-1" />
-                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground flex items-center justify-between">
-                              <span>我的自定义画风</span>
-                              <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                                {customStyles.length}
-                              </span>
-                            </div>
-                            {customStyles.map((style) => (
-                              <SelectItem key={style.id} value={style.id}>
-                                <div className="flex flex-col items-start py-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium">{style.name}</span>
-                                    <span className="text-xs bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded">
-                                      自定义
-                                    </span>
-                                  </div>
-                                  <span className="text-xs text-muted-foreground">
-                                    {style.description}
-                                  </span>
-                                </div>
+                  <span className={cn(
+                    "text-xs px-2 py-0.5 rounded-full border",
+                    formData.summary.length >= minSummaryLength && formData.summary.length <= maxSummaryLength
+                      ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
+                      : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800"
+                  )}>
+                    {formData.summary.length} / {maxSummaryLength}
+                  </span>
+                </div>
+                
+                <Card className="border-muted shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden group">
+                  <CardContent className="p-0">
+                    <Textarea
+                      id="summary"
+                      placeholder="示例: 在未来都市,黑客少女发现了政府隐藏的真相。她潜入数据中心,解开层层加密,最终揭露了控制人类意识的阴谋。在追击中,她必须在信任同伴与独自逃亡之间做出抉择..."
+                      value={formData.summary}
+                      onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+                      className="min-h-[180px] border-0 focus-visible:ring-0 resize-none p-6 text-base leading-relaxed bg-background group-hover:bg-accent/5 transition-colors"
+                    />
+                  </CardContent>
+                  <div className="border-t bg-muted/20 px-4 py-2 flex justify-between items-center text-xs">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>AI 将基于此生成初步的场景规划</span>
+                    </div>
+                    {formData.summary.length < minSummaryLength && (
+                       <span className="text-amber-600 font-medium">还需 {minSummaryLength - formData.summary.length} 字</span>
+                    )}
+                  </div>
+                </Card>
+              </section>
+
+              {/* Art Style Section */}
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="style" className="text-xl font-semibold flex items-center gap-2 text-foreground">
+                    <Palette className="w-5 h-5 text-primary" /> 美术风格
+                  </Label>
+                </div>
+                
+                <Card className="border-muted shadow-sm">
+                  <CardContent className="p-6 space-y-6">
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <div className="flex-1">
+                        <Label className="text-sm text-muted-foreground mb-2 block">选择画风预设</Label>
+                        <Select value={styleConfig.presetId} onValueChange={handlePresetChange}>
+                          <SelectTrigger id="style" className="h-12 w-full text-base">
+                            <SelectValue placeholder="选择画风预设..." />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[300px]">
+                            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">内置预设</div>
+                            {ART_STYLE_PRESETS.map((preset) => (
+                              <SelectItem key={preset.id} value={preset.id}>
+                                <span className="font-medium">{preset.label}</span>
+                                <span className="ml-2 text-muted-foreground text-xs">- {preset.description}</span>
                               </SelectItem>
                             ))}
-                          </>
-                        )}
-                        {/* 当前臨时自定义 */}
-                        {styleConfig.presetId === 'custom' && (
-                          <>
+                            {customStyles.length > 0 && (
+                              <>
+                                <div className="h-px bg-border my-1" />
+                                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">自定义画风</div>
+                                {customStyles.map((style) => (
+                                  <SelectItem key={style.id} value={style.id}>{style.name}</SelectItem>
+                                ))}
+                              </>
+                            )}
                             <div className="h-px bg-border my-1" />
-                            <SelectItem value="custom">
-                              <div className="flex flex-col items-start py-1">
-                                <span className="font-medium">当前自定义配置</span>
-                                <span className="text-xs text-muted-foreground">未保存的修改</span>
-                              </div>
-                            </SelectItem>
+                            <SelectItem value="custom" className="text-primary font-medium">✨ 当前自定义配置</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="flex items-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-12 w-12 shrink-0"
+                          onClick={handleOpenCreateDialog}
+                          title="创建新画风"
+                        >
+                          <Plus className="h-5 w-5" />
+                        </Button>
+                        
+                        {isCustomStyleId(styleConfig.presetId) && (
+                          <>
+                            <Button variant="outline" size="icon" className="h-12 w-12 shrink-0" onClick={() => {
+                                const style = getCustomStyleById(styleConfig.presetId);
+                                if (style) handleOpenEditDialog(style);
+                            }} title="编辑画风">
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="icon" className="h-12 w-12 shrink-0 text-destructive hover:text-destructive" onClick={() => {
+                                setStyleToDelete(styleConfig.presetId);
+                                setDeleteConfirmOpen(true);
+                            }} title="删除画风">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </>
                         )}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-12 w-12"
-                      onClick={handleOpenCreateDialog}
-                      title="创建自定义画风"
-                    >
-                      <Plus className="h-5 w-5" />
-                    </Button>
-                  </div>
-
-                  {/* 当前选中自定义画风时显示编辑/删除按钮 */}
-                  {isCustomStyleId(styleConfig.presetId) && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 gap-1.5"
-                        onClick={() => {
-                          const style = getCustomStyleById(styleConfig.presetId);
-                          if (style) handleOpenEditDialog(style);
-                        }}
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                        编辑画风
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 gap-1.5 text-destructive hover:text-destructive"
-                        onClick={() => {
-                          setStyleToDelete(styleConfig.presetId);
-                          setDeleteConfirmOpen(true);
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        删除
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* 当前为临时自定义时显示保存按钮 */}
-                  {styleConfig.presetId === 'custom' && (
-                    <div className="mt-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 gap-1.5 text-primary"
-                        onClick={handleSaveCurrentAsCustom}
-                      >
-                        <Save className="h-3.5 w-3.5" />
-                        保存为自定义画风
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {/* 画风细节调整区 - 可展开 */}
-                <Accordion type="single" collapsible className="border rounded-lg">
-                  <AccordionItem value="style-details" className="border-0">
-                    <AccordionTrigger className="px-4 hover:no-underline">
-                      <div className="flex items-center gap-2">
-                        <Palette className="h-4 w-4 text-primary" />
-                        <span className="text-sm font-medium">画风细节调整</span>
+                        
                         {styleConfig.presetId === 'custom' && (
-                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                            已自定义
-                          </span>
+                           <Button variant="outline" className="h-12 gap-2 text-primary border-primary/20 bg-primary/5" onClick={handleSaveCurrentAsCustom}>
+                              <Save className="h-4 w-4" /> 保存预设
+                           </Button>
                         )}
                       </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-4">
-                      {/* 整体风格 */}
-                      <div className="space-y-2">
-                        <Label className="text-sm flex items-center gap-2">
-                          <Layers className="h-3.5 w-3.5" />
-                          整体风格
-                        </Label>
-                        <Input
-                          value={styleConfig.baseStyle}
-                          onChange={(e) => handleStyleFieldChange('baseStyle', e.target.value)}
-                          placeholder="如: anime style, cel shaded, clean lineart"
-                          className="font-mono text-sm"
-                        />
-                      </div>
+                    </div>
 
-                      {/* 渲染技法 */}
-                      <div className="space-y-2">
-                        <Label className="text-sm flex items-center gap-2">
-                          <Brush className="h-3.5 w-3.5" />
-                          渲染技法
-                        </Label>
-                        <Input
-                          value={styleConfig.technique}
-                          onChange={(e) => handleStyleFieldChange('technique', e.target.value)}
-                          placeholder="如: heavy impasto brushstrokes, watercolor wash"
-                          className="font-mono text-sm"
-                        />
-                      </div>
+                    <Accordion type="single" collapsible className="border rounded-lg bg-muted/10">
+                      <AccordionItem value="style-details" className="border-0">
+                        <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/20 rounded-t-lg">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <Brush className="h-4 w-4 text-primary" />
+                            <span>高级参数微调</span>
+                            {styleConfig.presetId === 'custom' && (
+                              <Badge variant="outline" className="ml-2 text-[10px] h-5">已修改</Badge>
+                            )}
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-4 pt-2 space-y-4">
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground flex items-center gap-1"><Layers className="h-3 w-3" /> 整体风格</Label>
+                                <Input value={styleConfig.baseStyle} onChange={(e) => handleStyleFieldChange('baseStyle', e.target.value)} className="h-9 font-mono text-xs" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground flex items-center gap-1"><Brush className="h-3 w-3" /> 渲染技法</Label>
+                                <Input value={styleConfig.technique} onChange={(e) => handleStyleFieldChange('technique', e.target.value)} className="h-9 font-mono text-xs" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground flex items-center gap-1"><Palette className="h-3 w-3" /> 色彩倾向</Label>
+                                <Input value={styleConfig.colorPalette} onChange={(e) => handleStyleFieldChange('colorPalette', e.target.value)} className="h-9 font-mono text-xs" />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> 文化/时代</Label>
+                                <Input value={styleConfig.culturalFeature} onChange={(e) => handleStyleFieldChange('culturalFeature', e.target.value)} className="h-9 font-mono text-xs" />
+                              </div>
+                           </div>
+                           
+                           <div className="mt-2 pt-2 border-t border-dashed">
+                             <div className="flex items-center justify-between mb-1.5">
+                               <Label className="text-xs font-medium">Prompt Preview</Label>
+                               <Button variant="ghost" size="sm" className="h-6 text-xs gap-1" onClick={handleCopyFullPrompt}>
+                                 {copiedPrompt ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                 {copiedPrompt ? '已复制' : '复制'}
+                               </Button>
+                             </div>
+                             <div className="bg-muted p-2 rounded text-xs font-mono text-muted-foreground break-all leading-relaxed">
+                               {styleConfig.fullPrompt}
+                             </div>
+                           </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  </CardContent>
+                </Card>
+              </section>
 
-                      {/* 色彩倾向 */}
-                      <div className="space-y-2">
-                        <Label className="text-sm flex items-center gap-2">
-                          <Palette className="h-3.5 w-3.5" />
-                          色彩倾向
-                        </Label>
-                        <Input
-                          value={styleConfig.colorPalette}
-                          onChange={(e) => handleStyleFieldChange('colorPalette', e.target.value)}
-                          placeholder="如: vibrant saturated colors, high contrast"
-                          className="font-mono text-sm"
-                        />
-                      </div>
-
-                      {/* 文化/时代特征 */}
-                      <div className="space-y-2">
-                        <Label className="text-sm flex items-center gap-2">
-                          <MapPin className="h-3.5 w-3.5" />
-                          文化/时代特征
-                        </Label>
-                        <Input
-                          value={styleConfig.culturalFeature}
-                          onChange={(e) =>
-                            handleStyleFieldChange('culturalFeature', e.target.value)
-                          }
-                          placeholder="如: Oriental aesthetics, Victorian era"
-                          className="font-mono text-sm"
-                        />
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-
-                {/* 完整提示词预览 */}
-                <div className="p-4 rounded-lg bg-muted/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">完整画风提示词 (Full Prompt)</Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCopyFullPrompt}
-                      className="h-7 gap-1.5"
-                    >
-                      {copiedPrompt ? (
-                        <>
-                          <Check className="h-3.5 w-3.5" />
-                          已复制
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" />
-                          复制
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground font-mono leading-relaxed break-all">
-                    {styleConfig.fullPrompt}
-                  </p>
-                </div>
-              </div>
-
-              {/* 主角描述 */}
-              <div className="space-y-2">
-                <Label htmlFor="protagonist" className="text-base font-semibold">
-                  主角描述 *
-                </Label>
-                <p className="text-sm text-muted-foreground mb-2">
-                  描述主角的外貌特征、服装、性格(建议{minProtagonistLength}-{maxProtagonistLength}
-                  字)
-                </p>
-                <Textarea
-                  id="protagonist"
-                  placeholder="示例: 18岁少女,银色短发,紫色赛博义眼。穿黑色机能夹克、破洞牛仔裤、高帮军靴。性格冷静理智但内心孤独,精通编程和黑客技术,右臂有发光电路纹身..."
-                  value={formData.protagonist}
-                  onChange={(e) => setFormData({ ...formData, protagonist: e.target.value })}
-                  className="min-h-[140px] resize-none"
-                />
-                <div className="flex justify-between items-center">
-                  <p className="text-xs text-muted-foreground">
-                    {formData.protagonist.length < minProtagonistLength && (
-                      <span className="text-yellow-500">
-                        还需 {minProtagonistLength - formData.protagonist.length} 字
-                      </span>
-                    )}
-                    {formData.protagonist.length >= minProtagonistLength && (
-                      <span className="text-green-500">✓ 描述充分</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
+              {/* Character Description Section */}
+              <section className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="protagonist" className="text-xl font-semibold flex items-center gap-2 text-foreground">
+                    <Users className="w-5 h-5 text-primary" /> 主角描述
+                  </Label>
+                  <span className={cn(
+                    "text-xs px-2 py-0.5 rounded-full border",
+                    formData.protagonist.length >= minProtagonistLength && formData.protagonist.length <= maxProtagonistLength
+                      ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
+                      : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800"
+                  )}>
                     {formData.protagonist.length} / {maxProtagonistLength}
-                  </p>
+                  </span>
                 </div>
-              </div>
+                
+                <Card className="border-muted shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden group">
+                  <CardContent className="p-0">
+                    <Textarea
+                      id="protagonist"
+                      placeholder="示例: 18岁少女,银色短发,紫色赛博义眼。穿黑色机能夹克、破洞牛仔裤、高帮军靴。性格冷静理智但内心孤独,精通编程和黑客技术,右臂有发光电路纹身..."
+                      value={formData.protagonist}
+                      onChange={(e) => setFormData({ ...formData, protagonist: e.target.value })}
+                      className="min-h-[140px] border-0 focus-visible:ring-0 resize-none p-6 text-base leading-relaxed bg-background group-hover:bg-accent/5 transition-colors"
+                    />
+                  </CardContent>
+                  <div className="border-t bg-muted/20 px-4 py-2 flex justify-between items-center text-xs">
+                     <div className="flex items-center gap-2 text-muted-foreground">
+                       <Users className="w-3.5 h-3.5" />
+                       <span>描述越具体，角色形象越稳定</span>
+                     </div>
+                     {formData.protagonist.length < minProtagonistLength && (
+                       <span className="text-amber-600 font-medium">还需 {minProtagonistLength - formData.protagonist.length} 字</span>
+                    )}
+                  </div>
+                </Card>
+              </section>
+
             </div>
 
-            {/* 操作按钮 */}
-            <div className="flex items-center justify-between mt-8 pt-6 border-t">
-              <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={handleSaveDraft} disabled={!hasDraftChanges}>
-                  保存草稿
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  {lastSavedAt ? `已保存 ${lastSavedAt}` : '支持自动保存'}
-                </span>
+            {/* Right Column: Sidebar (Sticky) */}
+            <div className="lg:col-span-4 space-y-6">
+              <div className="sticky top-6 space-y-6">
+                
+                {/* Guidelines Card */}
+                <Card className="border-muted/60 shadow-sm">
+                   <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                         <Lightbulb className="w-4 h-4 text-amber-500" /> 创作小贴士
+                      </CardTitle>
+                   </CardHeader>
+                   <CardContent className="text-sm text-muted-foreground space-y-3 pl-4">
+                      <div className="relative pl-4 border-l-2 border-primary/20">
+                         <p className="font-medium text-foreground text-xs mb-0.5">剧本梗概</p>
+                         <p className="text-xs leading-relaxed">包含起因、发展、高潮、结局的基本框架。冲突越明确，AI生成的场景越有张力。</p>
+                      </div>
+                      <div className="relative pl-4 border-l-2 border-primary/20">
+                         <p className="font-medium text-foreground text-xs mb-0.5">画风选择</p>
+                         <p className="text-xs leading-relaxed">画风决定了视觉基调。推荐使用"自定义画风"来固定角色的特定配色方案。</p>
+                      </div>
+                      <div className="relative pl-4 border-l-2 border-primary/20">
+                         <p className="font-medium text-foreground text-xs mb-0.5">一致性原则</p>
+                         <p className="text-xs leading-relaxed">此处的所有描述将被提取为"项目上下文"，贯穿整个创作流程，请务必准确。</p>
+                      </div>
+                   </CardContent>
+                </Card>
+
               </div>
-              <Button onClick={handleProceed} disabled={!canProceed} className="gap-2">
-                <span>{props.proceedText ?? '确认并生成分镜'}</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
             </div>
+          </div>
+        </TabsContent>
 
-            {/* 提示信息 */}
-            {!canProceed && (
-              <div className="mt-4 p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                  💡 请完整填写所有必填项(标注*)后才能进入下一步
-                </p>
-              </div>
-            )}
-          </TabsContent>
+        <TabsContent value="worldview" className="mt-0">
+          <WorldViewBuilder />
+        </TabsContent>
 
-          {/* 世界观Tab */}
-          <TabsContent value="worldview">
-            <WorldViewBuilder />
-          </TabsContent>
-
-          {/* 角色Tab */}
-          <TabsContent value="characters">
-            <CharacterManager projectId={currentProject.id} />
-          </TabsContent>
-        </Tabs>
-      </Card>
-
-      {/* 示例参考卡片 */}
-      <Card className="p-6 bg-muted/30">
-        <h3 className="font-semibold mb-3 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span>填写建议</span>
-        </h3>
-        <ul className="space-y-2 text-sm text-muted-foreground">
-          <li>
-            • <strong>剧本梗概</strong>: 包含起因、发展、高潮、结局的基本框架
-          </li>
-          <li>
-            • <strong>画风选择</strong>: 考虑故事题材和目标受众
-          </li>
-          <li>
-            • <strong>主角描述</strong>: 越具体越好,包括视觉特征和性格标签
-          </li>
-          <li>
-            • <strong>一致性原则</strong>: 所有描述将被提取为"项目上下文",贯穿整个创作流程
-          </li>
-        </ul>
-      </Card>
+        <TabsContent value="characters" className="mt-0">
+          <CharacterManager projectId={currentProject.id} />
+        </TabsContent>
+      </Tabs>
 
       {/* 自定义画风创建/编辑对话框 */}
       <Dialog open={showCustomStyleDialog} onOpenChange={setShowCustomStyleDialog}>
@@ -805,9 +745,9 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
+              <Label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Layers className="h-3.5 w-3.5" />
-                整体风格
+                整体风格 (Base Style)
               </Label>
               <Input
                 value={customStyleForm.baseStyle}
@@ -820,9 +760,9 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
+              <Label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Brush className="h-3.5 w-3.5" />
-                渲染技法
+                渲染技法 (Technique)
               </Label>
               <Input
                 value={customStyleForm.technique}
@@ -835,9 +775,9 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
+              <Label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Palette className="h-3.5 w-3.5" />
-                色彩倾向
+                色彩倾向 (Palette)
               </Label>
               <Input
                 value={customStyleForm.colorPalette}
@@ -850,9 +790,9 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
+              <Label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5" />
-                文化/时代特征
+                文化/时代 (Culture/Era)
               </Label>
               <Input
                 value={customStyleForm.culturalFeature}
@@ -865,9 +805,9 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
             </div>
 
             {/* 预览合成的提示词 */}
-            <div className="p-3 rounded-lg bg-muted/50">
-              <Label className="text-xs text-muted-foreground">合成提示词预览</Label>
-              <p className="text-xs font-mono mt-1 break-all">
+            <div className="p-3 rounded-lg bg-muted/50 border border-dashed">
+              <Label className="text-xs text-muted-foreground block mb-1">合成提示词预览</Label>
+              <p className="text-xs font-mono text-muted-foreground break-all leading-tight">
                 {composeStyleFullPrompt({
                   baseStyle: customStyleForm.baseStyle,
                   technique: customStyleForm.technique,

@@ -29,29 +29,83 @@ function ProjectCardComponent({
   onRename,
   index = 0,
 }: ProjectCardProps) {
-  // 使用 useMemo 缓存进度计算
+  // 更细致的进度计算：结合工作流状态和实际完成数据
   const progressPercentage = useMemo(() => {
-    switch (project.workflowState) {
-      case 'IDLE':
-      case 'DATA_COLLECTING':
-        return 10;
-      case 'DATA_COLLECTED':
-        return 25;
-      case 'SCENE_LIST_GENERATING':
-      case 'SCENE_LIST_EDITING':
-        return 40;
-      case 'SCENE_LIST_CONFIRMED':
-        return 50;
-      case 'SCENE_PROCESSING':
-        return 75;
-      case 'ALL_SCENES_COMPLETE':
-        return 90;
-      case 'EXPORTING':
-        return 100;
-      default:
-        return 0;
+    const stats = (project as Project & { _stats?: {
+      episodeCount: number;
+      episodesWithCoreExpression: number;
+      sceneCount: number;
+      scenesCompleted: number;
+    } })._stats;
+
+    // 基础进度（基于工作流状态）
+    const getBaseProgress = (): { min: number; max: number } => {
+      switch (project.workflowState) {
+        case 'IDLE':
+          return { min: 0, max: 5 };
+        case 'DATA_COLLECTING':
+          return { min: 5, max: 10 };
+        case 'DATA_COLLECTED':
+          return { min: 10, max: 15 };
+        case 'WORLD_VIEW_BUILDING':
+          return { min: 15, max: 20 };
+        case 'CHARACTER_MANAGING':
+          return { min: 20, max: 25 };
+        case 'EPISODE_PLANNING':
+          return { min: 25, max: 35 };
+        case 'EPISODE_PLAN_EDITING':
+          return { min: 35, max: 45 };
+        case 'EPISODE_CREATING':
+          return { min: 45, max: 60 };
+        case 'SCENE_LIST_GENERATING':
+          return { min: 60, max: 65 };
+        case 'SCENE_LIST_EDITING':
+          return { min: 65, max: 75 };
+        case 'SCENE_LIST_CONFIRMED':
+          return { min: 75, max: 80 };
+        case 'SCENE_PROCESSING':
+          return { min: 80, max: 95 };
+        case 'ALL_SCENES_COMPLETE':
+        case 'ALL_EPISODES_COMPLETE':
+          return { min: 95, max: 98 };
+        case 'EXPORTING':
+          return { min: 98, max: 100 };
+        default:
+          return { min: 0, max: 5 };
+      }
+    };
+
+    const { min, max } = getBaseProgress();
+
+    // 如果有统计数据，在当前状态范围内进行细化
+    if (stats) {
+      const range = max - min;
+      let subProgress = 0;
+
+      // 根据不同阶段计算子进度
+      if (project.workflowState === 'EPISODE_PLAN_EDITING' || project.workflowState === 'EPISODE_PLANNING') {
+        // 剧集规划阶段：按核心表达完成率
+        if (stats.episodeCount > 0) {
+          subProgress = stats.episodesWithCoreExpression / stats.episodeCount;
+        }
+      } else if (project.workflowState === 'EPISODE_CREATING' || 
+                 project.workflowState === 'SCENE_LIST_EDITING' ||
+                 project.workflowState === 'SCENE_PROCESSING') {
+        // 创作阶段：按分镜完成率
+        if (stats.sceneCount > 0) {
+          subProgress = stats.scenesCompleted / stats.sceneCount;
+        }
+      } else {
+        // 其他阶段：取中间值
+        subProgress = 0.5;
+      }
+
+      return Math.round(min + range * subProgress);
     }
-  }, [project.workflowState]);
+
+    // 无统计数据时，取状态范围的中间值
+    return Math.round((min + max) / 2);
+  }, [project]);
 
   // 使用 useMemo 缓存日期格式化
   const formattedDate = useMemo(() => {

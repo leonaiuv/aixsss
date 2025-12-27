@@ -45,7 +45,8 @@ import {
   parseKeyframePromptText,
   parseMotionPromptText,
 } from '@/lib/ai/promptParsers';
-import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -64,6 +65,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { WorkflowStepper } from './WorkflowStepper';
 import { BasicSettings } from './BasicSettings';
 import { SceneSortable } from './SceneSortable';
 import { StatisticsPanel } from './StatisticsPanel';
@@ -73,7 +75,6 @@ import { WorkflowWorkbench } from './WorkflowWorkbench';
 import { PanelScriptEditor } from './PanelScriptEditor';
 import {
   CheckCircle2,
-  Circle,
   Sparkles,
   Loader2,
   RefreshCw,
@@ -92,6 +93,13 @@ import {
   Brain,
   Layers,
   XCircle,
+  AlertTriangle,
+  AlertCircle,
+  Clock,
+  ArrowRight,
+  Network,
+  Clapperboard,
+  LayoutGrid,
 } from 'lucide-react';
 
 type WorkflowStep = 'workbench' | 'global' | 'causal' | 'plan' | 'episode' | 'export';
@@ -262,7 +270,6 @@ export function EpisodeWorkflow() {
     isLoading: isEpisodesLoading,
     isRunningWorkflow,
     error: episodeError,
-    lastJobId,
     lastJobProgress,
     loadEpisodes,
     setCurrentEpisode,
@@ -325,7 +332,7 @@ export function EpisodeWorkflow() {
   const [pendingDeleteEpisode, setPendingDeleteEpisode] = useState<Episode | null>(null);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [chainVersionCount, setChainVersionCount] = useState<number | null>(null);
-  const [hasChainUnversionedChanges, setHasChainUnversionedChanges] = useState(false);
+  const [, setHasChainUnversionedChanges] = useState(false);
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'markdown' | 'json'>('markdown');
@@ -370,7 +377,7 @@ export function EpisodeWorkflow() {
     batchGeneratingSource === 'episode_workflow' &&
     batchOperations.isProcessing;
 
-  const openBatchRefineDialog = () => {
+  const _openBatchRefineDialog = () => {
     setBatchRefineErrors({});
     setBatchRefineSelectedIds(recommendedBatchRefineIds);
     setBatchRefineDialogOpen(true);
@@ -514,7 +521,7 @@ export function EpisodeWorkflow() {
     currentProject?.contextCache?.narrativeCausalChainUpdatedAt,
   ]);
 
-  const steps: Array<{ id: WorkflowStep; name: string }> = [
+  const _steps: Array<{ id: WorkflowStep; name: string }> = [
     { id: 'workbench', name: '工作台' },
     { id: 'global', name: '全局设定' },
     { id: 'causal', name: '叙事因果链' },
@@ -1260,7 +1267,7 @@ ${safeJsonStringify(ep.coreExpression)}
     URL.revokeObjectURL(url);
   };
 
-  const getStepStatus = (step: WorkflowStep): 'completed' | 'current' | 'pending' => {
+  const _getStepStatus = (step: WorkflowStep): 'completed' | 'current' | 'pending' => {
     if (step === activeStep) return 'current';
     const order: WorkflowStep[] = ['workbench', 'global', 'causal', 'plan', 'episode', 'export'];
     return order.indexOf(step) < order.indexOf(activeStep) ? 'completed' : 'pending';
@@ -1308,212 +1315,176 @@ ${safeJsonStringify(ep.coreExpression)}
 
     // 分阶段信息
     const completedPhase = (narrative as { completedPhase?: number } | null)?.completedPhase ?? 0;
-    const validationStatus =
+    const _validationStatus =
       (narrative as { validationStatus?: string } | null)?.validationStatus ?? 'incomplete';
-    const outlineSummary =
-      (narrative as { outlineSummary?: string } | null)?.outlineSummary ?? null;
 
     return (
       <div className="space-y-6">
-        <Card className="p-6">
-          <div className="flex items-start justify-between gap-6">
-            <div className="space-y-2">
-              <h2 className="text-xl font-semibold">叙事因果链（分阶段生成）</h2>
-              <p className="text-sm text-muted-foreground">
-                将复杂的因果链拆分为 4 个阶段，每阶段专注一个模块，AI 输出更稳定。
-              </p>
-              <div className="flex flex-wrap gap-2 pt-2">
-                <Badge variant={summaryLen >= 100 ? 'default' : 'destructive'}>
-                  梗概 {summaryLen}/100
-                </Badge>
-                <Badge variant={hasStyle ? 'default' : 'destructive'}>
-                  画风 {hasStyle ? 'OK' : '缺失'}
-                </Badge>
-                <Badge variant={worldViewElements.length > 0 ? 'secondary' : 'outline'}>
-                  世界观 {worldViewElements.length}
-                </Badge>
-                <Badge variant={projectCharacters.length > 0 ? 'secondary' : 'outline'}>
-                  角色 {projectCharacters.length}
-                </Badge>
-                <Badge
-                  variant={
-                    completedPhase >= 4 ? 'default' : completedPhase > 0 ? 'secondary' : 'outline'
-                  }
-                >
-                  进度 {completedPhase}/4
-                </Badge>
-                {validationStatus === 'pass' ? (
-                  <Badge variant="default">✓ 自洽校验通过</Badge>
-                ) : validationStatus === 'needs_revision' ? (
-                  <Badge variant="destructive">需修订</Badge>
-                ) : null}
-              </div>
-              {missing.length > 0 ? (
-                <p className="text-sm text-destructive">缺少：{missing.join('、')}</p>
-              ) : null}
-              {updatedAt ? (
-                <p className="text-xs text-muted-foreground">
-                  最近更新：{new Date(updatedAt).toLocaleString('zh-CN')}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="w-full max-w-md space-y-3">
-              {/* 分阶段按钮 */}
-              <div className="grid grid-cols-2 gap-2">
-                {CAUSAL_CHAIN_PHASES.map((p) => {
-                  const isCompleted = completedPhase >= p.phase;
-                  const isNext = completedPhase === p.phase - 1;
-                  const isRunningThisPhase = runningPhase === p.phase;
-                  // 关键修复：任何阶段运行时禁用所有按钮（防止竞态条件）
-                  const isAnyPhaseRunning = runningPhase !== null || isRunningWorkflow;
-                  const canTrigger = canPlan && !isAnyPhaseRunning;
-                  const canRunMain = canTrigger && isNext;
-                  const canRerun = canTrigger && isCompleted;
-
-                  return (
-                    <div key={p.phase} className="flex w-full gap-2">
-                      <Button
-                        onClick={() => void handleCausalPhase(p.phase)}
-                        disabled={!canRunMain}
-                        variant={isCompleted ? 'secondary' : isNext ? 'default' : 'outline'}
-                        className={`flex-1 gap-1 text-xs h-auto py-2 ${isCompleted ? 'disabled:opacity-100' : ''}`}
-                      >
-                        {isRunningThisPhase ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : isCompleted ? (
-                          <span className="text-green-600">✓</span>
-                        ) : (
-                          <span className="opacity-50">{p.phase}</span>
-                        )}
-                        <span className="truncate">{p.name}</span>
-                      </Button>
-
-                      {/* 仅在“已完成阶段”后显示：独立的重新生成按钮（避免误点主按钮） */}
-                      {isCompleted ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={!canRerun}
-                          className="h-auto py-2 px-2 shrink-0"
-                          aria-label={`重新生成阶段 ${p.phase} ${p.name}`}
-                          onClick={() => {
-                            setPendingRerunPhase(p.phase);
-                            setRerunPhaseDialogOpen(true);
-                          }}
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                        </Button>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setNarrativeDialogOpen(true)}
-                  disabled={!currentProject?.id}
-                  className="flex-1"
-                  size="sm"
-                >
-                  编辑 JSON
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setVersionDialogOpen(true)}
-                  disabled={!currentProject?.id}
-                  className="flex-1 gap-2 relative"
-                  size="sm"
-                >
-                  {hasChainUnversionedChanges ? (
-                    <span
-                      className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-background"
-                      aria-label="有新变更未记录为版本"
-                      title="有新变更未记录为版本"
-                    />
-                  ) : null}
-                  <History className="h-4 w-4" />
-                  版本
-                  {typeof chainVersionCount === 'number' ? (
-                    <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1 text-[11px] font-medium rounded-full bg-muted text-foreground">
-                      {chainVersionCount}
-                    </span>
-                  ) : null}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => setActiveStep('plan')}
-                  disabled={completedPhase < 1}
-                  className="flex-1"
-                  size="sm"
-                >
-                  下一步
-                </Button>
-              </div>
-
-              {isRunningWorkflow ? (
-                <div className="pt-2 space-y-2">
-                  <Progress
-                    value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0}
-                  />
-                  <div className="text-xs text-muted-foreground">
-                    {lastJobProgress?.message || '排队中...'}
-                    {lastJobId ? ` · jobId=${lastJobId}` : null}
-                  </div>
+        <Card className="border shadow-sm">
+          <div className="p-6">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+              <div className="space-y-3 max-w-2xl">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight">构建叙事因果链</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    通过四个阶段构建深度一致的叙事逻辑：冲突 → 角色 → 节拍 → 叙事线。
+                    <br />
+                    这是保证多集剧本逻辑自洽的核心地基。
+                  </p>
                 </div>
-              ) : null}
+                
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={summaryLen >= 100 ? 'secondary' : 'destructive'} className="font-normal">
+                    梗概 {summaryLen}/100
+                  </Badge>
+                  <Badge variant={hasStyle ? 'secondary' : 'destructive'} className="font-normal">
+                    画风 {hasStyle ? 'OK' : '缺失'}
+                  </Badge>
+                  <Badge variant="outline" className="font-normal">
+                    世界观 {worldViewElements.length}
+                  </Badge>
+                  <Badge variant="outline" className="font-normal">
+                    角色 {projectCharacters.length}
+                  </Badge>
+                </div>
 
-              <p className="text-xs text-muted-foreground">
-                ⏱ 每阶段约 30-60s。可在「AI 调试面板」查看详细日志。
-              </p>
+                {missing.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-md">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>前置条件未满足：{missing.join('、')}</span>
+                  </div>
+                )}
+                
+                {updatedAt && (
+                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Clock className="w-3.5 h-3.5" />
+                      最近更新：{new Date(updatedAt).toLocaleString('zh-CN')}
+                   </div>
+                )}
+              </div>
+
+              <div className="w-full md:w-auto md:min-w-[320px] space-y-4">
+                 {/* 阶段控制面板 */}
+                 <div className="bg-muted/30 p-4 rounded-xl border space-y-3">
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">生成流程控制</div>
+                    <div className="grid grid-cols-1 gap-2">
+                      {CAUSAL_CHAIN_PHASES.map((p) => {
+                        const isCompleted = completedPhase >= p.phase;
+                        const isNext = completedPhase === p.phase - 1;
+                        const isRunningThisPhase = runningPhase === p.phase;
+                        const isAnyPhaseRunning = runningPhase !== null || isRunningWorkflow;
+                        const canTrigger = canPlan && !isAnyPhaseRunning;
+                        const canRunMain = canTrigger && isNext;
+                        const canRerun = canTrigger && isCompleted;
+
+                        return (
+                          <div key={p.phase} className="flex items-center gap-2">
+                             {/* 主生成按钮 */}
+                             <Button
+                                onClick={() => void handleCausalPhase(p.phase)}
+                                disabled={!canRunMain}
+                                variant={isCompleted ? 'secondary' : isNext ? 'default' : 'ghost'}
+                                className={cn(
+                                  "flex-1 justify-start h-9 text-sm font-medium transition-all relative overflow-hidden",
+                                  isNext && "shadow-md hover:shadow-lg ring-1 ring-primary/20",
+                                  !isNext && !isCompleted && "text-muted-foreground bg-muted/50"
+                                )}
+                             >
+                                <div className={cn(
+                                   "flex items-center justify-center w-5 h-5 rounded-full mr-2 text-[10px]",
+                                   isCompleted ? "bg-green-500 text-white" : isNext ? "bg-primary-foreground text-primary" : "bg-muted-foreground/20"
+                                )}>
+                                   {isRunningThisPhase ? <Loader2 className="w-3 h-3 animate-spin" /> : isCompleted ? "✓" : p.phase}
+                                </div>
+                                <span className="truncate">{p.name}</span>
+                                {isNext && <span className="absolute right-3 w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />}
+                             </Button>
+
+                             {/* 重试按钮 */}
+                             {isCompleted && (
+                               <Button
+                                 size="icon"
+                                 variant="ghost" 
+                                 className="h-9 w-9 text-muted-foreground hover:text-primary"
+                                 disabled={!canRerun}
+                                 onClick={() => {
+                                   setPendingRerunPhase(p.phase);
+                                   setRerunPhaseDialogOpen(true);
+                                 }}
+                                 title="重新生成此阶段"
+                               >
+                                 <RefreshCw className="w-4 h-4" />
+                               </Button>
+                             )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                 </div>
+
+                 <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setNarrativeDialogOpen(true)}
+                      disabled={!currentProject?.id}
+                      className="flex-1 gap-2 h-9 text-xs"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      编辑 JSON
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setVersionDialogOpen(true)}
+                      disabled={!currentProject?.id}
+                      className="flex-1 gap-2 h-9 text-xs"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      历史版本
+                      {typeof chainVersionCount === 'number' && chainVersionCount > 0 && (
+                        <span className="bg-muted px-1.5 py-0.5 rounded-full text-[10px]">{chainVersionCount}</span>
+                      )}
+                    </Button>
+                 </div>
+                 <Button
+                    variant="default"
+                    onClick={() => setActiveStep('plan')}
+                    disabled={completedPhase < 1}
+                    className="w-full gap-2 h-9 text-xs"
+                 >
+                    下一步：剧集规划
+                    <ArrowRight className="w-3.5 h-3.5" />
+                 </Button>
+                 
+                 {isRunningWorkflow && (
+                    <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 text-xs space-y-1.5 animate-pulse">
+                       <div className="flex items-center justify-between font-medium text-primary">
+                          <span>AI 正在思考...</span>
+                          <span>{typeof lastJobProgress?.pct === 'number' ? `${lastJobProgress.pct}%` : '0%'}</span>
+                       </div>
+                       <Progress value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0} className="h-1.5" />
+                       <p className="text-muted-foreground/80 truncate">{lastJobProgress?.message || '正在排队...'}</p>
+                    </div>
+                 )}
+              </div>
             </div>
           </div>
         </Card>
 
-        {/* 大纲摘要 */}
-        {outlineSummary ? (
-          <Card className="p-6 border-l-4 border-l-primary">
-            <h3 className="font-semibold mb-2">故事大纲摘要（阶段1产物）</h3>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{outlineSummary}</p>
-          </Card>
-        ) : null}
-
-        {/* 完整 JSON */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">因果链产物（JSON）</h3>
-            <div className="text-sm text-muted-foreground">
-              {completedPhase >= 4
-                ? '全部完成'
-                : completedPhase > 0
-                  ? `已完成 ${completedPhase}/4 阶段`
-                  : '暂无产物'}
-            </div>
-          </div>
-          <Separator className="my-4" />
-          {narrative ? (
-            <JsonViewer value={narrative} />
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              点击上方按钮开始分阶段生成。建议先完善世界观与角色关系。
-            </div>
-          )}
-        </Card>
-
-        {/* 可读版：用于快速阅读与兼容扩展字段 */}
         {narrative ? (
-          <Card className="p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">因果链产物（可读版）</h3>
-              <div className="text-sm text-muted-foreground">结构化阅读 · 扩展字段不丢失</div>
-            </div>
-            <Separator className="my-4" />
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
             <NarrativeCausalChainReadable value={narrative} />
-          </Card>
-        ) : null}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl bg-muted/10 text-muted-foreground text-center">
+             <div className="bg-background p-4 rounded-full shadow-sm mb-4">
+                <Network className="w-8 h-8 text-muted-foreground/50" />
+             </div>
+             <h3 className="text-lg font-medium text-foreground mb-1">暂无因果链数据</h3>
+             <p className="text-sm max-w-sm mx-auto">
+               请点击右上角的控制面板，按顺序生成叙事因果链的各个阶段。
+             </p>
+          </div>
+        )}
       </div>
     );
   };
@@ -1528,41 +1499,66 @@ ${safeJsonStringify(ep.coreExpression)}
     if (!hasCausalChain) missing.push('叙事因果链（请先生成）');
     if (!aiProfileId) missing.push('AI Profile（在「设置」中选择）');
 
-    return (
-      <div className="space-y-6">
-        <Card className="p-6">
-          <div className="flex items-start justify-between gap-6">
-            <div className="space-y-2">
-              <h2 className="text-xl font-semibold">剧集规划</h2>
-              <p className="text-sm text-muted-foreground">
-                输入：全局设定（梗概/画风/世界观/角色） → 输出：N 集规划（可编辑）
-              </p>
-              <div className="flex flex-wrap gap-2 pt-2">
-                <Badge variant={summaryLen >= 100 ? 'default' : 'destructive'}>
-                  梗概 {summaryLen}/100
-                </Badge>
-                <Badge variant={hasStyle ? 'default' : 'destructive'}>
-                  画风 {hasStyle ? 'OK' : '缺失'}
-                </Badge>
-                <Badge variant={hasCausalChain ? 'default' : 'destructive'}>
-                  因果链 {hasCausalChain ? 'OK' : '缺失'}
-                </Badge>
-                <Badge variant={worldViewElements.length > 0 ? 'secondary' : 'outline'}>
-                  世界观 {worldViewElements.length}
-                </Badge>
-                <Badge variant={projectCharacters.length > 0 ? 'secondary' : 'outline'}>
-                  角色 {projectCharacters.length}
-                </Badge>
-              </div>
-              {missing.length > 0 ? (
-                <p className="text-sm text-destructive">缺少：{missing.join('、')}</p>
-              ) : null}
-            </div>
+    const canRunPlan = canPlan && hasCausalChain;
 
-            <div className="w-full max-w-sm space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="targetEpisodeCount">目标集数（可选 1..24）</Label>
-                <Input
+    return (
+      <div className="space-y-8 animate-in fade-in duration-500">
+        {/* Header Section: Context & Controls */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-2 p-6 bg-gradient-to-br from-card to-muted/30">
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight mb-2">剧集规划中心</h2>
+                <p className="text-muted-foreground leading-relaxed">
+                  基于全局设定与因果链，智能规划剧集结构。支持自动推荐集数，或按需指定。
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">故事梗概</div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("w-2 h-2 rounded-full", summaryLen >= 100 ? "bg-emerald-500" : "bg-destructive")} />
+                    <span className="font-semibold">{summaryLen} 字</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">画风设定</div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("w-2 h-2 rounded-full", hasStyle ? "bg-emerald-500" : "bg-destructive")} />
+                    <span className="font-semibold">{hasStyle ? '已配置' : '缺失'}</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">因果链</div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("w-2 h-2 rounded-full", hasCausalChain ? "bg-emerald-500" : "bg-destructive")} />
+                    <span className="font-semibold">{hasCausalChain ? '已生成' : '缺失'}</span>
+                  </div>
+                </div>
+                 <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">AI Profile</div>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("w-2 h-2 rounded-full", aiProfileId ? "bg-emerald-500" : "bg-destructive")} />
+                    <span className="font-semibold">{aiProfileId ? 'Ready' : '未选择'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {missing.length > 0 && (
+                 <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>前置条件未满足：{missing.join('、')}</span>
+                 </div>
+              )}
+            </div>
+          </Card>
+
+          <Card className="p-6 flex flex-col justify-center space-y-4 border-l-4 border-l-primary/20">
+            <div className="space-y-2">
+              <Label htmlFor="targetEpisodeCount" className="text-sm font-medium">规划设置</Label>
+              <div className="flex items-center gap-2">
+                 <Input
                   id="targetEpisodeCount"
                   type="number"
                   min={1}
@@ -1572,122 +1568,180 @@ ${safeJsonStringify(ep.coreExpression)}
                     const v = e.target.value;
                     setTargetEpisodeCount(v ? Number(v) : '');
                   }}
-                  placeholder="留空表示让 AI 推荐"
+                  placeholder="自动推荐集数"
+                  className="bg-background"
                 />
+                <span className="text-sm text-muted-foreground whitespace-nowrap">集</span>
               </div>
-              <Button
-                onClick={handlePlanEpisodes}
-                disabled={!canPlan || !hasCausalChain || isRunningWorkflow}
-                className="w-full gap-2"
-              >
-                {isRunningWorkflow ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                <span>生成/覆盖剧集规划</span>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => currentProject?.id && loadEpisodes(currentProject.id)}
-                disabled={!currentProject?.id || isEpisodesLoading}
-                className="w-full gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span>刷新 Episodes</span>
-              </Button>
-
-              {isRunningWorkflow ? (
-                <div className="pt-2 space-y-2">
-                  <Progress
-                    value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0}
-                  />
-                  <div className="text-xs text-muted-foreground">
-                    {lastJobProgress?.message || '排队中...'}
-                    {lastJobId ? `（jobId=${lastJobId}）` : null}
-                  </div>
-                </div>
-              ) : null}
+              <p className="text-xs text-muted-foreground">留空则由 AI 根据故事体量自动推算。</p>
             </div>
-          </div>
-        </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Episodes（按集数排序）</h3>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">
-                {isEpisodesLoading ? '加载中...' : `${episodes.length} 集`}
+            <Button
+              onClick={handlePlanEpisodes}
+              disabled={!canRunPlan || isRunningWorkflow}
+              size="lg"
+              className="w-full shadow-lg shadow-primary/20 transition-all hover:shadow-primary/40"
+            >
+              {isRunningWorkflow ? (
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              ) : (
+                <Sparkles className="h-5 w-5 mr-2" />
+              )}
+              {episodes.length > 0 ? '重新规划 (覆盖)' : '开始规划剧集'}
+            </Button>
+
+            {isRunningWorkflow && (
+              <div className="space-y-1.5">
+                 <Progress value={typeof lastJobProgress?.pct === 'number' ? lastJobProgress.pct : 0} className="h-2" />
+                 <p className="text-xs text-center text-muted-foreground animate-pulse">
+                   {lastJobProgress?.message || '正在分析故事结构...'}
+                 </p>
               </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Episodes Grid */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-semibold flex items-center gap-2">
+              <Layers className="w-5 h-5 text-primary" />
+              剧集列表
+              <Badge variant="secondary" className="ml-2 rounded-full px-2.5">
+                {episodes.length} 集
+              </Badge>
+            </h3>
+            <div className="flex items-center gap-2">
+               <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => currentProject?.id && loadEpisodes(currentProject.id)}
+                disabled={isEpisodesLoading}
+                className={cn("text-muted-foreground", isEpisodesLoading && "animate-spin")}
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={openCreateEpisodeDialog}
                 disabled={!currentProject?.id || isRunningWorkflow}
-                className="gap-1"
               >
-                <Plus className="h-4 w-4" />
-                新增
+                <Plus className="h-4 w-4 mr-1" /> 手动新增
               </Button>
             </div>
           </div>
-          <Separator className="my-4" />
 
-          {episodeError ? (
-            <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-              {episodeError}
-            </div>
-          ) : null}
+          <Separator />
+
+          {episodeError && (
+             <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                {episodeError}
+             </div>
+          )}
 
           {episodes.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">
-              暂无 Episodes，请先生成剧集规划。
+            <div className="py-20 text-center border-2 border-dashed rounded-xl bg-muted/10">
+              <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                 <LayoutGrid className="w-8 h-8 text-muted-foreground/50" />
+              </div>
+              <h3 className="text-lg font-medium text-muted-foreground">暂无剧集规划</h3>
+              <p className="text-sm text-muted-foreground/70 mt-1 max-w-sm mx-auto">
+                请点击上方「开始规划剧集」，AI 将为您自动生成分集大纲。
+              </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {episodes.map((ep) => (
-                <div key={ep.id} className="rounded-lg border p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">第 {ep.order} 集</Badge>
-                        <span className="font-medium">{ep.title || '(未命名)'}</span>
-                        <Badge variant="outline">{getEpisodeStateLabel(ep.workflowState)}</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {ep.summary || '（无一句话概要）'}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openDeleteEpisodeConfirm(ep)}
-                        disabled={isRunningWorkflow}
-                        className="gap-1 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        删除
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => openEpisodeEditor(ep)}>
-                        编辑
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setCurrentEpisode(ep.id);
-                          setActiveStep('episode');
-                        }}
-                      >
-                        进入单集创作
-                      </Button>
-                    </div>
+                <Card 
+                  key={ep.id} 
+                  className="group relative overflow-hidden transition-all hover:shadow-md hover:border-primary/50 flex flex-col"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                     <div className="flex gap-1 bg-background/80 backdrop-blur rounded-md p-1 shadow-sm border">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => openEpisodeEditor(ep)}
+                          title="编辑属性"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                         <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => openDeleteEpisodeConfirm(ep)}
+                          disabled={isRunningWorkflow}
+                          title="删除"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                     </div>
                   </div>
-                </div>
+
+                  <CardHeader className="pb-3 relative">
+                    <div className="flex justify-between items-start">
+                       <div className="flex items-center gap-2 mb-2">
+                          <span className="text-4xl font-bold text-muted-foreground/10 select-none absolute -top-2 -left-2">
+                            {String(ep.order).padStart(2, '0')}
+                          </span>
+                          <Badge variant="outline" className="bg-background relative z-0">
+                            第 {ep.order} 集
+                          </Badge>
+                          <Badge 
+                            variant="secondary" 
+                            className={cn(
+                              "text-[10px] px-1.5 py-0 h-5",
+                              ep.workflowState === 'COMPLETE' ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : ""
+                            )}
+                          >
+                            {getEpisodeStateLabel(ep.workflowState)}
+                          </Badge>
+                       </div>
+                    </div>
+                    <CardTitle className="text-lg leading-tight line-clamp-1 group-hover:text-primary transition-colors">
+                      {ep.title || '（未命名）'}
+                    </CardTitle>
+                  </CardHeader>
+                  
+                  <CardContent className="flex-1 pb-4">
+                    <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed mb-4 min-h-[4.5em]">
+                      {ep.summary || '暂无概要...'}
+                    </p>
+                    
+                    {/* Metrics / Status (Placeholder for now) */}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground/70">
+                       <div className="flex items-center gap-1">
+                          <LayoutGrid className="w-3 h-3" />
+                          <span>- 分镜</span>
+                       </div>
+                       <div className="flex items-center gap-1">
+                          <MessageSquare className="w-3 h-3" />
+                          <span>- 对白</span>
+                       </div>
+                    </div>
+                  </CardContent>
+
+                  <div className="p-4 pt-0 mt-auto">
+                    <Button 
+                      className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
+                      variant="secondary"
+                      onClick={() => {
+                        setCurrentEpisode(ep.id);
+                        setActiveStep('episode');
+                      }}
+                    >
+                      进入创作 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                  </div>
+                </Card>
               ))}
             </div>
           )}
-        </Card>
+        </div>
       </div>
     );
   };
@@ -1697,72 +1751,100 @@ ${safeJsonStringify(ep.coreExpression)}
     const hasCoreExpression = Boolean(currentEpisode?.coreExpression);
     const canGenerateSceneList = Boolean(hasEpisode && hasCoreExpression && aiProfileId);
 
-    return (
-      <div className="space-y-6">
-        <Card className="p-6">
-          <div className="flex items-start justify-between gap-6">
-            <div className="space-y-2">
-              <h2 className="text-xl font-semibold">单集创作</h2>
-              <p className="text-sm text-muted-foreground">
-                核心表达 → 分镜生成 → 分镜细化（复用现有 scene 级 workflow）
-              </p>
-            </div>
+    // 计算分镜统计（不使用 useMemo，因为 hooks 不能在嵌套函数中调用）
+    const total = scenes.length;
+    const completed = scenes.filter(s => s.status === 'completed').length;
+    const scenesStats = { 
+      total, 
+      completed, 
+      progress: total > 0 ? (completed / total) * 100 : 0 
+    };
 
-            <div className="w-full max-w-sm space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="episodeSelect">选择 Episode</Label>
-                <select
-                  id="episodeSelect"
-                  className="w-full h-10 px-3 rounded-md border bg-background text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  value={currentEpisodeId ?? ''}
-                  onChange={(e) => setCurrentEpisode(e.target.value || null)}
-                  disabled={
-                    isRunningWorkflow || isRefining || isBatchBlocked || isBatchRefineRunning
-                  }
-                >
-                  <option value="">请选择</option>
-                  {episodes.map((ep) => (
-                    <option key={ep.id} value={ep.id}>
-                      第 {ep.order} 集：{ep.title || '(未命名)'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {currentEpisode ? (
-                <div className="text-sm text-muted-foreground">
-                  状态：{getEpisodeStateLabel(currentEpisode.workflowState)}
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <Card className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md border-l-4 border-l-primary bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+           <div className="flex items-center gap-4 w-full sm:w-auto">
+             <div className="bg-primary/10 p-2 rounded-full">
+                <Clapperboard className="w-5 h-5 text-primary" />
+             </div>
+             <div className="space-y-1 flex-1">
+                <div className="flex items-center gap-2">
+                   <h2 className="text-lg font-bold whitespace-nowrap">单集创作</h2>
+                   {currentEpisode && (
+                     <Badge variant="outline" className="ml-2">
+                       {getEpisodeStateLabel(currentEpisode.workflowState)}
+                     </Badge>
+                   )}
                 </div>
-              ) : null}
-            </div>
-          </div>
+                <div className="flex items-center gap-2 w-full max-w-[240px]">
+                   <select
+                      id="episodeSelect"
+                      className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={currentEpisodeId ?? ''}
+                      onChange={(e) => setCurrentEpisode(e.target.value || null)}
+                      disabled={isRunningWorkflow || isRefining || isBatchBlocked || isBatchRefineRunning}
+                    >
+                      <option value="">-- 选择集数 --</option>
+                      {episodes.map((ep) => (
+                        <option key={ep.id} value={ep.id}>
+                          第 {ep.order} 集：{ep.title || '(未命名)'}
+                        </option>
+                      ))}
+                    </select>
+                </div>
+             </div>
+           </div>
+
+           {currentEpisode && (
+             <div className="flex items-center gap-4 text-sm text-muted-foreground hidden md:flex">
+                <div className="flex flex-col items-center px-4 border-r">
+                   <span className="font-bold text-foreground">{scenesStats.total}</span>
+                   <span className="text-[10px] uppercase">分镜</span>
+                </div>
+                 <div className="flex flex-col items-center px-4 border-r">
+                   <span className="font-bold text-foreground">{scenesStats.completed}</span>
+                   <span className="text-[10px] uppercase">完成</span>
+                </div>
+                <div className="w-24">
+                   <Progress value={scenesStats.progress} className="h-2" />
+                </div>
+             </div>
+           )}
         </Card>
 
         {!hasEpisode ? (
-          <Card className="p-8 text-center text-muted-foreground text-sm">
-            请先从「剧集规划」进入某一集，或在上方下拉选择。
-          </Card>
+          <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/5">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+               <ArrowRight className="w-8 h-8 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-lg font-medium text-muted-foreground">请选择或创建一个 Episode</h3>
+            <p className="text-sm text-muted-foreground/70 mt-1">从上方下拉菜单选择，或返回「剧集规划」页面。</p>
+          </div>
         ) : (
           <Tabs defaultValue="core" className="w-full">
-            <TabsList>
-              <TabsTrigger value="core">核心表达</TabsTrigger>
-              <TabsTrigger value="scenes">分镜列表</TabsTrigger>
-              <TabsTrigger value="refine">分镜细化</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="core">1. 核心表达</TabsTrigger>
+              <TabsTrigger value="scenes">2. 分镜列表</TabsTrigger>
+              <TabsTrigger value="refine">3. 分镜细化</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="core" className="space-y-4">
+            <TabsContent value="core" className="space-y-4 focus-visible:outline-none">
               <Card className="p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <h3 className="font-semibold">核心表达（Core Expression）</h3>
+                <div className="flex items-start justify-between gap-4 mb-6">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                       <Brain className="w-5 h-5 text-primary" />
+                       核心表达 (Core Expression)
+                    </h3>
                     <p className="text-sm text-muted-foreground">
-                      结构化 JSON，决定该集的主题/情绪主线/冲突与结尾钩子。
+                      定义本集的主题/情绪曲线与核心冲突，是生成分镜的灵魂。
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <Button
                       onClick={handleGenerateCoreExpression}
                       disabled={!aiProfileId || isRunningWorkflow}
-                      className="gap-2"
+                      className="gap-2 shadow-sm"
                     >
                       {isRunningWorkflow ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -1781,30 +1863,37 @@ ${safeJsonStringify(ep.coreExpression)}
                   </div>
                 </div>
 
-                <Separator className="my-4" />
-
-                {currentEpisode?.coreExpression ? (
-                  <JsonViewer value={currentEpisode.coreExpression} />
-                ) : (
-                  <div className="text-sm text-muted-foreground">尚未生成核心表达。</div>
-                )}
+                <div className="bg-muted/30 rounded-lg border p-4 min-h-[200px]">
+                   {currentEpisode?.coreExpression ? (
+                      <JsonViewer value={currentEpisode.coreExpression} />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full py-10 text-muted-foreground">
+                         <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-3">
+                            <Brain className="w-6 h-6 opacity-20" />
+                         </div>
+                         <p>尚未生成核心表达。</p>
+                         <p className="text-xs mt-1">请点击右上角「AI 生成」或手动编辑。</p>
+                      </div>
+                    )}
+                </div>
               </Card>
             </TabsContent>
 
-            <TabsContent value="scenes" className="space-y-4">
+            <TabsContent value="scenes" className="space-y-4 focus-visible:outline-none">
               <Card className="p-6">
-                <div className="flex items-start justify-between gap-6">
-                  <div className="space-y-2">
-                    <h3 className="font-semibold">分镜列表（Storyboard / Scene List）</h3>
+                <div className="flex flex-col md:flex-row items-start justify-between gap-6 mb-6">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                       <LayoutGrid className="w-5 h-5 text-primary" />
+                       分镜列表 (Storyboard)
+                    </h3>
                     <p className="text-sm text-muted-foreground">
-                      AI 会为本集生成 8-12 条分镜概要，并写入数据库（覆盖式）。
+                      生成 8-12 条分镜节点，覆盖本集的起承转合。
                     </p>
                   </div>
-                  <div className="w-full max-w-sm space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="sceneCountHint">分镜数量提示（可选 6..24）</Label>
-                      <Input
-                        id="sceneCountHint"
+                  <div className="w-full md:w-auto flex flex-col gap-3 min-w-[300px]">
+                    <div className="flex gap-2">
+                       <Input
                         type="number"
                         min={6}
                         max={24}
@@ -1813,232 +1902,196 @@ ${safeJsonStringify(ep.coreExpression)}
                           const v = e.target.value;
                           setSceneCountHint(v ? Number(v) : '');
                         }}
-                        placeholder="留空默认 12（可选 6..24）"
+                        placeholder="数量 (默认12)"
+                        className="w-32"
                       />
+                      <Button
+                        onClick={handleGenerateSceneList}
+                        disabled={!canGenerateSceneList || isRunningWorkflow}
+                        className="flex-1 gap-2 shadow-sm"
+                      >
+                        {isRunningWorkflow ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                        <span>AI 生成列表</span>
+                      </Button>
                     </div>
-                    <Button
-                      onClick={handleGenerateSceneList}
-                      disabled={!canGenerateSceneList || isRunningWorkflow}
-                      className="w-full gap-2"
-                    >
-                      {isRunningWorkflow ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      <span>AI 生成分镜列表</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        currentEpisode?.id &&
-                        currentProject?.id &&
-                        loadScenes(currentProject.id, currentEpisode.id)
-                      }
-                      disabled={!currentEpisode?.id || isScenesLoading}
-                      className="w-full gap-2"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      <span>刷新分镜</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setSortDialogOpen(true)}
-                      disabled={scenes.length < 2}
-                      className="w-full"
-                    >
-                      拖拽排序
-                    </Button>
+                     <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            currentEpisode?.id &&
+                            currentProject?.id &&
+                            loadScenes(currentProject.id, currentEpisode.id)
+                          }
+                          disabled={!currentEpisode?.id || isScenesLoading}
+                          className="flex-1"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-2" />
+                          刷新
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSortDialogOpen(true)}
+                          disabled={scenes.length < 2}
+                          className="flex-1"
+                        >
+                          <ArrowRight className="h-3 w-3 mr-2 rotate-90" />
+                          排序
+                        </Button>
+                     </div>
                   </div>
                 </div>
 
-                <Separator className="my-4" />
+                <Separator className="mb-6" />
 
                 {scenesError ? (
-                  <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                  <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm flex items-center gap-2 mb-4">
+                    <AlertCircle className="w-4 h-4" />
                     {scenesError}
                   </div>
                 ) : null}
 
                 {isScenesLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>加载分镜中...</span>
+                  <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                    <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
+                    <span>正在加载分镜数据...</span>
                   </div>
                 ) : scenes.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">当前 Episode 暂无分镜。</div>
+                  <div className="text-center py-10 text-muted-foreground">
+                     暂无分镜数据，请先生成。
+                  </div>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="grid gap-3">
-                      {scenes
-                        .slice()
-                        .sort((a, b) => a.order - b.order)
-                        .map((scene) => (
-                          <div key={scene.id} className="rounded-lg border p-4">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="secondary">#{scene.order}</Badge>
-                                  {(() => {
-                                    const statusStyle = getSceneStatusStyle(scene.status);
-                                    return (
-                                      <span
-                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyle.className}`}
-                                      >
-                                        <span
-                                          className={`h-2 w-2 rounded-full ${statusStyle.dotClass}`}
-                                        />
-                                        {statusStyle.label}
-                                      </span>
-                                    );
-                                  })()}
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setRefineDialogOpen(true);
-                                    setSelectedSceneId(scene.id);
-                                  }}
-                                >
-                                  查看/编辑
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleRefineSceneAll(scene.id)}
-                                  disabled={!aiProfileId || isRefining || isBatchBlocked}
-                                  className="gap-2"
-                                >
-                                  {isRefining && refiningSceneId === scene.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Sparkles className="h-4 w-4" />
-                                  )}
-                                  <span>一键细化</span>
-                                </Button>
-                              </div>
-                            </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1">
+                    {scenes
+                      .slice()
+                      .sort((a, b) => a.order - b.order)
+                      .map((scene) => (
+                        <div key={scene.id} className="group flex flex-col md:flex-row items-start gap-4 rounded-lg border p-4 transition-all hover:bg-muted/30 hover:border-primary/30">
+                           <div className="flex items-center gap-3 md:min-w-[120px]">
+                              <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center p-0 border-primary/50 text-primary">
+                                {scene.order}
+                              </Badge>
+                              {(() => {
+                                  const statusStyle = getSceneStatusStyle(scene.status);
+                                  return (
+                                    <Badge variant="secondary" className={cn("text-[10px] px-1.5", statusStyle.className)}>
+                                       {statusStyle.label}
+                                    </Badge>
+                                  );
+                              })()}
+                           </div>
+                           
+                           <div className="flex-1 min-w-0">
+                              <p className="text-sm leading-relaxed text-foreground/90">{scene.summary}</p>
+                           </div>
 
-                            <div className="mt-3 space-y-2">
-                              <Label className="text-xs text-muted-foreground">分镜概要</Label>
-                              <Textarea
-                                value={scene.summary}
-                                onChange={(e) =>
-                                  currentEpisode?.id &&
-                                  currentProject?.id &&
-                                  updateScene(currentProject.id, currentEpisode.id, scene.id, {
-                                    summary: e.target.value,
-                                  })
-                                }
-                                className="min-h-[60px]"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                    </div>
+                           <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setRefineDialogOpen(true);
+                                  setSelectedSceneId(scene.id);
+                                }}
+                              >
+                                详情
+                              </Button>
+                           </div>
+                        </div>
+                      ))}
                   </div>
                 )}
               </Card>
             </TabsContent>
 
-            <TabsContent value="refine" className="space-y-4">
+            <TabsContent value="refine" className="space-y-4 focus-visible:outline-none">
               <Card className="p-6">
-                <div className="flex items-start justify-between gap-6">
-                  <div className="space-y-2">
-                    <h3 className="font-semibold">分镜细化</h3>
-                    <p className="text-sm text-muted-foreground">
-                      目前提供「一键细化」与字段编辑；细化任务由后端 worker 执行并写回 Scene。
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        isBatchRefineRunning
-                          ? setBatchRefineDialogOpen(true)
-                          : openBatchRefineDialog()
-                      }
-                      disabled={!aiProfileId || sortedScenes.length === 0 || isRunningWorkflow}
-                      className="gap-2"
-                    >
-                      {isBatchRefineRunning ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Layers className="h-4 w-4" />
-                      )}
-                      <span>{isBatchRefineRunning ? '批量细化中' : '批量细化'}</span>
-                      {!isBatchRefineRunning && recommendedBatchRefineIds.length > 0 ? (
-                        <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                          待细化 {recommendedBatchRefineIds.length}
-                        </Badge>
-                      ) : null}
-                    </Button>
-                  </div>
-                </div>
-                <Separator className="my-4" />
-                {scenes.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">暂无分镜，请先生成分镜列表。</div>
-                ) : (
-                  <div className="space-y-3">
-                    {sortedScenes.map((scene) => (
-                      <div
-                        key={scene.id}
-                        data-scene-id={scene.id}
-                        className="rounded-lg border p-4"
+                <div className="flex items-center justify-between mb-6">
+                   <div className="space-y-1">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                         <Sparkles className="w-5 h-5 text-primary" />
+                         分镜细化 (Refinement)
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        针对每个分镜，生成具体的画面描述、镜头语言与对白。
+                      </p>
+                   </div>
+                   <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setBatchRefineDialogOpen(true)}
+                        className="gap-2"
                       >
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary">#{scene.order}</Badge>
-                              {(() => {
-                                const statusStyle = getSceneStatusStyle(scene.status);
-                                return (
-                                  <span
-                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusStyle.className}`}
-                                  >
-                                    <span
-                                      className={`h-2 w-2 rounded-full ${statusStyle.dotClass}`}
-                                    />
-                                    {statusStyle.label}
-                                  </span>
-                                );
-                              })()}
+                         <Layers className="w-4 h-4" />
+                         批量任务面板
+                      </Button>
+                   </div>
+                </div>
+
+                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {scenes.length === 0 ? (
+                       <div className="col-span-full text-center py-10 text-muted-foreground">
+                          暂无分镜，请先生成分镜列表。
+                       </div>
+                    ) : (
+                      scenes
+                        .slice()
+                        .sort((a, b) => a.order - b.order)
+                        .map((scene) => (
+                          <div
+                            key={scene.id}
+                            className={cn(
+                               "relative rounded-lg border p-4 transition-all hover:shadow-md hover:border-primary/50 flex flex-col gap-3",
+                               scene.status === 'completed' ? "bg-emerald-50/30 dark:bg-emerald-900/10" : "bg-card"
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                               <div className="flex items-center gap-2">
+                                  <Badge variant="outline">#{scene.order}</Badge>
+                                  <Badge variant="secondary" className="text-[10px]">{getSceneStatusLabel(scene.status)}</Badge>
+                               </div>
+                               <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  onClick={() => {
+                                    setRefineDialogOpen(true);
+                                    setSelectedSceneId(scene.id);
+                                  }}
+                                >
+                                   <ArrowRight className="h-4 w-4" />
+                                </Button>
                             </div>
-                            <p className="text-sm mt-2 truncate">{scene.summary}</p>
+                            
+                            <p className="text-sm text-muted-foreground line-clamp-3 min-h-[3em]">
+                               {scene.summary}
+                            </p>
+
+                            <div className="pt-2 mt-auto">
+                                <Button
+                                  size="sm"
+                                  variant={scene.status === 'completed' ? 'outline' : 'default'}
+                                  className="w-full gap-2"
+                                  onClick={() => handleRefineSceneAll(scene.id)}
+                                  disabled={!aiProfileId || isRefining || isBatchBlocked}
+                                >
+                                  {isRefining && refiningSceneId === scene.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-3 w-3" />
+                                  )}
+                                  <span>{scene.status === 'completed' ? '重新细化' : '一键细化'}</span>
+                                </Button>
+                            </div>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setRefineDialogOpen(true);
-                                setSelectedSceneId(scene.id);
-                              }}
-                            >
-                              打开详情
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => handleRefineSceneAll(scene.id)}
-                              disabled={!aiProfileId || isRefining || isBatchBlocked}
-                              className="gap-2"
-                            >
-                              {isRefining && refiningSceneId === scene.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Sparkles className="h-4 w-4" />
-                              )}
-                              <span>一键细化</span>
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                        ))
+                    )}
+                 </div>
               </Card>
             </TabsContent>
           </Tabs>
@@ -2046,6 +2099,7 @@ ${safeJsonStringify(ep.coreExpression)}
       </div>
     );
   };
+
 
   const renderExportStep = () => {
     return (
@@ -2383,46 +2437,12 @@ ${safeJsonStringify(ep.coreExpression)}
         </div>
       </Card>
 
-      <div className="grid grid-cols-[240px_1fr] gap-6 min-h-[calc(100vh-260px)]">
-        <Card className="p-6 h-fit sticky top-24">
-          <h3 className="font-semibold mb-4">Episode 工作流</h3>
-          <div className="space-y-4">
-            {steps.map((step, index) => {
-              const status = getStepStatus(step.id);
-              return (
-                <div key={step.id} className="flex items-start gap-3">
-                  <div className="flex flex-col items-center">
-                    {status === 'completed' ? (
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                    ) : status === 'current' ? (
-                      <div className="h-5 w-5 rounded-full border-2 border-primary bg-primary/20" />
-                    ) : (
-                      <Circle className="h-5 w-5 text-muted-foreground" />
-                    )}
-                    {index < steps.length - 1 && (
-                      <div
-                        className={`w-0.5 h-8 mt-2 ${status === 'completed' ? 'bg-primary' : 'bg-border'}`}
-                      />
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setActiveStep(step.id)}
-                    className="text-left transition-colors cursor-pointer hover:text-primary"
-                  >
-                    <p
-                      className={`text-sm font-medium ${
-                        status === 'current' ? 'text-primary' : 'text-foreground'
-                      }`}
-                    >
-                      {step.name}
-                    </p>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
+      <WorkflowStepper 
+        currentStep={activeStep} 
+        onStepClick={setActiveStep}
+      />
 
+      <div className="min-h-[calc(100vh-260px)]">
         <div className="space-y-6">
           {activeStep === 'workbench' && (
             <WorkflowWorkbench

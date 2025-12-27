@@ -12,14 +12,22 @@ type ApiProject = Omit<Project, 'createdAt' | 'updatedAt' | 'deletedAt'> & {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  // 进度统计（可选）
+  _stats?: {
+    episodeCount: number;
+    episodesWithCoreExpression: number;
+    sceneCount: number;
+    scenesCompleted: number;
+  };
 };
 
-function mapProject(project: Project): ApiProject {
+function mapProject(project: Project, stats?: ApiProject['_stats']): ApiProject {
   return {
     ...project,
     createdAt: toIso(project.createdAt),
     updatedAt: toIso(project.updatedAt),
     deletedAt: project.deletedAt ? toIso(project.deletedAt) : null,
+    ...(stats ? { _stats: stats } : {}),
   };
 }
 
@@ -45,11 +53,52 @@ export class ProjectsService {
   }
 
   async list(teamId: string) {
+    // 首先获取基础项目列表
     const projects = await this.prisma.project.findMany({
       where: { teamId, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
     });
-    return projects.map(mapProject);
+
+    // 批量获取每个项目的统计信息
+    const projectsWithStats = await Promise.all(
+      projects.map(async (project) => {
+        try {
+          const episodes = await this.prisma.episode.findMany({
+            where: { projectId: project.id },
+            select: {
+              id: true,
+              coreExpression: true,
+              _count: { select: { scenes: true } },
+            },
+          });
+
+          const scenesCompleted = await this.prisma.scene.count({
+            where: {
+              episode: { projectId: project.id },
+              status: 'completed',
+            },
+          });
+
+          const episodeCount = episodes.length;
+          const episodesWithCoreExpression = episodes.filter(
+            (ep) => ep.coreExpression !== null,
+          ).length;
+          const sceneCount = episodes.reduce((sum, ep) => sum + ep._count.scenes, 0);
+
+          return mapProject(project, {
+            episodeCount,
+            episodesWithCoreExpression,
+            sceneCount,
+            scenesCompleted,
+          });
+        } catch {
+          // 如果统计失败，返回不带统计的项目
+          return mapProject(project);
+        }
+      }),
+    );
+
+    return projectsWithStats;
   }
 
   async get(teamId: string, projectId: string) {

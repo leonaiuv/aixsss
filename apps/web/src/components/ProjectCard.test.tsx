@@ -86,16 +86,23 @@ describe('ProjectCard', () => {
   });
 
   describe('进度显示', () => {
+    // 注意：无 _stats 时，进度为状态范围的中间值
     const progressTestCases: Array<{ state: WorkflowState; expectedProgress: number }> = [
-      { state: 'IDLE', expectedProgress: 10 },
-      { state: 'DATA_COLLECTING', expectedProgress: 10 },
-      { state: 'DATA_COLLECTED', expectedProgress: 25 },
-      { state: 'SCENE_LIST_GENERATING', expectedProgress: 40 },
-      { state: 'SCENE_LIST_EDITING', expectedProgress: 40 },
-      { state: 'SCENE_LIST_CONFIRMED', expectedProgress: 50 },
-      { state: 'SCENE_PROCESSING', expectedProgress: 75 },
-      { state: 'ALL_SCENES_COMPLETE', expectedProgress: 90 },
-      { state: 'EXPORTING', expectedProgress: 100 },
+      { state: 'IDLE', expectedProgress: 3 },           // (0+5)/2 = 2.5 → 3
+      { state: 'DATA_COLLECTING', expectedProgress: 8 }, // (5+10)/2 = 7.5 → 8
+      { state: 'DATA_COLLECTED', expectedProgress: 13 }, // (10+15)/2 = 12.5 → 13
+      { state: 'WORLD_VIEW_BUILDING', expectedProgress: 18 }, // (15+20)/2 = 17.5 → 18
+      { state: 'CHARACTER_MANAGING', expectedProgress: 23 },  // (20+25)/2 = 22.5 → 23
+      { state: 'EPISODE_PLANNING', expectedProgress: 30 },    // (25+35)/2 = 30
+      { state: 'EPISODE_PLAN_EDITING', expectedProgress: 40 }, // (35+45)/2 = 40
+      { state: 'EPISODE_CREATING', expectedProgress: 53 },    // (45+60)/2 = 52.5 → 53
+      { state: 'SCENE_LIST_GENERATING', expectedProgress: 63 }, // (60+65)/2 = 62.5 → 63
+      { state: 'SCENE_LIST_EDITING', expectedProgress: 70 },   // (65+75)/2 = 70
+      { state: 'SCENE_LIST_CONFIRMED', expectedProgress: 78 }, // (75+80)/2 = 77.5 → 78
+      { state: 'SCENE_PROCESSING', expectedProgress: 88 },     // (80+95)/2 = 87.5 → 88
+      { state: 'ALL_SCENES_COMPLETE', expectedProgress: 97 },  // (95+98)/2 = 96.5 → 97
+      { state: 'ALL_EPISODES_COMPLETE', expectedProgress: 97 },// (95+98)/2 = 96.5 → 97
+      { state: 'EXPORTING', expectedProgress: 99 },            // (98+100)/2 = 99
     ];
 
     progressTestCases.forEach(({ state, expectedProgress }) => {
