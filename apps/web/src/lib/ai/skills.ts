@@ -25,9 +25,9 @@ export const SceneListSkill: Skill = {
 
 export const SceneDescriptionSkill: Skill = {
   name: 'scene-description',
-  description: '为单个分镜生成「场景锚点」提示词（仅环境一致性）',
+  description: '为单个分镜生成「场景锚点」提示词（仅环境一致性，JSON格式）',
   requiredContext: ['project_essence', 'current_scene_summary', 'prev_scene_summary'],
-  promptTemplate: `你是专业的提示词工程师与分镜助理。请为“当前分镜”输出可复用的「场景锚点 Scene Anchor」，用于保证多张关键帧/多家图生视频的场景一致性。
+  promptTemplate: `你是专业的提示词工程师与分镜助理。请为"当前分镜"输出可复用的「场景锚点 Scene Anchor」JSON，用于保证多张关键帧/多家图生视频的场景一致性。
 
 ## 输入
 视觉风格参考（可轻量融入，不要堆砌质量词）:
@@ -40,20 +40,44 @@ export const SceneDescriptionSkill: Skill = {
 {prev_scene_summary}
 
 ## 重要约束（必须遵守）
-1. 只描述“环境/空间/光线/固定锚点物”，不要出现人物、不要写角色代入、不要写动作、不要写镜头运动。
-2. 用于一致性：输出里要包含 4-8 个可被稳定复现的锚点元素（具体物件/结构/光位），并在 LOCK_* 行里列出；词汇要稳定，不要同义改写。
+1. 只描述"环境/空间/光线/固定锚点物"，绝对不要出现人物、不要写角色代入、不要写动作、不要写镜头运动。
+2. anchors 数组里要包含 4-8 个可被稳定复现的锚点元素（具体物件/结构/光位）；词汇要稳定，不要同义改写。
 3. 同时输出中文与英文两版，内容等价但不互相翻译腔。
-4. 直接输出指定格式，不要解释。
+4. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
-## 输出格式（严格按行输出）
-SCENE_ANCHOR_ZH: ...
-SCENE_ANCHOR_EN: ...
-LOCK_ZH: 1) ...; 2) ...; 3) ...; ...
-LOCK_EN: 1) ...; 2) ...; 3) ...; ...
-AVOID_ZH: ...（如：no people/no text/no watermark/不要新增场景元素）
-AVOID_EN: ...`,
-  outputFormat: { type: 'text', maxLength: 1500 },
-  maxTokens: 800,
+## 输出格式（严格 JSON）
+{
+  "scene": {
+    "zh": "场景整体描述（一段话，60-120字）",
+    "en": "Overall scene description (one paragraph)"
+  },
+  "location": {
+    "type": "室内/室外/虚拟空间",
+    "name": "具体地点名称",
+    "details": "空间结构与布局细节"
+  },
+  "lighting": {
+    "type": "自然光/人工光/混合光",
+    "direction": "光源方向（如：左上45°/正面柔光/背光剪影）",
+    "color": "光线色温或颜色（如：暖黄色/冷白色/金色夕阳）",
+    "intensity": "光照强度描述（如：柔和/强烈/昏暗）"
+  },
+  "atmosphere": {
+    "mood": "氛围情绪基调",
+    "weather": "天气状况（室内可写'不适用'）",
+    "timeOfDay": "时间段（如：黄昏/深夜/正午）"
+  },
+  "anchors": {
+    "zh": ["锚点物1", "锚点物2", "锚点物3", "...（4-8个）"],
+    "en": ["anchor1", "anchor2", "anchor3", "..."]
+  },
+  "avoid": {
+    "zh": "不要出现的元素（如：人物、文字、水印、多余物体）",
+    "en": "Elements to avoid (e.g., people, text, watermark, extra objects)"
+  }
+}`,
+  outputFormat: { type: 'json', maxLength: 2000 },
+  maxTokens: 1000,
 };
 
 export const ActionDescriptionSkill: Skill = {
@@ -68,76 +92,153 @@ export const ActionDescriptionSkill: Skill = {
 export const KeyframePromptSkill: Skill = {
   name: 'keyframe-prompt',
   description:
-    '生成三张静止关键帧（起/中/终）的“人物差分提示词”（适配图生图/参考图流程，中英双语）',
+    '生成三张静止关键帧（起/中/终）的"主体差分提示词"JSON（适配图生图/参考图流程，中英双语）',
   requiredContext: ['project_essence', 'confirmed_content'],
-  promptTemplate: `你是专业的绘图/视频关键帧提示词工程师。用户已经用“场景锚点”生成了一张无人物的场景图（背景参考图）。现在请为 img2img/图生图 输出 3 张「静止」关键帧的“人物差分提示词”：KF0(起始) / KF1(中间) / KF2(结束)，用于在同一背景上生成连贯的三帧。
+  promptTemplate: `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 3 张「静止」关键帧的"主体差分提示词"JSON：KF0(起始) / KF1(中间) / KF2(结束)。
 
 ## 输入
 当前分镜概要（决定三帧的动作分解）:
 {current_scene_summary}
 
-场景锚点（环境一致性，包含 LOCK_*。注意：只允许引用 LOCK_* 里的锚点名用于定位，不要复述场景段落）:
+场景锚点 JSON（环境一致性）:
 {scene_description}
 
-视觉风格参考（可融入，但避免堆砌“masterpiece/best quality/8k”等质量词）:
+视觉风格参考:
 {style}
 
-角色信息（请用稳定词汇锁定外观，不要每次换同义词）:
+出场角色（仅用于点名，不要写长外观描述，角色外观由定妆照资产保证）:
 {characters}
 
 ## 关键规则（必须遵守）
-1. 三帧默认同一镜头/构图/透视/光照，并以同一背景参考图为底：不要改背景、不要新增场景物件。
-2. 每个关键帧都是“定格瞬间”，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
-3. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
-4. 每个 KF 只写“人物差分”：人物在画面中的位置（left/right/foreground/background 或三分法）、静态姿态/定格动作、手部/道具状态；表情/情绪只有在“特写/表情镜头”才重点写。
-5. 场景定位只允许引用 2-4 个 LOCK_* 锚点名（例如“车门/扶手杆/长条车窗/座椅”等），不要重新描述环境细节（不要写灯管/地板纹理/信息屏等长段）。
+1. 只描述主体（人物/物品）在场景中的【位置、姿势、动作定格、交互关系】，不要描述人物外貌细节（发型/脸/服装款式等由定妆照资产保证）。
+2. 三帧默认同一镜头/构图/透视/光照，背景参考图不变：不要改背景、不要新增场景物件。
+3. 每个关键帧都是"定格瞬间"，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
+4. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
+5. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名，不要重新描述环境细节。
 6. KF0/KF1/KF2 必须明显不同：每帧至少 3 个可见差异（位置/姿态/手部/道具/视线/距离），但都必须是定格瞬间。
-7. AVOID 必须与关键帧不冲突：禁止写 “no people/no characters/no hands”。可写：no extra characters / keep background unchanged / no text/watermark / no motion blur / bad hands / extra fingers / bad anatomy。
-8. 中英双语都要输出，并且每个 KF 的 ZH/EN 都是可直接用于图生图/参考图的完整提示词。
-9. 直接输出指定格式，不要解释。
+7. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
-## 输出格式（严格按行输出）
-KF0_ZH: ...
-KF0_EN: ...
-KF1_ZH: ...
-KF1_EN: ...
-KF2_ZH: ...
-KF2_EN: ...
-AVOID_ZH: ...
-AVOID_EN: ...`,
-  outputFormat: { type: 'text', maxLength: 4000 },
-  maxTokens: 1200,
+## 输出格式（严格 JSON）
+{
+  "camera": {
+    "type": "特写/中景/全景/远景",
+    "angle": "正面/侧面/俯视/仰视/3/4侧面",
+    "aspectRatio": "画面比例（如 16:9/3:4/1:1）"
+  },
+  "keyframes": {
+    "KF0": {
+      "zh": {
+        "subjects": [
+          {
+            "name": "角色/物品名（点名即可）",
+            "position": "画面位置（如：画面左侧/中央偏右/前景）",
+            "pose": "姿势状态（如：站立/坐姿/倚靠）",
+            "action": "动作定格（如：右手举起/双手交叉胸前）",
+            "expression": "表情（仅特写镜头需要，如：微笑/凝视）",
+            "gaze": "视线方向（如：看向镜头/看向画面右侧）",
+            "interaction": "与其他主体或场景的交互（如：手扶栏杆/与B角色对视）"
+          }
+        ],
+        "usedAnchors": ["引用的场景锚点1", "锚点2"],
+        "composition": "构图说明（如：三分法左侧/居中对称）",
+        "bubbleSpace": "气泡留白区域（如：右上角/无需留白）"
+      },
+      "en": {
+        "subjects": [
+          {
+            "name": "character/object name",
+            "position": "position in frame",
+            "pose": "pose state",
+            "action": "frozen action",
+            "expression": "expression (for close-up only)",
+            "gaze": "gaze direction",
+            "interaction": "interaction with others or scene"
+          }
+        ],
+        "usedAnchors": ["anchor1", "anchor2"],
+        "composition": "composition notes",
+        "bubbleSpace": "bubble space area"
+      }
+    },
+    "KF1": {
+      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
+      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
+    },
+    "KF2": {
+      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
+      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
+    }
+  },
+  "avoid": {
+    "zh": "避免元素（如：多余角色/背景变化/文字水印/运动模糊/解剖错误）",
+    "en": "Elements to avoid (e.g., extra characters, background changes, text/watermark, motion blur, bad anatomy)"
+  }
+}`,
+  outputFormat: { type: 'json', maxLength: 5000 },
+  maxTokens: 1500,
 };
 
 export const MotionPromptSkill: Skill = {
   name: 'motion-prompt',
-  description: '生成图生视频用的运动/时空提示词（基于三关键帧差分）',
+  description: '生成图生视频用的运动/时空提示词JSON（基于三关键帧差分）',
   requiredContext: ['project_essence', 'confirmed_content'],
-  promptTemplate: `你是图生视频(I2V)提示词工程师。请基于「三张静止关键帧 KF0/KF1/KF2」生成“描述变化”的运动/时空提示词，用于多家视频模型。
+  promptTemplate: `你是图生视频(I2V)提示词工程师。请基于「三张静止关键帧 KF0/KF1/KF2」生成"描述变化"的运动/时空提示词JSON，用于多家视频模型。
 
 ## 输入
-场景锚点（环境一致性）:
+场景锚点 JSON:
 {scene_description}
 
-三关键帧（静止描述，包含 KF0/KF1/KF2）:
+三关键帧 JSON（静止描述，包含 KF0/KF1/KF2）:
 {shot_prompt}
 
 ## 关键规则（必须遵守）
-1. 只描述“从 KF0→KF1→KF2 发生了什么变化”，不要重述静态画面细节。
-2. 变化分三类：人物变化 / 镜头变化 / 环境变化；每类最多 2 个要点，避免打架。
-3. 给两种输出：短版（适配多数模型）+ 分拍版（0-1s/1-2s/2-3s）。
-4. 输出中英双语；直接输出指定格式，不要解释。
-5. 强约束必须写明：保持同一人物身份/脸/服装/发型/背景锚点不变；禁止凭空新增物体；禁止场景跳变；禁止文字水印。
+1. 只描述"从 KF0→KF1→KF2 发生了什么变化"，不要重述静态画面细节。
+2. 变化分三类：主体变化（人物/物品）/ 镜头变化 / 环境变化；每类最多 2 个要点，避免打架。
+3. 给两种输出：短版（适配多数模型）+ 分拍版（0-1s/1-2s/2-3s 时间节拍）。
+4. 强约束必须写明：保持同一人物身份/脸/服装/发型/背景锚点不变；禁止凭空新增物体；禁止场景跳变；禁止文字水印。
+5. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
-## 输出格式（严格按行输出）
-MOTION_SHORT_ZH: ...
-MOTION_SHORT_EN: ...
-MOTION_BEATS_ZH: 0-1s ...; 1-2s ...; 2-3s ...
-MOTION_BEATS_EN: 0-1s ...; 1-2s ...; 2-3s ...
-CONSTRAINTS_ZH: ...
-CONSTRAINTS_EN: ...`,
-  outputFormat: { type: 'text', maxLength: 2000 },
-  maxTokens: 800,
+## 输出格式（严格 JSON）
+{
+  "motion": {
+    "short": {
+      "zh": "简短运动描述（一句话概括整体变化，20-40字）",
+      "en": "Short motion description (one sentence summarizing overall change)"
+    },
+    "beats": {
+      "zh": {
+        "0-1s": "第一秒内的变化描述",
+        "1-2s": "第二秒内的变化描述",
+        "2-3s": "第三秒内的变化描述"
+      },
+      "en": {
+        "0-1s": "Changes in first second",
+        "1-2s": "Changes in second second",
+        "2-3s": "Changes in third second"
+      }
+    }
+  },
+  "changes": {
+    "subject": {
+      "zh": ["主体变化1（如：角色A从坐姿站起）", "主体变化2"],
+      "en": ["Subject change 1", "Subject change 2"]
+    },
+    "camera": {
+      "zh": ["镜头变化（如：轻微推进/保持静止）"],
+      "en": ["Camera change"]
+    },
+    "environment": {
+      "zh": ["环境变化（如：窗帘轻微飘动/光线渐暗）"],
+      "en": ["Environment change"]
+    }
+  },
+  "constraints": {
+    "zh": "约束条件（如：保持人物身份一致、背景锚点不变、禁止新增物体、禁止场景跳变、禁止文字水印）",
+    "en": "Constraints (e.g., maintain character identity, keep background anchors unchanged, no new objects, no scene jumps, no text/watermark)"
+  }
+}`,
+  outputFormat: { type: 'json', maxLength: 2500 },
+  maxTokens: 1000,
 };
 
 export const DialogueSkill: Skill = {
@@ -231,9 +332,9 @@ export const CharacterBasicInfoSkill: Skill = {
 
 export const CharacterPortraitSkill: Skill = {
   name: 'character-portrait-prompts',
-  description: '生成角色定妆照提示词（MJ/SD/通用），用于角色一致性参考图',
+  description: '生成角色定妆照提示词JSON（MJ/SD/通用），用于角色一致性参考图',
   requiredContext: ['project_essence', 'character_info', 'style'],
-  promptTemplate: `你是专业的 AI 绘图提示词工程师。请为下述角色生成“定妆照（全身、白底）”提示词，用于后续分镜生成时锁定同一人物身份。
+  promptTemplate: `你是专业的 AI 绘图提示词工程师。请为下述角色生成"定妆照（全身、白底）"提示词JSON，用于后续分镜生成时锁定同一人物身份。
 
 ## 画风（可融入，不要堆砌质量词）
 {style}
@@ -253,15 +354,46 @@ secondaryColor={secondaryColor}
 - 单人、全身、正面或 3/4 站姿，纯白背景
 - 强调外观锚点（发型/发色/服装关键件/配饰/体态/表情气质）
 - 禁止新增其他人物/文字水印/多余物体
+- 只输出 JSON，不要代码块、不要解释、不要多余文字
 
-## 输出格式（严格 JSON；只输出 JSON）
+## 输出格式（严格 JSON）
 {
-  "midjourney": "英文提示词，末尾包含 --ar 2:3 --v 6，并包含 --no text --no watermark --no extra people 等约束",
-  "stableDiffusion": "英文正向提示词（可包含逗号分隔关键词），可在末尾追加 Negative prompt: ...",
-  "general": "中文通用描述（适配其他绘图工具）"
+  "portrait": {
+    "framing": "全身/半身",
+    "pose": "站姿描述（如：正面站立/3/4侧身/双手自然下垂）",
+    "background": "纯白背景/简洁纯色背景"
+  },
+  "visualAnchors": {
+    "hair": "发型发色锚点（如：黑色长直发及腰/金色短卷发）",
+    "face": "面部特征锚点（如：大眼睛/高鼻梁/圆脸）",
+    "bodyType": "体型锚点（如：纤细/高挑/健壮）",
+    "outfit": "服装锚点（如：白色衬衫+黑色西裤/红色连衣裙）",
+    "accessories": "配饰锚点（如：银色项链/黑框眼镜/无配饰）",
+    "distinctive": "独特识别特征（如：左眼下有泪痣/右手有疤痕）"
+  },
+  "colors": {
+    "primary": "#RRGGBB（角色主色调）",
+    "secondary": "#RRGGBB（角色副色调）",
+    "accent": "#RRGGBB（点缀色，可选）"
+  },
+  "prompts": {
+    "midjourney": "英文提示词，末尾包含 --ar 2:3 --v 6 --no text --no watermark --no extra people",
+    "stableDiffusion": {
+      "positive": "英文正向提示词（逗号分隔关键词）",
+      "negative": "英文负向提示词（如：text, watermark, multiple people, bad anatomy, extra limbs）"
+    },
+    "general": {
+      "zh": "中文通用描述（适配其他绘图工具）",
+      "en": "English general description"
+    }
+  },
+  "avoid": {
+    "zh": "避免元素（如：多余人物/文字水印/复杂背景/道具）",
+    "en": "Elements to avoid"
+  }
 }`,
-  outputFormat: { type: 'json', maxLength: 3000 },
-  maxTokens: 900,
+  outputFormat: { type: 'json', maxLength: 4000 },
+  maxTokens: 1200,
 };
 
 // 技能注册表

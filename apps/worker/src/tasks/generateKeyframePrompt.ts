@@ -14,43 +14,87 @@ function buildPrompt(args: {
   characters: string;
   panelHints: string;
 }): string {
-  return `你是专业的绘图/视频关键帧提示词工程师。用户已经用“场景锚点”生成了一张无人物的场景图（背景参考图）。现在请为 img2img/图生图 输出 3 张「静止」关键帧的“人物差分提示词”：KF0(起始) / KF1(中间) / KF2(结束)，用于在同一背景上生成连贯的三帧。
+  return `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 3 张「静止」关键帧的"主体差分提示词"JSON：KF0(起始) / KF1(中间) / KF2(结束)。
 
 ## 输入
 当前分镜概要（决定三帧的动作分解）:
 ${args.currentSummary}
 
-场景锚点（环境一致性，包含 LOCK_*。注意：只允许引用 LOCK_* 里的锚点名用于定位，不要复述场景段落）:
+场景锚点 JSON（环境一致性）:
 ${args.sceneAnchor}
 
-视觉风格参考（可融入，但避免堆砌“masterpiece/best quality/8k”等质量词）:
+视觉风格参考:
 ${args.style}
 
-出场角色（仅用于点名，不要写长外观描述）:
+出场角色（仅用于点名，不要写长外观描述，角色外观由定妆照资产保证）:
 ${args.characters}
 ${args.panelHints}
 
 ## 关键规则（必须遵守）
-1) 三帧默认同一镜头/构图/透视/光照，并以同一背景参考图为底：不要改背景、不要新增场景物件。
-2) 每个关键帧都是“定格瞬间”，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
-3) 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
-4) 每个 KF 只写“人物差分”：位置（left/right/foreground/background 或三分法）、静态姿态/定格动作、手部/道具状态、遮挡关系、留白（气泡区域）。
-5) 角色一致性由参考图资产保证：不要重复外观描述（发型/脸/服装款式/细节），只写差量（表情/姿势/交互）。
-6) 场景定位只允许引用 2-4 个 LOCK_* 锚点名，不要重新描述环境细节。
-7) KF0/KF1/KF2 必须明显不同：每帧至少 3 个可见差异（位置/姿态/手部/道具/视线/距离），但都必须是定格瞬间。
-8) AVOID 不要写 “no people/no characters/no hands”。可写：no extra characters / keep background unchanged / no text/watermark / no motion blur / bad hands / extra fingers / bad anatomy。
-9) 中英双语都要输出，并且每个 KF 的 ZH/EN 都是可直接用于图生图/参考图的完整提示词。
-10) 直接输出指定格式，不要解释。
+1. 只描述主体（人物/物品）在场景中的【位置、姿势、动作定格、交互关系】，不要描述人物外貌细节（发型/脸/服装款式等由定妆照资产保证）。
+2. 三帧默认同一镜头/构图/透视/光照，背景参考图不变：不要改背景、不要新增场景物件。
+3. 每个关键帧都是"定格瞬间"，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
+4. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
+5. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名，不要重新描述环境细节。
+6. KF0/KF1/KF2 必须明显不同：每帧至少 3 个可见差异（位置/姿态/手部/道具/视线/距离），但都必须是定格瞬间。
+7. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
-## 输出格式（严格按行输出）
-KF0_ZH: ...
-KF0_EN: ...
-KF1_ZH: ...
-KF1_EN: ...
-KF2_ZH: ...
-KF2_EN: ...
-AVOID_ZH: ...
-AVOID_EN: ...`;
+## 输出格式（严格 JSON）
+{
+  "camera": {
+    "type": "特写/中景/全景/远景",
+    "angle": "正面/侧面/俯视/仰视/3/4侧面",
+    "aspectRatio": "画面比例（如 16:9/3:4/1:1）"
+  },
+  "keyframes": {
+    "KF0": {
+      "zh": {
+        "subjects": [
+          {
+            "name": "角色/物品名（点名即可）",
+            "position": "画面位置（如：画面左侧/中央偏右/前景）",
+            "pose": "姿势状态（如：站立/坐姿/倚靠）",
+            "action": "动作定格（如：右手举起/双手交叉胸前）",
+            "expression": "表情（仅特写镜头需要，如：微笑/凝视）",
+            "gaze": "视线方向（如：看向镜头/看向画面右侧）",
+            "interaction": "与其他主体或场景的交互（如：手扶栏杆/与B角色对视）"
+          }
+        ],
+        "usedAnchors": ["引用的场景锚点1", "锚点2"],
+        "composition": "构图说明（如：三分法左侧/居中对称）",
+        "bubbleSpace": "气泡留白区域（如：右上角/无需留白）"
+      },
+      "en": {
+        "subjects": [
+          {
+            "name": "character/object name",
+            "position": "position in frame",
+            "pose": "pose state",
+            "action": "frozen action",
+            "expression": "expression (for close-up only)",
+            "gaze": "gaze direction",
+            "interaction": "interaction with others or scene"
+          }
+        ],
+        "usedAnchors": ["anchor1", "anchor2"],
+        "composition": "composition notes",
+        "bubbleSpace": "bubble space area"
+      }
+    },
+    "KF1": {
+      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
+      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
+    },
+    "KF2": {
+      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
+      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
+    }
+  },
+  "avoid": {
+    "zh": "避免元素（如：多余角色/背景变化/文字水印/运动模糊/解剖错误）",
+    "en": "Elements to avoid (e.g., extra characters, background changes, text/watermark, motion blur, bad anatomy)"
+  }
+}`;
 }
 
 export async function generateKeyframePrompt(args: {

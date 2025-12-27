@@ -23,6 +23,9 @@ import {
   computePanelMetrics,
   resolvePanelAssetManifest,
   resolvePanelScript,
+  buildSceneAnchorCopyText,
+  buildKeyframeCopyText,
+  buildMotionCopyText,
 } from '@/lib/workflowV2';
 import {
   migrateOldStyleToConfig,
@@ -2365,31 +2368,27 @@ ${safeJsonStringify(ep.coreExpression)}
     return parseMotionPromptText(refineScene?.motionPrompt || '');
   }, [refineScene?.motionPrompt]);
 
-  // 场景锚点复制文本：组合 SCENE_ANCHOR + LOCK + AVOID（纯文本，无标签）
+  // 场景锚点复制文本：使用新的 JSON 拼接工具函数
   const refineSceneAnchorCopyText = useMemo(() => {
-    const raw = (refineScene?.sceneDescription || '').trim();
-    if (!raw) return { zh: '', en: '' };
-    if (!parsedRefineSceneAnchor.isStructured) {
-      return { zh: raw, en: raw };
-    }
-    const buildCopyText = (locale: 'zh' | 'en') => {
-      const parts: string[] = [];
-      if (parsedRefineSceneAnchor.sceneAnchor[locale]) {
-        parts.push(parsedRefineSceneAnchor.sceneAnchor[locale]!);
-      }
-      if (parsedRefineSceneAnchor.lock?.[locale]) {
-        parts.push(parsedRefineSceneAnchor.lock[locale]!);
-      }
-      if (parsedRefineSceneAnchor.avoid?.[locale]) {
-        parts.push(parsedRefineSceneAnchor.avoid[locale]!);
-      }
-      return parts.join('\n\n').trim();
-    };
-    return {
-      zh: buildCopyText('zh'),
-      en: buildCopyText('en'),
-    };
-  }, [parsedRefineSceneAnchor, refineScene?.sceneDescription]);
+    if (!refineScene) return { zh: '', en: '' };
+    return buildSceneAnchorCopyText(refineScene);
+  }, [refineScene]);
+
+  // 关键帧复制文本：使用新的 JSON 拼接工具函数
+  const refineKeyframeCopyTexts = useMemo(() => {
+    if (!refineScene) return [{ zh: '', en: '' }, { zh: '', en: '' }, { zh: '', en: '' }] as const;
+    return [
+      buildKeyframeCopyText(refineScene, 0),
+      buildKeyframeCopyText(refineScene, 1),
+      buildKeyframeCopyText(refineScene, 2),
+    ] as const;
+  }, [refineScene]);
+
+  // 运动提示词复制文本：使用新的 JSON 拼接工具函数
+  const refineMotionCopyText = useMemo(() => {
+    if (!refineScene) return { zh: '', en: '' };
+    return buildMotionCopyText(refineScene);
+  }, [refineScene]);
 
   // 通用复制到剪贴板函数
   const copyToClipboard = async (text: string, title: string, description?: string) => {
@@ -2453,12 +2452,11 @@ ${safeJsonStringify(ep.coreExpression)}
     );
   };
 
-  // 关键帧复制处理
+  // 关键帧复制处理：使用拼接后的提示词
   const handleCopyKeyframe = async (kfIndex: 0 | 1 | 2, locale: 'zh' | 'en') => {
     const kfLabels = ['KF0（起始）', 'KF1（中间）', 'KF2（结束）'];
-    const kf = parsedRefineKeyframes.keyframes[kfIndex];
-    const text = kf[locale] || '';
-    await copyToClipboard(text, '已复制', `${kfLabels[kfIndex]} ${locale.toUpperCase()} 已复制。`);
+    const text = refineKeyframeCopyTexts[kfIndex][locale] || '';
+    await copyToClipboard(text, '已复制', `${kfLabels[kfIndex]} ${locale.toUpperCase()} 已复制（完整提示词）。`);
   };
 
   const handleCopyKeyframeAvoid = async (locale: 'zh' | 'en') => {
@@ -2466,16 +2464,26 @@ ${safeJsonStringify(ep.coreExpression)}
     await copyToClipboard(text, '已复制', `AVOID ${locale.toUpperCase()} 已复制。`);
   };
 
-  // 运动提示词复制处理
+  // 运动提示词复制处理：支持分块复制和完整复制
   const handleCopyMotion = async (
-    block: 'motionShort' | 'motionBeats' | 'constraints',
+    block: 'motionShort' | 'motionBeats' | 'constraints' | 'full',
     locale: 'zh' | 'en',
   ) => {
     const labels: Record<string, string> = {
-      motionShort: 'MOTION_SHORT',
-      motionBeats: 'MOTION_BEATS',
-      constraints: 'CONSTRAINTS',
+      motionShort: '运动简述',
+      motionBeats: '时间节拍',
+      constraints: '约束条件',
+      full: '完整运动提示词',
     };
+    
+    // 完整复制使用拼接后的提示词
+    if (block === 'full') {
+      const text = refineMotionCopyText[locale] || '';
+      await copyToClipboard(text, '已复制', `${labels[block]} ${locale.toUpperCase()} 已复制。`);
+      return;
+    }
+    
+    // 分块复制
     const text = parsedRefineMotion[block][locale] || '';
     await copyToClipboard(text, '已复制', `${labels[block]} ${locale.toUpperCase()} 已复制。`);
   };

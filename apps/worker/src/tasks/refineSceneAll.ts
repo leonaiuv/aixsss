@@ -64,7 +64,7 @@ function buildSceneAnchorPrompt(args: {
   prevSummary: string;
   panelHints: string;
 }): string {
-  return `你是专业的提示词工程师与分镜助理。请为“当前分镜”输出可复用的「场景锚点 Scene Anchor」，用于保证多张关键帧/多家图生视频的场景一致性。
+  return `你是专业的提示词工程师与分镜助理。请为"当前分镜"输出可复用的「场景锚点 Scene Anchor」JSON，用于保证多张关键帧/多家图生视频的场景一致性。
 
 ## 输入
 视觉风格参考（可轻量融入，不要堆砌质量词）:
@@ -77,13 +77,42 @@ ${args.currentSummary}
 ${args.prevSummary}
 ${args.panelHints}
 
-## 输出格式（严格按行输出）
-SCENE_ANCHOR_ZH: ...
-SCENE_ANCHOR_EN: ...
-LOCK_ZH: 1) ...; 2) ...; 3) ...; ...
-LOCK_EN: 1) ...; 2) ...; 3) ...; ...
-AVOID_ZH: ...
-AVOID_EN: ...`;
+## 重要约束
+1. 只描述"环境/空间/光线/固定锚点物"，绝对不要出现人物、不要写角色代入、不要写动作、不要写镜头运动。
+2. anchors 数组里要包含 4-8 个可被稳定复现的锚点元素。
+3. 只输出 JSON，不要代码块、不要解释、不要多余文字。
+
+## 输出格式（严格 JSON）
+{
+  "scene": {
+    "zh": "场景整体描述（一段话，60-120字）",
+    "en": "Overall scene description"
+  },
+  "location": {
+    "type": "室内/室外/虚拟空间",
+    "name": "具体地点名称",
+    "details": "空间结构与布局细节"
+  },
+  "lighting": {
+    "type": "自然光/人工光/混合光",
+    "direction": "光源方向",
+    "color": "光线色温或颜色",
+    "intensity": "光照强度描述"
+  },
+  "atmosphere": {
+    "mood": "氛围情绪基调",
+    "weather": "天气状况",
+    "timeOfDay": "时间段"
+  },
+  "anchors": {
+    "zh": ["锚点物1", "锚点物2", "锚点物3", "..."],
+    "en": ["anchor1", "anchor2", "anchor3", "..."]
+  },
+  "avoid": {
+    "zh": "不要出现的元素",
+    "en": "Elements to avoid"
+  }
+}`;
 }
 
 function buildKeyframePrompt(args: {
@@ -93,58 +122,96 @@ function buildKeyframePrompt(args: {
   characters: string;
   panelHints: string;
 }): string {
-  return `你是专业的绘图/视频关键帧提示词工程师。请在同一背景参考图（img2img/图生图）上输出 3 张「静止」关键帧的“人物差分提示词”：KF0 / KF1 / KF2。
+  return `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了背景参考图，角色定妆照也已预先生成。现在请输出 3 张「静止」关键帧的"主体差分提示词"JSON：KF0 / KF1 / KF2。
 
 ## 关键规则（必须遵守）
-1) 三帧默认同一镜头/构图/透视/光照，背景参考图不变：不要改背景、不要新增场景物件。
-2) 每个关键帧都是“定格瞬间”：禁止 then/after/随后/开始/逐渐 等连续过程词。
-3) 输出重点是“差量指令”：位置（left/right/foreground/background）、姿势/手部/道具状态、遮挡关系、留白（给气泡）。
-4) 角色一致性由参考图资产保证：不要重复外观描述（发型/脸/服装款式/细节），只点名角色资产并写差量（表情/姿势/交互）。
-5) 场景定位只允许引用场景锚点中的 LOCK_* 锚点名（2-4 个即可），不要复述环境长段落。
-6) AVOID 不要写 no people/no characters/no hands，避免与图生图冲突；可写 no text/no watermark/no extra objects 等。
+1. 只描述主体（人物/物品）在场景中的【位置、姿势、动作定格、交互关系】，不要描述人物外貌细节。
+2. 三帧默认同一镜头/构图/透视/光照，背景参考图不变：不要改背景、不要新增场景物件。
+3. 每个关键帧都是"定格瞬间"，禁止写连续过程词。
+4. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名。
+5. KF0/KF1/KF2 必须明显不同：每帧至少 3 个可见差异。
+6. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
 ## 输入
 当前分镜概要:
 ${args.currentSummary}
 
-场景锚点:
+场景锚点 JSON:
 ${args.sceneAnchor}
 
 视觉风格参考:
 ${args.style}
 
-出场角色（仅用于点名，不要写长外观描述）:
+出场角色（仅用于点名，外观由定妆照资产保证）:
 ${args.characters}
 ${args.panelHints}
 
-## 输出格式（严格按行输出）
-KF0_ZH: ...
-KF0_EN: ...
-KF1_ZH: ...
-KF1_EN: ...
-KF2_ZH: ...
-KF2_EN: ...
-AVOID_ZH: ...
-AVOID_EN: ...`;
+## 输出格式（严格 JSON）
+{
+  "camera": {
+    "type": "特写/中景/全景/远景",
+    "angle": "正面/侧面/俯视/仰视",
+    "aspectRatio": "画面比例"
+  },
+  "keyframes": {
+    "KF0": {
+      "zh": {
+        "subjects": [{ "name": "角色名", "position": "位置", "pose": "姿势", "action": "动作", "expression": "表情", "gaze": "视线", "interaction": "交互" }],
+        "usedAnchors": ["锚点1", "锚点2"],
+        "composition": "构图说明",
+        "bubbleSpace": "气泡留白"
+      },
+      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
+    },
+    "KF1": { "zh": {...}, "en": {...} },
+    "KF2": { "zh": {...}, "en": {...} }
+  },
+  "avoid": {
+    "zh": "避免元素",
+    "en": "Elements to avoid"
+  }
+}`;
 }
 
 function buildMotionPrompt(args: { sceneAnchor: string; shotPrompt: string; panelHints: string }): string {
-  return `你是图生视频(I2V)提示词工程师。请基于三关键帧生成“描述变化”的运动/时空提示词。
+  return `你是图生视频(I2V)提示词工程师。请基于三关键帧 JSON 生成"描述变化"的运动/时空提示词JSON。
 
-场景锚点:
+## 输入
+场景锚点 JSON:
 ${args.sceneAnchor}
 
-三关键帧:
+三关键帧 JSON:
 ${args.shotPrompt}
 ${args.panelHints}
 
-输出格式（严格按行输出）
-MOTION_SHORT_ZH: ...
-MOTION_SHORT_EN: ...
-MOTION_BEATS_ZH: 0-1s ...; 1-2s ...; 2-3s ...
-MOTION_BEATS_EN: 0-1s ...; 1-2s ...; 2-3s ...
-CONSTRAINTS_ZH: ...
-CONSTRAINTS_EN: ...`;
+## 关键规则
+1. 只描述"从 KF0→KF1→KF2 发生了什么变化"，不要重述静态画面细节。
+2. 变化分三类：主体变化 / 镜头变化 / 环境变化。
+3. 强约束：保持人物身份一致、背景锚点不变、禁止新增物体、禁止场景跳变。
+4. 只输出 JSON，不要代码块、不要解释、不要多余文字。
+
+## 输出格式（严格 JSON）
+{
+  "motion": {
+    "short": {
+      "zh": "简短运动描述",
+      "en": "Short motion description"
+    },
+    "beats": {
+      "zh": { "0-1s": "...", "1-2s": "...", "2-3s": "..." },
+      "en": { "0-1s": "...", "1-2s": "...", "2-3s": "..." }
+    }
+  },
+  "changes": {
+    "subject": { "zh": [...], "en": [...] },
+    "camera": { "zh": [...], "en": [...] },
+    "environment": { "zh": [...], "en": [...] }
+  },
+  "constraints": {
+    "zh": "约束条件",
+    "en": "Constraints"
+  }
+}`;
 }
 
 function buildDialoguePrompt(args: {

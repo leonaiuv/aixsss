@@ -8,30 +8,62 @@ import { toProviderChatConfig } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
 
 function buildPrompt(args: { sceneAnchor: string; shotPrompt: string; panelHints: string }): string {
-  return `你是图生视频(I2V)提示词工程师。请基于「三张静止关键帧 KF0/KF1/KF2」生成“描述变化”的运动/时空提示词，用于多家视频模型。
+  return `你是图生视频(I2V)提示词工程师。请基于「三张静止关键帧 KF0/KF1/KF2」生成"描述变化"的运动/时空提示词JSON，用于多家视频模型。
 
 ## 输入
-场景锚点（环境一致性）:
+场景锚点 JSON:
 ${args.sceneAnchor}
 
-三关键帧（静止描述，包含 KF0/KF1/KF2）:
+三关键帧 JSON（静止描述，包含 KF0/KF1/KF2）:
 ${args.shotPrompt}
 ${args.panelHints}
 
 ## 关键规则（必须遵守）
-1. 只描述“从 KF0→KF1→KF2 发生了什么变化”，不要重述静态画面细节。
-2. 变化分三类：人物变化 / 镜头变化 / 环境变化；每类最多 2 个要点，避免打架。
-3. 给两种输出：短版（适配多数模型）+ 分拍版（0-1s/1-2s/2-3s）。
-4. 输出中英双语；直接输出指定格式，不要解释。
-5. 强约束必须写明：保持同一人物身份/脸/服装/发型/背景锚点不变；禁止凭空新增物体；禁止场景跳变；禁止文字水印。
+1. 只描述"从 KF0→KF1→KF2 发生了什么变化"，不要重述静态画面细节。
+2. 变化分三类：主体变化（人物/物品）/ 镜头变化 / 环境变化；每类最多 2 个要点，避免打架。
+3. 给两种输出：短版（适配多数模型）+ 分拍版（0-1s/1-2s/2-3s 时间节拍）。
+4. 强约束必须写明：保持同一人物身份/脸/服装/发型/背景锚点不变；禁止凭空新增物体；禁止场景跳变；禁止文字水印。
+5. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
-## 输出格式（严格按行输出）
-MOTION_SHORT_ZH: ...
-MOTION_SHORT_EN: ...
-MOTION_BEATS_ZH: 0-1s ...; 1-2s ...; 2-3s ...
-MOTION_BEATS_EN: 0-1s ...; 1-2s ...; 2-3s ...
-CONSTRAINTS_ZH: ...
-CONSTRAINTS_EN: ...`;
+## 输出格式（严格 JSON）
+{
+  "motion": {
+    "short": {
+      "zh": "简短运动描述（一句话概括整体变化，20-40字）",
+      "en": "Short motion description (one sentence summarizing overall change)"
+    },
+    "beats": {
+      "zh": {
+        "0-1s": "第一秒内的变化描述",
+        "1-2s": "第二秒内的变化描述",
+        "2-3s": "第三秒内的变化描述"
+      },
+      "en": {
+        "0-1s": "Changes in first second",
+        "1-2s": "Changes in second second",
+        "2-3s": "Changes in third second"
+      }
+    }
+  },
+  "changes": {
+    "subject": {
+      "zh": ["主体变化1（如：角色A从坐姿站起）", "主体变化2"],
+      "en": ["Subject change 1", "Subject change 2"]
+    },
+    "camera": {
+      "zh": ["镜头变化（如：轻微推进/保持静止）"],
+      "en": ["Camera change"]
+    },
+    "environment": {
+      "zh": ["环境变化（如：窗帘轻微飘动/光线渐暗）"],
+      "en": ["Environment change"]
+    }
+  },
+  "constraints": {
+    "zh": "约束条件（如：保持人物身份一致、背景锚点不变、禁止新增物体、禁止场景跳变、禁止文字水印）",
+    "en": "Constraints (e.g., maintain character identity, keep background anchors unchanged, no new objects, no scene jumps, no text/watermark)"
+  }
+}`;
 }
 
 export async function generateMotionPrompt(args: {
