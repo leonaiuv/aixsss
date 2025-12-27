@@ -11,10 +11,7 @@ import { useMemo, useState } from 'react';
 import type { Character, Scene, WorldViewElement } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -101,7 +98,10 @@ interface SceneDetailModalProps {
   parsedMotion: ParsedMotion;
   onCopyKeyframe: (idx: 0 | 1 | 2, lang: 'zh' | 'en') => Promise<void>;
   onCopyKeyframeAvoid: (lang: 'zh' | 'en') => Promise<void>;
-  onCopyMotion: (key: 'motionShort' | 'motionBeats' | 'constraints', lang: 'zh' | 'en') => Promise<void>;
+  onCopyMotion: (
+    key: 'motionShort' | 'motionBeats' | 'constraints',
+    lang: 'zh' | 'en',
+  ) => Promise<void>;
   onCopySceneAnchor: (lang: 'zh' | 'en') => Promise<void>;
   onCopyDialogues: (dialogues: DialogueLine[]) => Promise<void>;
   sceneAnchorCopyText: { zh: string; en: string };
@@ -149,11 +149,7 @@ function CollapsibleSection({
           )}
         </div>
       </button>
-      {isOpen && (
-        <div className="border-t px-4 pb-4 pt-3">
-          {children}
-        </div>
-      )}
+      {isOpen && <div className="border-t px-4 pb-4 pt-3">{children}</div>}
     </div>
   );
 }
@@ -173,7 +169,7 @@ function CopyButtonGroup({
   size?: 'sm' | 'xs';
 }) {
   const btnClass = size === 'xs' ? 'h-6 px-2 text-xs' : 'h-7 px-2.5 text-xs';
-  
+
   return (
     <div className="flex items-center gap-1">
       <Button
@@ -324,9 +320,7 @@ function DialogueCard({ line }: { line: DialogueLine }) {
       <div className="flex items-center gap-2 mb-2">
         <div className={cn('flex items-center gap-1.5', config.iconColor)}>
           {config.icon}
-          <span className="text-xs font-medium uppercase tracking-wide">
-            {config.label}
-          </span>
+          <span className="text-xs font-medium uppercase tracking-wide">{config.label}</span>
         </div>
         {line.characterName && (
           <>
@@ -408,13 +402,17 @@ function DeltaComparisonPanel({
             <div className="text-xs font-medium text-primary">{item.label}</div>
             <div className="grid gap-2 text-xs">
               <div className="flex items-start gap-2">
-                <span className="shrink-0 rounded bg-red-500/10 px-1.5 py-0.5 text-red-600">前</span>
+                <span className="shrink-0 rounded bg-red-500/10 px-1.5 py-0.5 text-red-600">
+                  前
+                </span>
                 <span className="text-muted-foreground whitespace-pre-wrap line-clamp-2">
                   {item.before || '（空）'}
                 </span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="shrink-0 rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600">后</span>
+                <span className="shrink-0 rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600">
+                  后
+                </span>
                 <span className="text-muted-foreground whitespace-pre-wrap line-clamp-2">
                   {item.after || '（空）'}
                 </span>
@@ -477,11 +475,11 @@ export function SceneDetailModal({
   // 解析台词数据 - 支持结构化数组和纯文本格式
   const dialogues = useMemo<DialogueLine[]>(() => {
     if (!scene) return [];
-    
+
     const rawDialogues = scene.dialogues;
-    
+
     if (!rawDialogues) return [];
-    
+
     // 如果是结构化 DialogueLine[] 格式
     if (Array.isArray(rawDialogues) && rawDialogues.length > 0) {
       const first = rawDialogues[0];
@@ -489,18 +487,18 @@ export function SceneDetailModal({
       if (typeof first === 'object' && first !== null && 'content' in first) {
         // 特殊处理：如果只有一条记录，且 content 包含多条台词格式，需要进一步解析
         const items = rawDialogues as DialogueLine[];
-        
+
         // 检查是否有记录的 content 包含 `- [` 格式的多条台词
-        const needsFurtherParsing = items.some(item => 
-          item.content && item.content.includes('- [') && item.content.includes('\n')
+        const needsFurtherParsing = items.some(
+          (item) => item.content && item.content.includes('- [') && item.content.includes('\n'),
         );
-        
+
         if (needsFurtherParsing) {
           // 将所有 content 合并解析
-          const allContent = items.map(item => item.content).join('\n');
+          const allContent = items.map((item) => item.content).join('\n');
           return parseDialogueText(allContent);
         }
-        
+
         return items.slice().sort((a, b) => a.order - b.order);
       }
       // 如果是字符串数组，拼接后解析
@@ -509,12 +507,12 @@ export function SceneDetailModal({
         return parseDialogueText(combinedText);
       }
     }
-    
+
     // 如果是单个字符串格式，尝试解析
     if (typeof rawDialogues === 'string' && rawDialogues.trim()) {
       return parseDialogueText(rawDialogues);
     }
-    
+
     // 如果是包含 raw 文本的对象（某些 JSON 存储格式）
     if (typeof rawDialogues === 'object' && rawDialogues !== null && !Array.isArray(rawDialogues)) {
       // 尝试将对象转为 JSON 字符串后解析
@@ -523,7 +521,7 @@ export function SceneDetailModal({
         return parseDialogueText(jsonStr);
       }
     }
-    
+
     return [];
   }, [scene]);
 
@@ -532,8 +530,8 @@ export function SceneDetailModal({
   // 可能用换行符或空格 + - 分隔
   function parseDialogueText(text: string): DialogueLine[] {
     // 首先尝试按换行符分隔
-    let lines = text.split('\n').filter(line => line.trim());
-    
+    let lines = text.split('\n').filter((line) => line.trim());
+
     // 如果只有一行但包含多个 "[类型|情绪]" 模式，则需要分隔
     // 检测包含多个 "- [" 或 "[" 开头的台词
     if (lines.length === 1) {
@@ -544,25 +542,28 @@ export function SceneDetailModal({
         // 先将 " - [" 替换为特殊分隔符，然后分隔
         const separator = '\u0000SPLIT\u0000';
         const splitText = text.replace(/\s+-\s*\[/g, () => separator + '- [');
-        lines = splitText.split(separator).map(s => s.trim()).filter(Boolean);
+        lines = splitText
+          .split(separator)
+          .map((s) => s.trim())
+          .filter(Boolean);
       }
     }
-    
+
     const result: DialogueLine[] = [];
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       // 匹配格式: - [类型|情绪] 角色: 内容
       const match = line.match(/^-?\s*\[([^\]|]+)\|([^\]]+)\]\s*([^:：]+)[：:]\s*(.+)$/);
-      
+
       if (match) {
         const typeMap: Record<string, DialogueLine['type']> = {
-          '对白': 'dialogue',
-          '独白': 'monologue',
-          '旁白': 'narration',
-          '心理': 'thought',
+          对白: 'dialogue',
+          独白: 'monologue',
+          旁白: 'narration',
+          心理: 'thought',
         };
-        
+
         result.push({
           id: `parsed-${i}`,
           type: typeMap[match[1]] || 'dialogue',
@@ -581,7 +582,7 @@ export function SceneDetailModal({
         });
       }
     }
-    
+
     return result;
   }
 
@@ -603,9 +604,7 @@ export function SceneDetailModal({
                     <Badge variant="outline" className="text-xs">
                       {getSceneStatusLabel(scene.status)}
                     </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      分镜 #{scene.order}
-                    </span>
+                    <span className="text-xs text-muted-foreground">分镜 #{scene.order}</span>
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-1 max-w-[400px] mt-0.5">
                     {scene.summary || '（无概要）'}
@@ -667,7 +666,7 @@ export function SceneDetailModal({
                 'flex flex-col items-center justify-center w-10 h-10 rounded-lg transition-all',
                 activeTab === 'prompts'
                   ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               title="提示词"
             >
@@ -680,7 +679,7 @@ export function SceneDetailModal({
                 'flex flex-col items-center justify-center w-10 h-10 rounded-lg transition-all',
                 activeTab === 'script'
                   ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               title="分镜脚本"
             >
@@ -693,7 +692,7 @@ export function SceneDetailModal({
                 'flex flex-col items-center justify-center w-10 h-10 rounded-lg transition-all',
                 activeTab === 'dialogue'
                   ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
               title="台词"
             >
@@ -729,7 +728,9 @@ export function SceneDetailModal({
                     >
                       <Textarea
                         value={scene.sceneDescription}
-                        onChange={(e) => onUpdateScene(scene.id, { sceneDescription: e.target.value })}
+                        onChange={(e) =>
+                          onUpdateScene(scene.id, { sceneDescription: e.target.value })
+                        }
                         className="min-h-[140px] font-mono text-sm leading-relaxed resize-none"
                         placeholder="描述场景的视觉锚点，如：俯视角下，废弃的工厂区，锈迹斑斑的管道纵横交错..."
                       />
@@ -836,7 +837,9 @@ export function SceneDetailModal({
                         )}
                         <Textarea
                           value={scene.motionPrompt}
-                          onChange={(e) => onUpdateScene(scene.id, { motionPrompt: e.target.value })}
+                          onChange={(e) =>
+                            onUpdateScene(scene.id, { motionPrompt: e.target.value })
+                          }
                           className="min-h-[200px] font-mono text-sm leading-relaxed resize-none"
                           placeholder="SHORT_ZH: ...&#10;SHORT_EN: ...&#10;BEATS_ZH: ...&#10;..."
                         />
@@ -960,4 +963,3 @@ export function SceneDetailModal({
     </Dialog>
   );
 }
-

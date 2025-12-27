@@ -183,10 +183,10 @@ describe('EpisodeWorkflow', () => {
     await userEvent.click(screen.getByRole('tab', { name: '2. 分镜列表' }));
     await userEvent.click(screen.getByRole('button', { name: '详情' }));
 
-    expect(await screen.findByText('分镜详情（可编辑）')).toBeInTheDocument();
+    expect(await screen.findByText('分镜 #1')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: '复制 ZH' }));
-    await userEvent.click(screen.getByRole('button', { name: '复制 EN' }));
+    await userEvent.click(screen.getByRole('button', { name: 'ZH' }));
+    await userEvent.click(screen.getByRole('button', { name: 'EN' }));
 
     // 复制内容应包含 SCENE_ANCHOR + LOCK + AVOID（纯文本，无标签）
     expect(writeText).toHaveBeenNthCalledWith(
