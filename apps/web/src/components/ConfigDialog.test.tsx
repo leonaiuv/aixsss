@@ -74,11 +74,19 @@ beforeEach(() => {
   KeyManager.reset();
 });
 
+const openSecurityTab = () => {
+  fireEvent.click(screen.getByRole('button', { name: /安全设置/i }));
+};
+
+const openConnectionTab = () => {
+  fireEvent.click(screen.getByRole('button', { name: /连接配置/i }));
+};
+
 describe('ConfigDialog 基础功能', () => {
   it('应正确渲染对话框', () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
-    expect(screen.getByText('API配置')).toBeInTheDocument();
+    expect(screen.getByText('AI 设置')).toBeInTheDocument();
     expect(screen.getByLabelText(/API Key/i)).toBeInTheDocument();
   });
 
@@ -93,12 +101,14 @@ describe('ConfigDialog 加密密码设置', () => {
   it('应显示加密密码设置区域', () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
-    expect(screen.getByText(/加密设置/i)).toBeInTheDocument();
+    openSecurityTab();
+    expect(screen.getByText(/使用默认加密/i)).toBeInTheDocument();
   });
 
   it('未设置密码时应显示设置密码表单', () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     expect(screen.getByLabelText(/加密密码/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/确认密码/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /设置加密密码/i })).toBeInTheDocument();
@@ -107,6 +117,7 @@ describe('ConfigDialog 加密密码设置', () => {
   it('密码不匹配时应显示错误', async () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     const passwordInput = screen.getByLabelText(/加密密码/i);
     const confirmInput = screen.getByLabelText(/确认密码/i);
     const submitBtn = screen.getByRole('button', { name: /设置加密密码/i });
@@ -123,6 +134,7 @@ describe('ConfigDialog 加密密码设置', () => {
   it('密码过短时应显示错误', async () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     const passwordInput = screen.getByLabelText(/加密密码/i);
     const confirmInput = screen.getByLabelText(/确认密码/i);
     const submitBtn = screen.getByRole('button', { name: /设置加密密码/i });
@@ -139,6 +151,7 @@ describe('ConfigDialog 加密密码设置', () => {
   it('正确设置密码后应初始化加密', async () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     const passwordInput = screen.getByLabelText(/加密密码/i);
     const confirmInput = screen.getByLabelText(/确认密码/i);
     const submitBtn = screen.getByRole('button', { name: /设置加密密码/i });
@@ -160,6 +173,7 @@ describe('ConfigDialog 加密密码设置', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     expect(screen.getByText(/已启用加密保护/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /更换密码/i })).toBeInTheDocument();
   });
@@ -169,6 +183,7 @@ describe('ConfigDialog 加密密码设置', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     const changeBtn = screen.getByRole('button', { name: /更换密码/i });
     fireEvent.click(changeBtn);
 
@@ -184,6 +199,7 @@ describe('ConfigDialog 加密密码设置', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     fireEvent.click(screen.getByRole('button', { name: /更换密码/i }));
 
     await waitFor(() => {
@@ -207,6 +223,7 @@ describe('ConfigDialog 忘记密码', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     expect(screen.getByRole('button', { name: /忘记密码/i })).toBeInTheDocument();
   });
 
@@ -215,6 +232,7 @@ describe('ConfigDialog 忘记密码', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     const forgetBtn = screen.getByRole('button', { name: /忘记密码/i });
     fireEvent.click(forgetBtn);
 
@@ -229,6 +247,7 @@ describe('ConfigDialog 忘记密码', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     const forgetBtn = screen.getByRole('button', { name: /忘记密码/i });
     fireEvent.click(forgetBtn);
 
@@ -248,6 +267,7 @@ describe('ConfigDialog 加密状态指示', () => {
   it('未设置密码时应显示警告', () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     expect(screen.getByText(/使用默认加密/i)).toBeInTheDocument();
   });
 
@@ -256,6 +276,7 @@ describe('ConfigDialog 加密状态指示', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     expect(screen.getByText(/已启用加密保护/i)).toBeInTheDocument();
   });
 });
@@ -268,13 +289,14 @@ describe('ConfigDialog 解锁流程', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
-    expect(screen.getByText(/请先解锁/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /解锁/i })).toBeInTheDocument();
-
     expect(screen.getByLabelText(/API Key/i)).toBeDisabled();
     expect(screen.getByLabelText(/模型名称/i)).toBeDisabled();
     expect(screen.getByRole('button', { name: /测试连接/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /保存配置/i })).toBeDisabled();
+
+    openSecurityTab();
+    expect(screen.getByText(/配置已锁定/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /解锁/i })).toBeInTheDocument();
   });
 
   it('解锁密码错误应提示错误信息', async () => {
@@ -285,6 +307,7 @@ describe('ConfigDialog 解锁流程', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     fireEvent.change(screen.getByLabelText(/^加密密码$/), { target: { value: 'wrong-password' } });
     fireEvent.click(screen.getByRole('button', { name: /解锁/i }));
 
@@ -301,6 +324,7 @@ describe('ConfigDialog 解锁流程', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
+    openSecurityTab();
     fireEvent.change(screen.getByLabelText(/^加密密码$/), {
       target: { value: 'correct-password' },
     });
@@ -308,6 +332,10 @@ describe('ConfigDialog 解锁流程', () => {
 
     await waitFor(() => {
       expect(mockLoadConfig).toHaveBeenCalled();
+    });
+
+    openConnectionTab();
+    await waitFor(() => {
       expect(screen.getByLabelText(/API Key/i)).not.toBeDisabled();
       expect(screen.getByLabelText(/模型名称/i)).not.toBeDisabled();
       expect(screen.getByRole('button', { name: /测试连接/i })).not.toBeDisabled();
