@@ -851,10 +851,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       {/* 档案选择 */}
       <div className="flex items-center gap-3">
         <div className="flex-1">
-          <Select
-            value={activeProfileId || ''}
-            onValueChange={(v) => void handleSwitchProfile(v)}
-          >
+          <Select value={activeProfileId || ''} onValueChange={(v) => void handleSwitchProfile(v)}>
             <SelectTrigger disabled={isLocked} className="h-10">
               <SelectValue placeholder="选择档案" />
             </SelectTrigger>
@@ -874,7 +871,12 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           <Button size="icon" variant="outline" onClick={handleCreateProfile} disabled={isLocked}>
             <Plus className="h-4 w-4" />
           </Button>
-          <Button size="icon" variant="outline" onClick={handleDuplicateProfile} disabled={isLocked}>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={handleDuplicateProfile}
+            disabled={isLocked}
+          >
             <CopyPlus className="h-4 w-4" />
           </Button>
           <Button
@@ -1162,9 +1164,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         {validationErrors.pricing && (
           <p className="text-sm text-destructive">{validationErrors.pricing}</p>
         )}
-        <p className="text-xs text-muted-foreground">
-          用于成本估算，不填则使用默认估算
-        </p>
+        <p className="text-xs text-muted-foreground">用于成本估算，不填则使用默认估算</p>
       </div>
     </div>
   );
@@ -1172,9 +1172,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   // 渲染用量统计选项卡
   const renderUsageTab = () => (
     <div className="space-y-5">
-      <div className="text-sm text-muted-foreground">
-        统计当前档案近 24 小时的 AI 调用数据
-      </div>
+      <div className="text-sm text-muted-foreground">统计当前档案近 24 小时的 AI 调用数据</div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-lg border bg-card p-4 space-y-1">

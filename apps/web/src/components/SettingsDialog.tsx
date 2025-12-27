@@ -1,10 +1,5 @@
 import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Construction, Palette, Bell, Globe, Shield, Keyboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

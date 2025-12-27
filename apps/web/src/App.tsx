@@ -152,7 +152,11 @@ function LocalApp() {
   );
 
   return (
-    <AppLayout onSearch={handleOpenSearch} onConfig={handleOpenConfig} onSettings={handleOpenSettings}>
+    <AppLayout
+      onSearch={handleOpenSearch}
+      onConfig={handleOpenConfig}
+      onSettings={handleOpenSettings}
+    >
       <Routes>
         <Route path="/" element={<ProjectList />} />
         <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
@@ -296,7 +300,11 @@ function BackendApp() {
   }
 
   return (
-    <AppLayout onSearch={handleOpenSearch} onConfig={handleOpenConfig} onSettings={handleOpenSettings}>
+    <AppLayout
+      onSearch={handleOpenSearch}
+      onConfig={handleOpenConfig}
+      onSettings={handleOpenSettings}
+    >
       <Routes>
         <Route path="/" element={<ProjectList />} />
         <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
