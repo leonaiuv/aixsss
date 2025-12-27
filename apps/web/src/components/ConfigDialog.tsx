@@ -32,19 +32,25 @@ import {
   ShieldAlert,
   Lock,
   Sliders,
-  Layers,
   Copy,
   Trash2,
   Plus,
   CopyPlus,
+  Check,
+  X,
+  Zap,
+  Key,
+  Server,
+  Activity,
+  DollarSign,
 } from 'lucide-react';
 import { AIParameterTuner } from './editor/AIParameterTuner';
 import { clampMaxTokens, getMaxTokensPolicy } from '@/lib/ai/maxTokensPolicy';
+import { cn } from '@/lib/utils';
 
 const DEFAULT_GENERATION_PARAMS: AIGenerationParams = {
   temperature: 0.7,
   topP: 0.9,
-  // 兼容多数供应商的默认输出上限（DeepSeek chat 默认 4K）
   maxTokens: 4096,
   presencePenalty: 0.3,
   frequencyPenalty: 0.3,
@@ -160,6 +166,15 @@ function normalizeGenerationParams(
   };
 }
 
+type TabId = 'connection' | 'params' | 'usage' | 'security';
+
+const TABS: Array<{ id: TabId; label: string; icon: React.ElementType }> = [
+  { id: 'connection', label: '连接配置', icon: Server },
+  { id: 'params', label: '生成参数', icon: Sliders },
+  { id: 'usage', label: '用量统计', icon: Activity },
+  { id: 'security', label: '安全设置', icon: Shield },
+];
+
 interface ConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -186,6 +201,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const activeProfileRef = useRef(activeProfile);
   activeProfileRef.current = activeProfile;
 
+  const [activeTab, setActiveTab] = useState<TabId>('connection');
   const [provider, setProvider] = useState<ProviderType>('deepseek');
   const [apiKey, setApiKey] = useState('');
   const [baseURL, setBaseURL] = useState('');
@@ -383,8 +399,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     }
 
     setPresetId('');
-
-    // 检查加密状态
     setHasCustomPassword(KeyManager.hasCustomPassword());
   }, [activeProfileId, open]);
 
@@ -404,7 +418,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     }
   }, [PRICING_UNIT_STORAGE_KEY, pricingUnit]);
 
-  // 当 provider/model 变化时，确保 maxTokens 不超过该模型支持范围（避免保存后上游报错/被截断）
   useEffect(() => {
     setGenerationParams((prev) => {
       const next = clampMaxTokens(prev.maxTokens, provider, model);
@@ -426,7 +439,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       const n = Number(trimmed);
       if (!Number.isFinite(n)) return raw;
       const converted = n * ratio;
-      // 控制长度：避免出现很长的小数串
       const normalized =
         Math.abs(converted) >= 1 ? Number(converted.toFixed(6)) : Number(converted.toFixed(8));
       return String(normalized);
@@ -462,7 +474,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
     if (!profileName.trim()) errors.profileName = '档案名称不能为空';
 
-    // 后端模式：编辑已有服务端档案时，API Key 允许留空（表示“保持不变”）
     const requiresApiKey =
       !apiMode ||
       !activeProfileId ||
@@ -490,7 +501,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     const pricingRawCached = pricingCachedInput.trim();
     if (pricingRawInput || pricingRawOutput || pricingRawCached) {
       if (!pricingRawInput || !pricingRawOutput) {
-        errors.pricing = '请同时填写“输入价”和“输出价”（或全部留空）';
+        errors.pricing = '请同时填写"输入价"和"输出价"（或全部留空）';
       } else {
         const pricing = parsePricing();
         if (!pricing) errors.pricing = '价格格式不正确（请输入非负数字）';
@@ -519,7 +530,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setBaseURL(preset.baseURL || '');
     }
 
-    // 选预设通常意味着希望使用该模型的推荐默认输出长度（避免过小导致“输出被截断”）
     const policy = getMaxTokensPolicy(provider, preset.model);
     setGenerationParams((prev) => {
       const clamped = clampMaxTokens(prev.maxTokens, provider, preset.model);
@@ -637,7 +647,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
     toast({
       title: '配置已保存',
-      description: 'API配置保存成功',
+      description: 'AI 服务配置保存成功',
     });
 
     onOpenChange(false);
@@ -674,12 +684,12 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     if (success) {
       toast({
         title: '连接测试成功',
-        description: 'API配置有效',
+        description: 'API 配置有效',
       });
     } else {
       toast({
         title: '连接测试失败',
-        description: '请检查API Key和配置是否正确',
+        description: '请检查 API Key 和配置是否正确',
         variant: 'destructive',
       });
     }
@@ -744,7 +754,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     }
   };
 
-  // 设置加密密码
   const handleSetEncryptionPassword = () => {
     setPasswordError('');
 
@@ -773,7 +782,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     }
   };
 
-  // 更换密码
   const handleChangePassword = () => {
     setPasswordError('');
 
@@ -794,7 +802,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     }
 
     try {
-      // 先用当前密码解锁，再更换
       initializeEncryption(currentPassword);
     } catch {
       setPasswordError('解锁失败，请检查当前密码');
@@ -815,13 +822,11 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     }
   };
 
-  // 忘记密码 - 重置加密
   const handleForgetPassword = () => {
     setShowForgetConfirm(true);
   };
 
   const handleConfirmReset = () => {
-    // 清除加密配置
     localStorage.removeItem('aixs_config');
     localStorage.removeItem('aixs_key_salt');
     localStorage.removeItem('aixs_key_version');
@@ -840,621 +845,608 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     });
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>API配置</DialogTitle>
-          <DialogDescription>
-            {apiMode
-              ? '配置你的AI服务商。API Key 将加密存储在服务端；浏览器不会保存明文。'
-              : '配置你的AI服务商API密钥。数据将加密存储在本地。'}
-          </DialogDescription>
-        </DialogHeader>
+  // 渲染连接配置选项卡
+  const renderConnectionTab = () => (
+    <div className="space-y-5">
+      {/* 档案选择 */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <Select
+            value={activeProfileId || ''}
+            onValueChange={(v) => void handleSwitchProfile(v)}
+          >
+            <SelectTrigger disabled={isLocked} className="h-10">
+              <SelectValue placeholder="选择档案" />
+            </SelectTrigger>
+            <SelectContent>
+              {profiles.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  <span className="flex items-center gap-2">
+                    <Zap className="h-3 w-3 text-amber-500" />
+                    {p.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="outline" onClick={handleCreateProfile} disabled={isLocked}>
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="outline" onClick={handleDuplicateProfile} disabled={isLocked}>
+            <CopyPlus className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => void handleDeleteProfile()}
+            disabled={profiles.length <= 1 || isLocked}
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
-        {/* 加密设置区域 */}
-        {apiMode ? null : (
-          <div className="border rounded-lg p-4 bg-muted/30">
-            <div className="flex items-center gap-2 mb-3">
-              <Lock className="h-4 w-4" />
-              <span className="font-medium">加密设置</span>
-            </div>
+      {/* 档案名称 */}
+      <div className="space-y-2">
+        <Label htmlFor="profileName">档案名称</Label>
+        <Input
+          id="profileName"
+          value={profileName}
+          onChange={(e) => setProfileName(e.target.value)}
+          disabled={isLocked}
+          placeholder="为此配置起个名字"
+        />
+        {validationErrors.profileName && (
+          <p className="text-sm text-destructive">{validationErrors.profileName}</p>
+        )}
+      </div>
 
-            {isLocked ? (
-              <div className="space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  检测到已设置自定义加密密码。请先解锁后再查看/修改 API 配置。
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="unlockPassword">加密密码</Label>
-                  <Input
-                    id="unlockPassword"
-                    type="password"
-                    value={unlockPassword}
-                    onChange={(e) => setUnlockPassword(e.target.value)}
-                    placeholder="请输入密码以解锁"
-                    className="h-11"
-                  />
-                </div>
-                {unlockError ? <p className="text-sm text-destructive">{unlockError}</p> : null}
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => void handleUnlock()} disabled={isUnlocking}>
-                    {isUnlocking ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        解锁中...
-                      </>
-                    ) : (
-                      '解锁'
-                    )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-muted-foreground"
-                    onClick={handleForgetPassword}
-                  >
-                    忘记密码
-                  </Button>
-                </div>
+      {/* 供应商和预设 */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>供应商</Label>
+          <Select value={provider} onValueChange={(v) => setProvider(v as ProviderType)}>
+            <SelectTrigger disabled={isLocked}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="deepseek">DeepSeek</SelectItem>
+              <SelectItem value="kimi">Kimi (月之暗面)</SelectItem>
+              <SelectItem value="gemini">Gemini</SelectItem>
+              <SelectItem value="openai-compatible">OpenAI 兼容</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-                {showForgetConfirm ? (
-                  <div className="space-y-3 p-3 bg-destructive/10 rounded border border-destructive/30">
-                    <p className="text-sm font-medium text-destructive">⚠️ 警告</p>
-                    <p className="text-sm">
-                      此操作将清除所有加密配置，包括已保存的 API Key。您需要重新配置。
-                    </p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="destructive" onClick={handleConfirmReset}>
-                        确认重置
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowForgetConfirm(false)}
-                      >
-                        取消
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : hasCustomPassword ? (
-              // 已设置密码
-              <div>
-                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 mb-3">
-                  <Shield className="h-4 w-4" />
-                  <span className="text-sm">已启用加密保护</span>
-                </div>
+        <div className="space-y-2">
+          <Label>快速预设</Label>
+          <Select
+            value={presetId}
+            onValueChange={(v) => {
+              setPresetId(v);
+              handleApplyPreset(v);
+              setPresetId('');
+            }}
+          >
+            <SelectTrigger disabled={isLocked}>
+              <SelectValue placeholder="选择模型预设" />
+            </SelectTrigger>
+            <SelectContent>
+              {PROVIDER_PRESETS[provider].map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-                {isChangingPassword ? (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="currentPassword">当前密码</Label>
-                      <Input
-                        id="currentPassword"
-                        type="password"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        className="h-11"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="newPassword">新密码</Label>
-                      <Input
-                        id="newPassword"
-                        type="password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="至少6位字符"
-                        className="h-11"
-                      />
-                    </div>
-                    {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleChangePassword}>
-                        确认更换
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setIsChangingPassword(false)}
-                      >
-                        取消
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setIsChangingPassword(true)}>
-                      更换密码
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-muted-foreground"
-                      onClick={handleForgetPassword}
-                    >
-                      忘记密码
-                    </Button>
-                  </div>
-                )}
+      {/* API Key */}
+      <div className="space-y-2">
+        <Label htmlFor="apiKey" className="flex items-center gap-2">
+          <Key className="h-3.5 w-3.5" />
+          API Key
+        </Label>
+        <div className="relative">
+          <Input
+            id="apiKey"
+            type={showApiKey ? 'text' : 'password'}
+            placeholder={
+              apiMode && activeProfileId && !activeProfileId.startsWith('draft_')
+                ? '留空表示保持不变'
+                : '请输入 API Key'
+            }
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            className="pr-10"
+            disabled={isLocked}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-0 top-0 h-full px-3"
+            onClick={() => setShowApiKey(!showApiKey)}
+            disabled={isLocked}
+          >
+            {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </div>
+        {validationErrors.apiKey && (
+          <p className="text-sm text-destructive">{validationErrors.apiKey}</p>
+        )}
+      </div>
 
-                {showForgetConfirm ? (
-                  <div className="mt-3 space-y-3 p-3 bg-destructive/10 rounded border border-destructive/30">
-                    <p className="text-sm font-medium text-destructive">⚠️ 警告</p>
-                    <p className="text-sm">
-                      此操作将清除所有加密配置，包括已保存的 API Key。您需要重新配置。
-                    </p>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="destructive" onClick={handleConfirmReset}>
-                        确认重置
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setShowForgetConfirm(false)}
-                      >
-                        取消
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              // 未设置密码
-              <div>
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-3">
-                  <ShieldAlert className="h-4 w-4" />
-                  <span className="text-sm">使用默认加密，建议设置自定义密码</span>
-                </div>
+      {/* Base URL */}
+      {provider !== 'kimi' && (
+        <div className="space-y-2">
+          <Label htmlFor="baseURL">Base URL (可选)</Label>
+          <Input
+            id="baseURL"
+            placeholder={
+              provider === 'gemini'
+                ? 'https://generativelanguage.googleapis.com'
+                : 'https://api.example.com'
+            }
+            value={baseURL}
+            onChange={(e) => setBaseURL(e.target.value)}
+            disabled={isLocked}
+          />
+          {validationErrors.baseURL && (
+            <p className="text-sm text-destructive">{validationErrors.baseURL}</p>
+          )}
+        </div>
+      )}
 
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="encryptionPassword">加密密码</Label>
-                    <Input
-                      id="encryptionPassword"
-                      type="password"
-                      value={encryptionPassword}
-                      onChange={(e) => setEncryptionPassword(e.target.value)}
-                      placeholder="至少6位字符"
-                      className="h-11"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">确认密码</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="再次输入密码"
-                      className="h-11"
-                    />
-                  </div>
-                  {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
-                  <Button size="sm" onClick={handleSetEncryptionPassword}>
-                    设置加密密码
-                  </Button>
-                </div>
-              </div>
+      {/* 模型名称 */}
+      <div className="space-y-2">
+        <Label htmlFor="model">模型名称</Label>
+        <Input
+          id="model"
+          placeholder={provider === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'}
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={isLocked}
+        />
+        {validationErrors.model && (
+          <p className="text-sm text-destructive">{validationErrors.model}</p>
+        )}
+      </div>
+
+      {/* 测试连接 */}
+      <div className="flex items-center gap-3">
+        <Button
+          variant="outline"
+          onClick={handleTest}
+          disabled={isTesting || isLocked || hasConfigValidationErrors}
+          className="flex-1"
+        >
+          {isTesting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              测试中...
+            </>
+          ) : (
+            '测试连接'
+          )}
+        </Button>
+        {lastTest && (
+          <div
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-2 rounded-md text-sm',
+              lastTest.status === 'success'
+                ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                : 'bg-destructive/10 text-destructive',
             )}
+          >
+            {lastTest.status === 'success' ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <X className="h-4 w-4" />
+            )}
+            <span>{lastTest.status === 'success' ? '连接正常' : '连接失败'}</span>
           </div>
         )}
+      </div>
 
-        {/* 配置档案（多配置） */}
-        {isLocked ? null : (
-          <div className="border rounded-lg p-4 bg-muted/30">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4" />
-                <span className="font-medium">配置档案</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={handleCreateProfile}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  新建
-                </Button>
-                <Button size="sm" variant="outline" onClick={handleDuplicateProfile}>
-                  <CopyPlus className="mr-2 h-4 w-4" />
-                  复制
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => void handleDeleteProfile()}
-                  disabled={profiles.length <= 1}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  删除
-                </Button>
-              </div>
-            </div>
+      {/* 连接错误信息 */}
+      {lastTest?.status === 'error' && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+          {lastTest.errorMessage && (
+            <p className="text-sm text-destructive">{lastTest.errorMessage}</p>
+          )}
+          {lastTest.suggestions?.length ? (
+            <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-1">
+              {lastTest.suggestions.slice(0, 3).map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ul>
+          ) : null}
+          <Button size="sm" variant="ghost" onClick={() => void handleCopyLastTest()}>
+            <Copy className="mr-2 h-3 w-3" />
+            复制错误信息
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 
-            <div className="space-y-2">
-              <Label>当前档案</Label>
-              <Select
-                value={activeProfileId || ''}
-                onValueChange={(v) => void handleSwitchProfile(v)}
-              >
-                <SelectTrigger className="h-11 text-base md:text-sm">
-                  <SelectValue placeholder="选择档案" />
-                </SelectTrigger>
-                <SelectContent>
-                  {profiles.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} · {p.config.provider}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+  // 渲染生成参数选项卡
+  const renderParamsTab = () => (
+    <div className="space-y-5">
+      {/* 当前参数概览 */}
+      <div className="rounded-lg border bg-muted/30 p-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">AI 生成参数</p>
+            <p className="text-xs text-muted-foreground">
+              Temperature {generationParams.temperature.toFixed(2)} · TopP{' '}
+              {generationParams.topP.toFixed(2)} · MaxTokens {generationParams.maxTokens}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAiTunerOpen(true)}
+            disabled={isLocked}
+          >
+            <Sliders className="mr-2 h-4 w-4" />
+            调整参数
+          </Button>
+        </div>
+      </div>
 
-            <div className="mt-3 space-y-2">
-              <Label htmlFor="profileName">档案名称</Label>
-              <Input
-                id="profileName"
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
-                disabled={isLocked}
-                className="h-11"
-              />
-              {validationErrors.profileName ? (
-                <p className="text-sm text-destructive">{validationErrors.profileName}</p>
-              ) : null}
-            </div>
+      {/* 价格配置 */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="flex items-center gap-2">
+            <DollarSign className="h-3.5 w-3.5" />
+            定价配置 (可选)
+          </Label>
+          <Select
+            value={pricingUnit}
+            onValueChange={(v) => handlePricingUnitChange(v as PricingUnit)}
+          >
+            <SelectTrigger className="w-[140px] h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="per_1M">USD/1M tokens</SelectItem>
+              <SelectItem value="per_1K">USD/1K tokens</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-            <div className="mt-3 space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label>价格（可选）</Label>
-                <Select
-                  value={pricingUnit}
-                  onValueChange={(v) => handlePricingUnitChange(v as PricingUnit)}
-                >
-                  <SelectTrigger className="h-9 w-[160px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="per_1M">USD/1M tokens</SelectItem>
-                    <SelectItem value="per_1K">USD/1K tokens</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="pricingInput" className="text-xs text-muted-foreground">
-                    输入（Input / Prompt）
-                  </Label>
-                  <Input
-                    id="pricingInput"
-                    inputMode="decimal"
-                    placeholder={pricingUnit === 'per_1M' ? '例如 1.0' : '例如 0.001'}
-                    value={pricingInput}
-                    onChange={(e) => setPricingInput(e.target.value)}
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pricingOutput" className="text-xs text-muted-foreground">
-                    输出（Output / Completion）
-                  </Label>
-                  <Input
-                    id="pricingOutput"
-                    inputMode="decimal"
-                    placeholder={pricingUnit === 'per_1M' ? '例如 2.0' : '例如 0.002'}
-                    value={pricingOutput}
-                    onChange={(e) => setPricingOutput(e.target.value)}
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pricingCachedInput" className="text-xs text-muted-foreground">
-                    缓存输入（可选）
-                  </Label>
-                  <Input
-                    id="pricingCachedInput"
-                    inputMode="decimal"
-                    placeholder={pricingUnit === 'per_1M' ? '例如 0.5' : '例如 0.0005'}
-                    value={pricingCachedInput}
-                    onChange={(e) => setPricingCachedInput(e.target.value)}
-                    className="h-11"
-                  />
-                </div>
-              </div>
-              {validationErrors.pricing ? (
-                <p className="text-sm text-destructive">{validationErrors.pricing}</p>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="pricingInput" className="text-xs text-muted-foreground">
+              输入价
+            </Label>
+            <Input
+              id="pricingInput"
+              inputMode="decimal"
+              placeholder={pricingUnit === 'per_1M' ? '1.0' : '0.001'}
+              value={pricingInput}
+              onChange={(e) => setPricingInput(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pricingOutput" className="text-xs text-muted-foreground">
+              输出价
+            </Label>
+            <Input
+              id="pricingOutput"
+              inputMode="decimal"
+              placeholder={pricingUnit === 'per_1M' ? '2.0' : '0.002'}
+              value={pricingOutput}
+              onChange={(e) => setPricingOutput(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pricingCachedInput" className="text-xs text-muted-foreground">
+              缓存输入价
+            </Label>
+            <Input
+              id="pricingCachedInput"
+              inputMode="decimal"
+              placeholder={pricingUnit === 'per_1M' ? '0.5' : '0.0005'}
+              value={pricingCachedInput}
+              onChange={(e) => setPricingCachedInput(e.target.value)}
+            />
+          </div>
+        </div>
+        {validationErrors.pricing && (
+          <p className="text-sm text-destructive">{validationErrors.pricing}</p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          用于成本估算，不填则使用默认估算
+        </p>
+      </div>
+    </div>
+  );
+
+  // 渲染用量统计选项卡
+  const renderUsageTab = () => (
+    <div className="space-y-5">
+      <div className="text-sm text-muted-foreground">
+        统计当前档案近 24 小时的 AI 调用数据
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-lg border bg-card p-4 space-y-1">
+          <p className="text-xs text-muted-foreground">调用次数</p>
+          <p className="text-2xl font-semibold">{usage24h.stats.totalCalls}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4 space-y-1">
+          <p className="text-xs text-muted-foreground">成功率</p>
+          <p className="text-2xl font-semibold">{usage24h.stats.successRate.toFixed(1)}%</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4 space-y-1">
+          <p className="text-xs text-muted-foreground">平均耗时</p>
+          <p className="text-2xl font-semibold">{formatDuration(usage24h.stats.avgDurationMs)}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4 space-y-1">
+          <p className="text-xs text-muted-foreground">费用估算</p>
+          <p className="text-2xl font-semibold">${usage24h.costUSD.toFixed(4)}</p>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+        <p className="text-sm font-medium">详细信息</p>
+        <div className="text-xs text-muted-foreground space-y-1">
+          <p>Token 总计：{usage24h.stats.totalTokens.toLocaleString()}</p>
+          <p>
+            覆盖率：{usage24h.stats.tokenizedCalls}/{usage24h.stats.totalCalls}
+          </p>
+          <p>P95 耗时：{formatDuration(usage24h.stats.p95DurationMs)}</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  // 渲染安全设置选项卡
+  const renderSecurityTab = () => {
+    if (apiMode) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Shield className="h-12 w-12 text-green-500 mb-4" />
+          <p className="text-sm font-medium">服务端安全存储</p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-[280px]">
+            API Key 已加密存储在服务端，浏览器不会保存明文
+          </p>
+        </div>
+      );
+    }
+
+    if (isLocked) {
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-amber-500/30 bg-amber-500/5">
+            <Lock className="h-5 w-5 text-amber-500 shrink-0" />
+            <p className="text-sm">配置已锁定，请输入密码解锁</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="unlockPassword">加密密码</Label>
+            <Input
+              id="unlockPassword"
+              type="password"
+              value={unlockPassword}
+              onChange={(e) => setUnlockPassword(e.target.value)}
+              placeholder="请输入密码以解锁"
+            />
+          </div>
+          {unlockError && <p className="text-sm text-destructive">{unlockError}</p>}
+
+          <div className="flex gap-2">
+            <Button onClick={() => void handleUnlock()} disabled={isUnlocking}>
+              {isUnlocking ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  解锁中...
+                </>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  用于“统计分析/配置页”的成本估算；不填则按默认粗略口径计算。口径：输入=prompt
-                  tokens，输出=completion tokens。
-                  {pricingUnit === 'per_1M' ? '（换算：USD/1M ÷ 1000 = USD/1K）' : null}{' '}
-                  缓存输入价仅在供应商支持 Prompt Caching 且返回 cached token
-                  统计时才会用于更精确估算；否则会按输入价计算。
-                </p>
+                '解锁'
               )}
+            </Button>
+            <Button variant="ghost" onClick={handleForgetPassword}>
+              忘记密码
+            </Button>
+          </div>
+
+          {showForgetConfirm && (
+            <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5 space-y-3">
+              <p className="text-sm font-medium text-destructive">⚠️ 警告</p>
+              <p className="text-sm">此操作将清除所有加密配置，包括已保存的 API Key。</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="destructive" onClick={handleConfirmReset}>
+                  确认重置
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowForgetConfirm(false)}>
+                  取消
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (hasCustomPassword) {
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-4 rounded-lg border border-green-500/30 bg-green-500/5">
+            <Shield className="h-5 w-5 text-green-500 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">已启用加密保护</p>
+              <p className="text-xs text-muted-foreground">您的 API Key 使用自定义密码加密存储</p>
             </div>
           </div>
-        )}
 
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label>供应商</Label>
-            <Select value={provider} onValueChange={(v) => setProvider(v as ProviderType)}>
-              <SelectTrigger disabled={isLocked} className="h-11 text-base md:text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="deepseek">DeepSeek</SelectItem>
-                <SelectItem value="kimi">Kimi (月之暗面)</SelectItem>
-                <SelectItem value="gemini">Gemini</SelectItem>
-                <SelectItem value="openai-compatible">OpenAI兼容</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>一键预设</Label>
-            <Select
-              value={presetId}
-              onValueChange={(v) => {
-                setPresetId(v);
-                handleApplyPreset(v);
-                setPresetId('');
-              }}
-            >
-              <SelectTrigger disabled={isLocked} className="h-11 text-base md:text-sm">
-                <SelectValue placeholder="选择常用模型/默认 Base URL" />
-              </SelectTrigger>
-              <SelectContent>
-                {PROVIDER_PRESETS[provider].map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="apiKey">API Key</Label>
-            <div className="relative">
-              <Input
-                id="apiKey"
-                type={showApiKey ? 'text' : 'password'}
-                placeholder={
-                  apiMode && activeProfileId && !activeProfileId.startsWith('draft_')
-                    ? '留空表示保持不变（已安全存于服务端）'
-                    : '请输入 API Key'
-                }
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="h-11 pr-10"
-                disabled={isLocked}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-0 top-0 h-full px-3"
-                onClick={() => setShowApiKey(!showApiKey)}
-                disabled={isLocked}
-              >
-                {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {isChangingPassword ? (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="currentPassword">当前密码</Label>
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">新密码</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="至少6位字符"
+                />
+              </div>
+              {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleChangePassword}>
+                  确认更换
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setIsChangingPassword(false)}>
+                  取消
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsChangingPassword(true)}>
+                更换密码
               </Button>
-            </div>
-            {validationErrors.apiKey ? (
-              <p className="text-sm text-destructive">{validationErrors.apiKey}</p>
-            ) : null}
-            {apiMode && activeProfileId && !activeProfileId.startsWith('draft_') ? (
-              <p className="text-xs text-muted-foreground">
-                安全提示：浏览器不会保存 API Key；留空仅更新“模型/参数”，不改动服务端密钥。
-              </p>
-            ) : null}
-          </div>
-
-          {provider === 'kimi' ? null : (
-            <div className="space-y-2">
-              <Label htmlFor="baseURL">Base URL (可选)</Label>
-              <Input
-                id="baseURL"
-                placeholder={
-                  provider === 'gemini'
-                    ? 'https://generativelanguage.googleapis.com'
-                    : 'https://api.example.com'
-                }
-                value={baseURL}
-                onChange={(e) => setBaseURL(e.target.value)}
-                disabled={isLocked}
-                className="h-11"
-              />
-              {baseURL.trim() && /\/(v1beta|v1)\/?$/.test(baseURL.trim()) ? (
-                <p className="text-xs text-muted-foreground">
-                  提示：不要包含 <code>/v1</code>/<code>/v1beta</code>，保存/测试时会自动移除。
-                </p>
-              ) : null}
-              {validationErrors.baseURL ? (
-                <p className="text-sm text-destructive">{validationErrors.baseURL}</p>
-              ) : null}
-              {provider === 'openai-compatible' ? (
-                <p className="text-xs text-muted-foreground">
-                  OpenAI 兼容接口通常是：BaseURL + `/v1/chat/completions`。
-                </p>
-              ) : null}
+              <Button variant="ghost" onClick={handleForgetPassword}>
+                忘记密码
+              </Button>
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="model">模型名称</Label>
-            <Input
-              id="model"
-              placeholder={provider === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              disabled={isLocked}
-              className="h-11"
-            />
-            {validationErrors.model ? (
-              <p className="text-sm text-destructive">{validationErrors.model}</p>
-            ) : null}
-          </div>
-
-          <div className="border rounded-lg p-4 bg-muted/30">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-start gap-2">
-                <Sliders className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">AI 生成参数</p>
-                  <p className="text-xs text-muted-foreground">
-                    Temperature {generationParams.temperature.toFixed(2)} · TopP{' '}
-                    {generationParams.topP.toFixed(2)} · MaxTokens {generationParams.maxTokens}
-                  </p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setAiTunerOpen(true)}
-                disabled={isLocked}
-              >
-                调优
-              </Button>
-            </div>
-          </div>
-
-          <Button
-            variant="outline"
-            onClick={handleTest}
-            disabled={isTesting || isLocked || hasConfigValidationErrors}
-            className="w-full"
-          >
-            {isTesting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                测试中...
-              </>
-            ) : (
-              '测试连接'
-            )}
-          </Button>
-
-          <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                <span className="font-medium">连接状态 & 近24小时</span>
-              </div>
-              {lastTest ? (
-                <span
-                  className={
-                    lastTest.status === 'success'
-                      ? 'text-xs text-green-600 dark:text-green-400'
-                      : 'text-xs text-destructive'
-                  }
-                >
-                  上次测试：{lastTest.status === 'success' ? '成功' : '失败'}
-                </span>
-              ) : (
-                <span className="text-xs text-muted-foreground">未测试</span>
-              )}
-            </div>
-
-            {lastTest ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span
-                    className={
-                      lastTest.status === 'success'
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-destructive'
-                    }
-                  >
-                    {lastTest.status === 'success' ? '连接正常' : '连接失败'}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateTime(lastTest.testedAt)} · {formatDuration(lastTest.durationMs)}
-                  </span>
-                </div>
-
-                {typeof lastTest.httpStatus === 'number' ? (
-                  <div className="text-xs text-muted-foreground">HTTP {lastTest.httpStatus}</div>
-                ) : null}
-
-                {lastTest.status === 'error' ? (
-                  <div className="space-y-2">
-                    {lastTest.errorMessage ? (
-                      <div className="text-xs text-muted-foreground break-words">
-                        {lastTest.errorMessage}
-                      </div>
-                    ) : null}
-                    {lastTest.suggestions?.length ? (
-                      <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
-                        {lastTest.suggestions.slice(0, 6).map((s) => (
-                          <li key={s}>{s}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void handleCopyLastTest()}
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      复制错误信息
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void handleCopyLastTest()}
-                  >
-                    <Copy className="mr-2 h-4 w-4" />
-                    复制测试详情
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                建议：保存前先点击“测试连接”，确认 API Key、模型与 Base URL 可用。
-              </p>
-            )}
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <div className="rounded-md border bg-background/50 p-3">
-                <p className="text-xs text-muted-foreground">调用次数</p>
-                <p className="text-lg font-semibold">{usage24h.stats.totalCalls}</p>
-              </div>
-              <div className="rounded-md border bg-background/50 p-3">
-                <p className="text-xs text-muted-foreground">成功率</p>
-                <p className="text-lg font-semibold">{usage24h.stats.successRate.toFixed(1)}%</p>
-              </div>
-              <div className="rounded-md border bg-background/50 p-3">
-                <p className="text-xs text-muted-foreground">平均耗时</p>
-                <p className="text-lg font-semibold">
-                  {formatDuration(usage24h.stats.avgDurationMs)}
-                </p>
-              </div>
-              <div className="rounded-md border bg-background/50 p-3">
-                <p className="text-xs text-muted-foreground">费用估算（$）</p>
-                <p className="text-lg font-semibold">${usage24h.costUSD.toFixed(4)}</p>
+          {showForgetConfirm && (
+            <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5 space-y-3">
+              <p className="text-sm font-medium text-destructive">⚠️ 警告</p>
+              <p className="text-sm">此操作将清除所有加密配置，包括已保存的 API Key。</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="destructive" onClick={handleConfirmReset}>
+                  确认重置
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowForgetConfirm(false)}>
+                  取消
+                </Button>
               </div>
             </div>
+          )}
+        </div>
+      );
+    }
 
-            <div className="text-xs text-muted-foreground">
-              Token（可统计）：{usage24h.stats.totalTokens.toLocaleString()} · 覆盖率{' '}
-              {usage24h.stats.tokenizedCalls}/{usage24h.stats.totalCalls} · P95 耗时{' '}
-              {formatDuration(usage24h.stats.p95DurationMs)}
-            </div>
-
-            <div className="text-xs text-muted-foreground">
-              口径：按 AI 调用完成时间统计（success/error）；不包含“测试连接”。
-            </div>
+    // 未设置密码
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 p-4 rounded-lg border border-amber-500/30 bg-amber-500/5">
+          <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0" />
+          <div>
+            <p className="text-sm font-medium">使用默认加密</p>
+            <p className="text-xs text-muted-foreground">建议设置自定义密码以增强安全性</p>
           </div>
         </div>
 
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="encryptionPassword">加密密码</Label>
+            <Input
+              id="encryptionPassword"
+              type="password"
+              value={encryptionPassword}
+              onChange={(e) => setEncryptionPassword(e.target.value)}
+              placeholder="至少6位字符"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">确认密码</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="再次输入密码"
+            />
+          </div>
+          {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+          <Button onClick={handleSetEncryptionPassword}>设置加密密码</Button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[95vw] max-w-3xl min-h-[500px] max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <div className="flex h-full">
+          {/* 左侧标签导航 */}
+          <div className="w-44 shrink-0 border-r bg-muted/30 flex flex-col">
+            <DialogHeader className="px-4 py-4 border-b">
+              <DialogTitle className="text-base flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-500" />
+                AI 设置
+              </DialogTitle>
+            </DialogHeader>
+            <nav className="flex-1 p-2 space-y-1">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
+                    'hover:bg-muted',
+                    activeTab === tab.id
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground',
+                  )}
+                >
+                  <tab.icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* 右侧内容区 */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 overflow-y-auto p-5">
+              {activeTab === 'connection' && renderConnectionTab()}
+              {activeTab === 'params' && renderParamsTab()}
+              {activeTab === 'usage' && renderUsageTab()}
+              {activeTab === 'security' && renderSecurityTab()}
+            </div>
+
+            {/* 底部操作栏 */}
+            <DialogFooter className="border-t px-5 py-3 bg-muted/20">
+              <div className="flex items-center justify-between w-full">
+                <div className="text-xs text-muted-foreground">
+                  {isDirty && <span className="text-amber-500">● 有未保存的更改</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    取消
+                  </Button>
+                  <Button onClick={handleSave} disabled={isLocked || hasSaveValidationErrors}>
+                    保存配置
+                  </Button>
+                </div>
+              </div>
+            </DialogFooter>
+          </div>
+        </div>
+
+        {/* AI 参数调优弹窗 */}
         <Dialog open={aiTunerOpen} onOpenChange={setAiTunerOpen}>
           <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -1474,15 +1466,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
-          <Button onClick={handleSave} disabled={isLocked || hasSaveValidationErrors}>
-            保存配置
-          </Button>
-        </DialogFooter>
 
         <ConfirmDialog />
       </DialogContent>

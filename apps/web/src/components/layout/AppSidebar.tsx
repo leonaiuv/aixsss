@@ -32,9 +32,10 @@ import {
 interface AppSidebarProps {
   onSearch: () => void;
   onConfig: () => void;
+  onSettings: () => void;
 }
 
-export function AppSidebar({ onSearch, onConfig }: AppSidebarProps) {
+export function AppSidebar({ onSearch, onConfig, onSettings }: AppSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { mode: theme, toggleMode } = useThemeStore();
@@ -134,7 +135,7 @@ export function AppSidebar({ onSearch, onConfig }: AppSidebarProps) {
           </SidebarMenuItem>
 
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={onConfig} tooltip="设置">
+            <SidebarMenuButton onClick={onSettings} tooltip="设置">
               <Settings className="h-4 w-4" />
               <span>设置</span>
             </SidebarMenuButton>

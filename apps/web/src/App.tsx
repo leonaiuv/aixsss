@@ -29,6 +29,9 @@ const Editor = lazy(() => import('./components/Editor').then((m) => ({ default: 
 const ConfigDialog = lazy(() =>
   import('./components/ConfigDialog').then((m) => ({ default: m.ConfigDialog })),
 );
+const SettingsDialog = lazy(() =>
+  import('./components/SettingsDialog').then((m) => ({ default: m.SettingsDialog })),
+);
 const DevPanel = lazy(() => import('./components/DevPanel').then((m) => ({ default: m.DevPanel })));
 const DevPanelTrigger = lazy(() =>
   import('./components/DevPanel').then((m) => ({ default: m.DevPanelTrigger })),
@@ -69,6 +72,7 @@ function EditorRouteLoader() {
 function LocalApp() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const navigate = useNavigate();
 
   // 使用选择器优化，避免订阅整个 store
@@ -136,6 +140,7 @@ function LocalApp() {
 
   const handleOpenConfig = useCallback(() => setConfigDialogOpen(true), []);
   const handleOpenSearch = useCallback(() => setSearchDialogOpen(true), []);
+  const handleOpenSettings = useCallback(() => setSettingsDialogOpen(true), []);
 
   const handleSearchResultClick = useCallback(
     (project: (typeof projects)[0]) => {
@@ -147,7 +152,7 @@ function LocalApp() {
   );
 
   return (
-    <AppLayout onSearch={handleOpenSearch} onConfig={handleOpenConfig}>
+    <AppLayout onSearch={handleOpenSearch} onConfig={handleOpenConfig} onSettings={handleOpenSettings}>
       <Routes>
         <Route path="/" element={<ProjectList />} />
         <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
@@ -155,9 +160,14 @@ function LocalApp() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* API配置弹窗 */}
+      {/* AI 设置弹窗 */}
       <Suspense fallback={null}>
         <ConfigDialog open={configDialogOpen} onOpenChange={setConfigDialogOpen} />
+      </Suspense>
+
+      {/* 设置弹窗 */}
+      <Suspense fallback={null}>
+        <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
       </Suspense>
 
       {/* 全局搜索对话框 */}
@@ -189,6 +199,7 @@ function LocalApp() {
 function BackendApp() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const navigate = useNavigate();
 
   const loadProjects = useProjectStore((state) => state.loadProjects);
@@ -260,6 +271,7 @@ function BackendApp() {
 
   const handleOpenConfig = useCallback(() => setConfigDialogOpen(true), []);
   const handleOpenSearch = useCallback(() => setSearchDialogOpen(true), []);
+  const handleOpenSettings = useCallback(() => setSettingsDialogOpen(true), []);
 
   const handleSearchResultClick = useCallback(
     (project: (typeof projects)[0]) => {
@@ -284,7 +296,7 @@ function BackendApp() {
   }
 
   return (
-    <AppLayout onSearch={handleOpenSearch} onConfig={handleOpenConfig}>
+    <AppLayout onSearch={handleOpenSearch} onConfig={handleOpenConfig} onSettings={handleOpenSettings}>
       <Routes>
         <Route path="/" element={<ProjectList />} />
         <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
@@ -293,6 +305,10 @@ function BackendApp() {
 
       <Suspense fallback={null}>
         <ConfigDialog open={configDialogOpen} onOpenChange={setConfigDialogOpen} />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
       </Suspense>
 
       <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>

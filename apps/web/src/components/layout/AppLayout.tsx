@@ -18,9 +18,10 @@ interface AppLayoutProps {
   children: React.ReactNode;
   onSearch: () => void;
   onConfig: () => void;
+  onSettings: () => void;
 }
 
-export function AppLayout({ children, onSearch, onConfig }: AppLayoutProps) {
+export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayoutProps) {
   const location = useLocation();
   const currentProject = useProjectStore((s) => s.currentProject);
 
@@ -28,7 +29,7 @@ export function AppLayout({ children, onSearch, onConfig }: AppLayoutProps) {
 
   return (
     <SidebarProvider>
-      <AppSidebar onSearch={onSearch} onConfig={onConfig} />
+      <AppSidebar onSearch={onSearch} onConfig={onConfig} onSettings={onSettings} />
 
       <SidebarInset className="bg-paper-texture">
         {/* Top Bar with Breadcrumbs */}

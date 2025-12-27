@@ -20,7 +20,7 @@ describe('AppLayout', () => {
 
   it('renders sidebar and main content', () => {
     renderWithRouter(
-      <AppLayout onSearch={() => {}} onConfig={() => {}}>
+      <AppLayout onSearch={() => {}} onConfig={() => {}} onSettings={() => {}}>
         <div data-testid="main-content">Main Content</div>
       </AppLayout>,
     );
@@ -34,7 +34,7 @@ describe('AppLayout', () => {
 
   it('renders breadcrumbs', () => {
     renderWithRouter(
-      <AppLayout onSearch={() => {}} onConfig={() => {}}>
+      <AppLayout onSearch={() => {}} onConfig={() => {}} onSettings={() => {}}>
         <div>Content</div>
       </AppLayout>,
     );
