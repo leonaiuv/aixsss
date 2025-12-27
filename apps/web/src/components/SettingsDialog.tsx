@@ -74,4 +74,3 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     </Dialog>
   );
 }
-

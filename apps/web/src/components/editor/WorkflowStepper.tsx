@@ -20,22 +20,35 @@ const STEPS: { id: WorkflowStepId; label: string; description: string }[] = [
 
 export function WorkflowStepper({ currentStep, onStepClick, className }: WorkflowStepperProps) {
   return (
-    <div className={cn("w-full py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mb-8", className)}>
+    <div
+      className={cn(
+        'w-full py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mb-8',
+        className,
+      )}
+    >
       <div className="container flex items-center justify-between max-w-7xl mx-auto px-4">
         <nav aria-label="Progress">
           <ol role="list" className="flex items-center">
             {STEPS.map((step, stepIdx) => {
               const isCurrent = step.id === currentStep;
-              const isCompleted = STEPS.findIndex(s => s.id === currentStep) > stepIdx;
+              const isCompleted = STEPS.findIndex((s) => s.id === currentStep) > stepIdx;
 
               return (
-                <li key={step.id} className={cn("relative", stepIdx !== STEPS.length - 1 ? "pr-8 sm:pr-20" : "")}>
+                <li
+                  key={step.id}
+                  className={cn('relative', stepIdx !== STEPS.length - 1 ? 'pr-8 sm:pr-20' : '')}
+                >
                   {stepIdx !== STEPS.length - 1 && (
-                    <div className="absolute top-4 left-0 -right-8 h-0.5 w-full hidden sm:block" aria-hidden="true">
-                       <div className={cn(
-                         "h-full transition-all duration-500 ease-in-out",
-                         isCompleted ? "bg-primary" : "bg-muted"
-                       )} />
+                    <div
+                      className="absolute top-4 left-0 -right-8 h-0.5 w-full hidden sm:block"
+                      aria-hidden="true"
+                    >
+                      <div
+                        className={cn(
+                          'h-full transition-all duration-500 ease-in-out',
+                          isCompleted ? 'bg-primary' : 'bg-muted',
+                        )}
+                      />
                     </div>
                   )}
                   <button
@@ -46,27 +59,39 @@ export function WorkflowStepper({ currentStep, onStepClick, className }: Workflo
                     <span className="flex items-center justify-center">
                       <span
                         className={cn(
-                          "flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors duration-200 z-10 bg-background",
-                          isCompleted ? "border-primary bg-primary text-primary-foreground" :
-                          isCurrent ? "border-primary ring-4 ring-primary/20" :
-                          "border-muted-foreground/30 hover:border-primary/50"
+                          'flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors duration-200 z-10 bg-background',
+                          isCompleted
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : isCurrent
+                              ? 'border-primary ring-4 ring-primary/20'
+                              : 'border-muted-foreground/30 hover:border-primary/50',
                         )}
                       >
                         {isCompleted ? (
                           <Check className="h-5 w-5" aria-hidden="true" />
                         ) : (
-                          <span className={cn("text-xs font-bold", isCurrent ? "text-primary" : "text-muted-foreground")}>
+                          <span
+                            className={cn(
+                              'text-xs font-bold',
+                              isCurrent ? 'text-primary' : 'text-muted-foreground',
+                            )}
+                          >
                             {stepIdx + 1}
                           </span>
                         )}
                       </span>
                     </span>
                     <span className="mt-2 flex flex-col items-center">
-                      <span className={cn(
-                        "text-sm font-medium transition-colors duration-200",
-                        isCurrent ? "text-primary" : 
-                        isCompleted ? "text-foreground" : "text-muted-foreground"
-                      )}>
+                      <span
+                        className={cn(
+                          'text-sm font-medium transition-colors duration-200',
+                          isCurrent
+                            ? 'text-primary'
+                            : isCompleted
+                              ? 'text-foreground'
+                              : 'text-muted-foreground',
+                        )}
+                      >
                         {step.label}
                       </span>
                     </span>
@@ -80,4 +105,3 @@ export function WorkflowStepper({ currentStep, onStepClick, className }: Workflo
     </div>
   );
 }
-

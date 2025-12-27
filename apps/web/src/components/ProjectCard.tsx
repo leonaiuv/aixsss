@@ -31,12 +31,16 @@ function ProjectCardComponent({
 }: ProjectCardProps) {
   // 更细致的进度计算：结合工作流状态和实际完成数据
   const progressPercentage = useMemo(() => {
-    const stats = (project as Project & { _stats?: {
-      episodeCount: number;
-      episodesWithCoreExpression: number;
-      sceneCount: number;
-      scenesCompleted: number;
-    } })._stats;
+    const stats = (
+      project as Project & {
+        _stats?: {
+          episodeCount: number;
+          episodesWithCoreExpression: number;
+          sceneCount: number;
+          scenesCompleted: number;
+        };
+      }
+    )._stats;
 
     // 基础进度（基于工作流状态）
     const getBaseProgress = (): { min: number; max: number } => {
@@ -83,14 +87,19 @@ function ProjectCardComponent({
       let subProgress = 0;
 
       // 根据不同阶段计算子进度
-      if (project.workflowState === 'EPISODE_PLAN_EDITING' || project.workflowState === 'EPISODE_PLANNING') {
+      if (
+        project.workflowState === 'EPISODE_PLAN_EDITING' ||
+        project.workflowState === 'EPISODE_PLANNING'
+      ) {
         // 剧集规划阶段：按核心表达完成率
         if (stats.episodeCount > 0) {
           subProgress = stats.episodesWithCoreExpression / stats.episodeCount;
         }
-      } else if (project.workflowState === 'EPISODE_CREATING' || 
-                 project.workflowState === 'SCENE_LIST_EDITING' ||
-                 project.workflowState === 'SCENE_PROCESSING') {
+      } else if (
+        project.workflowState === 'EPISODE_CREATING' ||
+        project.workflowState === 'SCENE_LIST_EDITING' ||
+        project.workflowState === 'SCENE_PROCESSING'
+      ) {
         // 创作阶段：按分镜完成率
         if (stats.sceneCount > 0) {
           subProgress = stats.scenesCompleted / stats.sceneCount;

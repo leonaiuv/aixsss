@@ -237,4 +237,3 @@ export function JsonViewer({
     </div>
   );
 }
-

@@ -47,8 +47,10 @@ type StepId = 'workbench' | 'global' | 'causal' | 'plan' | 'episode' | 'export';
 function StatusBadge({ status, onClick }: { status: ArtifactStatus; onClick?: () => void }) {
   const styles = {
     draft: 'bg-muted text-muted-foreground hover:bg-muted/80',
-    review: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50',
-    locked: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50',
+    review:
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50',
+    locked:
+      'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50',
   };
 
   const labels = {
@@ -60,7 +62,7 @@ function StatusBadge({ status, onClick }: { status: ArtifactStatus; onClick?: ()
   return (
     <Badge
       variant="outline"
-      className={cn("cursor-pointer transition-colors border-transparent", styles[status])}
+      className={cn('cursor-pointer transition-colors border-transparent', styles[status])}
       onClick={onClick}
     >
       {status === 'locked' && <Lock className="w-3 h-3 mr-1" />}
@@ -69,7 +71,17 @@ function StatusBadge({ status, onClick }: { status: ArtifactStatus; onClick?: ()
   );
 }
 
-function MetricCard({ label, value, icon, subValue }: { label: string; value: string | number; icon: React.ReactNode; subValue?: string }) {
+function MetricCard({
+  label,
+  value,
+  icon,
+  subValue,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  subValue?: string;
+}) {
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 flex items-center justify-between">
@@ -80,9 +92,7 @@ function MetricCard({ label, value, icon, subValue }: { label: string; value: st
             {subValue && <span className="text-xs text-muted-foreground">{subValue}</span>}
           </div>
         </div>
-        <div className="p-2 bg-primary/5 rounded-lg text-primary">
-          {icon}
-        </div>
+        <div className="p-2 bg-primary/5 rounded-lg text-primary">{icon}</div>
       </CardContent>
     </Card>
   );
@@ -93,7 +103,7 @@ function WorkflowStageItem({
   status,
   icon,
   onSetStatus,
-  isLast = false
+  isLast = false,
 }: {
   label: string;
   status: ArtifactStatus;
@@ -104,32 +114,66 @@ function WorkflowStageItem({
   return (
     <div className="flex items-start gap-4 group">
       <div className="flex flex-col items-center">
-        <div className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center border transition-colors",
-          status === 'locked' ? "bg-emerald-500 text-white border-emerald-500" :
-          status === 'review' ? "bg-amber-100 text-amber-600 border-amber-200" :
-          "bg-muted text-muted-foreground border-border"
-        )}>
+        <div
+          className={cn(
+            'w-8 h-8 rounded-full flex items-center justify-center border transition-colors',
+            status === 'locked'
+              ? 'bg-emerald-500 text-white border-emerald-500'
+              : status === 'review'
+                ? 'bg-amber-100 text-amber-600 border-amber-200'
+                : 'bg-muted text-muted-foreground border-border',
+          )}
+        >
           {status === 'locked' ? <Check className="w-4 h-4" /> : icon}
         </div>
-        {!isLast && <div className={cn("w-0.5 h-12 my-1", status === 'locked' ? "bg-emerald-200" : "bg-border")} />}
+        {!isLast && (
+          <div
+            className={cn('w-0.5 h-12 my-1', status === 'locked' ? 'bg-emerald-200' : 'bg-border')}
+          />
+        )}
       </div>
       <div className="flex-1 pt-1 pb-6">
         <div className="flex items-center justify-between mb-1">
           <h4 className="text-sm font-medium">{label}</h4>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onSetStatus('draft')} title="设为草稿"><Circle className="w-3 h-3" /></Button>
-             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onSetStatus('review')} title="设为评审"><AlertCircle className="w-3 h-3" /></Button>
-             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onSetStatus('locked')} title="设为锁定"><Lock className="w-3 h-3" /></Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => onSetStatus('draft')}
+              title="设为草稿"
+            >
+              <Circle className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => onSetStatus('review')}
+              title="设为评审"
+            >
+              <AlertCircle className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => onSetStatus('locked')}
+              title="设为锁定"
+            >
+              <Lock className="w-3 h-3" />
+            </Button>
           </div>
         </div>
         <div className="flex items-center gap-2">
-           <StatusBadge status={status} />
-           <span className="text-xs text-muted-foreground">
-             {status === 'draft' ? '内容正在撰写中...' :
-              status === 'review' ? '等待确认核心要素...' :
-              '已定稿，下游可依赖'}
-           </span>
+          <StatusBadge status={status} />
+          <span className="text-xs text-muted-foreground">
+            {status === 'draft'
+              ? '内容正在撰写中...'
+              : status === 'review'
+                ? '等待确认核心要素...'
+                : '已定稿，下游可依赖'}
+          </span>
         </div>
       </div>
     </div>
@@ -144,7 +188,12 @@ function IssueItem({ issue, onAction }: { issue: WorkflowIssue; onAction?: () =>
   };
 
   return (
-    <div className={cn("flex items-start gap-3 p-3 text-sm border rounded-r-md border-l-4", styles[issue.level])}>
+    <div
+      className={cn(
+        'flex items-start gap-3 p-3 text-sm border rounded-r-md border-l-4',
+        styles[issue.level],
+      )}
+    >
       <div className="mt-0.5">
         {issue.level === 'error' && <XCircle className="w-4 h-4 text-red-500" />}
         {issue.level === 'warn' && <AlertTriangle className="w-4 h-4 text-amber-500" />}
@@ -311,7 +360,9 @@ export function WorkflowWorkbench(props: {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-xs font-medium text-muted-foreground">
-            <span className={cn("w-2 h-2 rounded-full", canRunAI ? "bg-green-500" : "bg-amber-500")} />
+            <span
+              className={cn('w-2 h-2 rounded-full', canRunAI ? 'bg-green-500' : 'bg-amber-500')}
+            />
             {canRunAI ? 'AI 就绪' : 'AI 未配置'}
           </div>
           <Button variant="outline" onClick={() => props.onGoToStep('export')}>
@@ -347,11 +398,10 @@ export function WorkflowWorkbench(props: {
           subValue="Chars"
           icon={<Type className="w-5 h-5" />}
         />
-            </div>
+      </div>
 
       {/* Main Content Layout */}
       <div className="grid gap-6 lg:grid-cols-12">
-        
         {/* Left Column: Workflow Status (4 cols) */}
         <div className="lg:col-span-4 space-y-6">
           <Card className="h-full border-l-4 border-l-primary/50">
@@ -363,18 +413,22 @@ export function WorkflowWorkbench(props: {
               <div className="relative">
                 {/* Project Level */}
                 <div className="mb-6">
-                  <h5 className="text-xs font-bold text-muted-foreground uppercase mb-4 tracking-wider">Project Level</h5>
+                  <h5 className="text-xs font-bold text-muted-foreground uppercase mb-4 tracking-wider">
+                    Project Level
+                  </h5>
                   <WorkflowStageItem
                     label="项目圣经 (Bible)"
                     status={projectV2.artifacts.bible.status}
                     icon={<BookOpen className="w-4 h-4" />}
                     onSetStatus={(s) => props.onSetProjectArtifactStatus('bible', s)}
                   />
-          </div>
-                
+                </div>
+
                 {/* Episode Level */}
-            <div>
-                  <h5 className="text-xs font-bold text-muted-foreground uppercase mb-4 tracking-wider">Episode Level</h5>
+                <div>
+                  <h5 className="text-xs font-bold text-muted-foreground uppercase mb-4 tracking-wider">
+                    Episode Level
+                  </h5>
                   <WorkflowStageItem
                     label="本集大纲 (Outline)"
                     status={episodeV2.artifacts.outline.status}
@@ -394,7 +448,7 @@ export function WorkflowWorkbench(props: {
                     onSetStatus={(s) => props.onSetEpisodeArtifactStatus('promptPack', s)}
                     isLast
                   />
-            </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -402,85 +456,100 @@ export function WorkflowWorkbench(props: {
 
         {/* Right Column: Actions & Issues (8 cols) */}
         <div className="lg:col-span-8 space-y-6">
-
           {/* Active Tasks */}
           <Card>
             <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">待办任务</CardTitle>
-                <Badge variant="secondary" className="rounded-full">{tasks.filter(t => t.status !== 'done').length} Pending</Badge>
+                <Badge variant="secondary" className="rounded-full">
+                  {tasks.filter((t) => t.status !== 'done').length} Pending
+                </Badge>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3 md:grid-cols-2">
-            {tasks.map((t) => {
+                {tasks.map((t) => {
                   const isDone = t.status === 'done';
-              const action =
-                t.id === 'task:planEpisodes'
+                  const action =
+                    t.id === 'task:planEpisodes'
                       ? { label: '执行规划', onClick: props.onRunPlanEpisodes }
-                  : t.id === 'task:causalChain'
+                      : t.id === 'task:causalChain'
                         ? { label: '编辑因果链', onClick: () => props.onGoToStep('causal') }
-                    : t.id === 'task:episode:coreExpression'
+                        : t.id === 'task:episode:coreExpression'
                           ? { label: '生成核心表达', onClick: props.onRunGenerateCoreExpression }
-                      : t.id === 'task:episode:sceneList'
+                          : t.id === 'task:episode:sceneList'
                             ? { label: '生成分镜表', onClick: props.onRunGenerateSceneList }
-                        : t.id === 'task:episode:shotPrompt' || t.id === 'task:episode:dialogue'
+                            : t.id === 'task:episode:shotPrompt' || t.id === 'task:episode:dialogue'
                               ? { label: '一键细化', onClick: props.onRunBatchRefineAll }
-                          : t.id === 'task:bible'
+                              : t.id === 'task:bible'
                                 ? { label: '编辑圣经', onClick: () => props.onGoToStep('global') }
-                            : t.id === 'task:worldView'
-                                  ? { label: '编辑世界观', onClick: () => props.onGoToStep('global') }
-                              : null;
+                                : t.id === 'task:worldView'
+                                  ? {
+                                      label: '编辑世界观',
+                                      onClick: () => props.onGoToStep('global'),
+                                    }
+                                  : null;
 
-              return (
-                <div
-                  key={t.id}
+                  return (
+                    <div
+                      key={t.id}
                       className={cn(
-                        "flex flex-col justify-between p-4 rounded-lg border transition-all hover:shadow-sm",
-                        isDone ? "bg-muted/30 opacity-60" : "bg-card hover:border-primary/30"
+                        'flex flex-col justify-between p-4 rounded-lg border transition-all hover:shadow-sm',
+                        isDone ? 'bg-muted/30 opacity-60' : 'bg-card hover:border-primary/30',
                       )}
                     >
                       <div className="space-y-2 mb-4">
                         <div className="flex items-center justify-between">
-                          <Badge variant={isDone ? 'outline' : 'default'} className="text-[10px] h-5">
+                          <Badge
+                            variant={isDone ? 'outline' : 'default'}
+                            className="text-[10px] h-5"
+                          >
                             {t.level === 'error' ? '必做' : t.level === 'warn' ? '推荐' : '可选'}
-                        </Badge>
+                          </Badge>
                           {isDone && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                         </div>
                         <h4 className="font-semibold text-sm">{t.title}</h4>
-                        <p className="text-xs text-muted-foreground line-clamp-2" title={t.description}>
+                        <p
+                          className="text-xs text-muted-foreground line-clamp-2"
+                          title={t.description}
+                        >
                           {t.description}
                         </p>
                       </div>
                       {action && !isDone && (
-                        <Button size="sm" className="w-full text-xs" onClick={action.onClick} disabled={t.status === 'blocked'}>
+                        <Button
+                          size="sm"
+                          className="w-full text-xs"
+                          onClick={action.onClick}
+                          disabled={t.status === 'blocked'}
+                        >
                           {action.label} <ArrowRight className="w-3 h-3 ml-1" />
-                      </Button>
-                    )}
-                </div>
-              );
-            })}
-          </div>
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
-        </Card>
+          </Card>
 
           {/* Quality Issues */}
           <Card>
             <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">质量检查</CardTitle>
                 {issues.length > 0 ? (
-                   <span className="text-sm text-destructive font-medium flex items-center gap-1">
-                     <AlertCircle className="w-4 h-4" />
-                     {issues.length} 个问题需要关注
-                   </span>
+                  <span className="text-sm text-destructive font-medium flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {issues.length} 个问题需要关注
+                  </span>
                 ) : (
-                   <span className="text-sm text-emerald-600 font-medium flex items-center gap-1">
-                     <CheckCircle2 className="w-4 h-4" />
-                     状态良好
-                   </span>
+                  <span className="text-sm text-emerald-600 font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" />
+                    状态良好
+                  </span>
                 )}
-          </div>
+              </div>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[200px] pr-4">
@@ -489,7 +558,7 @@ export function WorkflowWorkbench(props: {
                     <div className="flex flex-col items-center justify-center h-full py-8 text-muted-foreground">
                       <CheckCircle2 className="w-8 h-8 mb-2 opacity-20" />
                       <p>未发现明显问题</p>
-        </div>
+                    </div>
                   ) : (
                     issues.map((i) => (
                       <IssueItem
@@ -522,66 +591,73 @@ export function WorkflowWorkbench(props: {
                     检查跨集角色、道具、场景的一致性
                   </CardDescription>
                 </div>
-            <Button
+                <Button
                   variant="secondary"
-              size="sm"
-              onClick={() => void handleBuildContinuityReport()}
-              disabled={!project || episodes.length === 0 || isContinuityLoading}
+                  size="sm"
+                  onClick={() => void handleBuildContinuityReport()}
+                  disabled={!project || episodes.length === 0 || isContinuityLoading}
                 >
-                  {isContinuityLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                  {isContinuityLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
                   生成报告
-            </Button>
+                </Button>
               </div>
             </CardHeader>
             {continuityReport && (
               <CardContent className="space-y-6">
                 {/* Report Stats */}
                 <div className="flex gap-4 p-4 bg-muted/30 rounded-lg">
-                   <div className="text-center px-4 border-r">
-                      <div className="text-2xl font-bold">{continuityReport.episodeCount}</div>
-                      <div className="text-xs text-muted-foreground uppercase">Episodes</div>
-              </div>
-                   <div className="text-center px-4 border-r">
-                      <div className="text-2xl font-bold">{continuityReport.issueCounts.error}</div>
-                      <div className="text-xs text-destructive font-bold uppercase">Errors</div>
-            </div>
-                   <div className="text-center px-4">
-                      <div className="text-2xl font-bold text-amber-600">{continuityReport.issueCounts.warn}</div>
-                      <div className="text-xs text-amber-600 font-bold uppercase">Warnings</div>
+                  <div className="text-center px-4 border-r">
+                    <div className="text-2xl font-bold">{continuityReport.episodeCount}</div>
+                    <div className="text-xs text-muted-foreground uppercase">Episodes</div>
                   </div>
-            </div>
+                  <div className="text-center px-4 border-r">
+                    <div className="text-2xl font-bold">{continuityReport.issueCounts.error}</div>
+                    <div className="text-xs text-destructive font-bold uppercase">Errors</div>
+                  </div>
+                  <div className="text-center px-4">
+                    <div className="text-2xl font-bold text-amber-600">
+                      {continuityReport.issueCounts.warn}
+                    </div>
+                    <div className="text-xs text-amber-600 font-bold uppercase">Warnings</div>
+                  </div>
+                </div>
 
                 {/* Report Details List */}
                 <div className="space-y-4">
-                   {continuityReport.issues.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-4">完美！未发现一致性问题。</p>
-                   ) : (
-                      <div className="space-y-2">
-                         {continuityReport.issues.slice(0, 5).map(i => (
-                            <IssueItem 
-                              key={i.id} 
-                              issue={i} 
-                              onAction={() => {
-                                if (i.scope.sceneId && props.onGoToScene && i.scope.episodeId) {
-                                  props.onGoToScene(i.scope.episodeId, i.scope.sceneId);
-                                }
-                              }}
-                            />
-                         ))}
-                         {continuityReport.issues.length > 5 && (
-                            <p className="text-center text-xs text-muted-foreground pt-2">
-                               还有 {continuityReport.issues.length - 5} 个问题...
-                            </p>
-                         )}
-                  </div>
-                )}
+                  {continuityReport.issues.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-4">
+                      完美！未发现一致性问题。
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {continuityReport.issues.slice(0, 5).map((i) => (
+                        <IssueItem
+                          key={i.id}
+                          issue={i}
+                          onAction={() => {
+                            if (i.scope.sceneId && props.onGoToScene && i.scope.episodeId) {
+                              props.onGoToScene(i.scope.episodeId, i.scope.sceneId);
+                            }
+                          }}
+                        />
+                      ))}
+                      {continuityReport.issues.length > 5 && (
+                        <p className="text-center text-xs text-muted-foreground pt-2">
+                          还有 {continuityReport.issues.length - 5} 个问题...
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             )}
           </Card>
-
-            </div>
-          </div>
+        </div>
+      </div>
     </div>
   );
 }
