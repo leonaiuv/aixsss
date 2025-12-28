@@ -1,5 +1,5 @@
 import type { JsonValue } from '@prisma/client/runtime/library';
-import type { GenerationParams, ProviderChatConfig } from '../providers/types.js';
+import type { GenerationParams, ProviderChatConfig, ProviderImageConfig } from '../providers/types.js';
 
 export type TokenUsage = {
   prompt: number;
@@ -92,5 +92,26 @@ export function toProviderChatConfig(profile: {
   };
 }
 
+export function toProviderImageConfig(profile: {
+  provider: 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible';
+  model: string;
+  baseURL: string | null;
+}): ProviderImageConfig {
+  if (profile.provider === 'gemini') {
+    return {
+      kind: 'gemini',
+      apiKey: '',
+      baseURL: profile.baseURL ?? undefined,
+      model: profile.model,
+    };
+  }
+
+  return {
+    kind: 'openai_compatible',
+    apiKey: '',
+    baseURL: profile.baseURL ?? defaultBaseURL(profile.provider),
+    model: profile.model,
+  };
+}
 
 

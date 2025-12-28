@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Copy,
   Film,
+  Image as ImageIcon,
   Loader2,
   MapPin,
   MessageSquare,
@@ -87,11 +88,13 @@ interface SceneDetailModalProps {
   characters: Character[];
   worldViewElements: WorldViewElement[];
   isRefining: boolean;
+  isGeneratingImages: boolean;
   refineProgress?: { message?: string | null; pct?: number | null };
   isBatchBlocked: boolean;
   aiProfileId?: string | null;
   onUpdateScene: (sceneId: string, updates: Partial<Scene>) => void;
   onRefineScene: (sceneId: string) => void;
+  onGenerateImages: (sceneId: string) => void;
   onDeleteScene: (sceneId: string) => void;
   onCopyImg2ImgPack: () => Promise<void>;
   parsedKeyframes: ParsedKeyframes;
@@ -107,6 +110,8 @@ interface SceneDetailModalProps {
   sceneAnchorCopyText: { zh: string; en: string };
   getSceneStatusLabel: (status: SceneStatus) => string;
 }
+
+const KEYFRAME_LABELS = ['KF0', 'KF1', 'KF2'] as const;
 
 // 可折叠区块组件
 function CollapsibleSection({
@@ -433,11 +438,13 @@ export function SceneDetailModal({
   characters,
   worldViewElements,
   isRefining,
+  isGeneratingImages,
   refineProgress,
   isBatchBlocked,
   aiProfileId,
   onUpdateScene,
   onRefineScene,
+  onGenerateImages,
   onDeleteScene,
   onCopyImg2ImgPack,
   parsedKeyframes,
@@ -524,6 +531,17 @@ export function SceneDetailModal({
 
     return [];
   }, [scene]);
+
+  const generatedImageMap = useMemo(() => {
+    const map = new Map<(typeof KEYFRAME_LABELS)[number], NonNullable<Scene['generatedImages']>[number]>();
+    if (!scene?.generatedImages) return map;
+    for (const image of scene.generatedImages) {
+      if (image?.keyframe && image?.url) {
+        map.set(image.keyframe, image);
+      }
+    }
+    return map;
+  }, [scene?.generatedImages]);
 
   // 解析纯文本台词格式
   // 格式: - [类型|情绪] 角色: 内容
@@ -795,6 +813,64 @@ export function SceneDetailModal({
                           className="min-h-[200px] font-mono text-sm leading-relaxed resize-none"
                           placeholder="KF0_ZH: (人物差分: ...) ...&#10;KF0_EN: (Character Diff: ...) ...&#10;KF1_ZH: ...&#10;..."
                         />
+                      </div>
+                    </CollapsibleSection>
+
+                    {/* 关键帧图片 */}
+                    <CollapsibleSection
+                      title="关键帧图片"
+                      icon={<ImageIcon className="h-4 w-4" />}
+                      badge={
+                        <Badge variant="secondary" className="text-xs">
+                          Keyframe Images
+                        </Badge>
+                      }
+                      actions={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onGenerateImages(scene.id)}
+                          disabled={!aiProfileId || isGeneratingImages || isBatchBlocked}
+                          className="gap-2"
+                        >
+                          {isGeneratingImages ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              生成中...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4" />
+                              一键生成图片
+                            </>
+                          )}
+                        </Button>
+                      }
+                    >
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        {KEYFRAME_LABELS.map((label, index) => {
+                          const image = generatedImageMap.get(label);
+                          return (
+                            <div key={label} className="space-y-2">
+                              <div className="text-xs font-medium text-muted-foreground">
+                                {label}（{index === 0 ? '起始' : index === 1 ? '中间' : '结束'}）
+                              </div>
+                              {image ? (
+                                <div className="overflow-hidden rounded-lg border">
+                                  <img
+                                    src={image.url}
+                                    alt={`${label} keyframe`}
+                                    className="h-40 w-full object-cover"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
+                                  未生成
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </CollapsibleSection>
 

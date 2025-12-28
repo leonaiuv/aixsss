@@ -56,4 +56,28 @@ export type ChatResult = {
   };
 };
 
+export type ImageGenerationParams = {
+  size?: string;
+  quality?: 'standard' | 'hd';
+  style?: 'vivid' | 'natural';
+  n?: number;
+  seed?: number;
+};
+
+export type ProviderImageConfig = {
+  kind: ProviderKind;
+  apiKey: string;
+  baseURL?: string;
+  model?: string;
+  params?: ImageGenerationParams;
+};
+
+export type ImageResult = {
+  url: string;
+  revisedPrompt?: string;
+};
+
+export type ImageGenerationResult = {
+  images: ImageResult[];
+};
 

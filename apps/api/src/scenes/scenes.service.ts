@@ -116,6 +116,7 @@ export class ScenesService {
         castCharacterIds: input.castCharacterIds ?? [],
         shotPrompt: input.shotPrompt ?? '',
         motionPrompt: input.motionPrompt ?? '',
+        generatedImages: input.generatedImages ?? undefined,
         dialogues: input.dialogues ?? undefined,
         contextSummary: input.contextSummary ?? undefined,
         status: (input.status as SceneStatus) ?? undefined,
@@ -139,6 +140,7 @@ export class ScenesService {
         castCharacterIds: input.castCharacterIds ?? [],
         shotPrompt: input.shotPrompt ?? '',
         motionPrompt: input.motionPrompt ?? '',
+        generatedImages: input.generatedImages ?? undefined,
         dialogues: input.dialogues ?? undefined,
         contextSummary: input.contextSummary ?? undefined,
         status: (input.status as SceneStatus) ?? undefined,
@@ -166,6 +168,9 @@ export class ScenesService {
         ...(input.castCharacterIds !== undefined ? { castCharacterIds: input.castCharacterIds } : {}),
         ...(typeof input.shotPrompt === 'string' ? { shotPrompt: input.shotPrompt } : {}),
         ...(typeof input.motionPrompt === 'string' ? { motionPrompt: input.motionPrompt } : {}),
+        ...(input.generatedImages !== undefined
+          ? { generatedImages: input.generatedImages as Prisma.InputJsonValue }
+          : {}),
         ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),
         ...(input.contextSummary !== undefined
           ? { contextSummary: input.contextSummary as Prisma.InputJsonValue }
@@ -201,6 +206,9 @@ export class ScenesService {
         ...(input.castCharacterIds !== undefined ? { castCharacterIds: input.castCharacterIds } : {}),
         ...(typeof input.shotPrompt === 'string' ? { shotPrompt: input.shotPrompt } : {}),
         ...(typeof input.motionPrompt === 'string' ? { motionPrompt: input.motionPrompt } : {}),
+        ...(input.generatedImages !== undefined
+          ? { generatedImages: input.generatedImages as Prisma.InputJsonValue }
+          : {}),
         ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),
         ...(input.contextSummary !== undefined
           ? { contextSummary: input.contextSummary as Prisma.InputJsonValue }

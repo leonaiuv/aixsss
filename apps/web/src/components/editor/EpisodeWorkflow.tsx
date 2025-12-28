@@ -12,7 +12,11 @@ import {
   apiUpdateEpisodeScene,
 } from '@/lib/api/episodeScenes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
-import { apiWorkflowRefineAllScenes, apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
+import {
+  apiWorkflowGenerateKeyframeImages,
+  apiWorkflowRefineAllScenes,
+  apiWorkflowRefineSceneAll,
+} from '@/lib/api/workflow';
 import { flushApiEpisodeScenePatchQueue } from '@/lib/api/episodeScenePatchQueue';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
 import { isApiMode } from '@/lib/runtime/mode';
@@ -362,6 +366,7 @@ export function EpisodeWorkflow() {
   const [refiningSceneId, setRefiningSceneId] = useState<string | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [refineJobProgress, setRefineJobProgress] = useState<NormalizedJobProgress | null>(null);
+  const [generatingImagesSceneId, setGeneratingImagesSceneId] = useState<string | null>(null);
   const [refineAllProgress, setRefineAllProgress] = useState<BatchRefineProgress | null>(null);
   const [refineAllJobRunning, setRefineAllJobRunning] = useState(false);
   const [refineAllFailedScenes, setRefineAllFailedScenes] = useState<BatchFailedScene[]>([]);
@@ -823,6 +828,27 @@ export function EpisodeWorkflow() {
       setIsRefining(false);
       setRefiningSceneId(null);
       setRefineJobProgress(null);
+    }
+  };
+
+  const handleGenerateKeyframeImages = async (sceneId: string) => {
+    if (!aiProfileId || !currentProject?.id) return;
+    setGeneratingImagesSceneId(sceneId);
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      const job = await apiWorkflowGenerateKeyframeImages({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+      });
+      await apiWaitForAIJob(job.id);
+      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+      toast({ title: '图片生成完成', description: '已生成关键帧图片。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '图片生成失败', description: detail, variant: 'destructive' });
+    } finally {
+      setGeneratingImagesSceneId(null);
     }
   };
 
@@ -3080,6 +3106,7 @@ ${safeJsonStringify(ep.coreExpression)}
         characters={projectCharacters}
         worldViewElements={worldViewElements}
         isRefining={isRefining && refiningSceneId === refineScene?.id}
+        isGeneratingImages={generatingImagesSceneId === refineScene?.id}
         refineProgress={refineJobProgress ?? undefined}
         isBatchBlocked={isBatchBlocked}
         aiProfileId={aiProfileId}
@@ -3088,6 +3115,7 @@ ${safeJsonStringify(ep.coreExpression)}
           updateScene(currentProject.id, currentEpisode.id, sceneId, updates);
         }}
         onRefineScene={handleRefineSceneAll}
+        onGenerateImages={handleGenerateKeyframeImages}
         onDeleteScene={(sceneId) => {
           if (!currentEpisode?.id) return;
           void deleteScene(currentProject.id, currentEpisode.id, sceneId);

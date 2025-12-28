@@ -386,6 +386,37 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueGenerateKeyframeImages(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'generate_keyframe_images',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_keyframe_images',
+      { teamId, projectId, sceneId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async enqueueGenerateMotionPrompt(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
     await this.requireProject(teamId, projectId);
     await this.requireScene(projectId, sceneId);

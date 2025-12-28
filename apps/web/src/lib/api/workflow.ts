@@ -117,6 +117,19 @@ export async function apiWorkflowGenerateKeyframePrompt(input: {
   );
 }
 
+export async function apiWorkflowGenerateKeyframeImages(input: {
+  projectId: string;
+  sceneId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
+      input.sceneId,
+    )}/generate-images`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
 export async function apiWorkflowGenerateMotionPrompt(input: {
   projectId: string;
   sceneId: string;

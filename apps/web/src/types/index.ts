@@ -335,6 +335,19 @@ export type SceneStatus =
   | 'completed'
   | 'needs_update';
 
+export type GeneratedImageKeyframe = 'KF0' | 'KF1' | 'KF2';
+
+export interface GeneratedImage {
+  keyframe: GeneratedImageKeyframe;
+  url: string;
+  prompt?: string;
+  revisedPrompt?: string;
+  provider?: string;
+  model?: string;
+  createdAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
 // 单集工作流状态
 export type EpisodeWorkflowState =
   | 'IDLE'
@@ -515,6 +528,8 @@ export interface Scene {
   shotPrompt: string;
   /** 时空/运动提示词 - 基于关键帧差分的“变化描述”，用于图生视频(I2V)模型（建议中英双语） */
   motionPrompt: string;
+  /** 关键帧生成图片 */
+  generatedImages?: GeneratedImage[];
   /** 台词列表 - 对白/独白/旁白/心理活动 */
   dialogues?: DialogueLine[];
   contextSummary?: SceneContextSummary;

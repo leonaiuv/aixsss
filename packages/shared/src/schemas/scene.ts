@@ -1,7 +1,18 @@
 import { z } from 'zod';
-import { SCENE_STATUSES } from '../types.js';
+import { GENERATED_IMAGE_KEYFRAMES, SCENE_STATUSES } from '../types.js';
 
 export const SceneStatusSchema = z.enum(SCENE_STATUSES);
+
+const GeneratedImageSchema = z.object({
+  keyframe: z.enum(GENERATED_IMAGE_KEYFRAMES),
+  url: z.string().min(1),
+  prompt: z.string().min(1).optional(),
+  revisedPrompt: z.string().min(1).optional(),
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  createdAt: z.string().min(1).optional(),
+  metadata: z.unknown().optional(),
+});
 
 export const CreateSceneInputSchema = z.object({
   id: z
@@ -17,6 +28,7 @@ export const CreateSceneInputSchema = z.object({
   castCharacterIds: z.array(z.string().min(1)).default([]),
   shotPrompt: z.string().min(0).max(12000).default(''),
   motionPrompt: z.string().min(0).max(12000).default(''),
+  generatedImages: z.array(GeneratedImageSchema).optional(),
   dialogues: z.unknown().optional(),
   contextSummary: z.unknown().optional(),
   status: SceneStatusSchema.optional(),
@@ -28,4 +40,3 @@ export type CreateSceneInput = z.infer<typeof CreateSceneInputSchema>;
 export const UpdateSceneInputSchema = CreateSceneInputSchema.partial();
 
 export type UpdateSceneInput = z.infer<typeof UpdateSceneInputSchema>;
-
