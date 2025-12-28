@@ -15,6 +15,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+type SceneRefinementSkipSteps = {
+  sceneDescription?: boolean;
+  shotPrompt?: boolean;
+};
+
+type SceneRefinementManualOverrides = {
+  sceneDescription?: string;
+  shotPrompt?: string;
+};
+
+function getRefinementSettings(contextSummary: unknown): {
+  skipSteps: SceneRefinementSkipSteps;
+  manualOverrides: SceneRefinementManualOverrides;
+} {
+  if (!isRecord(contextSummary)) {
+    return { skipSteps: {}, manualOverrides: {} };
+  }
+  const refinement = isRecord(contextSummary.refinement) ? contextSummary.refinement : {};
+  const skipSteps = isRecord(refinement.skipSteps) ? refinement.skipSteps : {};
+  const manualOverrides = isRecord(refinement.manualOverrides) ? refinement.manualOverrides : {};
+  return {
+    skipSteps: {
+      sceneDescription: skipSteps.sceneDescription === true,
+      shotPrompt: skipSteps.shotPrompt === true,
+    },
+    manualOverrides: {
+      sceneDescription: typeof manualOverrides.sceneDescription === 'string' ? manualOverrides.sceneDescription : undefined,
+      shotPrompt: typeof manualOverrides.shotPrompt === 'string' ? manualOverrides.shotPrompt : undefined,
+    },
+  };
+}
+
 async function safeUpdateScene(args: {
   prisma: PrismaClient;
   projectId: string;
@@ -298,7 +330,15 @@ export async function refineSceneAll(args: {
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
-    select: { id: true, episodeId: true, order: true, summary: true, contextSummary: true },
+    select: {
+      id: true,
+      episodeId: true,
+      order: true,
+      summary: true,
+      sceneDescription: true,
+      shotPrompt: true,
+      contextSummary: true,
+    },
   });
   if (!scene) throw new UnrecoverableError('Scene not found');
 
@@ -330,32 +370,46 @@ export async function refineSceneAll(args: {
 
   let tokens: TokenUsage | undefined;
 
-  // 1) Scene anchor
-  await updateProgress({ pct: 5, message: '生成场景锚点...' });
-  try {
-    await safeUpdateScene({ prisma, projectId, sceneId, data: { status: 'scene_generating' } });
-  } catch (err) {
-    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
-    throw err;
-  }
+  const refinementSettings = getRefinementSettings(scene.contextSummary);
+  const manualSceneDescription = refinementSettings.manualOverrides.sceneDescription?.trim() ?? '';
+  const manualShotPrompt = refinementSettings.manualOverrides.shotPrompt?.trim() ?? '';
 
-  const anchorRes = await doChat({
-    providerConfig,
-    prompt: buildSceneAnchorPrompt({
-      style: styleFullPrompt(project),
-      currentSummary: scene.summary || '-',
-      prevSummary: prev?.summary || '-',
-      panelHints,
-    }),
-  });
-  tokens = mergeTokenUsage(tokens, anchorRes.tokenUsage);
-  const anchorFixed = await fixStructuredOutput({
-    providerConfig,
-    type: 'scene_anchor',
-    raw: anchorRes.content,
-    tokenUsage: tokens,
-  });
-  tokens = anchorFixed.tokenUsage;
+  // 1) Scene anchor
+  let anchorContent = scene.sceneDescription || '';
+  if (refinementSettings.skipSteps.sceneDescription) {
+    anchorContent = manualSceneDescription || anchorContent;
+    if (!anchorContent) {
+      throw new UnrecoverableError('Scene anchor skipped but no manual override provided');
+    }
+    await updateProgress({ pct: 5, message: '跳过场景锚点生成，使用手动输入...' });
+  } else {
+    await updateProgress({ pct: 5, message: '生成场景锚点...' });
+    try {
+      await safeUpdateScene({ prisma, projectId, sceneId, data: { status: 'scene_generating' } });
+    } catch (err) {
+      if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+      throw err;
+    }
+
+    const anchorRes = await doChat({
+      providerConfig,
+      prompt: buildSceneAnchorPrompt({
+        style: styleFullPrompt(project),
+        currentSummary: scene.summary || '-',
+        prevSummary: prev?.summary || '-',
+        panelHints,
+      }),
+    });
+    tokens = mergeTokenUsage(tokens, anchorRes.tokenUsage);
+    const anchorFixed = await fixStructuredOutput({
+      providerConfig,
+      type: 'scene_anchor',
+      raw: anchorRes.content,
+      tokenUsage: tokens,
+    });
+    tokens = anchorFixed.tokenUsage;
+    anchorContent = anchorFixed.content;
+  }
 
   await updateProgress({ pct: 25, message: '保存场景锚点...' });
   try {
@@ -363,7 +417,7 @@ export async function refineSceneAll(args: {
       prisma,
       projectId,
       sceneId,
-      data: { sceneDescription: anchorFixed.content, status: 'scene_confirmed' },
+      data: { sceneDescription: anchorContent, status: 'scene_confirmed' },
     });
   } catch (err) {
     if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
@@ -371,32 +425,42 @@ export async function refineSceneAll(args: {
   }
 
   // 2) Keyframe
-  await updateProgress({ pct: 30, message: '生成关键帧提示词...' });
-  try {
-    await safeUpdateScene({ prisma, projectId, sceneId, data: { status: 'keyframe_generating' } });
-  } catch (err) {
-    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
-    throw err;
-  }
+  let keyframeContent = scene.shotPrompt || '';
+  if (refinementSettings.skipSteps.shotPrompt) {
+    keyframeContent = manualShotPrompt || keyframeContent;
+    if (!keyframeContent) {
+      throw new UnrecoverableError('Keyframe prompt skipped but no manual override provided');
+    }
+    await updateProgress({ pct: 30, message: '跳过关键帧生成，使用手动输入...' });
+  } else {
+    await updateProgress({ pct: 30, message: '生成关键帧提示词...' });
+    try {
+      await safeUpdateScene({ prisma, projectId, sceneId, data: { status: 'keyframe_generating' } });
+    } catch (err) {
+      if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+      throw err;
+    }
 
-  const kfRes = await doChat({
-    providerConfig,
-    prompt: buildKeyframePrompt({
-      style: styleFullPrompt(project),
-      currentSummary: scene.summary || '-',
-      sceneAnchor: anchorFixed.content,
-      characters: project.protagonist || '-',
-      panelHints,
-    }),
-  });
-  tokens = mergeTokenUsage(tokens, kfRes.tokenUsage);
-  const kfFixed = await fixStructuredOutput({
-    providerConfig,
-    type: 'keyframe_prompt',
-    raw: kfRes.content,
-    tokenUsage: tokens,
-  });
-  tokens = kfFixed.tokenUsage;
+    const kfRes = await doChat({
+      providerConfig,
+      prompt: buildKeyframePrompt({
+        style: styleFullPrompt(project),
+        currentSummary: scene.summary || '-',
+        sceneAnchor: anchorContent,
+        characters: project.protagonist || '-',
+        panelHints,
+      }),
+    });
+    tokens = mergeTokenUsage(tokens, kfRes.tokenUsage);
+    const kfFixed = await fixStructuredOutput({
+      providerConfig,
+      type: 'keyframe_prompt',
+      raw: kfRes.content,
+      tokenUsage: tokens,
+    });
+    tokens = kfFixed.tokenUsage;
+    keyframeContent = kfFixed.content;
+  }
 
   await updateProgress({ pct: 55, message: '保存关键帧...' });
   try {
@@ -404,7 +468,7 @@ export async function refineSceneAll(args: {
       prisma,
       projectId,
       sceneId,
-      data: { shotPrompt: kfFixed.content, status: 'keyframe_confirmed' },
+      data: { shotPrompt: keyframeContent, status: 'keyframe_confirmed' },
     });
   } catch (err) {
     if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
@@ -423,8 +487,8 @@ export async function refineSceneAll(args: {
   const motionRes = await doChat({
     providerConfig,
     prompt: buildMotionPrompt({
-      sceneAnchor: anchorFixed.content,
-      shotPrompt: kfFixed.content,
+      sceneAnchor: anchorContent,
+      shotPrompt: keyframeContent,
       panelHints,
     }),
   });
@@ -456,8 +520,8 @@ export async function refineSceneAll(args: {
     providerConfig,
     prompt: buildDialoguePrompt({
       sceneSummary: scene.summary || '-',
-      sceneAnchor: anchorFixed.content,
-      shotPrompt: kfFixed.content,
+      sceneAnchor: anchorContent,
+      shotPrompt: keyframeContent,
       motionPrompt: motionFixed.content,
       characters: project.protagonist || '-',
       panelHints,
@@ -499,8 +563,8 @@ export async function refineSceneAll(args: {
       version: 1,
       prompts: {
         ...(isRecord(prevPanelScript.prompts) ? prevPanelScript.prompts : {}),
-        sceneAnchor: anchorFixed.content,
-        keyframes: kfFixed.content,
+        sceneAnchor: anchorContent,
+        keyframes: keyframeContent,
         motion: motionFixed.content,
       },
       metrics: {
@@ -561,8 +625,8 @@ export async function refineSceneAll(args: {
 
   return {
     sceneId,
-    sceneDescription: anchorFixed.content,
-    shotPrompt: kfFixed.content,
+    sceneDescription: anchorContent,
+    shotPrompt: keyframeContent,
     motionPrompt: motionFixed.content,
     dialogueCount: dialogues.length,
     tokenUsage: tokens ?? null,

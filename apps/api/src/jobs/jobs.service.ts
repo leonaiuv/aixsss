@@ -508,6 +508,69 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueRefineAllScenes(
+    teamId: string,
+    projectId: string,
+    aiProfileId: string,
+    options?: { sceneIds?: string[] },
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const sceneIds = options?.sceneIds?.filter(Boolean);
+    const scenes = await this.prisma.scene.findMany({
+      where: {
+        projectId,
+        ...(sceneIds && sceneIds.length > 0 ? { id: { in: sceneIds } } : {}),
+      },
+      select: {
+        id: true,
+        order: true,
+        episode: { select: { order: true } },
+      },
+      orderBy: [{ episode: { order: 'asc' } }, { order: 'asc' }],
+    });
+
+    if (scenes.length === 0) {
+      throw new BadRequestException('No scenes found');
+    }
+
+    const orderedSceneIds = scenes.map((scene) => scene.id);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        aiProfileId,
+        type: 'refine_scene_all_batch',
+        status: 'queued',
+      },
+    });
+
+    try {
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: { workflowState: 'SCENE_PROCESSING', currentSceneOrder: 0, currentSceneStep: 'scene_description' },
+      });
+    } catch {
+      // ignore
+    }
+
+    await this.queue.add(
+      'refine_scene_all_batch',
+      { teamId, projectId, aiProfileId, jobId: jobRow.id, sceneIds: orderedSceneIds },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async runLlmChat(
     teamId: string,
     aiProfileId: string,

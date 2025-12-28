@@ -23,6 +23,10 @@ const NarrativeCausalChainBodySchema = WorkflowBodySchema.extend({
   force: z.boolean().optional(),
 });
 
+const RefineAllScenesBodySchema = WorkflowBodySchema.extend({
+  sceneIds: z.array(z.string().min(1)).optional(),
+});
+
 @UseGuards(JwtAuthGuard)
 @Controller('workflow')
 export class WorkflowController {
@@ -137,5 +141,16 @@ export class WorkflowController {
     const input = parseOrBadRequest(WorkflowBodySchema, body);
     return this.jobs.enqueueRefineSceneAll(user.teamId, projectId, sceneId, input.aiProfileId);
   }
-}
 
+  @Post('projects/:projectId/scenes/refine-all')
+  refineAllScenes(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(RefineAllScenesBodySchema, body);
+    return this.jobs.enqueueRefineAllScenes(user.teamId, projectId, input.aiProfileId, {
+      sceneIds: input.sceneIds,
+    });
+  }
+}
