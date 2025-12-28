@@ -203,6 +203,7 @@ model Scene {
   castCharacterIds String[]   @default([])
   shotPrompt       String     @default("")
   motionPrompt     String     @default("")
+  generatedImages  Json?
   dialogues        Json?
   contextSummary   Json?
   status           SceneStatus @default(pending)

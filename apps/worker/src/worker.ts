@@ -6,6 +6,7 @@ import { EnvSchema } from './config/env.js';
 import { generateSceneList } from './tasks/generateSceneList.js';
 import { generateSceneAnchor } from './tasks/generateSceneAnchor.js';
 import { generateKeyframePrompt } from './tasks/generateKeyframePrompt.js';
+import { generateKeyframeImages } from './tasks/generateKeyframeImages.js';
 import { generateMotionPrompt } from './tasks/generateMotionPrompt.js';
 import { generateDialogue } from './tasks/generateDialogue.js';
 import { refineSceneAll } from './tasks/refineSceneAll.js';
@@ -277,6 +278,32 @@ async function main() {
           }
           case 'generate_keyframe_prompt': {
             const result = await generateKeyframePrompt({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_keyframe_images': {
+            const result = await generateKeyframeImages({
               prisma,
               teamId,
               projectId,

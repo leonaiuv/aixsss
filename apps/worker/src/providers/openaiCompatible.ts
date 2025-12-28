@@ -1,4 +1,10 @@
-import type { ChatMessage, ChatResult, ProviderChatConfig } from './types.js';
+import type {
+  ChatMessage,
+  ChatResult,
+  ImageGenerationResult,
+  ProviderChatConfig,
+  ProviderImageConfig,
+} from './types.js';
 
 type OpenAIErrorResponse = {
   error?: { message?: string };
@@ -31,6 +37,16 @@ type OpenAIResponsesResponse = {
   output_text?: string;
   output?: OpenAIResponsesOutputItem[];
   usage?: OpenAIResponsesUsage;
+};
+
+type OpenAIImageData = {
+  url?: string;
+  b64_json?: string;
+  revised_prompt?: string;
+};
+
+type OpenAIImageResponse = {
+  data?: OpenAIImageData[];
 };
 
 function getRequestTimeoutMs(): number {
@@ -363,4 +379,51 @@ export async function chatOpenAICompatible(config: ProviderChatConfig, messages:
   }
 }
 
+export async function generateImagesOpenAICompatible(
+  config: ProviderImageConfig,
+  prompt: string,
+): Promise<ImageGenerationResult> {
+  const baseURL = normalizeBaseURL(config.baseURL || 'https://api.openai.com');
+  const url = `${baseURL}/v1/images/generations`;
+  const model = config.model || 'gpt-image-1';
+  const params = config.params;
+  const body = {
+    model,
+    prompt,
+    n: params?.n ?? 1,
+    ...(params?.size ? { size: params.size } : {}),
+    ...(params?.quality ? { quality: params.quality } : {}),
+    ...(params?.style ? { style: params.style } : {}),
+    ...(typeof params?.seed === 'number' ? { seed: params.seed } : {}),
+    response_format: 'url',
+  };
+
+  const response = await fetchWithTimeout(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  const data = (await response.json()) as OpenAIImageResponse;
+  const images = Array.isArray(data?.data)
+    ? data.data
+        .map((item) => {
+          if (typeof item?.url !== 'string' || !item.url) return null;
+          return {
+            url: item.url,
+            revisedPrompt: item.revised_prompt,
+          };
+        })
+        .filter((item): item is { url: string; revisedPrompt?: string } => Boolean(item))
+    : [];
+
+  return { images };
+}
 

@@ -1,5 +1,11 @@
-import type { ProviderChatConfig, ChatMessage, ChatResult } from './types.js';
-import { chatOpenAICompatible } from './openaiCompatible.js';
+import type {
+  ProviderChatConfig,
+  ProviderImageConfig,
+  ChatMessage,
+  ChatResult,
+  ImageGenerationResult,
+} from './types.js';
+import { chatOpenAICompatible, generateImagesOpenAICompatible } from './openaiCompatible.js';
 import { chatGemini } from './gemini.js';
 
 export async function chatWithProvider(config: ProviderChatConfig, messages: ChatMessage[]): Promise<ChatResult> {
@@ -15,4 +21,19 @@ export async function chatWithProvider(config: ProviderChatConfig, messages: Cha
   }
 }
 
+export async function generateImagesWithProvider(
+  config: ProviderImageConfig,
+  prompt: string,
+): Promise<ImageGenerationResult> {
+  switch (config.kind) {
+    case 'openai_compatible':
+      return generateImagesOpenAICompatible(config, prompt);
+    case 'gemini':
+      throw new Error('Gemini image generation not supported yet');
+    default: {
+      const _exhaustive: never = config.kind;
+      throw new Error(`Unsupported provider kind: ${_exhaustive}`);
+    }
+  }
+}
 
