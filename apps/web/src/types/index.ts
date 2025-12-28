@@ -495,6 +495,8 @@ export interface Scene {
   sceneDescription: string;
   /** @deprecated 保留用于向后兼容 */
   actionDescription: string;
+  /** 出场角色ID列表（场景级） */
+  castCharacterIds?: string[];
   /** 关键帧提示词（KF0/KF1/KF2）- 静止画面描述，用于生图AI（建议中英双语） */
   shotPrompt: string;
   /** 时空/运动提示词 - 基于关键帧差分的“变化描述”，用于图生视频(I2V)模型（建议中英双语） */

@@ -14,6 +14,7 @@ export const CreateSceneInputSchema = z.object({
   summary: z.string().min(0).max(2000).default(''),
   sceneDescription: z.string().min(0).max(6000).default(''),
   actionDescription: z.string().min(0).max(6000).default(''),
+  castCharacterIds: z.array(z.string().min(1).max(160)).default([]),
   shotPrompt: z.string().min(0).max(12000).default(''),
   motionPrompt: z.string().min(0).max(12000).default(''),
   dialogues: z.unknown().optional(),
@@ -27,5 +28,4 @@ export type CreateSceneInput = z.infer<typeof CreateSceneInputSchema>;
 export const UpdateSceneInputSchema = CreateSceneInputSchema.partial();
 
 export type UpdateSceneInput = z.infer<typeof UpdateSceneInputSchema>;
-
 

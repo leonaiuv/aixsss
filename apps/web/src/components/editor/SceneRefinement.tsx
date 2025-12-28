@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Accordion,
   AccordionContent,
@@ -218,6 +219,16 @@ export function SceneRefinement() {
     [characters, currentProject?.id],
   );
 
+  const currentScene = scenes[currentSceneIndex];
+  const currentSceneCastIds = useMemo(
+    () => currentScene?.castCharacterIds ?? [],
+    [currentScene?.castCharacterIds],
+  );
+  const selectedCastCharacters = useMemo(() => {
+    if (!currentScene || currentSceneCastIds.length === 0) return [];
+    return projectCharacters.filter((character) => currentSceneCastIds.includes(character.id));
+  }, [currentScene, currentSceneCastIds, projectCharacters]);
+
   // 缓存进度计算 - 必须在条件返回之前调用 hooks
   const progress = useMemo(() => {
     if (scenes.length === 0) return 0;
@@ -254,6 +265,20 @@ export function SceneRefinement() {
       updateProject(projectId, { currentSceneOrder: safeIndex + 1 });
     },
     [projectId, scenes.length, updateProject],
+  );
+
+  const toggleCastCharacter = useCallback(
+    (characterId: string, checked: boolean) => {
+      if (!currentProject || !currentScene) return;
+      const next = new Set(currentScene.castCharacterIds ?? []);
+      if (checked) {
+        next.add(characterId);
+      } else {
+        next.delete(characterId);
+      }
+      updateScene(currentProject.id, currentScene.id, { castCharacterIds: [...next] });
+    },
+    [currentProject, currentScene, updateScene],
   );
 
   const loadScenesRef = useRef(loadScenes);
@@ -360,7 +385,6 @@ export function SceneRefinement() {
     );
   }
 
-  const currentScene = scenes[currentSceneIndex];
   const promptEditorValue =
     promptEditor?.kind === 'field'
       ? (currentScene?.[promptEditor.field] ?? '')
@@ -543,7 +567,7 @@ export function SceneRefinement() {
       // 使用 contextBuilder 填充模板
       const prompt = fillPromptTemplate(skill.promptTemplate, {
         artStyle: currentProject.artStyleConfig,
-        characters: projectCharacters,
+        characters: selectedCastCharacters,
         protagonist: currentProject.protagonist,
         sceneDescription: latestScene.sceneDescription,
         sceneSummary: latestScene.summary,
@@ -785,11 +809,11 @@ export function SceneRefinement() {
       }
 
       // 使用 contextBuilder 构建角色上下文
-      const characterContext = buildCharacterContext(projectCharacters);
+      const characterContext = buildCharacterContext(selectedCastCharacters);
 
       // 使用 fillPromptTemplate 填充模板
       const prompt = fillPromptTemplate(skill.promptTemplate, {
-        characters: projectCharacters,
+        characters: selectedCastCharacters,
         sceneSummary: latestScene.summary,
         sceneDescription: latestScene.sceneDescription,
         shotPrompt: latestScene.shotPrompt,
@@ -1272,6 +1296,53 @@ export function SceneRefinement() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* 出场角色 */}
+        <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold">出场角色</h3>
+              <p className="text-xs text-muted-foreground">
+                已选 {currentSceneCastIds.length}/{projectCharacters.length}
+              </p>
+            </div>
+            {projectCharacters.length === 0 && (
+              <Badge variant="secondary" className="text-xs">
+                暂无角色
+              </Badge>
+            )}
+          </div>
+          {projectCharacters.length === 0 ? (
+            <div className="mt-3 text-sm text-muted-foreground">
+              请先在“基础设定 → 角色管理”中添加角色。
+            </div>
+          ) : (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {projectCharacters.map((character) => {
+                const checked = currentSceneCastIds.includes(character.id);
+                return (
+                  <label
+                    key={character.id}
+                    className="flex items-start gap-2 rounded-md border bg-background/60 p-2 text-sm hover:bg-muted/40"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) => toggleCastCharacter(character.id, Boolean(value))}
+                    />
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{character.name}</div>
+                      {character.briefDescription ? (
+                        <div className="text-xs text-muted-foreground line-clamp-2">
+                          {character.briefDescription}
+                        </div>
+                      ) : null}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* 三阶段生成 */}

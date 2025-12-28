@@ -113,6 +113,7 @@ export class ScenesService {
         summary: input.summary ?? '',
         sceneDescription: input.sceneDescription ?? '',
         actionDescription: input.actionDescription ?? '',
+        castCharacterIds: input.castCharacterIds ?? [],
         shotPrompt: input.shotPrompt ?? '',
         motionPrompt: input.motionPrompt ?? '',
         dialogues: input.dialogues ?? undefined,
@@ -135,6 +136,7 @@ export class ScenesService {
         summary: input.summary ?? '',
         sceneDescription: input.sceneDescription ?? '',
         actionDescription: input.actionDescription ?? '',
+        castCharacterIds: input.castCharacterIds ?? [],
         shotPrompt: input.shotPrompt ?? '',
         motionPrompt: input.motionPrompt ?? '',
         dialogues: input.dialogues ?? undefined,
@@ -161,6 +163,9 @@ export class ScenesService {
         ...(typeof input.summary === 'string' ? { summary: input.summary } : {}),
         ...(typeof input.sceneDescription === 'string' ? { sceneDescription: input.sceneDescription } : {}),
         ...(typeof input.actionDescription === 'string' ? { actionDescription: input.actionDescription } : {}),
+        ...(Array.isArray(input.castCharacterIds)
+          ? { castCharacterIds: input.castCharacterIds }
+          : {}),
         ...(typeof input.shotPrompt === 'string' ? { shotPrompt: input.shotPrompt } : {}),
         ...(typeof input.motionPrompt === 'string' ? { motionPrompt: input.motionPrompt } : {}),
         ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),
@@ -195,6 +200,9 @@ export class ScenesService {
         ...(typeof input.summary === 'string' ? { summary: input.summary } : {}),
         ...(typeof input.sceneDescription === 'string' ? { sceneDescription: input.sceneDescription } : {}),
         ...(typeof input.actionDescription === 'string' ? { actionDescription: input.actionDescription } : {}),
+        ...(Array.isArray(input.castCharacterIds)
+          ? { castCharacterIds: input.castCharacterIds }
+          : {}),
         ...(typeof input.shotPrompt === 'string' ? { shotPrompt: input.shotPrompt } : {}),
         ...(typeof input.motionPrompt === 'string' ? { motionPrompt: input.motionPrompt } : {}),
         ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),

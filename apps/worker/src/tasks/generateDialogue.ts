@@ -114,10 +114,11 @@ ${args.panelHints}
 - 旁白: [旁白] 台词内容
 
 补充约束：
-1. 1-6 行即可，越短越好，但要贴合画面与动作节拍。
-2. 如需标注时间点或画外/字幕提示，可把信息追加到情绪后面，用“|”分隔（保持可解析），示例：
+1. 仅允许使用上方“场景中的角色”名单，禁止引入未勾选/未出现的角色名。
+2. 1-6 行即可，越短越好，但要贴合画面与动作节拍。
+3. 如需标注时间点或画外/字幕提示，可把信息追加到情绪后面，用“|”分隔（保持可解析），示例：
    [对白|惊讶|t=1.0s|画外] 林默: 抱歉，我…
-3. 只输出台词行，不要额外解释。`;
+4. 只输出台词行，不要额外解释。`;
 }
 
 function buildDialogueFixPrompt(raw: string): string {
@@ -148,7 +149,7 @@ export async function generateDialogue(args: {
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, teamId, deletedAt: null },
-    select: { id: true, protagonist: true },
+    select: { id: true },
   });
   if (!project) throw new Error('Project not found');
 
@@ -160,6 +161,7 @@ export async function generateDialogue(args: {
       sceneDescription: true,
       shotPrompt: true,
       motionPrompt: true,
+      castCharacterIds: true,
       contextSummary: true,
     },
   });
@@ -179,12 +181,26 @@ export async function generateDialogue(args: {
   const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary), {
     includeAssets: false,
   });
+
+  const castCharacterIds = scene.castCharacterIds ?? [];
+  const castCharacters = castCharacterIds.length
+    ? await prisma.character.findMany({
+        where: { projectId, id: { in: castCharacterIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const castCharacterMap = new Map(castCharacters.map((character) => [character.id, character]));
+  const orderedCastNames = castCharacterIds
+    .map((id) => castCharacterMap.get(id)?.name)
+    .filter((name): name is string => Boolean(name));
+  const charactersList =
+    orderedCastNames.length > 0 ? orderedCastNames.map((name) => `- ${name}`).join('\n') : '（无）';
   const prompt = buildPrompt({
     sceneSummary: scene.summary || '-',
     sceneAnchor: scene.sceneDescription,
     shotPrompt: scene.shotPrompt,
     motionPrompt: scene.motionPrompt,
-    characters: project.protagonist || '-',
+    characters: charactersList,
     panelHints,
   });
 
@@ -262,5 +278,3 @@ export async function generateDialogue(args: {
     tokenUsage: res.tokenUsage ?? null,
   };
 }
-
-
