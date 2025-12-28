@@ -200,6 +200,7 @@ model Scene {
   summary          String     @default("")
   sceneDescription String     @default("")
   actionDescription String    @default("")
+  castCharacterIds String[]   @default([])
   shotPrompt       String     @default("")
   motionPrompt     String     @default("")
   dialogues        Json?
@@ -319,4 +320,3 @@ model AIJob {
   @@index([teamId, createdAt(sort: Desc)])
   @@index([status])
 }
-

@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Accordion,
   AccordionContent,
@@ -233,6 +234,17 @@ export function SceneRefinement() {
     if (scenes.length === 0) return 0;
     return Math.round(((currentSceneIndex + 1) / scenes.length) * 100);
   }, [currentSceneIndex, scenes.length]);
+  const currentScene = scenes[currentSceneIndex];
+  const selectedCastIds = useMemo(
+    () => currentScene?.castCharacterIds ?? [],
+    [currentScene?.castCharacterIds],
+  );
+  const selectedCastIdSet = useMemo(() => new Set(selectedCastIds), [selectedCastIds]);
+  const castCharacters = useMemo(() => {
+    if (!currentScene?.castCharacterIds?.length) return [];
+    const selected = new Set(currentScene.castCharacterIds);
+    return projectCharacters.filter((character) => selected.has(character.id));
+  }, [currentScene?.castCharacterIds, projectCharacters]);
 
   // 使用 useCallback 优化导航回调 - 必须在条件返回之前
   const goToPrevScene = useCallback(() => {
@@ -370,7 +382,6 @@ export function SceneRefinement() {
     );
   }
 
-  const currentScene = scenes[currentSceneIndex];
   const currentSkipSteps = currentScene ? skipSteps[currentScene.id] ?? {} : {};
   const currentManualOverrides = currentScene ? manualOverrides[currentScene.id] ?? {} : {};
   const promptEditorValue =
@@ -592,7 +603,7 @@ export function SceneRefinement() {
       // 使用 contextBuilder 填充模板
       const prompt = fillPromptTemplate(skill.promptTemplate, {
         artStyle: currentProject.artStyleConfig,
-        characters: projectCharacters,
+        characters: castCharacters,
         protagonist: currentProject.protagonist,
         sceneDescription: latestScene.sceneDescription,
         sceneSummary: latestScene.summary,
@@ -834,11 +845,11 @@ export function SceneRefinement() {
       }
 
       // 使用 contextBuilder 构建角色上下文
-      const characterContext = buildCharacterContext(projectCharacters);
+      const characterContext = buildCharacterContext(castCharacters);
 
       // 使用 fillPromptTemplate 填充模板
       const prompt = fillPromptTemplate(skill.promptTemplate, {
-        characters: projectCharacters,
+        characters: castCharacters,
         sceneSummary: latestScene.summary,
         sceneDescription: latestScene.sceneDescription,
         shotPrompt: latestScene.shotPrompt,
@@ -1329,6 +1340,50 @@ export function SceneRefinement() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* 出场角色选择 */}
+        <div className="mb-6 rounded-lg border bg-muted/30 p-4 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-semibold mb-1">出场角色</h3>
+              <p className="text-xs text-muted-foreground">
+                勾选本分镜出场角色，仅会注入所选角色到关键帧/台词提示词。
+              </p>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              已选 {selectedCastIds.length} / {projectCharacters.length}
+            </div>
+          </div>
+          {projectCharacters.length === 0 ? (
+            <p className="text-sm text-muted-foreground">暂无角色，请先在基础设定中创建角色。</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {projectCharacters.map((character) => (
+                <label
+                  key={character.id}
+                  className="flex items-center gap-2 rounded-md border bg-background/70 px-3 py-2 text-sm"
+                >
+                  <Checkbox
+                    checked={selectedCastIdSet.has(character.id)}
+                    onCheckedChange={(checked) => {
+                      if (!currentProject || !currentScene) return;
+                      const next = new Set(currentScene.castCharacterIds ?? []);
+                      if (checked) {
+                        next.add(character.id);
+                      } else {
+                        next.delete(character.id);
+                      }
+                      updateScene(currentProject.id, currentScene.id, {
+                        castCharacterIds: Array.from(next),
+                      });
+                    }}
+                  />
+                  <span>{character.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 三阶段生成 */}

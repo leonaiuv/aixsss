@@ -46,6 +46,7 @@ export const SCENE_STATUSES = [
 ] as const;
 export type SceneStatus = (typeof SCENE_STATUSES)[number];
 
+export type SceneCastCharacterIds = string[];
+
 export const TEAM_ROLES = ['OWNER', 'ADMIN', 'MEMBER'] as const;
 export type TeamRole = (typeof TEAM_ROLES)[number];
-

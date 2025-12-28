@@ -114,10 +114,11 @@ ${args.panelHints}
 - 旁白: [旁白] 台词内容
 
 补充约束：
-1. 1-6 行即可，越短越好，但要贴合画面与动作节拍。
-2. 如需标注时间点或画外/字幕提示，可把信息追加到情绪后面，用“|”分隔（保持可解析），示例：
+1. 仅允许使用已勾选出场角色，不得引入未列出的角色。
+2. 1-6 行即可，越短越好，但要贴合画面与动作节拍。
+3. 如需标注时间点或画外/字幕提示，可把信息追加到情绪后面，用“|”分隔（保持可解析），示例：
    [对白|惊讶|t=1.0s|画外] 林默: 抱歉，我…
-3. 只输出台词行，不要额外解释。`;
+4. 只输出台词行，不要额外解释。`;
 }
 
 function buildDialogueFixPrompt(raw: string): string {
@@ -161,6 +162,7 @@ export async function generateDialogue(args: {
       shotPrompt: true,
       motionPrompt: true,
       contextSummary: true,
+      castCharacterIds: true,
     },
   });
   if (!scene) throw new Error('Scene not found');
@@ -179,12 +181,28 @@ export async function generateDialogue(args: {
   const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary), {
     includeAssets: false,
   });
+  const castCharacterIds = scene.castCharacterIds ?? [];
+  let castCharacters = '-';
+  if (castCharacterIds.length > 0) {
+    const characters = await prisma.character.findMany({
+      where: { projectId, id: { in: castCharacterIds } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(characters.map((character) => [character.id, character.name]));
+    const orderedNames = castCharacterIds
+      .map((id) => nameById.get(id))
+      .filter((name): name is string => Boolean(name));
+    if (orderedNames.length > 0) {
+      castCharacters = orderedNames.join('、');
+    }
+  }
+
   const prompt = buildPrompt({
     sceneSummary: scene.summary || '-',
     sceneAnchor: scene.sceneDescription,
     shotPrompt: scene.shotPrompt,
     motionPrompt: scene.motionPrompt,
-    characters: project.protagonist || '-',
+    characters: castCharacters,
     panelHints,
   });
 
@@ -262,5 +280,4 @@ export async function generateDialogue(args: {
     tokenUsage: res.tokenUsage ?? null,
   };
 }
-
 
