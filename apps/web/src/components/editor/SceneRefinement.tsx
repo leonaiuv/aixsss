@@ -382,8 +382,8 @@ export function SceneRefinement() {
     );
   }
 
-  const currentSkipSteps = currentScene ? skipSteps[currentScene.id] ?? {} : {};
-  const currentManualOverrides = currentScene ? manualOverrides[currentScene.id] ?? {} : {};
+  const currentSkipSteps = currentScene ? (skipSteps[currentScene.id] ?? {}) : {};
+  const currentManualOverrides = currentScene ? (manualOverrides[currentScene.id] ?? {}) : {};
   const promptEditorValue =
     promptEditor?.kind === 'field'
       ? (currentScene?.[promptEditor.field] ?? '')
@@ -1456,7 +1456,9 @@ export function SceneRefinement() {
                       size="sm"
                       variant="outline"
                       disabled={!currentSkipSteps.sceneDescription}
-                      onClick={() => applyManualSceneDescription(currentManualOverrides.sceneDescription)}
+                      onClick={() =>
+                        applyManualSceneDescription(currentManualOverrides.sceneDescription)
+                      }
                     >
                       应用手动输入
                     </Button>

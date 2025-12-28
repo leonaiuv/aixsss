@@ -163,7 +163,8 @@ function normalizeBatchRefineProgress(progress: unknown): BatchRefineProgress {
   const raw = progress as Record<string, unknown> | undefined;
   const totalScenes = typeof raw?.totalScenes === 'number' ? raw.totalScenes : null;
   const currentSceneId = typeof raw?.currentSceneId === 'string' ? raw.currentSceneId : null;
-  const currentSceneOrder = typeof raw?.currentSceneOrder === 'number' ? raw.currentSceneOrder : null;
+  const currentSceneOrder =
+    typeof raw?.currentSceneOrder === 'number' ? raw.currentSceneOrder : null;
   const completedSceneIds = Array.isArray(raw?.completedSceneIds)
     ? raw?.completedSceneIds.filter((id): id is string => typeof id === 'string')
     : [];
@@ -2303,7 +2304,9 @@ ${safeJsonStringify(ep.coreExpression)}
                           : '-'}
                       </span>
                     </div>
-                    <Progress value={typeof refineAllProgress.pct === 'number' ? refineAllProgress.pct : 0} />
+                    <Progress
+                      value={typeof refineAllProgress.pct === 'number' ? refineAllProgress.pct : 0}
+                    />
                     {refineAllFailedScenes.length > 0 ? (
                       <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive space-y-2">
                         <div className="font-medium">失败列表</div>

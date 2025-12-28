@@ -126,7 +126,8 @@ export const useStoryboardStore = create<StoryboardStore>((set, get) => ({
           const manualOverrides = Object.fromEntries(
             nextScenes.map((scene) => [
               scene.id,
-              (scene.contextSummary?.refinement?.manualOverrides ?? {}) as SceneRefinementManualOverrides,
+              (scene.contextSummary?.refinement?.manualOverrides ??
+                {}) as SceneRefinementManualOverrides,
             ]),
           );
           set({ scenes: nextScenes, skipSteps, manualOverrides });

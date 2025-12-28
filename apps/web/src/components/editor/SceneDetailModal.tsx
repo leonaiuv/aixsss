@@ -533,7 +533,10 @@ export function SceneDetailModal({
   }, [scene]);
 
   const generatedImageMap = useMemo(() => {
-    const map = new Map<(typeof KEYFRAME_LABELS)[number], NonNullable<Scene['generatedImages']>[number]>();
+    const map = new Map<
+      (typeof KEYFRAME_LABELS)[number],
+      NonNullable<Scene['generatedImages']>[number]
+    >();
     if (!scene?.generatedImages) return map;
     for (const image of scene.generatedImages) {
       if (image?.keyframe && image?.url) {
