@@ -443,7 +443,9 @@ async function main() {
   });
 
   worker.on('failed', (job, err) => {
-    console.error('[worker] job failed', { id: job?.id, name: job?.name, err: err?.message });
+    const detail =
+      err instanceof Error ? (err.stack || err.message) : typeof err === 'string' ? err : JSON.stringify(err);
+    console.error('[worker] job failed', { id: job?.id, name: job?.name, err: detail });
   });
 
   const shutdown = async () => {

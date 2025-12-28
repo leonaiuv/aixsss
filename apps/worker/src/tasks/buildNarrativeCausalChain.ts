@@ -148,7 +148,7 @@ function schemaPhase3Outline(): Record<string, unknown> {
               required: ['act', 'actName', 'beats'],
               properties: {
                 act: { type: 'integer', minimum: 1, maximum: 4 },
-                actName: { type: 'string' },
+                actName: { type: 'string', minLength: 1 },
                 beats: {
                   type: 'array',
                   minItems: 3,
@@ -158,9 +158,9 @@ function schemaPhase3Outline(): Record<string, unknown> {
                     additionalProperties: false,
                     required: ['beatName', 'escalation', 'interlock'],
                     properties: {
-                      beatName: { type: 'string' },
+                      beatName: { type: 'string', minLength: 1 },
                       escalation: { type: 'integer', minimum: 1, maximum: 10 },
-                      interlock: { type: 'string' },
+                      interlock: { type: 'string', minLength: 1 },
                     },
                   },
                 },
@@ -195,7 +195,7 @@ function schemaPhase3ActDetail(args: { actMode: 'three_act' | 'four_act'; act: n
               required: ['act', 'actName', 'beats'],
               properties: {
                 act: { type: 'integer', const: args.act },
-                actName: { type: 'string' },
+                actName: { type: 'string', minLength: 1 },
                 beats: {
                   type: 'array',
                   minItems: args.beatNames.length,
@@ -217,14 +217,14 @@ function schemaPhase3ActDetail(args: { actMode: 'three_act' | 'four_act'; act: n
                     ],
                     properties: {
                       beatName: { type: 'string', enum: args.beatNames },
-                      surfaceEvent: { type: 'string' },
-                      infoFlow: { type: 'string' },
+                      surfaceEvent: { type: 'string', minLength: 1 },
+                      infoFlow: { type: 'string', minLength: 1 },
                       escalation: { type: 'integer', minimum: 1, maximum: 10 },
-                      interlock: { type: 'string' },
-                      location: { type: 'string' },
-                      characters: { type: 'array', minItems: 1, items: { type: 'string' } },
-                      visualHook: { type: 'string' },
-                      emotionalTone: { type: 'string' },
+                      interlock: { type: 'string', minLength: 1 },
+                      location: { type: 'string', minLength: 1 },
+                      characters: { type: 'array', minItems: 1, items: { type: 'string', minLength: 1 } },
+                      visualHook: { type: 'string', minLength: 1 },
+                      emotionalTone: { type: 'string', minLength: 1 },
                       estimatedScenes: { type: 'integer', minimum: 1, maximum: 10 },
                     },
                   },
@@ -593,6 +593,8 @@ ${beatsOutlineText}
 4) escalation / estimatedScenes 必须是整数（不加引号）
 5) 所有字符串字段禁止出现真实换行符；如需换行请使用 \\n
 6) 每个字符串字段尽量控制在 60 字以内（避免输出过长导致截断）
+7) surfaceEvent/infoFlow/location/visualHook 必须是非空字符串；characters 至少包含 1 个非空角色名（不要用 "" 或 []）
+8) 不确定时请填入合理内容（可保守），不要留空/不要写 null
 
 【输出 JSON 结构】
 {
@@ -624,19 +626,136 @@ ${beatsOutlineText}
 请输出 JSON：`;
 }
 
-function isBeatDetailedEnough(beat: Record<string, unknown>): boolean {
-  const location = beat['location'];
-  const visualHook = beat['visualHook'];
-  const characters = beat['characters'];
-  const surfaceEvent = beat['surfaceEvent'];
-  const infoFlow = beat['infoFlow'];
-  return (
-    typeof location === 'string' && location.trim().length > 0 &&
-    typeof visualHook === 'string' && visualHook.trim().length > 0 &&
-    Array.isArray(characters) && characters.length > 0 &&
-    typeof surfaceEvent === 'string' && surfaceEvent.trim().length > 0 &&
-    typeof infoFlow === 'string' && infoFlow.trim().length > 0
+function buildPhase3ActRepairPrompt(args: {
+  phase1: Phase1ConflictEngine;
+  phase2: Phase2InfoLayers;
+  actOutline: ActOutline;
+  actMode: 'three_act' | 'four_act';
+  currentBeats: unknown;
+  missingBeats: Array<Pick<Phase3IncompleteBeat, 'beatName' | 'missing'>>;
+}): string {
+  const base = buildPhase3ActDetailPrompt({
+    phase1: args.phase1,
+    phase2: args.phase2,
+    actOutline: args.actOutline,
+    actMode: args.actMode,
+  });
+  const idx = base.lastIndexOf('请输出 JSON：');
+  const baseBody = (idx >= 0 ? base.slice(0, idx) : base).trimEnd();
+
+  const missingText = args.missingBeats
+    .map((x) => `- ${x.beatName}: ${x.missing.join(', ')}`)
+    .join('\n');
+
+  const current = JSON.stringify(
+    {
+      beatFlow: {
+        actMode: args.actMode,
+        acts: [
+          {
+            act: args.actOutline.act,
+            actName: args.actOutline.actName ?? '',
+            beats: args.currentBeats,
+          },
+        ],
+      },
+    },
+    null,
+    2,
   );
+
+  return `${baseBody}
+
+【校验反馈】你上次输出存在空/缺失字段，请严格补齐以下节拍的字段（必须非空）：
+${missingText || '-'}
+
+【当前已生成的 beats（供参考，可覆盖修正）】
+${current}
+
+【额外要求】
+- 保持 beatName/顺序/数量不变
+- location/visualHook/surfaceEvent/infoFlow 不能是空字符串
+- characters 至少包含 1 个非空角色名
+
+请输出 JSON：`;
+}
+
+function isBeatDetailedEnough(beat: Record<string, unknown>): boolean {
+  return getBeatMissingFields(beat).length === 0;
+}
+
+function getBeatMissingFields(beat: Record<string, unknown>): Array<'location' | 'visualHook' | 'characters' | 'surfaceEvent' | 'infoFlow'> {
+  const missing: Array<'location' | 'visualHook' | 'characters' | 'surfaceEvent' | 'infoFlow'> = [];
+
+  const location = beat['location'];
+  if (!(typeof location === 'string' && location.trim().length > 0)) missing.push('location');
+
+  const visualHook = beat['visualHook'];
+  if (!(typeof visualHook === 'string' && visualHook.trim().length > 0)) missing.push('visualHook');
+
+  const characters = beat['characters'];
+  const hasValidCharacter =
+    Array.isArray(characters) && characters.some((c) => typeof c === 'string' && c.trim().length > 0);
+  if (!hasValidCharacter) missing.push('characters');
+
+  const surfaceEvent = beat['surfaceEvent'];
+  if (!(typeof surfaceEvent === 'string' && surfaceEvent.trim().length > 0)) missing.push('surfaceEvent');
+
+  const infoFlow = beat['infoFlow'];
+  if (!(typeof infoFlow === 'string' && infoFlow.trim().length > 0)) missing.push('infoFlow');
+
+  return missing;
+}
+
+type Phase3IncompleteBeat = {
+  act: number;
+  actName?: string | null;
+  beatName: string;
+  missing: Array<'location' | 'visualHook' | 'characters' | 'surfaceEvent' | 'infoFlow'>;
+};
+
+function findPhase3IncompleteBeats(args: {
+  beatFlow: Phase3BeatFlow['beatFlow'];
+  actCount: number;
+}): Phase3IncompleteBeat[] {
+  const acts = args.beatFlow.acts ?? [];
+  const list: Phase3IncompleteBeat[] = [];
+
+  for (const act of acts) {
+    const actNo = typeof act.act === 'number' ? act.act : null;
+    if (!actNo || actNo < 1 || actNo > args.actCount) continue;
+    for (const b of act.beats ?? []) {
+      const beatName = String(b.beatName ?? '').trim();
+      if (!beatName) continue;
+      const missing = getBeatMissingFields(b as unknown as Record<string, unknown>);
+      if (missing.length === 0) continue;
+      list.push({ act: actNo, actName: act.actName ?? null, beatName, missing });
+    }
+  }
+
+  return list;
+}
+
+function formatPhase3IncompleteBeats(list: Phase3IncompleteBeat[], maxItems = 8): string {
+  const label: Record<Phase3IncompleteBeat['missing'][number], string> = {
+    location: 'location(地点)',
+    visualHook: 'visualHook(视觉钩子)',
+    characters: 'characters(角色)',
+    surfaceEvent: 'surfaceEvent(事件)',
+    infoFlow: 'infoFlow(信息流)',
+  };
+
+  const picked = list.slice(0, maxItems);
+  const text = picked
+    .map((x) => {
+      const miss = x.missing.map((m) => label[m]).join(', ');
+      const actName = x.actName ? `「${x.actName}」` : '';
+      return `第${x.act}幕${actName}/${x.beatName}: 缺少 ${miss}`;
+    })
+    .join('；');
+
+  const suffix = list.length > maxItems ? `；...等共${list.length}处` : '';
+  return `${text}${suffix}`;
 }
 
 function mergeActDetailsIntoBeatFlow(
@@ -748,7 +867,8 @@ function buildJsonFixPrompt(raw: string, phase: number): string {
     2: `必须包含 infoVisibilityLayers(数组) 和 characterMatrix(数组)。
 注意：motivation.gain 和 motivation.lossAvoid 必须是数字(如 5)，不是字符串(如 "5")`,
     3: `必须包含 beatFlow(对象，含 actMode 和 acts 数组)。
-注意：escalation 和 estimatedScenes 必须是数字(如 3)，不是字符串(如 "3")`,
+注意：escalation 和 estimatedScenes 必须是数字(如 3)，不是字符串(如 "3")；
+location/visualHook/surfaceEvent/infoFlow 必须是非空字符串；characters 至少包含 1 个非空角色名`,
     4: `必须包含 plotLines(数组) 和 consistencyChecks(对象)。
 注意：lineType 必须是 "main"/"sub1"/"sub2"/"sub3" 之一；consistencyChecks 中的值必须是布尔值 true/false（不加引号）`,
   };
@@ -1047,10 +1167,10 @@ export async function buildNarrativeCausalChain(args: {
         pct: 18,
         message: force ? '阶段3A：重新生成节拍目录（强制）...' : '阶段3A：生成节拍目录（轻量）...',
       });
-      const phaseConfigA = {
+      const phaseConfigA = stableJsonFixConfig({
         ...providerConfig,
         responseFormat: jsonSchemaFormat('narrative_phase3_outline', schemaPhase3Outline()),
-      };
+      });
       const promptA = buildPhase3OutlinePrompt({ phase1, phase2 });
       const resA = await chatWithProvider(phaseConfigA, [{ role: 'user', content: promptA }]);
       if (!resA.content?.trim()) throw new Error('AI 返回空内容');
@@ -1162,7 +1282,8 @@ export async function buildNarrativeCausalChain(args: {
           }),
         ),
       };
-      const resB = await chatWithProvider(phaseConfigB, [{ role: 'user', content: promptB }]);
+      const stablePhaseConfigB = stableJsonFixConfig(phaseConfigB);
+      const resB = await chatWithProvider(stablePhaseConfigB, [{ role: 'user', content: promptB }]);
       if (!resB.content?.trim()) throw new Error('AI 返回空内容');
       tokenUsage = mergeTokenUsage(tokenUsage, resB.tokenUsage) ?? tokenUsage;
 
@@ -1175,7 +1296,7 @@ export async function buildNarrativeCausalChain(args: {
           pct: 38 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 45),
           message: `阶段3B解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
         });
-        const fixConfig = stableJsonFixConfig(phaseConfigB);
+        const fixConfig = stableJsonFixConfig(stablePhaseConfigB);
         let lastErr: unknown = err;
         let ok = false;
         for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -1218,11 +1339,105 @@ export async function buildNarrativeCausalChain(args: {
         detailMap.set(name, b);
       }
 
-      const mergedBeats = beats.map((b) => {
+      let mergedBeats = beats.map((b) => {
         const name = String(b.beatName ?? '').trim();
         const d = name ? detailMap.get(name) : undefined;
         return d ? { ...b, ...d, beatName: name } : b;
       });
+
+      let actIncomplete: Array<Pick<Phase3IncompleteBeat, 'beatName' | 'missing'>> = mergedBeats
+        .map((b) => {
+          const beatName = String((b as { beatName?: unknown }).beatName ?? '').trim();
+          return {
+            beatName,
+            missing: getBeatMissingFields(b as unknown as Record<string, unknown>),
+          };
+        })
+        .filter((x) => x.beatName.length > 0 && x.missing.length > 0);
+
+      // 若字段缺失：对同一幕进行定向修复（避免整阶段重跑）
+      for (let repairAttempt = 1; repairAttempt <= 2 && actIncomplete.length > 0; repairAttempt += 1) {
+        await updateProgress({
+          pct: 55 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 35) + repairAttempt,
+          message: `阶段3B：第${actNo}幕检测到缺失字段，尝试修复（${repairAttempt}/2）...`,
+        });
+
+        const repairPrompt = buildPhase3ActRepairPrompt({
+          phase1,
+          phase2,
+          actOutline,
+          actMode: currentBeatFlow.actMode,
+          currentBeats: mergedBeats,
+          missingBeats: actIncomplete,
+        });
+
+        const repairRes = await chatWithProvider(stablePhaseConfigB, [{ role: 'user', content: repairPrompt }]);
+        if (!repairRes.content?.trim()) throw new Error('AI 返回空内容');
+        tokenUsage = mergeTokenUsage(tokenUsage, repairRes.tokenUsage) ?? tokenUsage;
+
+        let parsedRepair: Phase3BeatFlow | null = null;
+        try {
+          ({ parsed: parsedRepair, extractedJson } = parsePhase3(repairRes.content));
+        } catch (err) {
+          lastParseError = err instanceof Error ? err.message : String(err);
+          await updateProgress({
+            pct: 60 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 35) + repairAttempt,
+            message: `阶段3B修复解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
+          });
+          const fixConfig = stableJsonFixConfig(stablePhaseConfigB);
+          let lastErr: unknown = err;
+          let ok = false;
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
+            const fixRes = await chatWithProvider(fixConfig, [
+              { role: 'user', content: buildJsonFixPrompt(repairRes.content, 3) },
+            ]);
+            if (!fixRes.content?.trim()) {
+              lastErr = new Error('修复失败：AI 返回空内容');
+              continue;
+            }
+            tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+            try {
+              ({ parsed: parsedRepair, extractedJson } = parsePhase3(fixRes.content));
+              ok = true;
+              break;
+            } catch (e) {
+              lastErr = e;
+            }
+          }
+          if (!ok) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+          fixed = true;
+        }
+
+        if (!parsedRepair) throw new Error(`阶段3：第${actNo}幕修复解析失败：结果为空`);
+
+        const repairAct = (parsedRepair.beatFlow.acts ?? []).find((a) => a.act === actNo) ?? null;
+        if (!repairAct || !Array.isArray(repairAct.beats) || repairAct.beats.length === 0) {
+          throw new Error(`阶段3：第${actNo}幕修复结果为空`);
+        }
+
+        const repairMap = new Map<string, (typeof repairAct.beats)[number]>();
+        for (const b of repairAct.beats) {
+          const name = String(b.beatName ?? '').trim();
+          if (!name) continue;
+          repairMap.set(name, b);
+        }
+
+        mergedBeats = beats.map((b) => {
+          const name = String(b.beatName ?? '').trim();
+          const d = name ? repairMap.get(name) : undefined;
+          return d ? { ...b, ...d, beatName: name } : b;
+        });
+
+        actIncomplete = mergedBeats
+          .map((b) => {
+            const beatName = String((b as { beatName?: unknown }).beatName ?? '').trim();
+            return {
+              beatName,
+              missing: getBeatMissingFields(b as unknown as Record<string, unknown>),
+            };
+          })
+          .filter((x) => x.beatName.length > 0 && x.missing.length > 0);
+      }
 
       phase3Mutated = true;
       currentBeatFlow = mergeActDetailsIntoBeatFlow(currentBeatFlow, actNo, mergedBeats);
@@ -1235,17 +1450,40 @@ export async function buildNarrativeCausalChain(args: {
         where: { id: projectId },
         data: { contextCache: nextCache },
       });
+
+      if (actIncomplete.length > 0) {
+        const missing = formatPhase3IncompleteBeats(
+          actIncomplete.map((x) => ({
+            act: actNo,
+            actName: actOutline.actName ?? null,
+            beatName: x.beatName,
+            missing: x.missing,
+          })),
+        );
+        throw new Error(`阶段3：第${actNo}幕补全后仍存在缺失字段：${missing}`);
+      }
     }
 
     // 最终校验：所有幕都补全
-    const allActsOk = (currentBeatFlow.acts ?? [])
-      .filter((a) => typeof a.act === 'number' && a.act >= 1 && a.act <= actCount)
-      .every((a) => (a.beats ?? []).length >= 3 && (a.beats ?? []).every((b) =>
-        isBeatDetailedEnough(b as unknown as Record<string, unknown>)
-      ));
+    const structureIssues: string[] = [];
+    for (let actNo = 1; actNo <= actCount; actNo += 1) {
+      const act = (currentBeatFlow.acts ?? []).find((a) => a.act === actNo) ?? null;
+      if (!act) {
+        structureIssues.push(`缺少第${actNo}幕`);
+        continue;
+      }
+      const beats = act.beats ?? [];
+      if (beats.length < 3) {
+        structureIssues.push(`第${actNo}幕节拍数不足(${beats.length})`);
+      }
+    }
 
-    if (!allActsOk) {
-      throw new Error('阶段3未完全补全（仍存在缺少 location/visualHook/characters/事件/信息流 的节拍），请重试');
+    const incomplete = findPhase3IncompleteBeats({ beatFlow: currentBeatFlow, actCount });
+    if (structureIssues.length > 0 || incomplete.length > 0) {
+      const detail = incomplete.length > 0 ? formatPhase3IncompleteBeats(incomplete) : '';
+      const issues = structureIssues.length > 0 ? structureIssues.join('；') : '';
+      const joined = [issues, detail].filter(Boolean).join('；');
+      throw new Error(`阶段3未完全补全（仍存在缺少 location/visualHook/characters/事件/信息流 的节拍）：${joined || '请重试'}`);
     }
 
     const nextCompletedPhase = phase3Mutated

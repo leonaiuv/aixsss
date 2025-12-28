@@ -427,6 +427,299 @@ describe('buildNarrativeCausalChain phase 3 (incremental)', () => {
     expect(chatMock.mock.calls.length).toBeGreaterThan(0);
     expect(res.phase).toBe(3);
   });
+
+  it('repairs missing fields per-act and still succeeds', async () => {
+    type TaskArgs = Parameters<typeof buildNarrativeCausalChain>[0];
+
+    const outline = {
+      beatFlow: {
+        actMode: 'three_act',
+        acts: [
+          {
+            act: 1,
+            actName: '开端',
+            beats: [
+              { beatName: '发现线索', escalation: 2, interlock: '主线启动' },
+              { beatName: '试探对方', escalation: 3, interlock: '暗线触发' },
+              { beatName: '误判加深', escalation: 4, interlock: '信息差扩散' },
+            ],
+          },
+          {
+            act: 2,
+            actName: '发展',
+            beats: [
+              { beatName: '追查升级', escalation: 5, interlock: '交叉' },
+              { beatName: '对峙失控', escalation: 6, interlock: '受阻' },
+              { beatName: '背叛显形', escalation: 7, interlock: '反噬' },
+            ],
+          },
+          {
+            act: 3,
+            actName: '高潮',
+            beats: [
+              { beatName: '真相逼近', escalation: 8, interlock: '汇合' },
+              { beatName: '不可逆点', escalation: 9, interlock: '引爆点' },
+              { beatName: '终局爆发', escalation: 10, interlock: '收束' },
+            ],
+          },
+        ],
+      },
+    };
+
+    const actDetail = (act: number, actName: string, beats: string[], opts?: { emptyLocation?: boolean }) => ({
+      beatFlow: {
+        actMode: 'three_act',
+        acts: [
+          {
+            act,
+            actName,
+            beats: beats.map((name, idx) => ({
+              beatName: name,
+              surfaceEvent: `事件${act}-${idx + 1}`,
+              infoFlow: `信息流${act}-${idx + 1}`,
+              escalation: Math.min(10, 1 + act + idx),
+              interlock: `咬合${act}-${idx + 1}`,
+              location: opts?.emptyLocation && idx === 0 ? '' : `地点${act}`,
+              characters: ['张三'],
+              visualHook: `画面${act}-${idx + 1}`,
+              emotionalTone: '紧张',
+              estimatedScenes: 2,
+            })),
+          },
+        ],
+      },
+    });
+
+    (chatWithProvider as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ content: JSON.stringify(outline), tokenUsage: { prompt: 1, completion: 1, total: 2 } })
+      // act1 first try: location 空字符串 -> 触发修复
+      .mockResolvedValueOnce({
+        content: JSON.stringify(actDetail(1, '开端', ['发现线索', '试探对方', '误判加深'], { emptyLocation: true })),
+        tokenUsage: { prompt: 1, completion: 1, total: 2 },
+      })
+      // act1 repair: 全部补齐
+      .mockResolvedValueOnce({
+        content: JSON.stringify(actDetail(1, '开端', ['发现线索', '试探对方', '误判加深'])),
+        tokenUsage: { prompt: 1, completion: 1, total: 2 },
+      })
+      .mockResolvedValueOnce({
+        content: JSON.stringify(actDetail(2, '发展', ['追查升级', '对峙失控', '背叛显形'])),
+        tokenUsage: { prompt: 1, completion: 1, total: 2 },
+      })
+      .mockResolvedValueOnce({
+        content: JSON.stringify(actDetail(3, '高潮', ['真相逼近', '不可逆点', '终局爆发'])),
+        tokenUsage: { prompt: 1, completion: 1, total: 2 },
+      });
+
+    const existingChain = {
+      version: '2.0.0',
+      validationStatus: 'incomplete',
+      revisionSuggestions: [],
+      completedPhase: 2,
+      outlineSummary: '三幕故事骨架',
+      conflictEngine: { coreObjectOrEvent: '账本', stakesByFaction: {} },
+      infoVisibilityLayers: [],
+      characterMatrix: [],
+      beatFlow: null,
+      plotLines: [],
+      consistencyChecks: null,
+    };
+
+    const prisma = {
+      project: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'p1',
+          summary: '故事梗概',
+          style: '风格',
+          artStyleConfig: null,
+          contextCache: { narrativeCausalChain: existingChain },
+        }),
+        update: vi.fn().mockResolvedValue({ id: 'p1' }),
+      },
+      aIProfile: {
+        findFirst: vi.fn().mockResolvedValue({
+          provider: 'openai_compatible',
+          model: 'test',
+          baseURL: null,
+          apiKeyEncrypted: 'x',
+          generationParams: null,
+        }),
+      },
+      worldViewElement: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      character: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    };
+
+    const res = await buildNarrativeCausalChain({
+      prisma: prisma as unknown as TaskArgs['prisma'],
+      teamId: 't1',
+      projectId: 'p1',
+      aiProfileId: 'a1',
+      apiKeySecret: 'secret',
+      phase: 3,
+      updateProgress: async () => {},
+    });
+
+    expect(res.phase).toBe(3);
+    expect(res.completedPhase).toBe(3);
+    const chatMock = chatWithProvider as unknown as ReturnType<typeof vi.fn>;
+    expect(chatMock.mock.calls).toHaveLength(5);
+  });
+
+  it('fails with detailed missing-field message when repair still incomplete', async () => {
+    type TaskArgs = Parameters<typeof buildNarrativeCausalChain>[0];
+
+    const outline = {
+      beatFlow: {
+        actMode: 'three_act',
+        acts: [
+          {
+            act: 1,
+            actName: '开端',
+            beats: [
+              { beatName: '发现线索', escalation: 2, interlock: '主线启动' },
+              { beatName: '试探对方', escalation: 3, interlock: '暗线触发' },
+              { beatName: '误判加深', escalation: 4, interlock: '信息差扩散' },
+            ],
+          },
+          {
+            act: 2,
+            actName: '发展',
+            beats: [
+              { beatName: '追查升级', escalation: 5, interlock: '交叉' },
+              { beatName: '对峙失控', escalation: 6, interlock: '受阻' },
+              { beatName: '背叛显形', escalation: 7, interlock: '反噬' },
+            ],
+          },
+          {
+            act: 3,
+            actName: '高潮',
+            beats: [
+              { beatName: '真相逼近', escalation: 8, interlock: '汇合' },
+              { beatName: '不可逆点', escalation: 9, interlock: '引爆点' },
+              { beatName: '终局爆发', escalation: 10, interlock: '收束' },
+            ],
+          },
+        ],
+      },
+    };
+
+    const act1Bad = {
+      beatFlow: {
+        actMode: 'three_act',
+        acts: [
+          {
+            act: 1,
+            actName: '开端',
+            beats: [
+              {
+                beatName: '发现线索',
+                surfaceEvent: '事件1-1',
+                infoFlow: '信息流1-1',
+                escalation: 2,
+                interlock: '咬合1-1',
+                location: '',
+                characters: ['张三'],
+                visualHook: '画面1-1',
+                emotionalTone: '紧张',
+                estimatedScenes: 2,
+              },
+              {
+                beatName: '试探对方',
+                surfaceEvent: '事件1-2',
+                infoFlow: '信息流1-2',
+                escalation: 3,
+                interlock: '咬合1-2',
+                location: '地点1',
+                characters: ['张三'],
+                visualHook: '画面1-2',
+                emotionalTone: '紧张',
+                estimatedScenes: 2,
+              },
+              {
+                beatName: '误判加深',
+                surfaceEvent: '事件1-3',
+                infoFlow: '信息流1-3',
+                escalation: 4,
+                interlock: '咬合1-3',
+                location: '地点1',
+                characters: ['张三'],
+                visualHook: '画面1-3',
+                emotionalTone: '紧张',
+                estimatedScenes: 2,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    (chatWithProvider as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ content: JSON.stringify(outline), tokenUsage: { prompt: 1, completion: 1, total: 2 } })
+      .mockResolvedValueOnce({ content: JSON.stringify(act1Bad), tokenUsage: { prompt: 1, completion: 1, total: 2 } })
+      .mockResolvedValueOnce({ content: JSON.stringify(act1Bad), tokenUsage: { prompt: 1, completion: 1, total: 2 } })
+      .mockResolvedValueOnce({ content: JSON.stringify(act1Bad), tokenUsage: { prompt: 1, completion: 1, total: 2 } });
+
+    const existingChain = {
+      version: '2.0.0',
+      validationStatus: 'incomplete',
+      revisionSuggestions: [],
+      completedPhase: 2,
+      outlineSummary: '三幕故事骨架',
+      conflictEngine: { coreObjectOrEvent: '账本', stakesByFaction: {} },
+      infoVisibilityLayers: [],
+      characterMatrix: [],
+      beatFlow: null,
+      plotLines: [],
+      consistencyChecks: null,
+    };
+
+    const prisma = {
+      project: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'p1',
+          summary: '故事梗概',
+          style: '风格',
+          artStyleConfig: null,
+          contextCache: { narrativeCausalChain: existingChain },
+        }),
+        update: vi.fn().mockResolvedValue({ id: 'p1' }),
+      },
+      aIProfile: {
+        findFirst: vi.fn().mockResolvedValue({
+          provider: 'openai_compatible',
+          model: 'test',
+          baseURL: null,
+          apiKeyEncrypted: 'x',
+          generationParams: null,
+        }),
+      },
+      worldViewElement: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      character: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    };
+
+    await expect(
+      buildNarrativeCausalChain({
+        prisma: prisma as unknown as TaskArgs['prisma'],
+        teamId: 't1',
+        projectId: 'p1',
+        aiProfileId: 'a1',
+        apiKeySecret: 'secret',
+        phase: 3,
+        updateProgress: async () => {},
+      }),
+    ).rejects.toThrow(/第1幕.*location\(地点\)/);
+
+    const updateMock = prisma.project.update as unknown as ReturnType<typeof vi.fn>;
+    expect(updateMock.mock.calls.length).toBe(2); // 3A 目录写入 + 第1幕写入后报错
+  });
 });
 
 
