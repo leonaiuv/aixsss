@@ -418,10 +418,10 @@ export async function generateImagesOpenAICompatible(
           if (typeof item?.url !== 'string' || !item.url) return null;
           return {
             url: item.url,
-            revisedPrompt: item.revised_prompt,
+            ...(item.revised_prompt ? { revisedPrompt: item.revised_prompt } : {}),
           };
         })
-        .filter((item): item is { url: string; revisedPrompt?: string } => Boolean(item))
+        .filter((item): item is { url: string; revisedPrompt?: string } => item !== null)
     : [];
 
   return { images };

@@ -157,8 +157,8 @@ export async function refineSceneBatch(args: {
         buildProgress({
           pct,
           message: `已处理 ${processed}/${totalScenes}`,
-          currentSceneId: null,
-          currentSceneOrder: null,
+          currentSceneId: undefined,
+          currentSceneOrder: undefined,
         }),
       );
     }
@@ -168,8 +168,8 @@ export async function refineSceneBatch(args: {
     buildProgress({
       pct: 100,
       message: '批量细化完成',
-      currentSceneId: null,
-      currentSceneOrder: null,
+      currentSceneId: undefined,
+      currentSceneOrder: undefined,
     }),
   );
 
