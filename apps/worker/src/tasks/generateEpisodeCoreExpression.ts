@@ -158,12 +158,49 @@ function formatNarrativeCausalChain(contextCache: unknown): string {
   return pushUntil(lines, 12000);
 }
 
-function buildPrompt(args: {
+const TRUNCATION_MARK = '…【截断】';
+
+function clipString(value: string, max: number, marker = TRUNCATION_MARK): string {
+  const maxLen = Math.max(0, Math.floor(max));
+  if (value.length <= maxLen) return value;
+  if (maxLen === 0) return '';
+  if (maxLen <= marker.length) return marker.slice(0, maxLen);
+  return `${value.slice(0, maxLen - marker.length)}${marker}`;
+}
+
+export function clipText(input: unknown, max = 400): string {
+  const s = (typeof input === 'string' ? input : input == null ? '' : String(input)).trim();
+  if (!s) return '-';
+  return clipString(s, max);
+}
+
+export function clipJson(input: unknown, max = 2000): string {
+  if (input == null) return 'null';
+  try {
+    const s = JSON.stringify(input);
+    return clipString(s, max);
+  } catch {
+    return clipText(input, max);
+  }
+}
+
+function formatOptionalSeasonArc(value: unknown, max = 1200): string {
+  if (value == null) return '-';
+  if (typeof value === 'string') return clipText(value, max);
+  return clipJson(value, max);
+}
+
+export function buildEpisodeCoreExpressionPrompt(args: {
   storySynopsis: string;
   artStyle: string;
   worldView: string;
   characters: string;
   narrativeCausalChain?: string;
+  protagonistCore?: string;
+  storyCore?: string;
+  seasonArc?: unknown;
+  prevEpisode?: { order: number; title: string; summary: string; outline: unknown; coreExpression: unknown | null };
+  nextEpisode?: { order: number; title: string; summary: string; outline: unknown; coreExpression: unknown | null };
   episode: { order: number; title: string; summary: string; outline: unknown };
 }): string {
   return `你是专业编剧/分镜总监。请基于“全局设定 + 本集概要”，生成该集的「核心表达 Core Expression」。
@@ -174,6 +211,13 @@ function buildPrompt(args: {
 - 故事梗概：
 ${args.storySynopsis}
 
+- 季级硬约束（优先，用于跨集一致性；若为 '-' 代表缺失）：
+  - 叙事因果链：
+    ${args.narrativeCausalChain ?? '-'}
+  - 故事核心（可选）：${clipText(args.storyCore, 600)}
+  - 主角核心（可选）：${clipText(args.protagonistCore, 600)}
+  - Season Arc 主线弧线（预留，可选）：${formatOptionalSeasonArc(args.seasonArc, 1200)}
+
 - 画风（完整提示词）：
 ${args.artStyle}
 
@@ -183,8 +227,19 @@ ${args.worldView}
 - 角色库：
 ${args.characters}
 
-- 叙事因果链（结构化叙事骨架；若提供，请与其保持一致）：
-${args.narrativeCausalChain ?? '-'}
+相邻集衔接（用于避免“单集孤岛”，只做连贯性约束，不要喧宾夺主）：
+- 上一集（若有）：
+  - 集数：${args.prevEpisode ? `第 ${args.prevEpisode.order} 集` : '-'}
+  - 标题：${args.prevEpisode ? args.prevEpisode.title || '-' : '-'}
+  - 一句话概要：${args.prevEpisode ? clipText(args.prevEpisode.summary, 220) : '-'}
+  - Outline（按字符截断）：${args.prevEpisode ? clipJson(args.prevEpisode.outline, 1800) : '-'}
+  - Core Expression（若已生成，按字符截断）：${args.prevEpisode ? clipJson(args.prevEpisode.coreExpression, 1800) : '-'}
+- 下一集（若有）：
+  - 集数：${args.nextEpisode ? `第 ${args.nextEpisode.order} 集` : '-'}
+  - 标题：${args.nextEpisode ? args.nextEpisode.title || '-' : '-'}
+  - 一句话概要：${args.nextEpisode ? clipText(args.nextEpisode.summary, 220) : '-'}
+  - Outline（按字符截断）：${args.nextEpisode ? clipJson(args.nextEpisode.outline, 1800) : '-'}
+  - Core Expression（若已生成，按字符截断）：${args.nextEpisode ? clipJson(args.nextEpisode.coreExpression, 1800) : '-'}
 
 本集信息：
 - 集数：第 ${args.episode.order} 集
@@ -243,6 +298,18 @@ export async function generateEpisodeCoreExpression(args: {
   });
   if (!episode) throw new Error('Episode not found');
 
+  // 相邻集信息：用于减少“核心表达孤岛”，不要求相邻集已生成 coreExpression
+  const [prevEpisode, nextEpisode] = await Promise.all([
+    prisma.episode.findFirst({
+      where: { projectId, order: episode.order - 1 },
+      select: { order: true, title: true, summary: true, outline: true, coreExpression: true },
+    }),
+    prisma.episode.findFirst({
+      where: { projectId, order: episode.order + 1 },
+      select: { order: true, title: true, summary: true, outline: true, coreExpression: true },
+    }),
+  ]);
+
   const profile = await prisma.aIProfile.findFirst({
     where: { id: aiProfileId, teamId },
     select: { provider: true, model: true, baseURL: true, apiKeyEncrypted: true, generationParams: true },
@@ -264,12 +331,38 @@ export async function generateEpisodeCoreExpression(args: {
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
 
-  const prompt = buildPrompt({
+  const contextCache = project.contextCache && typeof project.contextCache === 'object'
+    ? (project.contextCache as Record<string, unknown>)
+    : null;
+
+  const prompt = buildEpisodeCoreExpressionPrompt({
     storySynopsis: project.summary,
     artStyle: styleFullPrompt(project),
     worldView: formatWorldView(worldViewElements),
     characters: formatCharacters(characters),
     narrativeCausalChain: formatNarrativeCausalChain(project.contextCache),
+    storyCore: typeof contextCache?.storyCore === 'string' ? contextCache.storyCore : undefined,
+    protagonistCore: typeof contextCache?.protagonistCore === 'string' ? contextCache.protagonistCore : undefined,
+    seasonArc:
+      contextCache?.seasonArc ?? contextCache?.seasonArcText ?? contextCache?.seasonArcMain ?? contextCache?.seasonArcOutline,
+    prevEpisode: prevEpisode
+      ? {
+          order: prevEpisode.order,
+          title: prevEpisode.title,
+          summary: prevEpisode.summary,
+          outline: prevEpisode.outline,
+          coreExpression: prevEpisode.coreExpression ?? null,
+        }
+      : undefined,
+    nextEpisode: nextEpisode
+      ? {
+          order: nextEpisode.order,
+          title: nextEpisode.title,
+          summary: nextEpisode.summary,
+          outline: nextEpisode.outline,
+          coreExpression: nextEpisode.coreExpression ?? null,
+        }
+      : undefined,
     episode: { order: episode.order, title: episode.title, summary: episode.summary, outline: episode.outline },
   });
 
