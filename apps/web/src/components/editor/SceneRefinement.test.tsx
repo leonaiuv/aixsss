@@ -90,6 +90,8 @@ describe('SceneRefinement - 一键生成全部功能', () => {
         updateScene: mockUpdateScene,
         currentSceneId: null,
         isGenerating: false,
+        skipSteps: {},
+        manualOverrides: {},
         loadScenes: vi.fn(),
         setScenes: vi.fn(),
         addScene: vi.fn(),
@@ -97,6 +99,8 @@ describe('SceneRefinement - 一键生成全部功能', () => {
         reorderScenes: vi.fn(),
         setCurrentScene: vi.fn(),
         setGenerating: vi.fn(),
+        setSceneSkipSteps: vi.fn(),
+        setSceneManualOverrides: vi.fn(),
       };
       return selector ? selector(state) : state;
     });
@@ -107,6 +111,8 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       updateScene: mockUpdateScene,
       currentSceneId: null,
       isGenerating: false,
+      skipSteps: {},
+      manualOverrides: {},
       loadScenes: vi.fn(),
       setScenes: vi.fn(),
       addScene: vi.fn(),
@@ -114,6 +120,8 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       reorderScenes: vi.fn(),
       setCurrentScene: vi.fn(),
       setGenerating: vi.fn(),
+      setSceneSkipSteps: vi.fn(),
+      setSceneManualOverrides: vi.fn(),
     })) as any;
 
     // Mock config store
@@ -660,6 +668,8 @@ describe('SceneRefinement - 台词生成功能', () => {
         updateScene: mockUpdateScene,
         currentSceneId: null,
         isGenerating: false,
+        skipSteps: {},
+        manualOverrides: {},
         loadScenes: vi.fn(),
         setScenes: vi.fn(),
         addScene: vi.fn(),
@@ -667,6 +677,8 @@ describe('SceneRefinement - 台词生成功能', () => {
         reorderScenes: vi.fn(),
         setCurrentScene: vi.fn(),
         setGenerating: vi.fn(),
+        setSceneSkipSteps: vi.fn(),
+        setSceneManualOverrides: vi.fn(),
       };
       return selector ? selector(state) : state;
     });
@@ -862,6 +874,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
         updateScene: vi.fn(),
         currentSceneId: null,
         isGenerating: false,
+        skipSteps: {},
+        manualOverrides: {},
         loadScenes: vi.fn(),
         setScenes: vi.fn(),
         addScene: vi.fn(),
@@ -869,6 +883,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
         reorderScenes: vi.fn(),
         setCurrentScene: vi.fn(),
         setGenerating: vi.fn(),
+        setSceneSkipSteps: vi.fn(),
+        setSceneManualOverrides: vi.fn(),
       };
       return selector ? selector(state) : state;
     });
@@ -878,6 +894,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
       updateScene: vi.fn(),
       currentSceneId: null,
       isGenerating: false,
+      skipSteps: {},
+      manualOverrides: {},
       loadScenes: vi.fn(),
       setScenes: vi.fn(),
       addScene: vi.fn(),
@@ -885,6 +903,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
       reorderScenes: vi.fn(),
       setCurrentScene: vi.fn(),
       setGenerating: vi.fn(),
+      setSceneSkipSteps: vi.fn(),
+      setSceneManualOverrides: vi.fn(),
     })) as any;
 
     vi.mocked(useConfigStore).mockReturnValue({
@@ -943,6 +963,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
         updateScene: vi.fn(),
         currentSceneId: null,
         isGenerating: false,
+        skipSteps: {},
+        manualOverrides: {},
         loadScenes: vi.fn(),
         setScenes: vi.fn(),
         addScene: vi.fn(),
@@ -950,6 +972,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
         reorderScenes: vi.fn(),
         setCurrentScene: vi.fn(),
         setGenerating: vi.fn(),
+        setSceneSkipSteps: vi.fn(),
+        setSceneManualOverrides: vi.fn(),
       };
       return selector ? selector(state) : state;
     });
@@ -959,6 +983,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
       updateScene: vi.fn(),
       currentSceneId: null,
       isGenerating: false,
+      skipSteps: {},
+      manualOverrides: {},
       loadScenes: vi.fn(),
       setScenes: vi.fn(),
       addScene: vi.fn(),
@@ -966,6 +992,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
       reorderScenes: vi.fn(),
       setCurrentScene: vi.fn(),
       setGenerating: vi.fn(),
+      setSceneSkipSteps: vi.fn(),
+      setSceneManualOverrides: vi.fn(),
     })) as any;
 
     vi.mocked(useConfigStore).mockReturnValue({
@@ -1039,6 +1067,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
         updateScene: vi.fn(),
         currentSceneId: null,
         isGenerating: false,
+        skipSteps: {},
+        manualOverrides: {},
         loadScenes: vi.fn(),
         setScenes: vi.fn(),
         addScene: vi.fn(),
@@ -1046,6 +1076,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
         reorderScenes: vi.fn(),
         setCurrentScene: vi.fn(),
         setGenerating: vi.fn(),
+        setSceneSkipSteps: vi.fn(),
+        setSceneManualOverrides: vi.fn(),
       };
       return selector ? selector(state) : state;
     });
@@ -1055,6 +1087,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
       updateScene: vi.fn(),
       currentSceneId: null,
       isGenerating: false,
+      skipSteps: {},
+      manualOverrides: {},
       loadScenes: vi.fn(),
       setScenes: vi.fn(),
       addScene: vi.fn(),
@@ -1062,6 +1096,8 @@ describe('SceneRefinement - React Hooks 规则合规性', () => {
       reorderScenes: vi.fn(),
       setCurrentScene: vi.fn(),
       setGenerating: vi.fn(),
+      setSceneSkipSteps: vi.fn(),
+      setSceneManualOverrides: vi.fn(),
     })) as any;
 
     vi.mocked(useConfigStore).mockReturnValue({
