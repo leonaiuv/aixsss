@@ -178,11 +178,11 @@ function normalizeBatchRefineProgress(progress: unknown): BatchRefineProgress {
           if (typeof sceneId !== 'string') return null;
           return {
             sceneId,
-            order: typeof order === 'number' ? order : undefined,
-            error: typeof error === 'string' ? error : undefined,
+            ...(typeof order === 'number' ? { order } : {}),
+            ...(typeof error === 'string' ? { error } : {}),
           };
         })
-        .filter((entry): entry is BatchFailedScene => Boolean(entry))
+        .filter((entry): entry is BatchFailedScene => entry !== null)
     : [];
   return {
     ...base,
