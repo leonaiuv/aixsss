@@ -30,16 +30,18 @@ import { Scene } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { GripVertical, Check, X } from 'lucide-react';
 
 interface SceneSortableProps {
   scenes: Scene[];
-  onReorder: (scenes: Scene[]) => void;
+  onReorder: (scenes: Scene[]) => void | Promise<void>;
 }
 
 export function SceneSortable({ scenes, onReorder }: SceneSortableProps) {
   const [items, setItems] = useState(scenes);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -63,14 +65,26 @@ export function SceneSortable({ scenes, onReorder }: SceneSortableProps) {
     }
   };
 
-  const handleSave = () => {
-    onReorder(items);
-    setHasChanges(false);
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onReorder(items);
+      setHasChanges(false);
+    } catch {
+      // 由调用方负责提示错误；这里保留修改，便于用户重试
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
     setItems(scenes);
     setHasChanges(false);
+  };
+
+  const handleUpdateSummary = (sceneId: string, summary: string) => {
+    setItems((prev) => prev.map((s) => (s.id === sceneId ? { ...s, summary } : s)));
+    setHasChanges(true);
   };
 
   return (
@@ -82,11 +96,11 @@ export function SceneSortable({ scenes, onReorder }: SceneSortableProps) {
             拖拽分镜以重新排序，排序完成后点击保存
           </p>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={handleCancel}>
+            <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
               <X className="h-4 w-4 mr-1" />
               取消
             </Button>
-            <Button size="sm" onClick={handleSave}>
+            <Button size="sm" onClick={handleSave} disabled={isSaving}>
               <Check className="h-4 w-4 mr-1" />
               保存排序
             </Button>
@@ -99,7 +113,12 @@ export function SceneSortable({ scenes, onReorder }: SceneSortableProps) {
         <SortableContext items={items} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
             {items.map((scene, index) => (
-              <SortableSceneCard key={scene.id} scene={scene} index={index} />
+              <SortableSceneCard
+                key={scene.id}
+                scene={scene}
+                index={index}
+                onUpdateSummary={handleUpdateSummary}
+              />
             ))}
           </div>
         </SortableContext>
@@ -109,7 +128,15 @@ export function SceneSortable({ scenes, onReorder }: SceneSortableProps) {
 }
 
 // 可排序的分镜卡片
-function SortableSceneCard({ scene, index }: { scene: Scene; index: number }) {
+function SortableSceneCard({
+  scene,
+  index,
+  onUpdateSummary,
+}: {
+  scene: Scene;
+  index: number;
+  onUpdateSummary: (sceneId: string, summary: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: scene.id,
   });
@@ -139,7 +166,11 @@ function SortableSceneCard({ scene, index }: { scene: Scene; index: number }) {
 
         {/* 内容 */}
         <div className="flex-1 min-w-0">
-          <p className="font-medium truncate">{scene.summary}</p>
+          <Textarea
+            value={scene.summary}
+            onChange={(e) => onUpdateSummary(scene.id, e.target.value)}
+            className="min-h-[52px] resize-none text-sm font-medium leading-relaxed"
+          />
           <div className="flex items-center gap-2 mt-1">
             <Badge
               variant={

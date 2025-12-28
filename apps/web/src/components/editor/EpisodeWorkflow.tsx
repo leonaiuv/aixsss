@@ -6,7 +6,11 @@ import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useEpisodeStore } from '@/stores/episodeStore';
 import { useEpisodeScenesStore } from '@/stores/episodeScenesStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
-import { apiListEpisodeScenes, apiReorderEpisodeScenes } from '@/lib/api/episodeScenes';
+import {
+  apiListEpisodeScenes,
+  apiReorderEpisodeScenes,
+  apiUpdateEpisodeScene,
+} from '@/lib/api/episodeScenes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
 import { flushApiEpisodeScenePatchQueue } from '@/lib/api/episodeScenePatchQueue';
@@ -2968,23 +2972,33 @@ ${safeJsonStringify(ep.coreExpression)}
           </DialogHeader>
           <SceneSortable
             scenes={scenes.slice().sort((a, b) => a.order - b.order)}
-            onReorder={(next) => {
+            onReorder={async (next) => {
               if (!currentEpisode?.id) return;
+              const prevById = new Map(scenes.map((s) => [s.id, s] as const));
               const reordered = next.map((s, idx) => ({ ...s, order: idx + 1 }));
               setScenes(reordered);
               const ids = reordered.map((s) => s.id);
-              void apiReorderEpisodeScenes(currentProject.id, currentEpisode.id, ids)
-                .then((serverScenes) => {
-                  setScenes(serverScenes as Scene[]);
-                  setSortDialogOpen(false);
-                })
-                .catch((error) =>
-                  toast({
-                    title: '保存排序失败',
-                    description: error instanceof Error ? error.message : String(error),
-                    variant: 'destructive',
+              const summaryUpdates = reordered
+                .filter((s) => prevById.get(s.id)?.summary !== s.summary)
+                .map((s) =>
+                  apiUpdateEpisodeScene(currentProject.id, currentEpisode.id, s.id, {
+                    summary: s.summary,
                   }),
                 );
+
+              try {
+                await flushApiEpisodeScenePatchQueue().catch(() => {});
+                await Promise.all(summaryUpdates);
+                await apiReorderEpisodeScenes(currentProject.id, currentEpisode.id, ids);
+                setSortDialogOpen(false);
+              } catch (error) {
+                toast({
+                  title: '保存排序失败',
+                  description: error instanceof Error ? error.message : String(error),
+                  variant: 'destructive',
+                });
+                throw error;
+              }
             }}
           />
         </DialogContent>
