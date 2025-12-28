@@ -481,6 +481,20 @@ export interface SceneContextSummary {
   keyElement?: string;
   transition?: string;
   panelScript?: PanelScriptV1;
+  refinement?: {
+    skipSteps?: SceneRefinementSkipSteps;
+    manualOverrides?: SceneRefinementManualOverrides;
+  };
+}
+
+export interface SceneRefinementSkipSteps {
+  sceneDescription?: boolean;
+  shotPrompt?: boolean;
+}
+
+export interface SceneRefinementManualOverrides {
+  sceneDescription?: string;
+  shotPrompt?: string;
 }
 
 // 分镜实体

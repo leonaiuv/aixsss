@@ -155,3 +155,20 @@ export async function apiWorkflowRefineSceneAll(input: {
     { method: 'POST', body: { aiProfileId: input.aiProfileId } },
   );
 }
+
+export async function apiWorkflowRefineAllScenes(input: {
+  projectId: string;
+  aiProfileId: string;
+  sceneIds?: string[];
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/refine-all`,
+    {
+      method: 'POST',
+      body: {
+        aiProfileId: input.aiProfileId,
+        ...(input.sceneIds && input.sceneIds.length > 0 ? { sceneIds: input.sceneIds } : {}),
+      },
+    },
+  );
+}

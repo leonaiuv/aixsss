@@ -12,7 +12,7 @@ import {
   apiUpdateEpisodeScene,
 } from '@/lib/api/episodeScenes';
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
-import { apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
+import { apiWorkflowRefineAllScenes, apiWorkflowRefineSceneAll } from '@/lib/api/workflow';
 import { flushApiEpisodeScenePatchQueue } from '@/lib/api/episodeScenePatchQueue';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
 import { isApiMode } from '@/lib/runtime/mode';
@@ -132,6 +132,15 @@ function safeJsonStringify(value: unknown): string {
 }
 
 type NormalizedJobProgress = { pct: number | null; message: string | null };
+type BatchFailedScene = { sceneId: string; order?: number; error?: string };
+
+type BatchRefineProgress = NormalizedJobProgress & {
+  totalScenes: number | null;
+  currentSceneId: string | null;
+  currentSceneOrder: number | null;
+  completedSceneIds: string[];
+  failedScenes: BatchFailedScene[];
+};
 
 interface JobProgressLike {
   pct?: unknown;
@@ -143,6 +152,41 @@ function normalizeJobProgress(progress: unknown): NormalizedJobProgress {
   const pct = typeof p?.pct === 'number' ? p.pct : null;
   const message = typeof p?.message === 'string' ? p.message : null;
   return { pct, message };
+}
+
+function normalizeBatchRefineProgress(progress: unknown): BatchRefineProgress {
+  const base = normalizeJobProgress(progress);
+  const raw = progress as Record<string, unknown> | undefined;
+  const totalScenes = typeof raw?.totalScenes === 'number' ? raw.totalScenes : null;
+  const currentSceneId = typeof raw?.currentSceneId === 'string' ? raw.currentSceneId : null;
+  const currentSceneOrder = typeof raw?.currentSceneOrder === 'number' ? raw.currentSceneOrder : null;
+  const completedSceneIds = Array.isArray(raw?.completedSceneIds)
+    ? raw?.completedSceneIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const failedScenes = Array.isArray(raw?.failedScenes)
+    ? raw.failedScenes
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const sceneId = (entry as { sceneId?: unknown }).sceneId;
+          const order = (entry as { order?: unknown }).order;
+          const error = (entry as { error?: unknown }).error;
+          if (typeof sceneId !== 'string') return null;
+          return {
+            sceneId,
+            order: typeof order === 'number' ? order : undefined,
+            error: typeof error === 'string' ? error : undefined,
+          };
+        })
+        .filter((entry): entry is BatchFailedScene => Boolean(entry))
+    : [];
+  return {
+    ...base,
+    totalScenes,
+    currentSceneId,
+    currentSceneOrder,
+    completedSceneIds,
+    failedScenes,
+  };
 }
 
 function normalizeJobTokenUsage(
@@ -318,6 +362,9 @@ export function EpisodeWorkflow() {
   const [refiningSceneId, setRefiningSceneId] = useState<string | null>(null);
   const [isRefining, setIsRefining] = useState(false);
   const [refineJobProgress, setRefineJobProgress] = useState<NormalizedJobProgress | null>(null);
+  const [refineAllProgress, setRefineAllProgress] = useState<BatchRefineProgress | null>(null);
+  const [refineAllJobRunning, setRefineAllJobRunning] = useState(false);
+  const [refineAllFailedScenes, setRefineAllFailedScenes] = useState<BatchFailedScene[]>([]);
   const [batchRefineDialogOpen, setBatchRefineDialogOpen] = useState(false);
   const [batchRefineSelectedIds, setBatchRefineSelectedIds] = useState<string[]>([]);
   const [batchRefineErrors, setBatchRefineErrors] = useState<Record<string, string>>({});
@@ -777,6 +824,88 @@ export function EpisodeWorkflow() {
       setRefiningSceneId(null);
       setRefineJobProgress(null);
     }
+  };
+
+  const runRefineAllScenesJob = async (sceneIds?: string[]) => {
+    if (!aiProfileId || !currentProject?.id) {
+      throw new Error('缺少 aiProfileId 或 projectId，无法执行全部细化');
+    }
+    if (isGlobalBatchGenerating && batchGeneratingSource !== 'episode_workflow') {
+      toast({
+        title: '批量任务进行中',
+        description: '当前有其他批量操作正在执行，请等待完成后再细化。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setRefineAllJobRunning(true);
+    setRefineAllFailedScenes([]);
+    setRefineAllProgress({
+      pct: 0,
+      message: '准备批量细化...',
+      totalScenes: null,
+      currentSceneId: null,
+      currentSceneOrder: null,
+      completedSceneIds: [],
+      failedScenes: [],
+    });
+    startBatchGenerating('episode_workflow');
+
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      const job = await apiWorkflowRefineAllScenes({
+        projectId: currentProject.id,
+        aiProfileId,
+        sceneIds,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeBatchRefineProgress(progress);
+          setRefineAllProgress(next);
+          if (next.failedScenes.length > 0) {
+            setRefineAllFailedScenes(next.failedScenes);
+          }
+        },
+      });
+
+      const result = (finished.result ?? null) as Record<string, unknown> | null;
+      const failedFromResult = Array.isArray(result?.failedScenes)
+        ? (result?.failedScenes as BatchFailedScene[])
+        : [];
+      if (failedFromResult.length > 0) {
+        setRefineAllFailedScenes(failedFromResult);
+      }
+
+      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+
+      toast({
+        title: failedFromResult.length > 0 ? '全部细化完成（部分失败）' : '全部细化完成',
+        description:
+          failedFromResult.length > 0
+            ? `失败 ${failedFromResult.length} 个分镜，可点击“重试失败项”继续。`
+            : '已更新项目所有分镜内容。',
+        variant: failedFromResult.length > 0 ? 'destructive' : 'default',
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '全部细化失败', description: detail, variant: 'destructive' });
+    } finally {
+      setRefineAllJobRunning(false);
+      stopBatchGenerating();
+    }
+  };
+
+  const handleRefineAllScenes = async () => {
+    if (!aiProfileId || !currentProject?.id) return;
+    await runRefineAllScenesJob();
+  };
+
+  const handleRetryFailedRefineAll = async () => {
+    if (!aiProfileId || !currentProject?.id) return;
+    if (refineAllFailedScenes.length === 0) return;
+    const retrySceneIds = Array.from(new Set(refineAllFailedScenes.map((scene) => scene.sceneId)));
+    await runRefineAllScenesJob(retrySceneIds);
   };
 
   const requestCancelBatchRefine = () => {
@@ -2109,6 +2238,23 @@ ${safeJsonStringify(ep.coreExpression)}
                   </div>
                   <div className="flex gap-2">
                     <Button
+                      onClick={() => void handleRefineAllScenes()}
+                      className="gap-2"
+                      disabled={!aiProfileId || refineAllJobRunning || isBatchBlocked}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>{refineAllJobRunning ? '全部细化中' : '全部细化'}</span>
+                    </Button>
+                    {refineAllFailedScenes.length > 0 ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleRetryFailedRefineAll()}
+                        disabled={refineAllJobRunning || isBatchBlocked}
+                      >
+                        重试失败项 ({refineAllFailedScenes.length})
+                      </Button>
+                    ) : null}
+                    <Button
                       variant="outline"
                       onClick={() => setBatchRefineDialogOpen(true)}
                       className="gap-2"
@@ -2118,6 +2264,42 @@ ${safeJsonStringify(ep.coreExpression)}
                     </Button>
                   </div>
                 </div>
+
+                {refineAllProgress ? (
+                  <div className="mb-6 rounded-lg border bg-muted/30 p-4 space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {refineAllProgress.message || '全部细化进行中...'}
+                      </span>
+                      <span>
+                        {refineAllProgress.totalScenes
+                          ? `${Math.min(refineAllProgress.completedSceneIds.length + refineAllProgress.failedScenes.length, refineAllProgress.totalScenes)}/${refineAllProgress.totalScenes}`
+                          : '-'}
+                      </span>
+                    </div>
+                    <Progress value={typeof refineAllProgress.pct === 'number' ? refineAllProgress.pct : 0} />
+                    {refineAllFailedScenes.length > 0 ? (
+                      <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive space-y-2">
+                        <div className="font-medium">失败列表</div>
+                        <div className="space-y-1 max-h-40 overflow-auto pr-1">
+                          {refineAllFailedScenes.map((scene) => {
+                            const sceneMeta = scenes.find((item) => item.id === scene.sceneId);
+                            const orderLabel = scene.order ?? sceneMeta?.order;
+                            return (
+                              <div key={scene.sceneId} className="flex flex-col gap-0.5">
+                                <span>
+                                  {orderLabel ? `#${orderLabel}` : '分镜'}{' '}
+                                  {sceneMeta?.summary || scene.sceneId}
+                                </span>
+                                {scene.error ? <span>原因：{scene.error}</span> : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {scenes.length === 0 ? (

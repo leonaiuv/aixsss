@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Accordion,
   AccordionContent,
@@ -128,7 +130,15 @@ export function SceneRefinement() {
   const { currentProject, updateProject } = useProjectStore();
   const projectId = currentProject?.id ?? null;
   const currentProjectSceneOrder = currentProject?.currentSceneOrder || 1;
-  const { scenes, updateScene, loadScenes } = useStoryboardStore();
+  const {
+    scenes,
+    updateScene,
+    loadScenes,
+    skipSteps,
+    manualOverrides,
+    setSceneSkipSteps,
+    setSceneManualOverrides,
+  } = useStoryboardStore();
   const { config, activeProfileId } = useConfigStore();
   const { characters } = useCharacterStore();
   const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
@@ -361,14 +371,49 @@ export function SceneRefinement() {
   }
 
   const currentScene = scenes[currentSceneIndex];
+  const currentSkipSteps = currentScene ? skipSteps[currentScene.id] ?? {} : {};
+  const currentManualOverrides = currentScene ? manualOverrides[currentScene.id] ?? {} : {};
   const promptEditorValue =
     promptEditor?.kind === 'field'
       ? (currentScene?.[promptEditor.field] ?? '')
       : (promptEditor?.value ?? '');
 
+  const applyManualSceneDescription = (manualValue?: string) => {
+    if (!currentProject || !currentScene) return;
+    const content = manualValue?.trim() ?? currentScene.sceneDescription?.trim() ?? '';
+    if (!content) {
+      setError('请先填写手动场景锚点内容，再启用跳过。');
+      return;
+    }
+    updateScene(currentProject.id, currentScene.id, {
+      sceneDescription: content,
+      status: 'scene_confirmed',
+    });
+    setActiveAccordion('keyframe');
+  };
+
+  const applyManualShotPrompt = (manualValue?: string) => {
+    if (!currentProject || !currentScene) return;
+    const content = manualValue?.trim() ?? currentScene.shotPrompt?.trim() ?? '';
+    if (!content) {
+      setError('请先填写手动关键帧提示词内容，再启用跳过。');
+      return;
+    }
+    updateScene(currentProject.id, currentScene.id, {
+      shotPrompt: content,
+      status: 'keyframe_confirmed',
+    });
+    setActiveAccordion('motion');
+  };
+
   // 生成场景锚点
   const generateSceneDescription = async () => {
-    if (!config || !currentScene) return;
+    if (!currentScene) return;
+    if (currentSkipSteps.sceneDescription) {
+      applyManualSceneDescription(currentManualOverrides.sceneDescription);
+      return;
+    }
+    if (!config) return;
 
     cancelRequestedRef.current = false;
     abortControllerRef.current?.abort();
@@ -518,6 +563,10 @@ export function SceneRefinement() {
     const { scenes: latestScenes } = useStoryboardStore.getState();
     const latestScene = latestScenes.find((s) => s.id === currentScene?.id);
 
+    if (currentSkipSteps.shotPrompt) {
+      applyManualShotPrompt(currentManualOverrides.shotPrompt);
+      return;
+    }
     if (!config || !latestScene || !latestScene.sceneDescription) return;
 
     cancelRequestedRef.current = false;
@@ -902,7 +951,11 @@ export function SceneRefinement() {
       const scene0 = currentScenes.find((s) => s.id === currentScene.id);
       if (!scene0?.sceneDescription) {
         setGeneratingStep('scene_description');
-        await generateSceneDescription();
+        if (currentSkipSteps.sceneDescription) {
+          applyManualSceneDescription(currentManualOverrides.sceneDescription);
+        } else {
+          await generateSceneDescription();
+        }
         if (cancelRequestedRef.current) return;
         await new Promise((resolve) => setTimeout(resolve, 50));
         if (cancelRequestedRef.current) return;
@@ -919,7 +972,11 @@ export function SceneRefinement() {
       // 第二阶段：生成关键帧提示词（KF0/KF1/KF2）
       if (!latestScene1.shotPrompt) {
         setGeneratingStep('keyframe_prompt');
-        await generateKeyframePrompt();
+        if (currentSkipSteps.shotPrompt) {
+          applyManualShotPrompt(currentManualOverrides.shotPrompt);
+        } else {
+          await generateKeyframePrompt();
+        }
         if (cancelRequestedRef.current) return;
         await new Promise((resolve) => setTimeout(resolve, 50));
         if (cancelRequestedRef.current) return;
@@ -1306,6 +1363,51 @@ export function SceneRefinement() {
               </div>
             </AccordionTrigger>
             <AccordionContent className="pt-4">
+              <div className="mb-4 rounded-lg border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="skip-scene-description">跳过场景锚点生成</Label>
+                    <p className="text-xs text-muted-foreground">
+                      启用后将直接使用手动输入的场景锚点，不再调用 AI。
+                    </p>
+                  </div>
+                  <Switch
+                    id="skip-scene-description"
+                    checked={Boolean(currentSkipSteps.sceneDescription)}
+                    onCheckedChange={(checked) => {
+                      if (!currentProject || !currentScene) return;
+                      setSceneSkipSteps(currentProject.id, currentScene.id, {
+                        sceneDescription: checked,
+                      });
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="manual-scene-description">手动输入场景锚点</Label>
+                  <Textarea
+                    id="manual-scene-description"
+                    value={currentManualOverrides.sceneDescription ?? ''}
+                    onChange={(e) => {
+                      if (!currentProject || !currentScene) return;
+                      setSceneManualOverrides(currentProject.id, currentScene.id, {
+                        sceneDescription: e.target.value,
+                      });
+                    }}
+                    placeholder="直接填写场景锚点 JSON 或描述文本"
+                    className="min-h-[120px] resize-y"
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!currentSkipSteps.sceneDescription}
+                      onClick={() => applyManualSceneDescription(currentManualOverrides.sceneDescription)}
+                    >
+                      应用手动输入
+                    </Button>
+                  </div>
+                </div>
+              </div>
               {currentScene.sceneDescription ? (
                 <div className="space-y-3">
                   {parsedSceneAnchor.isStructured && (
@@ -1464,6 +1566,51 @@ export function SceneRefinement() {
               </div>
             </AccordionTrigger>
             <AccordionContent className="pt-4">
+              <div className="mb-4 rounded-lg border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="skip-shot-prompt">跳过关键帧生成</Label>
+                    <p className="text-xs text-muted-foreground">
+                      启用后将直接使用手动输入的关键帧提示词，不再调用 AI。
+                    </p>
+                  </div>
+                  <Switch
+                    id="skip-shot-prompt"
+                    checked={Boolean(currentSkipSteps.shotPrompt)}
+                    onCheckedChange={(checked) => {
+                      if (!currentProject || !currentScene) return;
+                      setSceneSkipSteps(currentProject.id, currentScene.id, {
+                        shotPrompt: checked,
+                      });
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="manual-shot-prompt">手动输入关键帧提示词</Label>
+                  <Textarea
+                    id="manual-shot-prompt"
+                    value={currentManualOverrides.shotPrompt ?? ''}
+                    onChange={(e) => {
+                      if (!currentProject || !currentScene) return;
+                      setSceneManualOverrides(currentProject.id, currentScene.id, {
+                        shotPrompt: e.target.value,
+                      });
+                    }}
+                    placeholder="直接填写关键帧 JSON 或提示词文本"
+                    className="min-h-[120px] resize-y"
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!currentSkipSteps.shotPrompt}
+                      onClick={() => applyManualShotPrompt(currentManualOverrides.shotPrompt)}
+                    >
+                      应用手动输入
+                    </Button>
+                  </div>
+                </div>
+              </div>
               {currentScene.shotPrompt ? (
                 <div className="space-y-3">
                   {/* KF0/KF1/KF2 快速复制区块（识别到结构化标签时显示） */}

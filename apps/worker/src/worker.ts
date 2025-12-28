@@ -9,6 +9,7 @@ import { generateKeyframePrompt } from './tasks/generateKeyframePrompt.js';
 import { generateMotionPrompt } from './tasks/generateMotionPrompt.js';
 import { generateDialogue } from './tasks/generateDialogue.js';
 import { refineSceneAll } from './tasks/refineSceneAll.js';
+import { refineSceneBatch } from './tasks/refineSceneBatch.js';
 import { llmChat } from './tasks/llmChat.js';
 import { planEpisodes } from './tasks/planEpisodes.js';
 import { generateEpisodeCoreExpression } from './tasks/generateEpisodeCoreExpression.js';
@@ -361,6 +362,36 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'refine_scene_all_batch': {
+            const sceneIds = Array.isArray(data.sceneIds)
+              ? data.sceneIds.filter((id): id is string => typeof id === 'string')
+              : undefined;
+            const result = await refineSceneBatch({
+              prisma,
+              teamId,
+              projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              sceneIds,
+              updateProgress,
+              previousProgress: job.progress,
             });
 
             const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
