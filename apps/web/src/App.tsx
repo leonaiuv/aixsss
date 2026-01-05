@@ -25,7 +25,10 @@ import { AuthPage } from './components/AuthPage';
 import { AppLayout } from './components/layout/AppLayout';
 
 // 懒加载重型组件
-const Editor = lazy(() => import('./components/Editor').then((m) => ({ default: m.Editor })));
+const AgentCanvasEditor = lazy(() =>
+  import('./components/canvas/AgentCanvasEditor').then((m) => ({ default: m.AgentCanvasEditor })),
+);
+const LegacyEditor = lazy(() => import('./components/Editor').then((m) => ({ default: m.Editor })));
 const ConfigDialog = lazy(() =>
   import('./components/ConfigDialog').then((m) => ({ default: m.ConfigDialog })),
 );
@@ -64,7 +67,27 @@ function EditorRouteLoader() {
 
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <Editor />
+      <AgentCanvasEditor />
+    </Suspense>
+  );
+}
+
+function LegacyEditorRouteLoader() {
+  const { projectId } = useParams();
+  const loadProject = useProjectStore((s) => s.loadProject);
+  const currentProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    loadProject(projectId);
+  }, [projectId, loadProject]);
+
+  if (!projectId) return <Navigate to="/" replace />;
+  if (currentProjectId !== projectId) return <LoadingFallback />;
+
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <LegacyEditor />
     </Suspense>
   );
 }
@@ -160,6 +183,7 @@ function LocalApp() {
       <Routes>
         <Route path="/" element={<ProjectList />} />
         <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
+        <Route path="/projects/:projectId/legacy" element={<LegacyEditorRouteLoader />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -308,6 +332,7 @@ function BackendApp() {
       <Routes>
         <Route path="/" element={<ProjectList />} />
         <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
+        <Route path="/projects/:projectId/legacy" element={<LegacyEditorRouteLoader />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

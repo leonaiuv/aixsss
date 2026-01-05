@@ -25,7 +25,9 @@ export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayou
   const location = useLocation();
   const currentProject = useProjectStore((s) => s.currentProject);
 
-  const isEditor = location.pathname.startsWith('/projects/');
+  const isProject = location.pathname.startsWith('/projects/');
+  const isLegacyEditor = location.pathname.endsWith('/legacy');
+  const isCanvas = isProject && !isLegacyEditor;
 
   return (
     <SidebarProvider>
@@ -40,7 +42,7 @@ export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayou
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
-                {isEditor ? (
+                {isProject ? (
                   <BreadcrumbLink asChild>
                     <Link
                       to="/"
@@ -58,7 +60,7 @@ export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayou
                 )}
               </BreadcrumbItem>
 
-              {isEditor && currentProject && (
+              {isProject && currentProject && (
                 <>
                   <BreadcrumbSeparator>
                     <ChevronRight className="h-3.5 w-3.5" />
@@ -75,8 +77,13 @@ export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayou
         </header>
 
         {/* Main Content with subtle texture */}
-        <main className="flex-1 overflow-auto">
-          <div className={cn('mx-auto h-full p-6', isEditor ? 'max-w-[1600px]' : 'max-w-7xl')}>
+        <main className={cn('flex-1', isCanvas ? 'overflow-hidden' : 'overflow-auto')}>
+          <div
+            className={cn(
+              'mx-auto h-full',
+              isCanvas ? 'max-w-none p-0' : isProject ? 'max-w-[1600px] p-6' : 'max-w-7xl p-6',
+            )}
+          >
             {children}
           </div>
         </main>

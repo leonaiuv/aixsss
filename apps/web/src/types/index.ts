@@ -356,6 +356,53 @@ export type EpisodeWorkflowState =
   | 'SCENE_PROCESSING'
   | 'COMPLETE';
 
+// ==========================================
+// Agent Canvas（画布节点工作流）
+// ==========================================
+
+export type AgentCanvasNodeType =
+  | 'project'
+  | 'world_view'
+  | 'characters'
+  | 'episode_plan'
+  | 'episode'
+  | 'episode_scene_list'
+  | 'refine_all_scenes'
+  | 'export'
+  | 'llm';
+
+export interface AgentCanvasViewportV1 {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+export interface AgentCanvasNodeV1<TData = Record<string, unknown>> {
+  id: string;
+  type: AgentCanvasNodeType;
+  position: { x: number; y: number };
+  data: TData;
+  width?: number;
+  height?: number;
+}
+
+export interface AgentCanvasEdgeV1 {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
+  type?: string;
+  label?: string;
+}
+
+export interface AgentCanvasGraphV1 {
+  version: 1;
+  nodes: AgentCanvasNodeV1[];
+  edges: AgentCanvasEdgeV1[];
+  viewport?: AgentCanvasViewportV1;
+}
+
 // 项目上下文缓存
 export interface ProjectContextCache {
   styleKeywords?: string;
@@ -375,6 +422,12 @@ export interface ProjectContextCache {
    * 注意：该结构仅影响前端工作台体验，后端以 Json 透传。
    */
   workflowV2?: WorkflowV2ProjectState;
+
+  /**
+   * 画布节点工作流（Agent Canvas）
+   * 作为前端“可视化工作流 + Chat 构建”入口的数据存储。
+   */
+  agentCanvas?: AgentCanvasGraphV1;
 }
 
 // 项目实体
