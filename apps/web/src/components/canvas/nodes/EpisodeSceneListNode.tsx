@@ -52,10 +52,13 @@ export function EpisodeSceneListNode({ id, data }: NodeProps<EpisodeSceneListFlo
   const rf = useReactFlow();
 
   const selectedEpisode = useMemo(() => {
-    const byId = typeof data.episodeId === 'string' ? episodes.find((e) => e.id === data.episodeId) : null;
+    const byId =
+      typeof data.episodeId === 'string' ? episodes.find((e) => e.id === data.episodeId) : null;
     if (byId) return byId;
     const byOrder =
-      typeof data.episodeOrder === 'number' ? episodes.find((e) => e.order === data.episodeOrder) : null;
+      typeof data.episodeOrder === 'number'
+        ? episodes.find((e) => e.order === data.episodeOrder)
+        : null;
     return byOrder ?? episodes[0] ?? null;
   }, [episodes, data.episodeId, data.episodeOrder]);
 
@@ -128,7 +131,9 @@ export function EpisodeSceneListNode({ id, data }: NodeProps<EpisodeSceneListFlo
       }
     >
       {!isApiMode() ? (
-        <div className="text-xs text-muted-foreground">该节点仅在 API 模式可用（需要后端 + Worker）。</div>
+        <div className="text-xs text-muted-foreground">
+          该节点仅在 API 模式可用（需要后端 + Worker）。
+        </div>
       ) : (
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -141,7 +146,14 @@ export function EpisodeSceneListNode({ id, data }: NodeProps<EpisodeSceneListFlo
                 rf.setNodes((nds) =>
                   nds.map((n) =>
                     n.id === id
-                      ? { ...n, data: { ...(n.data as Record<string, unknown>), episodeId: ep.id, episodeOrder: ep.order } }
+                      ? {
+                          ...n,
+                          data: {
+                            ...(n.data as Record<string, unknown>),
+                            episodeId: ep.id,
+                            episodeOrder: ep.order,
+                          },
+                        }
                       : n,
                   ),
                 );

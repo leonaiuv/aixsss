@@ -19,7 +19,10 @@ export function AgentChatPanel(props: {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const canSend = useMemo(() => !props.isRunning && input.trim().length > 0, [props.isRunning, input]);
+  const canSend = useMemo(
+    () => !props.isRunning && input.trim().length > 0,
+    [props.isRunning, input],
+  );
 
   useEffect(() => {
     // 新消息自动滚到底（best-effort）
@@ -116,4 +119,3 @@ export function AgentChatPanel(props: {
     </div>
   );
 }
-

@@ -99,8 +99,15 @@ export function ProjectNode({ data }: NodeProps<ProjectFlowNode>) {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-xs font-medium text-muted-foreground">画风 Full Prompt（只读）</div>
-            <Button size="sm" variant="ghost" onClick={copyStyle} disabled={!styleFullPrompt.trim()}>
+            <div className="text-xs font-medium text-muted-foreground">
+              画风 Full Prompt（只读）
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={copyStyle}
+              disabled={!styleFullPrompt.trim()}
+            >
               <Copy className="mr-1 h-4 w-4" />
               复制
             </Button>

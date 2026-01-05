@@ -132,4 +132,3 @@ export function createDefaultAgentCanvasGraph(): AgentCanvasGraphV1 {
     viewport: { x: -40, y: -40, zoom: 0.8 },
   };
 }
-

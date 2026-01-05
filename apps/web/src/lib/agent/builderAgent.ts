@@ -146,13 +146,9 @@ export async function buildCanvasPatchWithAgent(input: {
     { role: 'system', content: buildSystemPrompt({ nodeLibrary: input.nodeLibrary }) },
     {
       role: 'user',
-      content: [
-        '当前画布摘要：',
-        input.graphSummary,
-        '',
-        '用户需求：',
-        input.userMessage,
-      ].join('\n'),
+      content: ['当前画布摘要：', input.graphSummary, '', '用户需求：', input.userMessage].join(
+        '\n',
+      ),
     },
   ];
 
@@ -168,4 +164,3 @@ export async function buildCanvasPatchWithAgent(input: {
   }
   return parsed.data;
 }
-

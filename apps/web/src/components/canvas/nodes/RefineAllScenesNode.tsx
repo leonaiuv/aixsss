@@ -65,19 +65,27 @@ export function RefineAllScenesNode({ data }: NodeProps<RefineAllScenesFlowNode>
       description="对项目内所有分镜执行细化工作流（可重试、可审计）。"
       headerRight={
         <Button size="sm" onClick={run} disabled={!canRun || isRunning}>
-          {isRunning ? <StopCircle className="mr-1 h-4 w-4" /> : <Sparkles className="mr-1 h-4 w-4" />}
+          {isRunning ? (
+            <StopCircle className="mr-1 h-4 w-4" />
+          ) : (
+            <Sparkles className="mr-1 h-4 w-4" />
+          )}
           {isRunning ? '进行中' : '运行'}
         </Button>
       }
     >
       {!isApiMode() ? (
-        <div className="text-xs text-muted-foreground">该节点仅在 API 模式可用（需要后端 + Worker）。</div>
+        <div className="text-xs text-muted-foreground">
+          该节点仅在 API 模式可用（需要后端 + Worker）。
+        </div>
       ) : (
         <div className="space-y-2 text-xs text-muted-foreground">
           {progress ? (
             <div className="rounded-md border bg-background/60 p-2">
               <div>{progress.message ?? '执行中...'}</div>
-              {typeof progress.pct === 'number' ? <div className="mt-1">进度：{Math.round(progress.pct)}%</div> : null}
+              {typeof progress.pct === 'number' ? (
+                <div className="mt-1">进度：{Math.round(progress.pct)}%</div>
+              ) : null}
             </div>
           ) : (
             <div className="rounded-md border bg-background/60 p-2">尚未运行。</div>

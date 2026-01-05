@@ -5,7 +5,13 @@ import { NodeFrame } from './NodeFrame';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useProjectStore } from '@/stores/projectStore';
 import { useCharacterStore } from '@/stores/characterStore';
@@ -75,7 +81,12 @@ export function CharactersNode({ data }: NodeProps<CharactersFlowNode>) {
         }
         description="角色库：用于稳定出场人物的一致性与关系网。"
         headerRight={
-          <Button size="sm" variant="secondary" onClick={() => setDialogOpen(true)} disabled={!projectId}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setDialogOpen(true)}
+            disabled={!projectId}
+          >
             <Plus className="mr-1 h-4 w-4" />
             新增
           </Button>
@@ -105,7 +116,9 @@ export function CharactersNode({ data }: NodeProps<CharactersFlowNode>) {
                               {c.briefDescription}
                             </div>
                           ) : (
-                            <div className="mt-0.5 text-[11px] text-muted-foreground">（无简述）</div>
+                            <div className="mt-0.5 text-[11px] text-muted-foreground">
+                              （无简述）
+                            </div>
                           )}
                         </div>
                         <Button
@@ -140,7 +153,11 @@ export function CharactersNode({ data }: NodeProps<CharactersFlowNode>) {
           <div className="space-y-3">
             <div className="space-y-1.5">
               <div className="text-xs font-medium text-muted-foreground">姓名</div>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：林月" />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="例如：林月"
+              />
             </div>
             <div className="space-y-1.5">
               <div className="text-xs font-medium text-muted-foreground">简述（可选）</div>

@@ -200,7 +200,9 @@ export function ExportNode({ data }: NodeProps<ExportFlowNode>) {
         ) : null}
 
         <ScrollArea className="h-[260px] rounded-md border bg-background/60">
-          <pre className="p-2 text-[11px] leading-snug">{markdown || '（点击“生成”后会在这里预览）'}</pre>
+          <pre className="p-2 text-[11px] leading-snug">
+            {markdown || '（点击“生成”后会在这里预览）'}
+          </pre>
         </ScrollArea>
       </div>
     </NodeFrame>

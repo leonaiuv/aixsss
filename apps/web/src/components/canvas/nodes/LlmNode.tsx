@@ -38,7 +38,10 @@ export function LlmNode({ id, data }: NodeProps<LlmFlowNode>) {
   useEffect(() => setPrompt(safeString(data.prompt)), [data.prompt]);
   useEffect(() => setOutput(safeString(data.output)), [data.output]);
 
-  const canRun = useMemo(() => Boolean(isConfigured && config && prompt.trim()), [isConfigured, config, prompt]);
+  const canRun = useMemo(
+    () => Boolean(isConfigured && config && prompt.trim()),
+    [isConfigured, config, prompt],
+  );
 
   const syncData = (patch: Partial<LlmNodeData>) => {
     rf.setNodes((nds) =>
@@ -120,7 +123,9 @@ export function LlmNode({ id, data }: NodeProps<LlmFlowNode>) {
         <div className="space-y-1.5">
           <div className="text-xs font-medium text-muted-foreground">Output</div>
           <ScrollArea className="h-[170px] rounded-md border bg-background/60">
-            <pre className="p-2 text-[11px] leading-snug">{output || '（运行后输出显示在这里）'}</pre>
+            <pre className="p-2 text-[11px] leading-snug">
+              {output || '（运行后输出显示在这里）'}
+            </pre>
           </ScrollArea>
         </div>
       </div>

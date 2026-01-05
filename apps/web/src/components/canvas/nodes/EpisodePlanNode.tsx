@@ -133,7 +133,12 @@ export function EpisodePlanNode({ id, data }: NodeProps<EpisodePlanFlowNode>) {
       description="根据全局设定生成 N 集概要（可迭代）。"
       headerRight={
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="secondary" onClick={createEpisodeNodes} disabled={!isApiMode() || episodes.length === 0}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={createEpisodeNodes}
+            disabled={!isApiMode() || episodes.length === 0}
+          >
             <Plus className="mr-1 h-4 w-4" />
             生成集节点
           </Button>
@@ -145,7 +150,9 @@ export function EpisodePlanNode({ id, data }: NodeProps<EpisodePlanFlowNode>) {
       }
     >
       {!isApiMode() ? (
-        <div className="text-xs text-muted-foreground">该节点仅在 API 模式可用（需要后端 + Worker）。</div>
+        <div className="text-xs text-muted-foreground">
+          该节点仅在 API 模式可用（需要后端 + Worker）。
+        </div>
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-2">

@@ -106,7 +106,12 @@ export function WorldViewNode({ data }: NodeProps<WorldViewFlowNode>) {
         }
         description="结构化世界观要素：将被注入到后续规划/分镜生成。"
         headerRight={
-          <Button size="sm" variant="secondary" onClick={() => setDialogOpen(true)} disabled={!projectId}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setDialogOpen(true)}
+            disabled={!projectId}
+          >
             <Plus className="mr-1 h-4 w-4" />
             新增
           </Button>
@@ -198,7 +203,11 @@ export function WorldViewNode({ data }: NodeProps<WorldViewFlowNode>) {
 
             <div className="space-y-1.5">
               <div className="text-xs font-medium text-muted-foreground">标题</div>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如：霓虹城邦的阶层制度" />
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="例如：霓虹城邦的阶层制度"
+              />
             </div>
 
             <div className="space-y-1.5">

@@ -54,10 +54,13 @@ export function EpisodeNode({ id, data }: NodeProps<EpisodeFlowNode>) {
   }, [projectId, loadEpisodes]);
 
   const selectedEpisode = useMemo(() => {
-    const byId = typeof data.episodeId === 'string' ? episodes.find((e) => e.id === data.episodeId) : null;
+    const byId =
+      typeof data.episodeId === 'string' ? episodes.find((e) => e.id === data.episodeId) : null;
     if (byId) return byId;
     const byOrder =
-      typeof data.episodeOrder === 'number' ? episodes.find((e) => e.order === data.episodeOrder) : null;
+      typeof data.episodeOrder === 'number'
+        ? episodes.find((e) => e.order === data.episodeOrder)
+        : null;
     return byOrder ?? episodes[0] ?? null;
   }, [episodes, data.episodeId, data.episodeOrder]);
 
@@ -106,7 +109,9 @@ export function EpisodeNode({ id, data }: NodeProps<EpisodeFlowNode>) {
       }
     >
       {!isApiMode() ? (
-        <div className="text-xs text-muted-foreground">该节点仅在 API 模式可用（需要后端 + Worker）。</div>
+        <div className="text-xs text-muted-foreground">
+          该节点仅在 API 模式可用（需要后端 + Worker）。
+        </div>
       ) : (
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -119,7 +124,14 @@ export function EpisodeNode({ id, data }: NodeProps<EpisodeFlowNode>) {
                 rf.setNodes((nds) =>
                   nds.map((n) =>
                     n.id === id
-                      ? { ...n, data: { ...(n.data as Record<string, unknown>), episodeId: ep.id, episodeOrder: ep.order } }
+                      ? {
+                          ...n,
+                          data: {
+                            ...(n.data as Record<string, unknown>),
+                            episodeId: ep.id,
+                            episodeOrder: ep.order,
+                          },
+                        }
                       : n,
                   ),
                 );
@@ -169,7 +181,9 @@ export function EpisodeNode({ id, data }: NodeProps<EpisodeFlowNode>) {
             <div className="text-xs font-medium text-muted-foreground">核心表达（预览）</div>
             <ScrollArea className="h-[170px] rounded-md border bg-background/60">
               <pre className="p-2 text-[11px] leading-snug">
-                {selectedEpisode?.coreExpression ? safeJson(selectedEpisode.coreExpression) : '（尚未生成）'}
+                {selectedEpisode?.coreExpression
+                  ? safeJson(selectedEpisode.coreExpression)
+                  : '（尚未生成）'}
               </pre>
             </ScrollArea>
           </div>

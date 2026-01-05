@@ -16,10 +16,20 @@ import {
 } from '@xyflow/react';
 import { useProjectStore } from '@/stores/projectStore';
 import { createDefaultAgentCanvasGraph, parseAgentCanvasGraph } from '@/lib/agent/graph';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import type { AgentCanvasGraphV1, AgentCanvasNodeType, ChatMessage, ProjectContextCache } from '@/types';
+import type {
+  AgentCanvasGraphV1,
+  AgentCanvasNodeType,
+  ChatMessage,
+  ProjectContextCache,
+} from '@/types';
 import { ProjectNode } from './nodes/ProjectNode';
 import { WorldViewNode } from './nodes/WorldViewNode';
 import { CharactersNode } from './nodes/CharactersNode';
@@ -187,11 +197,14 @@ function CanvasLayout() {
             const nodeId = op.node.id ?? createNodeId(op.node.type);
             if (next.some((n) => n.id === nodeId)) continue;
             const position = op.node.position ?? getCanvasCenter();
-            const libLabel = NODE_LIBRARY.find((n) => n.type === op.node.type)?.label ?? op.node.type;
+            const libLabel =
+              NODE_LIBRARY.find((n) => n.type === op.node.type)?.label ?? op.node.type;
             const nodeData = { label: libLabel, ...(op.node.data ?? {}) };
             next.push({ id: nodeId, type: op.node.type, position, data: nodeData });
           } else if (op.op === 'update_node') {
-            next = next.map((n) => (n.id === op.id ? { ...n, data: { ...n.data, ...op.data } } : n));
+            next = next.map((n) =>
+              n.id === op.id ? { ...n, data: { ...n.data, ...op.data } } : n,
+            );
           } else if (op.op === 'delete_node') {
             next = next.filter((n) => n.id !== op.id);
           }
@@ -336,7 +349,10 @@ function CanvasLayout() {
             graphSummary,
             nodeLibrary: NODE_LIBRARY,
           });
-          setChatMessages((prev) => [...prev, { role: 'assistant', content: res.assistantMessage }]);
+          setChatMessages((prev) => [
+            ...prev,
+            { role: 'assistant', content: res.assistantMessage },
+          ]);
           if (res.patch) applyPatch(res.patch);
         }
       } catch (err) {
@@ -349,14 +365,7 @@ function CanvasLayout() {
         setChatRunning(false);
       }
     },
-    [
-      applyPatch,
-      chatMessages,
-      chatMode,
-      config,
-      graphSummary,
-      isConfigured,
-    ],
+    [applyPatch, chatMessages, chatMode, config, graphSummary, isConfigured],
   );
 
   return (
