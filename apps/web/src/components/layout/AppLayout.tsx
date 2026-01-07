@@ -1,7 +1,7 @@
 import { useLocation, Link } from 'react-router-dom';
 import { useProjectStore } from '@/stores/projectStore';
 import { cn } from '@/lib/utils';
-import { ChevronRight, Home } from 'lucide-react';
+import { ArrowLeftRight, ChevronRight, Home } from 'lucide-react';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import {
@@ -13,6 +13,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -28,6 +29,7 @@ export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayou
   const isProject = location.pathname.startsWith('/projects/');
   const isLegacyEditor = location.pathname.endsWith('/legacy');
   const isCanvas = isProject && !isLegacyEditor;
+  const projectId = isProject ? location.pathname.split('/')[2] ?? null : null;
 
   return (
     <SidebarProvider>
@@ -74,6 +76,20 @@ export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayou
               )}
             </BreadcrumbList>
           </Breadcrumb>
+
+          {projectId && (
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link to={isLegacyEditor ? `/projects/${projectId}` : `/projects/${projectId}/legacy`}>
+                  <ArrowLeftRight className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {isLegacyEditor ? '切换到画布版本' : '切换到传统构建'}
+                  </span>
+                  <span className="sm:hidden">{isLegacyEditor ? '画布' : '传统'}</span>
+                </Link>
+              </Button>
+            </div>
+          )}
         </header>
 
         {/* Main Content with subtle texture */}
