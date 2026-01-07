@@ -29,7 +29,7 @@ export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayou
   const isProject = location.pathname.startsWith('/projects/');
   const isLegacyEditor = location.pathname.endsWith('/legacy');
   const isCanvas = isProject && !isLegacyEditor;
-  const projectId = isProject ? location.pathname.split('/')[2] ?? null : null;
+  const projectId = isProject ? (location.pathname.split('/')[2] ?? null) : null;
 
   return (
     <SidebarProvider>
@@ -80,7 +80,9 @@ export function AppLayout({ children, onSearch, onConfig, onSettings }: AppLayou
           {projectId && (
             <div className="ml-auto flex items-center gap-2">
               <Button variant="outline" size="sm" asChild>
-                <Link to={isLegacyEditor ? `/projects/${projectId}` : `/projects/${projectId}/legacy`}>
+                <Link
+                  to={isLegacyEditor ? `/projects/${projectId}` : `/projects/${projectId}/legacy`}
+                >
                   <ArrowLeftRight className="h-4 w-4" />
                   <span className="hidden sm:inline">
                     {isLegacyEditor ? '切换到画布版本' : '切换到传统构建'}
