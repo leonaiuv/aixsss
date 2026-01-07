@@ -367,6 +367,7 @@ export type AgentCanvasNodeType =
   | 'episode_plan'
   | 'episode'
   | 'episode_scene_list'
+  | 'scene_beats'
   | 'refine_all_scenes'
   | 'export'
   | 'llm';
@@ -579,6 +580,9 @@ export interface Scene {
   castCharacterIds?: string[];
   /** 关键帧提示词（KF0/KF1/KF2）- 静止画面描述，用于生图AI（建议中英双语） */
   shotPrompt: string;
+  actionPlanJson?: unknown;
+  keyframeGroupsJson?: unknown;
+  motionGroupsJson?: unknown;
   /** 时空/运动提示词 - 基于关键帧差分的“变化描述”，用于图生视频(I2V)模型（建议中英双语） */
   motionPrompt: string;
   /** 关键帧生成图片 */

@@ -1260,8 +1260,11 @@ export function EpisodeWorkflow() {
               panelScript: resolvePanelScript(s),
               promptBlocks: {
                 sceneAnchor: parseSceneAnchorText(s.sceneDescription),
+                actionPlan: s.actionPlanJson ?? null,
                 keyframes: parseKeyframePromptText(s.shotPrompt),
+                keyframeGroups: s.keyframeGroupsJson ?? null,
                 motion: parseMotionPromptText(s.motionPrompt),
+                motionGroups: s.motionGroupsJson ?? null,
               },
               assetManifest: resolvePanelAssetManifest(s, projectCharacters),
               promptLayers: buildPromptLayers({

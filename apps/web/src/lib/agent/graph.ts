@@ -8,6 +8,7 @@ const AgentCanvasNodeTypeSchema = z.enum([
   'episode_plan',
   'episode',
   'episode_scene_list',
+  'scene_beats',
   'refine_all_scenes',
   'export',
   'llm',

@@ -40,6 +40,12 @@ docker compose -f docker-compose.dev.yml up -d
 pnpm -C apps/api prisma:migrate
 ```
 
+生产/CI 部署（仅应用已存在迁移，不创建新迁移）：
+
+```bash
+pnpm -C apps/api prisma:deploy
+```
+
 ### 6) 启动开发
 
 ```bash

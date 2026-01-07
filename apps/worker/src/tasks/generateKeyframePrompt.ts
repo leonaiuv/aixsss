@@ -1,11 +1,12 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
 import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput } from './formatFix.js';
-import { styleFullPrompt, toProviderChatConfig } from './common.js';
+import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
+import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupToLegacyShotPrompt } from './actionBeats.js';
 
 function buildPrompt(args: {
   style: string;
@@ -116,7 +117,15 @@ export async function generateKeyframePrompt(args: {
 
   const scene = await prisma.scene.findFirst({
     where: { id: sceneId, projectId },
-    select: { id: true, summary: true, sceneDescription: true, contextSummary: true },
+    select: {
+      id: true,
+      summary: true,
+      sceneDescription: true,
+      contextSummary: true,
+      castCharacterIds: true,
+      episodeId: true,
+      order: true,
+    },
   });
   if (!scene) throw new Error('Scene not found');
   if (!scene.sceneDescription?.trim()) throw new Error('Scene anchor missing');
@@ -127,7 +136,7 @@ export async function generateKeyframePrompt(args: {
   });
   if (!profile) throw new Error('AI profile not found');
 
-  await updateProgress({ pct: 5, message: '准备提示词...' });
+  await updateProgress({ pct: 5, message: '准备动作拆解与关键帧生成...' });
 
   const characterRows = await prisma.character.findMany({
     where: { projectId },
@@ -139,6 +148,20 @@ export async function generateKeyframePrompt(args: {
   });
 
   const style = styleFullPrompt(project);
+  const styleMeta = [style, panelHints].filter(Boolean).join('\n\n');
+
+  const cast = (scene.castCharacterIds ?? [])
+    .map((id) => ({ id, name: characterNameById.get(id) || id }))
+    .filter((c) => c.id);
+
+  const prevScene =
+    scene.order > 0
+      ? await prisma.scene.findFirst({
+          where: { projectId, episodeId: scene.episodeId, order: scene.order - 1 },
+          select: { summary: true },
+        })
+      : null;
+
   const prompt = buildPrompt({
     style,
     currentSummary: scene.summary || '-',
@@ -151,38 +174,94 @@ export async function generateKeyframePrompt(args: {
   const providerConfig = toProviderChatConfig(profile);
   providerConfig.apiKey = apiKey;
 
-  await updateProgress({ pct: 25, message: '调用 AI 生成关键帧提示词...' });
+  let tokenUsage: ReturnType<typeof mergeTokenUsage> = undefined;
 
-  const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
-  const res = await chatWithProvider(providerConfig, messages);
+  try {
+    await updateProgress({ pct: 20, message: '调用 AI 生成动作拆解（ActionPlan）...' });
+    const actionPlanRes = await generateActionPlanJson({
+      providerConfig,
+      sceneId,
+      sceneSummary: scene.summary || '-',
+      prevSceneSummary: prevScene?.summary || undefined,
+      cast,
+      sceneAnchorJson: scene.sceneDescription,
+      styleFullPrompt: styleMeta,
+    });
+    tokenUsage = mergeTokenUsage(tokenUsage, actionPlanRes.tokenUsage);
 
-  await updateProgress({ pct: 60, message: '检查输出格式...' });
+    await updateProgress({ pct: 55, message: '调用 AI 按 beat 生成三段式关键帧（KeyframeGroups）...' });
+    const keyframeGroupsRes = await generateKeyframeGroupsJson({
+      providerConfig,
+      sceneId,
+      sceneAnchorJson: scene.sceneDescription,
+      styleFullPrompt: styleMeta,
+      cast,
+      beats: actionPlanRes.plan.beats,
+    });
+    tokenUsage = mergeTokenUsage(tokenUsage, keyframeGroupsRes.tokenUsage);
 
-  const fixed = await fixStructuredOutput({
-    providerConfig,
-    type: 'keyframe_prompt',
-    raw: res.content,
-    tokenUsage: res.tokenUsage,
-  });
+    const firstGroup = keyframeGroupsRes.keyframeGroups.groups[0];
+    const legacyShotPrompt = keyframeGroupToLegacyShotPrompt(firstGroup);
 
-  await updateProgress({ pct: 85, message: '写入数据库...' });
+    await updateProgress({ pct: 85, message: '写入数据库...' });
+    await prisma.scene.update({
+      where: { id: sceneId },
+      data: {
+        shotPrompt: legacyShotPrompt,
+        actionPlanJson: actionPlanRes.plan as unknown as Prisma.InputJsonValue,
+        keyframeGroupsJson: keyframeGroupsRes.keyframeGroups as unknown as Prisma.InputJsonValue,
+        status: 'keyframe_confirmed',
+      },
+    });
 
-  await prisma.scene.update({
-    where: { id: sceneId },
-    data: {
+    await updateProgress({ pct: 100, message: '完成' });
+
+    return {
+      sceneId,
+      shotPrompt: legacyShotPrompt,
+      fixed: false,
+      actionPlanJson: actionPlanRes.plan,
+      keyframeGroupsJson: keyframeGroupsRes.keyframeGroups,
+      tokenUsage: tokenUsage ?? null,
+    };
+  } catch (err) {
+    await updateProgress({ pct: 25, message: '动作拆解失败，回退到旧版 KF0/KF1/KF2 提示词生成...' });
+
+    const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+    const res = await chatWithProvider(providerConfig, messages);
+
+    await updateProgress({ pct: 60, message: '检查输出格式...' });
+
+    const fixed = await fixStructuredOutput({
+      providerConfig,
+      type: 'keyframe_prompt',
+      raw: res.content,
+      tokenUsage: res.tokenUsage,
+    });
+
+    await updateProgress({ pct: 85, message: '写入数据库...' });
+
+    await prisma.scene.update({
+      where: { id: sceneId },
+      data: {
+        shotPrompt: fixed.content,
+        status: 'keyframe_confirmed',
+      },
+    });
+
+    tokenUsage = mergeTokenUsage(tokenUsage, fixed.tokenUsage);
+
+    await updateProgress({ pct: 100, message: '完成(回退旧版)' });
+
+    return {
+      sceneId,
       shotPrompt: fixed.content,
-      status: 'keyframe_confirmed',
-    },
-  });
-
-  await updateProgress({ pct: 100, message: '完成' });
-
-  return {
-    sceneId,
-    shotPrompt: fixed.content,
-    fixed: fixed.fixed,
-    tokenUsage: fixed.tokenUsage ?? null,
-  };
+      fixed: fixed.fixed,
+      tokenUsage: tokenUsage ?? null,
+      fallbackFromActionBeats: true,
+      actionBeatsError: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 

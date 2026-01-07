@@ -6,6 +6,7 @@ import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput } from './formatFix.js';
 import { styleFullPrompt, toProviderChatConfig, type TokenUsage, mergeTokenUsage } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript, type PanelScriptV1 } from './panelScriptHints.js';
+import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupToLegacyShotPrompt } from './actionBeats.js';
 
 function isPrismaNotFoundError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2025';
@@ -337,6 +338,7 @@ export async function refineSceneAll(args: {
       summary: true,
       sceneDescription: true,
       shotPrompt: true,
+      castCharacterIds: true,
       contextSummary: true,
     },
   });
@@ -426,6 +428,8 @@ export async function refineSceneAll(args: {
 
   // 2) Keyframe
   let keyframeContent = scene.shotPrompt || '';
+  let actionPlanJson: unknown | null = null;
+  let keyframeGroupsJson: unknown | null = null;
   if (refinementSettings.skipSteps.shotPrompt) {
     keyframeContent = manualShotPrompt || keyframeContent;
     if (!keyframeContent) {
@@ -441,25 +445,62 @@ export async function refineSceneAll(args: {
       throw err;
     }
 
-    const kfRes = await doChat({
-      providerConfig,
-      prompt: buildKeyframePrompt({
-        style: styleFullPrompt(project),
-        currentSummary: scene.summary || '-',
-        sceneAnchor: anchorContent,
-        characters: project.protagonist || '-',
-        panelHints,
-      }),
-    });
-    tokens = mergeTokenUsage(tokens, kfRes.tokenUsage);
-    const kfFixed = await fixStructuredOutput({
-      providerConfig,
-      type: 'keyframe_prompt',
-      raw: kfRes.content,
-      tokenUsage: tokens,
-    });
-    tokens = kfFixed.tokenUsage;
-    keyframeContent = kfFixed.content;
+    const cast = (scene.castCharacterIds ?? [])
+      .map((id) => ({ id, name: characterNameById.get(id) || id }))
+      .filter((c) => c.id);
+
+    const styleMeta = [styleFullPrompt(project), panelHints].filter(Boolean).join('\n\n');
+
+    try {
+      const actionPlanRes = await generateActionPlanJson({
+        providerConfig,
+        sceneId,
+        sceneSummary: scene.summary || '-',
+        prevSceneSummary: prev?.summary || undefined,
+        cast,
+        sceneAnchorJson: anchorContent,
+        styleFullPrompt: styleMeta,
+      });
+      tokens = mergeTokenUsage(tokens, actionPlanRes.tokenUsage);
+      actionPlanJson = actionPlanRes.plan;
+
+      await updateProgress({ pct: 45, message: '生成 KeyframeGroups（按 beats）...' });
+      const keyframeGroupsRes = await generateKeyframeGroupsJson({
+        providerConfig,
+        sceneId,
+        sceneAnchorJson: anchorContent,
+        styleFullPrompt: styleMeta,
+        cast,
+        beats: actionPlanRes.plan.beats,
+      });
+      tokens = mergeTokenUsage(tokens, keyframeGroupsRes.tokenUsage);
+      keyframeGroupsJson = keyframeGroupsRes.keyframeGroups;
+
+      keyframeContent = keyframeGroupToLegacyShotPrompt(keyframeGroupsRes.keyframeGroups.groups[0]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await updateProgress({ pct: 40, message: `ActionBeat 失败，回退旧版 KF0/KF1/KF2：${message}` });
+
+      const kfRes = await doChat({
+        providerConfig,
+        prompt: buildKeyframePrompt({
+          style: styleFullPrompt(project),
+          currentSummary: scene.summary || '-',
+          sceneAnchor: anchorContent,
+          characters: project.protagonist || '-',
+          panelHints,
+        }),
+      });
+      tokens = mergeTokenUsage(tokens, kfRes.tokenUsage);
+      const kfFixed = await fixStructuredOutput({
+        providerConfig,
+        type: 'keyframe_prompt',
+        raw: kfRes.content,
+        tokenUsage: tokens,
+      });
+      tokens = kfFixed.tokenUsage;
+      keyframeContent = kfFixed.content;
+    }
   }
 
   await updateProgress({ pct: 55, message: '保存关键帧...' });
@@ -468,7 +509,12 @@ export async function refineSceneAll(args: {
       prisma,
       projectId,
       sceneId,
-      data: { shotPrompt: keyframeContent, status: 'keyframe_confirmed' },
+      data: {
+        shotPrompt: keyframeContent,
+        ...(actionPlanJson ? { actionPlanJson: actionPlanJson as Prisma.InputJsonValue } : {}),
+        ...(keyframeGroupsJson ? { keyframeGroupsJson: keyframeGroupsJson as Prisma.InputJsonValue } : {}),
+        status: 'keyframe_confirmed',
+      },
     });
   } catch (err) {
     if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');

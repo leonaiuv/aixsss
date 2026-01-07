@@ -97,7 +97,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
@@ -122,7 +122,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
@@ -294,7 +294,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });

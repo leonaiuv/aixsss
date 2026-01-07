@@ -203,6 +203,12 @@ model Scene {
   castCharacterIds String[]   @default([])
   shotPrompt       String     @default("")
   motionPrompt     String     @default("")
+  /** 动作拆解层：Scene -> beats（start/mid/end 状态） */
+  actionPlanJson   Json?
+  /** 关键帧输出：按 beat 分组（start/mid/end frame_spec） */
+  keyframeGroupsJson Json?
+  /** 可选：按 beat 的运动提示（后续 I2V 用） */
+  motionGroupsJson Json?
   generatedImages  Json?
   dialogues        Json?
   contextSummary   Json?
