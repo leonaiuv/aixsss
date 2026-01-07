@@ -190,7 +190,11 @@ export function SceneBeatsNode({ id, data }: NodeProps<SceneBeatsFlowNode>) {
             刷新
           </Button>
           <Button size="sm" onClick={run} disabled={!canRun || isRunning}>
-            {isRunning ? <StopCircle className="mr-1 h-4 w-4" /> : <Play className="mr-1 h-4 w-4" />}
+            {isRunning ? (
+              <StopCircle className="mr-1 h-4 w-4" />
+            ) : (
+              <Play className="mr-1 h-4 w-4" />
+            )}
             {isRunning ? '进行中' : '运行'}
           </Button>
         </div>

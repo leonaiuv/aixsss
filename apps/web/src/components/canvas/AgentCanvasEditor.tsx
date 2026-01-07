@@ -68,7 +68,11 @@ const NODE_LIBRARY: Array<{ type: AgentCanvasNodeType; label: string; descriptio
   { type: 'episode_plan', label: '剧集规划', description: '生成 N 集概要' },
   { type: 'episode', label: '单集创作', description: '核心表达' },
   { type: 'episode_scene_list', label: '分镜生成', description: '生成分镜列表' },
-  { type: 'scene_beats', label: '动作拆解/关键帧组', description: '对指定 Scene 生成并查看 ActionPlan/KeyframeGroups' },
+  {
+    type: 'scene_beats',
+    label: '动作拆解/关键帧组',
+    description: '对指定 Scene 生成并查看 ActionPlan/KeyframeGroups',
+  },
   { type: 'refine_all_scenes', label: '分镜细化（批量）', description: '细化全部分镜' },
   { type: 'llm', label: 'LLM 节点', description: '通用对话/润色/结构化' },
   { type: 'export', label: '导出', description: '生成 Markdown' },
