@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import type { PrismaClient } from '@prisma/client';
 import type { ChatMessage, ProviderChatConfig, ResponseFormat } from '../providers/types.js';
 import { chatWithProvider } from '../providers/index.js';
 import { parseJsonFromText } from './aiJson.js';
 import { mergeTokenUsage, type TokenUsage } from './common.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 
 const CONTINUOUS_WORD_PATTERNS: RegExp[] = [
   /\b(then|after|before|while|when)\b/i,
@@ -541,6 +543,7 @@ function formatIssuesForPrompt(issues: ValidationIssue[]): string {
 }
 
 function buildActionPlanPrompt(args: {
+  systemPrompt: string;
   sceneId: string;
   sceneSummary: string;
   prevSceneSummary?: string;
@@ -548,14 +551,6 @@ function buildActionPlanPrompt(args: {
   sceneAnchorJson: string;
   styleFullPrompt: string;
 }): ChatMessage[] {
-  const system = [
-    '你是动画导演/分镜师，负责把一个 Scene 拆成多个可三段式表达的动作单元（ActionBeat）。',
-    '必须严格输出 JSON（不允许 Markdown/解释）。',
-    '一个 beat 只描述一个动作单元；每个 beat 必须给 start/mid/end 三段状态。',
-    'beat 之间 end->start 必须连续：角色位置/朝向/道具状态不允许无理由跳变。',
-    '不要写外貌细节（发型/服装/脸型等），由定妆照保证。',
-  ].join('\n');
-
   const user = [
     `scene_id: ${args.sceneId}`,
     `scene_summary: ${args.sceneSummary || '-'}`,
@@ -576,18 +571,16 @@ function buildActionPlanPrompt(args: {
   ].join('\n');
 
   return [
-    { role: 'system', content: system },
+    { role: 'system', content: args.systemPrompt },
     { role: 'user', content: user },
   ];
 }
 
-function buildActionPlanRepairPrompt(args: { rawJson: string; issues: ValidationIssue[] }): ChatMessage[] {
-  const system = [
-    '你是 JSON 修复器，只做“最小修改”来让 JSON 通过校验。',
-    '必须严格输出 JSON（不允许 Markdown/解释）。',
-    '不要新增与原始内容无关的剧情信息。',
-  ].join('\n');
-
+function buildActionPlanRepairPrompt(args: {
+  systemPrompt: string;
+  rawJson: string;
+  issues: ValidationIssue[];
+}): ChatMessage[] {
   const user = [
     '下面 JSON 未通过校验，请修复：',
     '',
@@ -599,26 +592,19 @@ function buildActionPlanRepairPrompt(args: { rawJson: string; issues: Validation
   ].join('\n');
 
   return [
-    { role: 'system', content: system },
+    { role: 'system', content: args.systemPrompt },
     { role: 'user', content: user },
   ];
 }
 
 function buildKeyframeGroupPrompt(args: {
+  systemPrompt: string;
   sceneAnchorJson: string;
   styleFullPrompt: string;
   cast: Array<{ id: string; name: string }>;
   beat: ActionBeat;
   prevEndFrameSpec?: FrameSpec | null;
 }): ChatMessage[] {
-  const system = [
-    '你是动画分镜关键帧导演。',
-    '必须严格输出 JSON（不允许 Markdown/解释）。',
-    '输出一个 beat 的三帧：start/mid/end（瞬间定格）。',
-    '同一 beat 内镜头/背景锚点保持一致（除非 beat 明确说明切镜头；默认不切）。',
-    '每帧必须有明确可见差异；禁止使用连续叙事词（然后/逐渐/慢慢/starts to 等）。',
-  ].join('\n');
-
   const user = [
     'beat_summary:',
     args.beat.beat_summary,
@@ -663,18 +649,16 @@ function buildKeyframeGroupPrompt(args: {
     .join('\n');
 
   return [
-    { role: 'system', content: system },
+    { role: 'system', content: args.systemPrompt },
     { role: 'user', content: user },
   ];
 }
 
-function buildKeyframeGroupRepairPrompt(args: { rawJson: string; issues: ValidationIssue[] }): ChatMessage[] {
-  const system = [
-    '你是 JSON 修复器，只做“最小修改”来让 JSON 通过校验。',
-    '必须严格输出 JSON（不允许 Markdown/解释）。',
-    '不要改动 beat 的意图；只修复结构/连续性/禁词/差异不足等问题。',
-  ].join('\n');
-
+function buildKeyframeGroupRepairPrompt(args: {
+  systemPrompt: string;
+  rawJson: string;
+  issues: ValidationIssue[];
+}): ChatMessage[] {
   const user = [
     '下面 JSON 未通过校验，请修复：',
     '',
@@ -686,22 +670,17 @@ function buildKeyframeGroupRepairPrompt(args: { rawJson: string; issues: Validat
   ].join('\n');
 
   return [
-    { role: 'system', content: system },
+    { role: 'system', content: args.systemPrompt },
     { role: 'user', content: user },
   ];
 }
 
 function buildContinuityRepairPrompt(args: {
+  systemPrompt: string;
   prevEnd: FrameSpec;
   nextStart: FrameSpec;
   beatSummary: string;
 }): ChatMessage[] {
-  const system = [
-    '你是镜头连续性修复器。',
-    '目标：最小修改 next_start_frame_spec，使其能无缝承接 prev_end_frame_spec。',
-    '必须严格输出 JSON（仅返回修复后的 next_start_frame_spec；不要返回其它字段/解释）。',
-  ].join('\n');
-
   const user = [
     'beat_summary:',
     args.beatSummary,
@@ -714,7 +693,40 @@ function buildContinuityRepairPrompt(args: {
   ].join('\n');
 
   return [
-    { role: 'system', content: system },
+    { role: 'system', content: args.systemPrompt },
+    { role: 'user', content: user },
+  ];
+}
+
+function buildContinuityRepairRepairPrompt(args: {
+  systemPrompt: string;
+  prevEnd: FrameSpec;
+  nextStart: FrameSpec;
+  beatSummary: string;
+  rawJson: string;
+  issues: ValidationIssue[];
+}): ChatMessage[] {
+  const user = [
+    '下面输出未通过校验，请修复并只输出 JSON：',
+    '',
+    'beat_summary:',
+    args.beatSummary,
+    '',
+    'prev_end_frame_spec:',
+    JSON.stringify(args.prevEnd, null, 2),
+    '',
+    'next_start_frame_spec（目标修复）：',
+    JSON.stringify(args.nextStart, null, 2),
+    '',
+    '校验错误：',
+    formatIssuesForPrompt(args.issues),
+    '',
+    '上一轮输出（供参考，可忽略）：',
+    args.rawJson,
+  ].join('\n');
+
+  return [
+    { role: 'system', content: args.systemPrompt },
     { role: 'user', content: user },
   ];
 }
@@ -806,6 +818,8 @@ async function generateJsonWithValidation<T>(args: {
 }
 
 export async function generateActionPlanJson(args: {
+  prisma: PrismaClient;
+  teamId: string;
   providerConfig: ProviderChatConfig;
   sceneId: string;
   sceneSummary: string;
@@ -813,8 +827,25 @@ export async function generateActionPlanJson(args: {
   cast: Array<{ id: string; name: string }>;
   sceneAnchorJson: string;
   styleFullPrompt: string;
+  systemPrompt?: string;
+  repairSystemPrompt?: string;
 }): Promise<{ plan: ActionPlanJson; tokenUsage?: TokenUsage }> {
-  const messages = buildActionPlanPrompt(args);
+  const systemPrompt =
+    args.systemPrompt ??
+    (await loadSystemPrompt({
+      prisma: args.prisma,
+      teamId: args.teamId,
+      key: 'workflow.action_beats.action_plan.system',
+    }));
+  const repairSystemPrompt =
+    args.repairSystemPrompt ??
+    (await loadSystemPrompt({
+      prisma: args.prisma,
+      teamId: args.teamId,
+      key: 'workflow.action_beats.action_plan.repair.system',
+    }));
+
+  const messages = buildActionPlanPrompt({ ...args, systemPrompt });
 
   const out = await generateJsonWithValidation<ActionPlanJson>({
     providerConfig: args.providerConfig,
@@ -822,7 +853,8 @@ export async function generateActionPlanJson(args: {
     responseFormat: ACTION_PLAN_RESPONSE_FORMAT,
     parse: (json) => ActionPlanJsonSchema.safeParse(json),
     semanticValidate: validateActionPlanContinuity,
-    buildRepairMessages: (rawJson, issues) => buildActionPlanRepairPrompt({ rawJson, issues }),
+    buildRepairMessages: (rawJson, issues) =>
+      buildActionPlanRepairPrompt({ systemPrompt: repairSystemPrompt, rawJson, issues }),
     maxAttempts: 2,
   });
 
@@ -830,14 +862,33 @@ export async function generateActionPlanJson(args: {
 }
 
 export async function generateKeyframeGroupJson(args: {
+  prisma: PrismaClient;
+  teamId: string;
   providerConfig: ProviderChatConfig;
   sceneAnchorJson: string;
   styleFullPrompt: string;
   cast: Array<{ id: string; name: string }>;
   beat: ActionBeat;
   prevEndFrameSpec?: FrameSpec | null;
+  systemPrompt?: string;
+  repairSystemPrompt?: string;
 }): Promise<{ group: KeyframeGroup; tokenUsage?: TokenUsage }> {
-  const messages = buildKeyframeGroupPrompt(args);
+  const systemPrompt =
+    args.systemPrompt ??
+    (await loadSystemPrompt({
+      prisma: args.prisma,
+      teamId: args.teamId,
+      key: 'workflow.action_beats.keyframe_group.system',
+    }));
+  const repairSystemPrompt =
+    args.repairSystemPrompt ??
+    (await loadSystemPrompt({
+      prisma: args.prisma,
+      teamId: args.teamId,
+      key: 'workflow.action_beats.keyframe_group.repair.system',
+    }));
+
+  const messages = buildKeyframeGroupPrompt({ ...args, systemPrompt });
 
   const out = await generateJsonWithValidation<KeyframeGroup>({
     providerConfig: args.providerConfig,
@@ -845,7 +896,8 @@ export async function generateKeyframeGroupJson(args: {
     responseFormat: KEYFRAME_GROUP_RESPONSE_FORMAT,
     parse: (json) => KeyframeGroupSchema.safeParse(json),
     semanticValidate: validateKeyframeGroup,
-    buildRepairMessages: (rawJson, issues) => buildKeyframeGroupRepairPrompt({ rawJson, issues }),
+    buildRepairMessages: (rawJson, issues) =>
+      buildKeyframeGroupRepairPrompt({ systemPrompt: repairSystemPrompt, rawJson, issues }),
     maxAttempts: 2,
   });
 
@@ -872,6 +924,8 @@ function validateCameraContinuity(prev: KeyframeGroup, next: KeyframeGroup): Val
 }
 
 export async function generateKeyframeGroupsJson(args: {
+  prisma: PrismaClient;
+  teamId: string;
   providerConfig: ProviderChatConfig;
   sceneId: string;
   sceneAnchorJson: string;
@@ -879,6 +933,22 @@ export async function generateKeyframeGroupsJson(args: {
   cast: Array<{ id: string; name: string }>;
   beats: ActionBeat[];
 }): Promise<{ keyframeGroups: KeyframeGroupsJson; tokenUsage?: TokenUsage }> {
+  const keyframeGroupSystemPrompt = await loadSystemPrompt({
+    prisma: args.prisma,
+    teamId: args.teamId,
+    key: 'workflow.action_beats.keyframe_group.system',
+  });
+  const keyframeGroupRepairSystemPrompt = await loadSystemPrompt({
+    prisma: args.prisma,
+    teamId: args.teamId,
+    key: 'workflow.action_beats.keyframe_group.repair.system',
+  });
+  const continuityRepairSystemPrompt = await loadSystemPrompt({
+    prisma: args.prisma,
+    teamId: args.teamId,
+    key: 'workflow.action_beats.continuity_repair.system',
+  });
+
   const groups: KeyframeGroup[] = [];
   let tokenUsage: TokenUsage | undefined;
   let prevEnd: FrameSpec | null = null;
@@ -886,12 +956,16 @@ export async function generateKeyframeGroupsJson(args: {
 
   for (const beat of args.beats) {
     const res = await generateKeyframeGroupJson({
+      prisma: args.prisma,
+      teamId: args.teamId,
       providerConfig: args.providerConfig,
       sceneAnchorJson: args.sceneAnchorJson,
       styleFullPrompt: args.styleFullPrompt,
       cast: args.cast,
       beat,
       prevEndFrameSpec: prevEnd,
+      systemPrompt: keyframeGroupSystemPrompt,
+      repairSystemPrompt: keyframeGroupRepairSystemPrompt,
     });
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage);
 
@@ -906,13 +980,15 @@ export async function generateKeyframeGroupsJson(args: {
         const repaired = await generateJsonWithValidation<KeyframeGroup>({
           providerConfig: args.providerConfig,
           messages: buildKeyframeGroupRepairPrompt({
+            systemPrompt: keyframeGroupRepairSystemPrompt,
             rawJson: JSON.stringify(group, null, 2),
             issues: camIssues,
           }),
           responseFormat: KEYFRAME_GROUP_RESPONSE_FORMAT,
           parse: (json) => KeyframeGroupSchema.safeParse(json),
           semanticValidate: validateKeyframeGroup,
-          buildRepairMessages: (rawJson, issues) => buildKeyframeGroupRepairPrompt({ rawJson, issues }),
+          buildRepairMessages: (rawJson, issues) =>
+            buildKeyframeGroupRepairPrompt({ systemPrompt: keyframeGroupRepairSystemPrompt, rawJson, issues }),
           maxAttempts: 2,
         });
         tokenUsage = mergeTokenUsage(tokenUsage, repaired.tokenUsage);
@@ -924,10 +1000,13 @@ export async function generateKeyframeGroupsJson(args: {
       const continuityIssues = validateContinuity(prevEnd, group.frames.start.frame_spec);
       if (continuityIssues.length) {
         const repaired = await repairContinuityJson({
+          prisma: args.prisma,
+          teamId: args.teamId,
           providerConfig: args.providerConfig,
           prevEnd,
           nextStart: group.frames.start.frame_spec,
           beatSummary: beat.beat_summary,
+          systemPrompt: continuityRepairSystemPrompt,
         });
         tokenUsage = mergeTokenUsage(tokenUsage, repaired.tokenUsage);
         group.frames.start.frame_spec = repaired.frameSpec;
@@ -944,13 +1023,15 @@ export async function generateKeyframeGroupsJson(args: {
       const repaired = await generateJsonWithValidation<KeyframeGroup>({
         providerConfig: args.providerConfig,
         messages: buildKeyframeGroupRepairPrompt({
+          systemPrompt: keyframeGroupRepairSystemPrompt,
           rawJson: JSON.stringify(group, null, 2),
           issues: semIssues,
         }),
         responseFormat: KEYFRAME_GROUP_RESPONSE_FORMAT,
         parse: (json) => KeyframeGroupSchema.safeParse(json),
         semanticValidate: validateKeyframeGroup,
-        buildRepairMessages: (rawJson, issues) => buildKeyframeGroupRepairPrompt({ rawJson, issues }),
+        buildRepairMessages: (rawJson, issues) =>
+          buildKeyframeGroupRepairPrompt({ systemPrompt: keyframeGroupRepairSystemPrompt, rawJson, issues }),
         maxAttempts: 2,
       });
       tokenUsage = mergeTokenUsage(tokenUsage, repaired.tokenUsage);
@@ -976,12 +1057,22 @@ export async function generateKeyframeGroupsJson(args: {
 }
 
 export async function repairContinuityJson(args: {
+  prisma: PrismaClient;
+  teamId: string;
   providerConfig: ProviderChatConfig;
   prevEnd: FrameSpec;
   nextStart: FrameSpec;
   beatSummary: string;
+  systemPrompt?: string;
 }): Promise<{ frameSpec: FrameSpec; tokenUsage?: TokenUsage }> {
-  const messages = buildContinuityRepairPrompt(args);
+  const systemPrompt =
+    args.systemPrompt ??
+    (await loadSystemPrompt({
+      prisma: args.prisma,
+      teamId: args.teamId,
+      key: 'workflow.action_beats.continuity_repair.system',
+    }));
+  const messages = buildContinuityRepairPrompt({ ...args, systemPrompt });
   const out = await generateJsonWithValidation<FrameSpec>({
     providerConfig: args.providerConfig,
     messages,
@@ -1000,7 +1091,15 @@ export async function repairContinuityJson(args: {
       }
       return issues;
     },
-    buildRepairMessages: (rawJson, issues) => buildKeyframeGroupRepairPrompt({ rawJson, issues }),
+    buildRepairMessages: (rawJson, issues) =>
+      buildContinuityRepairRepairPrompt({
+        systemPrompt,
+        prevEnd: args.prevEnd,
+        nextStart: args.nextStart,
+        beatSummary: args.beatSummary,
+        rawJson,
+        issues,
+      }),
     maxAttempts: 2,
   });
   return { frameSpec: out.json, tokenUsage: out.tokenUsage };

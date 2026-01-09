@@ -11,6 +11,7 @@ import { AIProfilesModule } from './ai-profiles/ai-profiles.module.js';
 import { HealthController } from './health/health.controller.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { EpisodesModule } from './episodes/episodes.module.js';
+import { SystemPromptsModule } from './system-prompts/system-prompts.module.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { EpisodesModule } from './episodes/episodes.module.js';
     WorldViewModule,
     AIProfilesModule,
     JobsModule,
+    SystemPromptsModule,
   ],
   controllers: [HealthController],
 })

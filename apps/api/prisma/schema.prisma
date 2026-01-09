@@ -92,6 +92,7 @@ model Team {
   members   TeamMember[]
   projects  Project[]
   aiProfiles AIProfile[]
+  systemPrompts SystemPrompt[]
   auditLogs AuditLog[]
   jobs      AIJob[]
   narrativeCausalChainVersions NarrativeCausalChainVersion[]
@@ -326,4 +327,18 @@ model AIJob {
 
   @@index([teamId, createdAt(sort: Desc)])
   @@index([status])
+}
+
+model SystemPrompt {
+  id        String   @id @default(cuid())
+  teamId    String
+  key       String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, key])
+  @@index([teamId, updatedAt(sort: Desc)])
 }

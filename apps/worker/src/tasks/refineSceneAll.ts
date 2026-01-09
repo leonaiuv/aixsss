@@ -7,6 +7,7 @@ import { fixStructuredOutput } from './formatFix.js';
 import { styleFullPrompt, toProviderChatConfig, type TokenUsage, mergeTokenUsage } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript, type PanelScriptV1 } from './panelScriptHints.js';
 import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupToLegacyShotPrompt } from './actionBeats.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 
 function isPrismaNotFoundError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2025';
@@ -91,61 +92,26 @@ function computeDialogueMetrics(dialogues: Array<{ content?: unknown }>): {
   };
 }
 
-function buildSceneAnchorPrompt(args: {
+function buildSceneAnchorUserPrompt(args: {
   style: string;
   currentSummary: string;
   prevSummary: string;
   panelHints: string;
 }): string {
-  return `你是专业的提示词工程师与分镜助理。请为"当前分镜"输出可复用的「场景锚点 Scene Anchor」JSON，用于保证多张关键帧/多家图生视频的场景一致性。
-
-## 输入
-视觉风格参考（可轻量融入，不要堆砌质量词）:
-${args.style}
-
-当前分镜概要:
-${args.currentSummary}
-
-上一分镜概要（仅用于理解衔接，不要把人物/动作写进场景锚点）:
-${args.prevSummary}
-${args.panelHints}
-
-## 重要约束
-1. 只描述"环境/空间/光线/固定锚点物"，绝对不要出现人物、不要写角色代入、不要写动作、不要写镜头运动。
-2. anchors 数组里要包含 4-8 个可被稳定复现的锚点元素。
-3. 只输出 JSON，不要代码块、不要解释、不要多余文字。
-
-## 输出格式（严格 JSON）
-{
-  "scene": {
-    "zh": "场景整体描述（一段话，60-120字）",
-    "en": "Overall scene description"
-  },
-  "location": {
-    "type": "室内/室外/虚拟空间",
-    "name": "具体地点名称",
-    "details": "空间结构与布局细节"
-  },
-  "lighting": {
-    "type": "自然光/人工光/混合光",
-    "direction": "光源方向",
-    "color": "光线色温或颜色",
-    "intensity": "光照强度描述"
-  },
-  "atmosphere": {
-    "mood": "氛围情绪基调",
-    "weather": "天气状况",
-    "timeOfDay": "时间段"
-  },
-  "anchors": {
-    "zh": ["锚点物1", "锚点物2", "锚点物3", "..."],
-    "en": ["anchor1", "anchor2", "anchor3", "..."]
-  },
-  "avoid": {
-    "zh": "不要出现的元素",
-    "en": "Elements to avoid"
-  }
-}`;
+  return [
+    '## 输入',
+    '视觉风格参考（可轻量融入，不要堆砌质量词）:',
+    args.style || '-',
+    '',
+    '当前分镜概要:',
+    args.currentSummary || '-',
+    '',
+    '上一分镜概要（仅用于理解衔接，不要把人物/动作写进场景锚点）:',
+    args.prevSummary || '-',
+    args.panelHints || '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function buildKeyframePrompt(args: {
@@ -206,48 +172,20 @@ ${args.panelHints}
 }`;
 }
 
-function buildMotionPrompt(args: { sceneAnchor: string; shotPrompt: string; panelHints: string }): string {
-  return `你是图生视频(I2V)提示词工程师。请基于三关键帧 JSON 生成"描述变化"的运动/时空提示词JSON。
-
-## 输入
-场景锚点 JSON:
-${args.sceneAnchor}
-
-三关键帧 JSON:
-${args.shotPrompt}
-${args.panelHints}
-
-## 关键规则
-1. 只描述"从 KF0→KF1→KF2 发生了什么变化"，不要重述静态画面细节。
-2. 变化分三类：主体变化 / 镜头变化 / 环境变化。
-3. 强约束：保持人物身份一致、背景锚点不变、禁止新增物体、禁止场景跳变。
-4. 只输出 JSON，不要代码块、不要解释、不要多余文字。
-
-## 输出格式（严格 JSON）
-{
-  "motion": {
-    "short": {
-      "zh": "简短运动描述",
-      "en": "Short motion description"
-    },
-    "beats": {
-      "zh": { "0-1s": "...", "1-2s": "...", "2-3s": "..." },
-      "en": { "0-1s": "...", "1-2s": "...", "2-3s": "..." }
-    }
-  },
-  "changes": {
-    "subject": { "zh": [...], "en": [...] },
-    "camera": { "zh": [...], "en": [...] },
-    "environment": { "zh": [...], "en": [...] }
-  },
-  "constraints": {
-    "zh": "约束条件",
-    "en": "Constraints"
-  }
-}`;
+function buildMotionUserPrompt(args: { sceneAnchor: string; shotPrompt: string; panelHints: string }): string {
+  return [
+    '场景锚点 JSON:',
+    args.sceneAnchor || '-',
+    '',
+    '三关键帧 JSON:',
+    args.shotPrompt || '-',
+    args.panelHints || '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
-function buildDialoguePrompt(args: {
+function buildDialogueUserPrompt(args: {
   sceneSummary: string;
   sceneAnchor: string;
   shotPrompt: string;
@@ -255,30 +193,30 @@ function buildDialoguePrompt(args: {
   characters: string;
   panelHints: string;
 }): string {
-  return `你是专业影视编剧。请生成可直接用于字幕/配音的台词，确保与关键帧/运动节拍一致且简洁。
+  return [
+    '分镜概要:',
+    args.sceneSummary || '-',
+    '',
+    '场景锚点（环境一致性）:',
+    args.sceneAnchor || '-',
+    '',
+    '三关键帧（静止）:',
+    args.shotPrompt || '-',
+    '',
+    '运动/时空提示词:',
+    args.motionPrompt || '-',
+    '',
+    '场景中的角色:',
+    args.characters || '-',
+    args.panelHints || '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
 
-分镜概要:
-${args.sceneSummary}
-
-场景锚点:
-${args.sceneAnchor}
-
-三关键帧:
-${args.shotPrompt}
-
-运动提示词:
-${args.motionPrompt}
-
-角色:
-${args.characters}
-${args.panelHints}
-
-输出要求：每条台词一行，格式：
-- [对白|情绪] 角色名: 台词内容
-- [独白|情绪] 角色名: 台词内容
-- [心理|情绪] 角色名: 台词内容
-- [旁白] 台词内容
-只输出 1-6 行，不要解释。`;
+function buildDialogueFixUserPrompt(raw: string): string {
+  const original = raw?.trim() ?? '';
+  return ['原始内容：', '<<<', original, '>>>'].join('\n');
 }
 
 function parseDialogueLines(text: string): Array<{ id: string; type: string; content: string; order: number; characterName?: string }> {
@@ -307,9 +245,11 @@ function parseDialogueLines(text: string): Array<{ id: string; type: string; con
   return parsed;
 }
 
-async function doChat(config: { providerConfig: ReturnType<typeof toProviderChatConfig>; prompt: string }): Promise<{ content: string; tokenUsage?: TokenUsage }> {
-  const messages: ChatMessage[] = [{ role: 'user', content: config.prompt }];
-  return chatWithProvider(config.providerConfig, messages);
+async function doChat(config: {
+  providerConfig: ReturnType<typeof toProviderChatConfig>;
+  messages: ChatMessage[];
+}): Promise<{ content: string; tokenUsage?: TokenUsage }> {
+  return chatWithProvider(config.providerConfig, config.messages);
 }
 
 export async function refineSceneAll(args: {
@@ -393,17 +333,28 @@ export async function refineSceneAll(args: {
       throw err;
     }
 
+    const anchorSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.scene_anchor.system',
+    });
+    const anchorUserPrompt = buildSceneAnchorUserPrompt({
+      style: styleFullPrompt(project),
+      currentSummary: scene.summary || '-',
+      prevSummary: prev?.summary || '-',
+      panelHints,
+    });
     const anchorRes = await doChat({
       providerConfig,
-      prompt: buildSceneAnchorPrompt({
-        style: styleFullPrompt(project),
-        currentSummary: scene.summary || '-',
-        prevSummary: prev?.summary || '-',
-        panelHints,
-      }),
+      messages: [
+        { role: 'system', content: anchorSystemPrompt },
+        { role: 'user', content: anchorUserPrompt },
+      ],
     });
     tokens = mergeTokenUsage(tokens, anchorRes.tokenUsage);
     const anchorFixed = await fixStructuredOutput({
+      prisma,
+      teamId,
       providerConfig,
       type: 'scene_anchor',
       raw: anchorRes.content,
@@ -453,6 +404,8 @@ export async function refineSceneAll(args: {
 
     try {
       const actionPlanRes = await generateActionPlanJson({
+        prisma,
+        teamId,
         providerConfig,
         sceneId,
         sceneSummary: scene.summary || '-',
@@ -466,6 +419,8 @@ export async function refineSceneAll(args: {
 
       await updateProgress({ pct: 45, message: '生成 KeyframeGroups（按 beats）...' });
       const keyframeGroupsRes = await generateKeyframeGroupsJson({
+        prisma,
+        teamId,
         providerConfig,
         sceneId,
         sceneAnchorJson: anchorContent,
@@ -483,16 +438,23 @@ export async function refineSceneAll(args: {
 
       const kfRes = await doChat({
         providerConfig,
-        prompt: buildKeyframePrompt({
-          style: styleFullPrompt(project),
-          currentSummary: scene.summary || '-',
-          sceneAnchor: anchorContent,
-          characters: project.protagonist || '-',
-          panelHints,
-        }),
+        messages: [
+          {
+            role: 'user',
+            content: buildKeyframePrompt({
+              style: styleFullPrompt(project),
+              currentSummary: scene.summary || '-',
+              sceneAnchor: anchorContent,
+              characters: project.protagonist || '-',
+              panelHints,
+            }),
+          },
+        ],
       });
       tokens = mergeTokenUsage(tokens, kfRes.tokenUsage);
       const kfFixed = await fixStructuredOutput({
+        prisma,
+        teamId,
         providerConfig,
         type: 'keyframe_prompt',
         raw: kfRes.content,
@@ -530,16 +492,27 @@ export async function refineSceneAll(args: {
     throw err;
   }
 
+  const motionSystemPrompt = await loadSystemPrompt({
+    prisma,
+    teamId,
+    key: 'workflow.motion_prompt.system',
+  });
+  const motionUserPrompt = buildMotionUserPrompt({
+    sceneAnchor: anchorContent,
+    shotPrompt: keyframeContent,
+    panelHints,
+  });
   const motionRes = await doChat({
     providerConfig,
-    prompt: buildMotionPrompt({
-      sceneAnchor: anchorContent,
-      shotPrompt: keyframeContent,
-      panelHints,
-    }),
+    messages: [
+      { role: 'system', content: motionSystemPrompt },
+      { role: 'user', content: motionUserPrompt },
+    ],
   });
   tokens = mergeTokenUsage(tokens, motionRes.tokenUsage);
   const motionFixed = await fixStructuredOutput({
+    prisma,
+    teamId,
     providerConfig,
     type: 'motion_prompt',
     raw: motionRes.content,
@@ -562,29 +535,57 @@ export async function refineSceneAll(args: {
 
   // 4) Dialogue
   await updateProgress({ pct: 80, message: '生成台词...' });
+  const dialogueSystemPrompt = await loadSystemPrompt({
+    prisma,
+    teamId,
+    key: 'workflow.dialogue.system',
+  });
+  const dialogueUserPrompt = buildDialogueUserPrompt({
+    sceneSummary: scene.summary || '-',
+    sceneAnchor: anchorContent,
+    shotPrompt: keyframeContent,
+    motionPrompt: motionFixed.content,
+    characters: project.protagonist || '-',
+    panelHints,
+  });
   const dialogueRes = await doChat({
     providerConfig,
-    prompt: buildDialoguePrompt({
-      sceneSummary: scene.summary || '-',
-      sceneAnchor: anchorContent,
-      shotPrompt: keyframeContent,
-      motionPrompt: motionFixed.content,
-      characters: project.protagonist || '-',
-      panelHints,
-    }),
+    messages: [
+      { role: 'system', content: dialogueSystemPrompt },
+      { role: 'user', content: dialogueUserPrompt },
+    ],
   });
   tokens = mergeTokenUsage(tokens, dialogueRes.tokenUsage);
 
   let dialogues = parseDialogueLines(dialogueRes.content);
+
   if (dialogues.length === 0 && dialogueRes.content?.trim()) {
-    dialogues = [
-      {
-        id: `dlg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-        type: 'narration',
-        content: dialogueRes.content.trim(),
-        order: 1,
-      },
-    ];
+    const fixSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.dialogue.fix.system',
+    });
+    const fixUserPrompt = buildDialogueFixUserPrompt(dialogueRes.content);
+    const fixedRes = await doChat({
+      providerConfig,
+      messages: [
+        { role: 'system', content: fixSystemPrompt },
+        { role: 'user', content: fixUserPrompt },
+      ],
+    });
+    tokens = mergeTokenUsage(tokens, fixedRes.tokenUsage);
+    dialogues = parseDialogueLines(fixedRes.content);
+
+    if (dialogues.length === 0 && fixedRes.content?.trim()) {
+      dialogues = [
+        {
+          id: `dlg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+          type: 'narration',
+          content: fixedRes.content.trim(),
+          order: 1,
+        },
+      ];
+    }
   }
   if (dialogues.length === 0) {
     dialogues = [

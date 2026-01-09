@@ -134,7 +134,7 @@ describe('generateEpisodeCoreExpression', () => {
       role: string;
       content: string;
     }>;
-    const prompt = messages[0]?.content ?? '';
+    const prompt = messages.find((m) => m.role === 'user')?.content ?? '';
 
     expect(prompt).toContain('相邻集衔接');
     expect(prompt).toContain('上一集（若有）：');
@@ -209,7 +209,7 @@ describe('generateEpisodeCoreExpression', () => {
       role: string;
       content: string;
     }>;
-    const prompt = messages[0]?.content ?? '';
+    const prompt = messages.find((m) => m.role === 'user')?.content ?? '';
 
     expect(prompt).toContain('Core Expression（若已生成，按字符截断）：null');
   });
@@ -280,7 +280,7 @@ describe('generateEpisodeCoreExpression', () => {
       role: string;
       content: string;
     }>;
-    const prompt = messages[0]?.content ?? '';
+    const prompt = messages.find((m) => m.role === 'user')?.content ?? '';
 
     const outlineLine = prompt.match(/Outline（按字符截断）：([^\n]*)/);
     expect(outlineLine?.[1]).toBeTruthy();

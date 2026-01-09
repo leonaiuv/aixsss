@@ -4,6 +4,7 @@ import type { ChatMessage } from '../providers/types.js';
 import { chatWithProvider } from '../providers/index.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { isRecord, styleFullPrompt, toProviderChatConfig } from './common.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 
 function parseSceneList(text: string, limit: number): string[] {
   return text
@@ -114,7 +115,7 @@ function formatNarrativeCausalChain(contextCache: unknown): string {
   return pushUntil(lines, 12000);
 }
 
-function buildPrompt(args: {
+function buildUserPrompt(args: {
   storySynopsis: string;
   artStyle: string;
   worldView: string;
@@ -123,39 +124,35 @@ function buildPrompt(args: {
   episode: { order: number; title: string; summary: string; outline: unknown; coreExpression: unknown };
   sceneCount: number;
 }): string {
-  return `你是一位专业的分镜师。请基于以下信息，为“当前集”生成 ${args.sceneCount} 条分镜概要（每条 15-30 字），覆盖起承转合与视觉冲击点。
-
-输出格式要求：
-1) 纯文本输出（不要 JSON/Markdown/代码块）
-2) 每行一条分镜，建议以“1.”、“2.”编号开头
-
-全局设定：
-- 故事梗概：
-${args.storySynopsis}
-
-- 画风（完整提示词）：
-${args.artStyle}
-
-- 世界观要素：
-${args.worldView}
-
-- 角色库：
-${args.characters}
-
-- 叙事因果链（结构化叙事骨架；若提供，请与其保持一致）：
-${args.narrativeCausalChain ?? '-'}
-
-当前集：
-- 集数：第 ${args.episode.order} 集
-- 标题：${args.episode.title || '-'}
-- 一句话概要：${args.episode.summary || '-'}
-- Outline（可能是结构化 JSON）：
-${JSON.stringify(args.episode.outline ?? null)}
-
-- Core Expression（结构化 JSON）：
-${JSON.stringify(args.episode.coreExpression ?? null)}
-
-请开始生成：`;
+  return [
+    `目标分镜数：${args.sceneCount}`,
+    '',
+    '全局设定：',
+    '- 故事梗概：',
+    args.storySynopsis || '-',
+    '',
+    '- 画风（完整提示词）：',
+    args.artStyle || '-',
+    '',
+    '- 世界观要素：',
+    args.worldView || '-',
+    '',
+    '- 角色库：',
+    args.characters || '-',
+    '',
+    '- 叙事因果链（结构化叙事骨架；若提供，请与其保持一致）：',
+    args.narrativeCausalChain ?? '-',
+    '',
+    '当前集：',
+    `- 集数：第 ${args.episode.order} 集`,
+    `- 标题：${args.episode.title || '-'}`,
+    `- 一句话概要：${args.episode.summary || '-'}`,
+    '- Outline（可能是结构化 JSON）：',
+    JSON.stringify(args.episode.outline ?? null),
+    '',
+    '- Core Expression（结构化 JSON）：',
+    JSON.stringify(args.episode.coreExpression ?? null),
+  ].join('\n');
 }
 
 export async function generateEpisodeSceneList(args: {
@@ -211,7 +208,13 @@ export async function generateEpisodeSceneList(args: {
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
 
-  const prompt = buildPrompt({
+  const systemPrompt = await loadSystemPrompt({
+    prisma,
+    teamId,
+    key: 'workflow.episode_scene_list.system',
+  });
+
+  const userPrompt = buildUserPrompt({
     storySynopsis: project.summary,
     artStyle: styleFullPrompt(project),
     worldView: formatWorldView(worldViewElements),
@@ -233,7 +236,10 @@ export async function generateEpisodeSceneList(args: {
 
   await updateProgress({ pct: 25, message: '调用 AI 生成分镜列表...' });
 
-  const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ];
   const res = await chatWithProvider(providerConfig, messages);
 
   await updateProgress({ pct: 70, message: '解析与写入分镜...' });
@@ -267,4 +273,3 @@ export async function generateEpisodeSceneList(args: {
     tokenUsage: res.tokenUsage ?? null,
   };
 }
-

@@ -6,6 +6,7 @@ import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { isRecord, mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { EpisodePlanSchema, type EpisodePlan } from '@aixsss/shared';
 import { parseJsonFromText } from './aiJson.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 
 function jsonSchemaFormat(name: string, schema: Record<string, unknown>) {
   return {
@@ -227,7 +228,7 @@ function formatNarrativeCausalChain(contextCache: Prisma.JsonValue | null): stri
   return pushUntil(lines, 12000);
 }
 
-function buildPrompt(args: {
+function buildUserPrompt(args: {
   storySynopsis: string;
   artStyle: string;
   worldView: string;
@@ -235,75 +236,32 @@ function buildPrompt(args: {
   narrativeCausalChain?: string;
   targetEpisodeCount?: number;
 }): string {
-  return `你是专业的剧集策划。请基于以下"全局设定"，生成可执行的 N 集规划。
-
-【重要】输出要求：
-1. 必须严格输出 **一个 JSON 对象**
-2. 不要输出任何 Markdown、代码块（如 \`\`\`json）、解释文字或多余字符
-3. 所有字段名必须使用英文（如 title, logline, sceneScope），不要用中文字段名
-4. 直接以 { 开头，以 } 结尾
-
-全局设定：
-- 故事梗概：
-${args.storySynopsis}
-
-- 画风（完整提示词）：
-${args.artStyle}
-
-- 世界观要素：
-${args.worldView}
-
-- 角色库：
-${args.characters}
-
-- 叙事因果链（结构化叙事骨架；若提供，请尽量保持一致，避免引入与其冲突的新核心矛盾）：
-${args.narrativeCausalChain ?? '-'}
-
-约束：
-- 推荐集数范围：1..24
-${typeof args.targetEpisodeCount === 'number' ? `- 这次必须输出 ${args.targetEpisodeCount} 集（episodeCount 必须等于该值）` : ''}
-- episodes.order 必须从 1 开始连续递增
-- episodeCount 必须等于 episodes.length
-- 每个 episode 必须包含 order, title, logline, mainCharacters, beats, sceneScope 字段
-- mainCharacters 请尽量从"角色库"里的名字中选择；如角色库为空，请输出空数组
-
-必须严格按照以下 JSON 结构输出（注意：字段名必须是英文）：
-{
-  "episodeCount": 8,
-  "reasoningBrief": "一句话解释为何是8集",
-  "episodes": [
-    {
-      "order": 1,
-      "title": "第1集标题",
-      "logline": "一句话概要（必填）",
-      "mainCharacters": ["角色A", "角色B"],
-      "beats": ["开场...", "冲突升级...", "转折...", "结尾钩子..."],
-      "sceneScope": "主要场景范围/地点/时间段（必填）",
-      "cliffhanger": "结尾钩子（可空）"
-    }
+  return [
+    typeof args.targetEpisodeCount === 'number'
+      ? `targetEpisodeCount（如设置则必须严格输出该集数）：${args.targetEpisodeCount}`
+      : '',
+    '全局设定：',
+    '- 故事梗概：',
+    args.storySynopsis || '-',
+    '',
+    '- 画风（完整提示词）：',
+    args.artStyle || '-',
+    '',
+    '- 世界观要素：',
+    args.worldView || '-',
+    '',
+    '- 角色库：',
+    args.characters || '-',
+    '',
+    '- 叙事因果链（结构化叙事骨架；若提供，请尽量保持一致，避免引入与其冲突的新核心矛盾）：',
+    args.narrativeCausalChain ?? '-',
   ]
+    .filter(Boolean)
+    .join('\n');
 }
 
-请直接输出 JSON：`;
-}
-
-function buildJsonFixPrompt(raw: string): string {
-  return `你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象。
-
-【重要】修复要求：
-1. 不要输出 Markdown、代码块（如 \`\`\`json）、解释或多余文字
-2. 所有字段名必须使用英文：episodeCount, reasoningBrief, episodes, order, title, logline, mainCharacters, beats, sceneScope, cliffhanger
-3. 直接以 { 开头，以 } 结尾
-4. episodeCount 必须等于 episodes.length
-5. episodes.order 必须从 1 开始连续递增
-6. 每个 episode 必须包含 order, title, logline, sceneScope 字段（都是必填的）
-
-原始输出：
-<<<
-${raw?.trim() ?? ''}
->>>
-
-请只输出修正后的 JSON：`;
+function buildJsonFixUserPrompt(raw: string): string {
+  return ['原始输出：', '<<<', raw?.trim() ?? '', '>>>'].join('\n');
 }
 
 function withMinimumMaxTokens(config: ReturnType<typeof toProviderChatConfig>, minMaxTokens: number) {
@@ -363,7 +321,13 @@ export async function planEpisodes(args: {
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
 
-  const prompt = buildPrompt({
+  const systemPrompt = await loadSystemPrompt({
+    prisma,
+    teamId,
+    key: 'workflow.plan_episodes.system',
+  });
+
+  const userPrompt = buildUserPrompt({
     storySynopsis: project.summary,
     artStyle: styleFullPrompt(project),
     worldView: formatWorldView(worldViewElements),
@@ -398,7 +362,10 @@ export async function planEpisodes(args: {
 
   await updateProgress({ pct: 25, message: '调用 AI 生成剧集规划...' });
 
-  const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ];
   const res = await chatWithProvider(providerConfig, messages);
   if (!res.content?.trim()) {
     throw new Error('AI 返回空内容（content 为空）。请检查模型/供应商可用性，或稍后重试。');
@@ -416,12 +383,20 @@ export async function planEpisodes(args: {
   } catch (err) {
     lastParseError = err instanceof Error ? err.message : String(err);
     const fixConfig = stableJsonFixConfig(providerConfig);
+    const fixSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.plan_episodes.json_fix.system',
+    });
     let lastErr: unknown = err;
     let ok = false;
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       await updateProgress({ pct: 60 + attempt, message: `尝试修复 JSON 输出（第${attempt}/3次）...` });
-      const fixMessages: ChatMessage[] = [{ role: 'user', content: buildJsonFixPrompt(res.content) }];
+      const fixMessages: ChatMessage[] = [
+        { role: 'system', content: fixSystemPrompt },
+        { role: 'user', content: buildJsonFixUserPrompt(res.content) },
+      ];
       const fixedRes = await chatWithProvider(fixConfig, fixMessages);
       if (!fixedRes.content?.trim()) {
         lastErr = new Error(

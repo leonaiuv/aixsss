@@ -17,6 +17,7 @@ import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
 import { Kbd } from '@/components/ui/kbd';
+import { isApiMode } from '@/lib/runtime/mode';
 import {
   Home,
   Search,
@@ -27,6 +28,7 @@ import {
   LogOut,
   BookOpen,
   Sparkles,
+  ScrollText,
 } from 'lucide-react';
 
 interface AppSidebarProps {
@@ -43,6 +45,7 @@ export function AppSidebar({ onSearch, onConfig, onSettings }: AppSidebarProps) 
   const { isPanelVisible, togglePanel } = useAIProgressStore();
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
+  const apiMode = isApiMode();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -105,6 +108,19 @@ export function AppSidebar({ onSearch, onConfig, onSettings }: AppSidebarProps) 
                   <span>AI 设置</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              {apiMode && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={isActive('/system-prompts')}
+                    onClick={() => navigate('/system-prompts')}
+                    tooltip="系统提示词"
+                  >
+                    <ScrollText className="h-4 w-4" />
+                    <span>系统提示词</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
 
               <SidebarMenuItem>
                 <SidebarMenuButton

@@ -1,6 +1,8 @@
+import type { PrismaClient } from '@prisma/client';
 import type { ChatMessage, ChatResult, ProviderChatConfig } from '../providers/types.js';
 import { chatWithProvider } from '../providers/index.js';
 import { mergeTokenUsage, type TokenUsage } from './common.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 
 export type FixableOutputType = 'scene_anchor' | 'keyframe_prompt' | 'motion_prompt';
 
@@ -86,131 +88,34 @@ export function cleanJsonOutput(text: string): string {
   return result.cleaned ?? text.trim();
 }
 
-export function buildFormatFixPrompt(type: FixableOutputType, raw: string): string {
-  const original = raw?.trim() ?? '';
-
-  if (type === 'scene_anchor') {
-    return `你刚才的输出不符合"可解析JSON格式"。请把下面"原始内容"重新整理为严格的 JSON 格式。
-
-要求：
-1) 尽量保留原始信息，只做"重排/补齐"，不要新增世界观设定或无关细节。
-2) 场景锚点只描述环境/空间/光线/固定物件，不要人物，不要动作，不要镜头运动。
-3) 只输出 JSON，不要代码块、不要解释、不要多余文字。
-
-原始内容：
-<<<
-${original}
->>>
-
-输出格式（严格 JSON）：
-{
-  "scene": {
-    "zh": "场景整体描述",
-    "en": "Overall scene description"
-  },
-  "location": {
-    "type": "室内/室外/虚拟空间",
-    "name": "具体地点名称",
-    "details": "空间结构与布局细节"
-  },
-  "lighting": {
-    "type": "自然光/人工光/混合光",
-    "direction": "光源方向",
-    "color": "光线色温或颜色",
-    "intensity": "光照强度描述"
-  },
-  "atmosphere": {
-    "mood": "氛围情绪基调",
-    "weather": "天气状况",
-    "timeOfDay": "时间段"
-  },
-  "anchors": {
-    "zh": ["锚点物1", "锚点物2", "..."],
-    "en": ["anchor1", "anchor2", "..."]
-  },
-  "avoid": {
-    "zh": "不要出现的元素",
-    "en": "Elements to avoid"
-  }
-}`;
-  }
-
-  if (type === 'keyframe_prompt') {
-    return `你刚才的输出不符合"可解析JSON格式"。请把下面"原始内容"重新整理为严格的 JSON 格式。
-
-要求：
-1) 尽量保留原始信息，只做"重排/补齐"，不要新增与原始无关的剧情或设定。
-2) 每个关键帧都是"静止定格瞬间"，避免 then/after/随后/然后/开始/逐渐 等连续过程词。
-3) 只输出 JSON，不要代码块、不要解释、不要多余文字。
-
-原始内容：
-<<<
-${original}
->>>
-
-输出格式（严格 JSON）：
-{
-  "camera": {
-    "type": "特写/中景/全景/远景",
-    "angle": "正面/侧面/俯视/仰视",
-    "aspectRatio": "画面比例"
-  },
-  "keyframes": {
-    "KF0": {
-      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
-      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
-    },
-    "KF1": { "zh": {...}, "en": {...} },
-    "KF2": { "zh": {...}, "en": {...} }
-  },
-  "avoid": {
-    "zh": "避免元素",
-    "en": "Elements to avoid"
-  }
-}`;
-  }
-
-  return `你刚才的输出不符合"可解析JSON格式"。请把下面"原始内容"重新整理为严格的 JSON 格式。
-
-要求：
-1) 只描述变化（KF0→KF1→KF2），不要重述静态画面细节。
-2) 只输出 JSON，不要代码块、不要解释、不要多余文字。
-
-原始内容：
-<<<
-${original}
->>>
-
-输出格式（严格 JSON）：
-{
-  "motion": {
-    "short": {
-      "zh": "简短运动描述",
-      "en": "Short motion description"
-    },
-    "beats": {
-      "zh": { "0-1s": "...", "1-2s": "...", "2-3s": "..." },
-      "en": { "0-1s": "...", "1-2s": "...", "2-3s": "..." }
+function systemPromptKey(type: FixableOutputType): string {
+  switch (type) {
+    case 'scene_anchor':
+      return 'workflow.format_fix.scene_anchor.system';
+    case 'keyframe_prompt':
+      return 'workflow.format_fix.keyframe_prompt.system';
+    case 'motion_prompt':
+      return 'workflow.format_fix.motion_prompt.system';
+    default: {
+      // exhaustive check
+      const neverType: never = type;
+      throw new Error(`Unknown fixable output type: ${String(neverType)}`);
     }
-  },
-  "changes": {
-    "subject": { "zh": [...], "en": [...] },
-    "camera": { "zh": [...], "en": [...] },
-    "environment": { "zh": [...], "en": [...] }
-  },
-  "constraints": {
-    "zh": "约束条件",
-    "en": "Constraints"
   }
-}`;
 }
 
-async function doChat(config: ProviderChatConfig, prompt: string): Promise<ChatResult> {
-  const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+export function buildFormatFixUserPrompt(raw: string): string {
+  const original = raw?.trim() ?? '';
+  return ['原始内容：', '<<<', original, '>>>'].join('\n');
+}
+
+async function doChat(config: ProviderChatConfig, messages: ChatMessage[]): Promise<ChatResult> {
   return chatWithProvider(config, messages);
 }
 
 export async function fixStructuredOutput(args: {
+  prisma: PrismaClient;
+  teamId: string;
   providerConfig: ProviderChatConfig;
   type: FixableOutputType;
   raw: string;
@@ -226,8 +131,16 @@ export async function fixStructuredOutput(args: {
   }
 
   // 需要修复
-  const fixPrompt = buildFormatFixPrompt(args.type, rawTrimmed);
-  const fixed = await doChat(args.providerConfig, fixPrompt);
+  const systemPrompt = await loadSystemPrompt({
+    prisma: args.prisma,
+    teamId: args.teamId,
+    key: systemPromptKey(args.type),
+  });
+  const fixUserPrompt = buildFormatFixUserPrompt(rawTrimmed);
+  const fixed = await doChat(args.providerConfig, [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: fixUserPrompt },
+  ]);
   const merged = mergeTokenUsage(args.tokenUsage, fixed.tokenUsage);
   const fixedCleaned = cleanJsonOutput(fixed.content ?? '');
 

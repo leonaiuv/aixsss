@@ -6,6 +6,7 @@ import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { isRecord, mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { CoreExpressionSchema, type CoreExpression } from '@aixsss/shared';
 import { parseJsonFromText } from './aiJson.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 
 function jsonSchemaFormat(name: string, schema: Record<string, unknown>) {
   return {
@@ -203,11 +204,7 @@ export function buildEpisodeCoreExpressionPrompt(args: {
   nextEpisode?: { order: number; title: string; summary: string; outline: unknown; coreExpression: unknown | null };
   episode: { order: number; title: string; summary: string; outline: unknown };
 }): string {
-  return `你是专业编剧/分镜总监。请基于“全局设定 + 本集概要”，生成该集的「核心表达 Core Expression」。
-
-必须严格输出 **一个 JSON 对象**，不要输出任何 Markdown、代码块、解释文字或多余字符。
-
-全局设定：
+  return `全局设定：
 - 故事梗概：
 ${args.storySynopsis}
 
@@ -247,32 +244,11 @@ ${args.characters}
 - 一句话概要：${args.episode.summary || '-'}
 - Outline（可能是结构化 JSON）：
 ${JSON.stringify(args.episode.outline ?? null)}
-
-输出 JSON Schema（示意）：
-{
-  "theme": "一句话主题",
-  "emotionalArc": ["起", "承", "转", "合"],
-  "coreConflict": "核心冲突描述",
-  "payoff": ["爽点/泪点/笑点/信息揭示"],
-  "visualMotifs": ["母题1", "母题2"],
-  "endingBeat": "结尾落点",
-  "nextHook": "下一集钩子（可空）"
-}`;
+`;
 }
 
-function buildJsonFixPrompt(raw: string): string {
-  return `你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象，不要输出 Markdown/代码块/解释/多余文字。
-
-要求：
-1) 必须是 JSON 对象，且可被 JSON.parse 直接解析
-2) emotionalArc 必须是长度为 4 的数组
-
-原始输出：
-<<<
-${raw?.trim() ?? ''}
->>>
-
-请只输出 JSON：`;
+function buildJsonFixUserPrompt(raw: string): string {
+  return ['原始输出：', '<<<', raw?.trim() ?? '', '>>>'].join('\n');
 }
 
 export async function generateEpisodeCoreExpression(args: {
@@ -335,7 +311,13 @@ export async function generateEpisodeCoreExpression(args: {
     ? (project.contextCache as Record<string, unknown>)
     : null;
 
-  const prompt = buildEpisodeCoreExpressionPrompt({
+  const systemPrompt = await loadSystemPrompt({
+    prisma,
+    teamId,
+    key: 'workflow.episode_core_expression.system',
+  });
+
+  const userPrompt = buildEpisodeCoreExpressionPrompt({
     storySynopsis: project.summary,
     artStyle: styleFullPrompt(project),
     worldView: formatWorldView(worldViewElements),
@@ -373,7 +355,10 @@ export async function generateEpisodeCoreExpression(args: {
 
   await updateProgress({ pct: 25, message: '调用 AI 生成核心表达...' });
 
-  const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ];
   const res = await chatWithProvider(providerConfig, messages);
   let tokenUsage = res.tokenUsage;
 
@@ -390,7 +375,15 @@ export async function generateEpisodeCoreExpression(args: {
     let ok = false;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       await updateProgress({ pct: 60 + attempt, message: `尝试修复 JSON 输出（第${attempt}/3次）...` });
-      const fixMessages: ChatMessage[] = [{ role: 'user', content: buildJsonFixPrompt(res.content) }];
+      const fixSystemPrompt = await loadSystemPrompt({
+        prisma,
+        teamId,
+        key: 'workflow.episode_core_expression.json_fix.system',
+      });
+      const fixMessages: ChatMessage[] = [
+        { role: 'system', content: fixSystemPrompt },
+        { role: 'user', content: buildJsonFixUserPrompt(res.content) },
+      ];
       const fixedRes = await chatWithProvider(fixConfig, fixMessages);
       tokenUsage = mergeTokenUsage(tokenUsage, fixedRes.tokenUsage);
       try {

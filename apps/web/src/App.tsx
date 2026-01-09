@@ -42,6 +42,9 @@ const DevPanelTrigger = lazy(() =>
 const ProjectSearch = lazy(() =>
   import('./components/editor/ProjectSearch').then((m) => ({ default: m.ProjectSearch })),
 );
+const SystemPromptsPage = lazy(() =>
+  import('./components/SystemPromptsPage').then((m) => ({ default: m.SystemPromptsPage })),
+);
 
 // 加载占位组件
 function LoadingFallback() {
@@ -184,6 +187,14 @@ function LocalApp() {
         <Route path="/" element={<ProjectList />} />
         <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
         <Route path="/projects/:projectId/legacy" element={<LegacyEditorRouteLoader />} />
+        <Route
+          path="/system-prompts"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <SystemPromptsPage />
+            </Suspense>
+          }
+        />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -333,6 +344,14 @@ function BackendApp() {
         <Route path="/" element={<ProjectList />} />
         <Route path="/projects/:projectId" element={<EditorRouteLoader />} />
         <Route path="/projects/:projectId/legacy" element={<LegacyEditorRouteLoader />} />
+        <Route
+          path="/system-prompts"
+          element={
+            <Suspense fallback={<LoadingFallback />}>
+              <SystemPromptsPage />
+            </Suspense>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

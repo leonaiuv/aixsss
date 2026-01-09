@@ -179,6 +179,8 @@ export async function generateKeyframePrompt(args: {
   try {
     await updateProgress({ pct: 20, message: '调用 AI 生成动作拆解（ActionPlan）...' });
     const actionPlanRes = await generateActionPlanJson({
+      prisma,
+      teamId,
       providerConfig,
       sceneId,
       sceneSummary: scene.summary || '-',
@@ -191,6 +193,8 @@ export async function generateKeyframePrompt(args: {
 
     await updateProgress({ pct: 55, message: '调用 AI 按 beat 生成三段式关键帧（KeyframeGroups）...' });
     const keyframeGroupsRes = await generateKeyframeGroupsJson({
+      prisma,
+      teamId,
       providerConfig,
       sceneId,
       sceneAnchorJson: scene.sceneDescription,
@@ -233,6 +237,8 @@ export async function generateKeyframePrompt(args: {
     await updateProgress({ pct: 60, message: '检查输出格式...' });
 
     const fixed = await fixStructuredOutput({
+      prisma,
+      teamId,
       providerConfig,
       type: 'keyframe_prompt',
       raw: res.content,
@@ -263,5 +269,4 @@ export async function generateKeyframePrompt(args: {
     };
   }
 }
-
 

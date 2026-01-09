@@ -5,6 +5,7 @@ import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { toProviderChatConfig } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 
 type DialogueType = 'dialogue' | 'monologue' | 'narration' | 'thought';
 
@@ -73,7 +74,7 @@ function parseDialoguesFromText(text: string): DialogueLine[] {
   return dialogues;
 }
 
-function buildPrompt(args: {
+function buildUserPrompt(args: {
   sceneSummary: string;
   sceneAnchor: string;
   shotPrompt: string;
@@ -81,59 +82,30 @@ function buildPrompt(args: {
   characters: string;
   panelHints: string;
 }): string {
-  return `你是专业影视编剧。请基于分镜信息生成可直接用于字幕/配音的台词，确保与关键帧/运动节拍一致且简洁有力。
-
-## 分镜概要
-${args.sceneSummary}
-
-## 场景锚点（环境一致性）
-${args.sceneAnchor}
-
-## 三关键帧（静止）
-${args.shotPrompt}
-
-## 运动/时空提示词（若已生成）
-${args.motionPrompt}
-
-## 场景中的角色
-${args.characters}
-${args.panelHints}
-
-## 台词类型说明
-1. 对白: 角色之间的对话
-2. 独白: 单个角色自言自语
-3. 旁白: 无角色的画外音叙述
-4. 心理: 角色的内心独白/思维活动
-
-## 情绪标注（可选）
-可用情绪：激动、兴奋、开心、快乐、悲伤、难过、愤怒、生气、恐惧、害怕、平静、冷静、惊讶、紧张、温柔、坚定
-
-## 输出格式要求（必须可解析）
-每条台词占一行，格式如下：
-- 对白/独白/心理: [类型|情绪] 角色名: 台词内容
-- 旁白: [旁白] 台词内容
-
-补充约束：
-1. 仅允许使用已勾选出场角色，不得引入未列出的角色。
-2. 1-6 行即可，越短越好，但要贴合画面与动作节拍。
-3. 如需标注时间点或画外/字幕提示，可把信息追加到情绪后面，用“|”分隔（保持可解析），示例：
-   [对白|惊讶|t=1.0s|画外] 林默: 抱歉，我…
-4. 只输出台词行，不要额外解释。`;
+  return [
+    '分镜概要:',
+    args.sceneSummary || '-',
+    '',
+    '场景锚点（环境一致性）:',
+    args.sceneAnchor || '-',
+    '',
+    '三关键帧（静止）:',
+    args.shotPrompt || '-',
+    '',
+    '运动/时空提示词:',
+    args.motionPrompt || '-',
+    '',
+    '场景中的角色:',
+    args.characters || '-',
+    args.panelHints || '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
-function buildDialogueFixPrompt(raw: string): string {
+function buildDialogueFixUserPrompt(raw: string): string {
   const original = raw?.trim() ?? '';
-  return `你的上一条回复没有按要求输出“可解析台词行”。请把下面内容改写为严格的台词行列表，并且【只输出台词行】。
-
-要求：
-1) 每行必须以 [对白|...] / [独白|...] / [旁白] / [心理|...] 开头
-2) 对白/独白/心理 必须包含“角色名: 台词内容”
-3) 仅输出 1-6 行，不要解释
-
-原始内容：
-<<<
-${original}
->>>`;
+  return ['原始内容：', '<<<', original, '>>>'].join('\n');
 }
 
 export async function generateDialogue(args: {
@@ -197,7 +169,13 @@ export async function generateDialogue(args: {
     }
   }
 
-  const prompt = buildPrompt({
+  const systemPrompt = await loadSystemPrompt({
+    prisma,
+    teamId,
+    key: 'workflow.dialogue.system',
+  });
+
+  const userPrompt = buildUserPrompt({
     sceneSummary: scene.summary || '-',
     sceneAnchor: scene.sceneDescription,
     shotPrompt: scene.shotPrompt,
@@ -212,7 +190,10 @@ export async function generateDialogue(args: {
 
   await updateProgress({ pct: 25, message: '调用 AI 生成台词...' });
 
-  const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ];
   const res = await chatWithProvider(providerConfig, messages);
 
   await updateProgress({ pct: 60, message: '解析台词...' });
@@ -222,8 +203,16 @@ export async function generateDialogue(args: {
   // If parsing fails, ask once more to reformat.
   if (dialogues.length === 0 && res.content?.trim()) {
     await updateProgress({ pct: 65, message: '输出不规范，正在纠偏...' });
-    const fixPrompt = buildDialogueFixPrompt(res.content);
-    const fixed = await chatWithProvider(providerConfig, [{ role: 'user', content: fixPrompt }]);
+    const fixSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.dialogue.fix.system',
+    });
+    const fixUserPrompt = buildDialogueFixUserPrompt(res.content);
+    const fixed = await chatWithProvider(providerConfig, [
+      { role: 'system', content: fixSystemPrompt },
+      { role: 'user', content: fixUserPrompt },
+    ]);
     dialogues = parseDialoguesFromText(fixed.content);
     if (dialogues.length === 0 && fixed.content?.trim()) {
       dialogues = [
@@ -280,4 +269,3 @@ export async function generateDialogue(args: {
     tokenUsage: res.tokenUsage ?? null,
   };
 }
-

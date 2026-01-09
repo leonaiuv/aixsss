@@ -5,6 +5,7 @@ import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { randomUUID } from 'node:crypto';
 import { mergeTokenUsage, toProviderChatConfig, styleFullPrompt, isRecord } from './common.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 import {
   NarrativeCausalChainSchema,
   Phase1ConflictEngineSchema,
@@ -398,46 +399,19 @@ function summarizeError(err: unknown): string {
 
 // ===================== 阶段1：核心冲突引擎 =====================
 
-function buildPhase1Prompt(args: {
+function buildPhase1UserPrompt(args: {
   storySynopsis: string;
   artStyle: string;
   worldView: string;
   characters: string;
 }): string {
-  return `你是叙事架构师。请基于设定生成【阶段1：故事大纲 + 核心冲突引擎】。
-
-【输出要求】直接输出 JSON，不要 Markdown/代码块/解释。
-
-【输入设定】
-- 故事梗概：${args.storySynopsis}
-- 画风：${args.artStyle}
-- 世界观：${args.worldView}
-- 角色库：${args.characters}
-
-【输出 JSON 结构】
-{
-  "outlineSummary": "用3-5句话概括完整故事流（起承转合）",
-  "conflictEngine": {
-    "coreObjectOrEvent": "核心冲突物件/事件（如：账册/失踪案/继承权）",
-    "stakesByFaction": {
-      "势力A": "该物件对势力A的功能与风险",
-      "势力B": "该物件对势力B的功能与风险"
-    },
-    "firstMover": {
-      "initiator": "发起者角色名",
-      "publicReason": "公开宣称的目的",
-      "hiddenIntent": "真实意图",
-      "legitimacyMask": "如何包装成'不得不做'的公事"
-    },
-    "necessityDerivation": [
-      "若不行动则______（损失）",
-      "若行动不加密则______（风险）",
-      "因此必须______（关键设计）"
-    ]
-  }
-}
-
-请输出 JSON：`;
+  return [
+    '输入设定：',
+    `- 故事梗概：${args.storySynopsis}`,
+    `- 画风：${args.artStyle}`,
+    `- 世界观：${args.worldView}`,
+    `- 角色库：${args.characters}`,
+  ].join('\n');
 }
 
 function parsePhase1(raw: string): { parsed: Phase1ConflictEngine; extractedJson: string } {
@@ -447,52 +421,23 @@ function parsePhase1(raw: string): { parsed: Phase1ConflictEngine; extractedJson
 
 // ===================== 阶段2：信息能见度层 + 角色矩阵 =====================
 
-function buildPhase2Prompt(args: {
+function buildPhase2UserPrompt(args: {
   storySynopsis: string;
   characters: string;
   phase1: Phase1ConflictEngine;
 }): string {
-  return `你是叙事架构师。请基于【阶段1结果】生成【阶段2：信息能见度层 + 角色矩阵】。
-
-【阶段1结果】
-- 故事大纲：${args.phase1.outlineSummary}
-- 核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}
-- 各方利害：${JSON.stringify(args.phase1.conflictEngine.stakesByFaction)}
-
-【角色库】${args.characters}
-
-【输出要求】
-1) 直接输出 JSON，不要 Markdown/代码块/解释
-2) 以 { 开头，以 } 结尾
-3) infoVisibilityLayers 至少 2-4 层（按知情权从高到低排列）
-4) characterMatrix 为角色库中的每个主要角色填写一项
-5) motivation.gain 和 motivation.lossAvoid 必须是 1-10 的整数（不要加引号）
-
-【输出 JSON 结构】
-{
-  "infoVisibilityLayers": [
-    {
-      "layerName": "顶层",
-      "roles": ["角色A"],
-      "infoBoundary": "知道全部真相",
-      "blindSpot": "不知道执行层的背叛",
-      "motivation": {"gain": 8, "lossAvoid": 3, "activationTrigger": "发现背叛"}
-    },
-    {
-      "layerName": "执行层",
-      "roles": ["角色B", "角色C"],
-      "infoBoundary": "只知道任务，不知道目的",
-      "blindSpot": "不知道自己是棋子",
-      "motivation": {"gain": 5, "lossAvoid": 7, "activationTrigger": "发现真相"}
-    }
-  ],
-  "characterMatrix": [
-    {"name": "角色A", "identity": "身份", "goal": "目标", "secret": "秘密", "vulnerability": "软肋"},
-    {"name": "角色B", "identity": "身份", "goal": "目标", "secret": "秘密", "vulnerability": "软肋"}
-  ]
-}
-
-请输出 JSON：`;
+  return [
+    '阶段1结果：',
+    `- 故事大纲：${args.phase1.outlineSummary}`,
+    `- 核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}`,
+    `- 各方利害：${JSON.stringify(args.phase1.conflictEngine.stakesByFaction)}`,
+    '',
+    '故事梗概：',
+    args.storySynopsis || '-',
+    '',
+    '角色库：',
+    args.characters || '-',
+  ].join('\n');
 }
 
 function parsePhase2(raw: string): { parsed: Phase2InfoLayers; extractedJson: string } {
@@ -505,49 +450,25 @@ function parsePhase2(raw: string): { parsed: Phase2InfoLayers; extractedJson: st
 type BeatOutline = { beatName: string; escalation?: number | null; interlock?: string | null };
 type ActOutline = { act: number; actName?: string | null; beats: BeatOutline[] };
 
-function buildPhase3OutlinePrompt(args: {
+function buildPhase3OutlineUserPrompt(args: {
   phase1: Phase1ConflictEngine;
   phase2: Phase2InfoLayers;
 }): string {
   const layerNames = (args.phase2.infoVisibilityLayers ?? []).map((l) => l.layerName).filter(Boolean).join('、');
   const characterNames = (args.phase2.characterMatrix ?? []).map((c) => c.name).filter(Boolean).join('、');
 
-  return `你是叙事架构师。请基于【阶段1+2结果】生成【阶段3A：节拍目录（轻量）】。
-
-【目的】先生成“节拍目录”，只输出节拍名与冲突升级/咬合点，不输出长文本；为后续分幕补全做锚点。
-
-【阶段1】故事大纲：${args.phase1.outlineSummary}
-核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}
-
-【阶段2】信息层级：${layerNames || '-'}
-角色：${characterNames || '-'}
-
-【输出要求】
-1) 直接输出 JSON，不要 Markdown/代码块/解释
-2) 以 { 开头，以 } 结尾
-3) actMode 必须是 "three_act" 或 "four_act"
-4) 每幕 3-5 个节拍（推荐 4 个；复杂剧情可 5 个）
-5) beatName 必须唯一，且后续会被引用，请写清晰的“动词+名词”
-6) escalation 必须是 1-10 的整数（不加引号），按幕推进逐步升高
-
-【输出 JSON 结构】
-{
-  "beatFlow": {
-    "actMode": "three_act",
-    "acts": [
-      { "act": 1, "actName": "开端", "beats": [
-        { "beatName": "发现", "escalation": 2, "interlock": "与暗线1首次咬合" }
-      ]},
-      { "act": 2, "actName": "发展", "beats": [ ... ]},
-      { "act": 3, "actName": "高潮", "beats": [ ... ]}
-    ]
-  }
+  return [
+    '阶段1：',
+    `故事大纲：${args.phase1.outlineSummary}`,
+    `核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}`,
+    '',
+    '阶段2：',
+    `信息层级：${layerNames || '-'}`,
+    `角色：${characterNames || '-'}`,
+  ].join('\n');
 }
 
-请输出 JSON：`;
-}
-
-function buildPhase3ActDetailPrompt(args: {
+function buildPhase3ActDetailUserPrompt(args: {
   phase1: Phase1ConflictEngine;
   phase2: Phase2InfoLayers;
   actOutline: ActOutline;
@@ -569,64 +490,26 @@ function buildPhase3ActDetailPrompt(args: {
     .map((b, idx) => `${idx + 1}. ${b.beatName}${typeof b.escalation === 'number' ? `（升${b.escalation}）` : ''}${b.interlock ? `｜咬合：${b.interlock}` : ''}`)
     .join('\n');
 
-  return `你是叙事架构师。请基于【阶段1+2结果】对【阶段3A给定的第${args.actOutline.act}幕节拍目录】进行补全，生成【阶段3B：按幕补全节拍详情】。
-
-【强约束】beatName 必须与目录完全一致（不改名、不新增、不删除、不重排）。
-
-【阶段1】故事大纲：${args.phase1.outlineSummary}
-核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}
-
-【阶段2】信息层级：
-${layersDetail || '-'}
-
-角色矩阵：
-${charactersDetail || '-'}
-
-【本幕节拍目录（不可修改）】
-第${args.actOutline.act}幕「${args.actOutline.actName || ''}」
-${beatsOutlineText}
-
-【输出要求】
-1) 直接输出 JSON，不要 Markdown/代码块/解释
-2) 以 { 开头，以 } 结尾
-3) 只输出这一幕（act=${args.actOutline.act}）的补全结果（但仍使用 beatFlow 包装）
-4) escalation / estimatedScenes 必须是整数（不加引号）
-5) 所有字符串字段禁止出现真实换行符；如需换行请使用 \\n
-6) 每个字符串字段尽量控制在 60 字以内（避免输出过长导致截断）
-7) surfaceEvent/infoFlow/location/visualHook 必须是非空字符串；characters 至少包含 1 个非空角色名（不要用 "" 或 []）
-8) 不确定时请填入合理内容（可保守），不要留空/不要写 null
-
-【输出 JSON 结构】
-{
-  "beatFlow": {
-    "actMode": "${args.actMode}",
-    "acts": [
-      {
-        "act": ${args.actOutline.act},
-        "actName": "${args.actOutline.actName ?? ''}",
-        "beats": [
-          {
-            "beatName": "必须与目录一致",
-            "surfaceEvent": "表面事件",
-            "infoFlow": "信息流动/知情差",
-            "escalation": 3,
-            "interlock": "与暗线交叉点（可沿用目录）",
-            "location": "地点",
-            "characters": ["角色A", "角色B"],
-            "visualHook": "画面钩子",
-            "emotionalTone": "情绪基调",
-            "estimatedScenes": 3
-          }
-        ]
-      }
-    ]
-  }
+  return [
+    `actMode: ${args.actMode}`,
+    '',
+    '阶段1：',
+    `故事大纲：${args.phase1.outlineSummary}`,
+    `核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}`,
+    '',
+    '阶段2 信息层级：',
+    layersDetail || '-',
+    '',
+    '阶段2 角色矩阵：',
+    charactersDetail || '-',
+    '',
+    '本幕节拍目录（beatName 必须完全一致，不可修改）：',
+    `第${args.actOutline.act}幕「${args.actOutline.actName || ''}」`,
+    beatsOutlineText,
+  ].join('\n');
 }
 
-请输出 JSON：`;
-}
-
-function buildPhase3ActRepairPrompt(args: {
+function buildPhase3ActRepairUserPrompt(args: {
   phase1: Phase1ConflictEngine;
   phase2: Phase2InfoLayers;
   actOutline: ActOutline;
@@ -634,14 +517,12 @@ function buildPhase3ActRepairPrompt(args: {
   currentBeats: unknown;
   missingBeats: Array<Pick<Phase3IncompleteBeat, 'beatName' | 'missing'>>;
 }): string {
-  const base = buildPhase3ActDetailPrompt({
+  const base = buildPhase3ActDetailUserPrompt({
     phase1: args.phase1,
     phase2: args.phase2,
     actOutline: args.actOutline,
     actMode: args.actMode,
   });
-  const idx = base.lastIndexOf('请输出 JSON：');
-  const baseBody = (idx >= 0 ? base.slice(0, idx) : base).trimEnd();
 
   const missingText = args.missingBeats
     .map((x) => `- ${x.beatName}: ${x.missing.join(', ')}`)
@@ -664,20 +545,15 @@ function buildPhase3ActRepairPrompt(args: {
     2,
   );
 
-  return `${baseBody}
-
-【校验反馈】你上次输出存在空/缺失字段，请严格补齐以下节拍的字段（必须非空）：
-${missingText || '-'}
-
-【当前已生成的 beats（供参考，可覆盖修正）】
-${current}
-
-【额外要求】
-- 保持 beatName/顺序/数量不变
-- location/visualHook/surfaceEvent/infoFlow 不能是空字符串
-- characters 至少包含 1 个非空角色名
-
-请输出 JSON：`;
+  return [
+    base.trimEnd(),
+    '',
+    '校验反馈：你上次输出存在空/缺失字段，请严格补齐以下节拍的字段（必须非空）：',
+    missingText || '-',
+    '',
+    '当前已生成的 beats（供参考，可覆盖修正）：',
+    current,
+  ].join('\n');
 }
 
 function isBeatDetailedEnough(beat: Record<string, unknown>): boolean {
@@ -777,7 +653,7 @@ function parsePhase3(raw: string): { parsed: Phase3BeatFlow; extractedJson: stri
 
 // ===================== 阶段4：叙事线 + 自洽校验 =====================
 
-function buildPhase4Prompt(args: {
+function buildPhase4UserPrompt(args: {
   phase1: Phase1ConflictEngine;
   phase2: Phase2InfoLayers;
   phase3: Phase3BeatFlow;
@@ -801,57 +677,18 @@ function buildPhase4Prompt(args: {
     .map((c) => `  - ${c.name || '未命名'}：表面目标[${c.goal || '无'}]，真实意图[${c.secret || '无'}]`)
     .join('\n');
 
-  return `你是叙事架构师。请基于【阶段1+2+3结果】生成【阶段4：叙事线交织 + 自洽校验】。
-
-【阶段1结果 - 故事骨架】
-故事大纲：${args.phase1.outlineSummary}
-核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}
-第一推动因：${args.phase1.conflictEngine.firstMover?.initiator || '未知'}
-
-【阶段2结果 - 角色目标】
-${characterGoals || '（无）'}
-
-【阶段3结果 - 节拍结构】
-${beatsDetail || '（无）'}
-
-【输出要求】
-1) 直接输出 JSON，不要 Markdown/代码块/解释
-2) 以 { 开头，以 } 结尾
-3) lineType 必须是 "main"、"sub1"、"sub2"、"sub3" 之一
-4) consistencyChecks 中的值必须是 true 或 false（布尔值，不加引号）
-5) plotLines 至少 2-4 条线
-
-【输出 JSON 结构】
-{
-  "plotLines": [
-    {
-      "lineType": "main",
-      "driver": "主角",
-      "statedGoal": "查明真相",
-      "trueGoal": "复仇",
-      "keyInterlocks": ["发现", "对峙"],
-      "pointOfNoReturn": "揭露"
-    },
-    {
-      "lineType": "sub1",
-      "driver": "反派",
-      "statedGoal": "维护秩序",
-      "trueGoal": "掩盖罪行",
-      "keyInterlocks": ["监视", "追杀"],
-      "pointOfNoReturn": "暴露"
-    }
-  ],
-  "consistencyChecks": {
-    "blindSpotDrivesAction": true,
-    "infoFlowChangesAtLeastTwo": true,
-    "coreConflictHasThreeWayTension": true,
-    "endingIrreversibleTriggeredByMultiLines": true,
-    "noRedundantRole": true,
-    "notes": ["角色X的转变动机可加强", "节拍Y的信息流单向"]
-  }
-}
-
-请输出 JSON：`;
+  return [
+    '阶段1结果 - 故事骨架：',
+    `故事大纲：${args.phase1.outlineSummary}`,
+    `核心冲突：${args.phase1.conflictEngine.coreObjectOrEvent}`,
+    `第一推动因：${args.phase1.conflictEngine.firstMover?.initiator || '未知'}`,
+    '',
+    '阶段2结果 - 角色目标：',
+    characterGoals || '（无）',
+    '',
+    '阶段3结果 - 节拍结构：',
+    beatsDetail || '（无）',
+  ].join('\n');
 }
 
 function parsePhase4(raw: string): { parsed: Phase4PlotLines; extractedJson: string } {
@@ -861,7 +698,7 @@ function parsePhase4(raw: string): { parsed: Phase4PlotLines; extractedJson: str
 
 // ===================== 通用修复提示 =====================
 
-function buildJsonFixPrompt(raw: string, phase: number): string {
+function buildJsonFixUserPrompt(raw: string, phase: number): string {
   const phaseHints: Record<number, string> = {
     1: `必须包含 outlineSummary(字符串) 和 conflictEngine(对象，含 coreObjectOrEvent)`,
     2: `必须包含 infoVisibilityLayers(数组) 和 characterMatrix(数组)。
@@ -873,22 +710,15 @@ location/visualHook/surfaceEvent/infoFlow 必须是非空字符串；characters 
 注意：lineType 必须是 "main"/"sub1"/"sub2"/"sub3" 之一；consistencyChecks 中的值必须是布尔值 true/false（不加引号）`,
   };
 
-  return `你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象。
-
-【修复要求】
-1) 不要输出 Markdown、代码块、解释或多余文字
-2) 直接以 { 开头，以 } 结尾
-3) 阶段${phase}的字段要求：${phaseHints[phase] ?? '确保字段完整'}
-4) 所有字符串字段禁止出现未转义的双引号 " （如需引号请用 \\" 或改用中文引号/改写措辞）
-5) 所有字符串字段禁止出现真实换行符；如需换行请使用 \\n
-6) 严禁尾随逗号（trailing comma）
-
-原始输出：
-<<<
-${raw?.trim() ?? ''}
->>>
-
-请只输出修正后的 JSON：`;
+  return [
+    `phase: ${phase}`,
+    `阶段字段要求：${phaseHints[phase] ?? '确保字段完整'}`,
+    '',
+    '原始输出：',
+    '<<<',
+    raw?.trim() ?? '',
+    '>>>',
+  ].join('\n');
 }
 
 function stableJsonFixConfig(base: ReturnType<typeof toProviderChatConfig>): ReturnType<typeof toProviderChatConfig> {
@@ -1010,14 +840,22 @@ export async function buildNarrativeCausalChain(args: {
       ...providerConfig,
       responseFormat: jsonSchemaFormat('narrative_phase1_conflict_engine', schemaPhase1ConflictEngine()),
     };
-    const prompt = buildPhase1Prompt({
+    const systemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.narrative_causal_chain.phase1.system',
+    });
+    const userPrompt = buildPhase1UserPrompt({
       storySynopsis: project.summary,
       artStyle: styleFullPrompt(project),
       worldView: formatWorldView(worldViewElements),
       characters: formatCharacters(characters),
     });
 
-    const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ];
     const res = await chatWithProvider(phaseConfig, messages);
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
@@ -1032,6 +870,11 @@ export async function buildNarrativeCausalChain(args: {
         message: `阶段1解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
       });
       const fixConfig = stableJsonFixConfig(phaseConfig);
+      const jsonFixSystemPrompt = await loadSystemPrompt({
+        prisma,
+        teamId,
+        key: 'workflow.narrative_causal_chain.json_fix.system',
+      });
       let lastErr: unknown = err;
       let ok = false;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -1040,7 +883,8 @@ export async function buildNarrativeCausalChain(args: {
           message: `阶段1修复 JSON（第${attempt}/3次）...`,
         });
         const fixRes = await chatWithProvider(fixConfig, [
-          { role: 'user', content: buildJsonFixPrompt(res.content, 1) },
+          { role: 'system', content: jsonFixSystemPrompt },
+          { role: 'user', content: buildJsonFixUserPrompt(res.content, 1) },
         ]);
         if (!fixRes.content?.trim()) {
           lastErr = new Error('修复失败：AI 返回空内容');
@@ -1083,7 +927,12 @@ export async function buildNarrativeCausalChain(args: {
       ...providerConfig,
       responseFormat: jsonSchemaFormat('narrative_phase2_info_layers', schemaPhase2InfoLayers()),
     };
-    const prompt = buildPhase2Prompt({
+    const systemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.narrative_causal_chain.phase2.system',
+    });
+    const userPrompt = buildPhase2UserPrompt({
       storySynopsis: project.summary,
       characters: formatCharacters(characters),
       phase1: {
@@ -1092,7 +941,10 @@ export async function buildNarrativeCausalChain(args: {
       },
     });
 
-    const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ];
     const res = await chatWithProvider(phaseConfig, messages);
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
@@ -1107,6 +959,11 @@ export async function buildNarrativeCausalChain(args: {
         message: `阶段2解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
       });
       const fixConfig = stableJsonFixConfig(phaseConfig);
+      const jsonFixSystemPrompt = await loadSystemPrompt({
+        prisma,
+        teamId,
+        key: 'workflow.narrative_causal_chain.json_fix.system',
+      });
       let lastErr: unknown = err;
       let ok = false;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -1115,7 +972,8 @@ export async function buildNarrativeCausalChain(args: {
           message: `阶段2修复 JSON（第${attempt}/3次）...`,
         });
         const fixRes = await chatWithProvider(fixConfig, [
-          { role: 'user', content: buildJsonFixPrompt(res.content, 2) },
+          { role: 'system', content: jsonFixSystemPrompt },
+          { role: 'user', content: buildJsonFixUserPrompt(res.content, 2) },
         ]);
         if (!fixRes.content?.trim()) {
           lastErr = new Error('修复失败：AI 返回空内容');
@@ -1157,6 +1015,22 @@ export async function buildNarrativeCausalChain(args: {
       characterMatrix: (existingChain?.characterMatrix ?? []) as Phase2InfoLayers['characterMatrix'],
     };
 
+    const phase3OutlineSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.narrative_causal_chain.phase3a.system',
+    });
+    const phase3ActSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.narrative_causal_chain.phase3b.system',
+    });
+    const jsonFixSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.narrative_causal_chain.json_fix.system',
+    });
+
     // === 3A：生成节拍目录（轻量） ===
     let beatFlow: Phase3BeatFlow['beatFlow'] | null =
       (force ? null : (existingChain?.beatFlow as Phase3BeatFlow['beatFlow'] | null)) ?? null;
@@ -1171,8 +1045,11 @@ export async function buildNarrativeCausalChain(args: {
         ...providerConfig,
         responseFormat: jsonSchemaFormat('narrative_phase3_outline', schemaPhase3Outline()),
       });
-      const promptA = buildPhase3OutlinePrompt({ phase1, phase2 });
-      const resA = await chatWithProvider(phaseConfigA, [{ role: 'user', content: promptA }]);
+      const promptA = buildPhase3OutlineUserPrompt({ phase1, phase2 });
+      const resA = await chatWithProvider(phaseConfigA, [
+        { role: 'system', content: phase3OutlineSystemPrompt },
+        { role: 'user', content: promptA },
+      ]);
       if (!resA.content?.trim()) throw new Error('AI 返回空内容');
       tokenUsage = mergeTokenUsage(tokenUsage, resA.tokenUsage) ?? tokenUsage;
 
@@ -1194,7 +1071,8 @@ export async function buildNarrativeCausalChain(args: {
             message: `阶段3A修复 JSON（第${attempt}/3次）...`,
           });
           const fixRes = await chatWithProvider(fixConfig, [
-            { role: 'user', content: buildJsonFixPrompt(resA.content, 3) },
+            { role: 'system', content: jsonFixSystemPrompt },
+            { role: 'user', content: buildJsonFixUserPrompt(resA.content, 3) },
           ]);
           if (!fixRes.content?.trim()) {
             lastErr = new Error('修复失败：AI 返回空内容');
@@ -1264,7 +1142,7 @@ export async function buildNarrativeCausalChain(args: {
         throw new Error(`阶段3：第${actNo}幕节拍目录为空（beatName 缺失）`);
       }
 
-      const promptB = buildPhase3ActDetailPrompt({
+      const promptB = buildPhase3ActDetailUserPrompt({
         phase1,
         phase2,
         actOutline,
@@ -1283,7 +1161,10 @@ export async function buildNarrativeCausalChain(args: {
         ),
       };
       const stablePhaseConfigB = stableJsonFixConfig(phaseConfigB);
-      const resB = await chatWithProvider(stablePhaseConfigB, [{ role: 'user', content: promptB }]);
+      const resB = await chatWithProvider(stablePhaseConfigB, [
+        { role: 'system', content: phase3ActSystemPrompt },
+        { role: 'user', content: promptB },
+      ]);
       if (!resB.content?.trim()) throw new Error('AI 返回空内容');
       tokenUsage = mergeTokenUsage(tokenUsage, resB.tokenUsage) ?? tokenUsage;
 
@@ -1305,7 +1186,8 @@ export async function buildNarrativeCausalChain(args: {
             message: `阶段3B修复 JSON（第${attempt}/3次）...`,
           });
           const fixRes = await chatWithProvider(fixConfig, [
-            { role: 'user', content: buildJsonFixPrompt(resB.content, 3) },
+            { role: 'system', content: jsonFixSystemPrompt },
+            { role: 'user', content: buildJsonFixUserPrompt(resB.content, 3) },
           ]);
           if (!fixRes.content?.trim()) {
             lastErr = new Error('修复失败：AI 返回空内容');
@@ -1362,7 +1244,7 @@ export async function buildNarrativeCausalChain(args: {
           message: `阶段3B：第${actNo}幕检测到缺失字段，尝试修复（${repairAttempt}/2）...`,
         });
 
-        const repairPrompt = buildPhase3ActRepairPrompt({
+        const repairPrompt = buildPhase3ActRepairUserPrompt({
           phase1,
           phase2,
           actOutline,
@@ -1371,7 +1253,10 @@ export async function buildNarrativeCausalChain(args: {
           missingBeats: actIncomplete,
         });
 
-        const repairRes = await chatWithProvider(stablePhaseConfigB, [{ role: 'user', content: repairPrompt }]);
+        const repairRes = await chatWithProvider(stablePhaseConfigB, [
+          { role: 'system', content: phase3ActSystemPrompt },
+          { role: 'user', content: repairPrompt },
+        ]);
         if (!repairRes.content?.trim()) throw new Error('AI 返回空内容');
         tokenUsage = mergeTokenUsage(tokenUsage, repairRes.tokenUsage) ?? tokenUsage;
 
@@ -1389,7 +1274,8 @@ export async function buildNarrativeCausalChain(args: {
           let ok = false;
           for (let attempt = 1; attempt <= 3; attempt += 1) {
             const fixRes = await chatWithProvider(fixConfig, [
-              { role: 'user', content: buildJsonFixPrompt(repairRes.content, 3) },
+              { role: 'system', content: jsonFixSystemPrompt },
+              { role: 'user', content: buildJsonFixUserPrompt(repairRes.content, 3) },
             ]);
             if (!fixRes.content?.trim()) {
               lastErr = new Error('修复失败：AI 返回空内容');
@@ -1513,7 +1399,12 @@ export async function buildNarrativeCausalChain(args: {
       ...providerConfig,
       responseFormat: jsonSchemaFormat('narrative_phase4_plot_lines', schemaPhase4PlotLines()),
     };
-    const prompt = buildPhase4Prompt({
+    const systemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.narrative_causal_chain.phase4.system',
+    });
+    const prompt = buildPhase4UserPrompt({
       phase1: {
         outlineSummary: existingChain?.outlineSummary ?? '',
         conflictEngine: (existingChain?.conflictEngine ?? { coreObjectOrEvent: '' }) as Phase1ConflictEngine['conflictEngine'],
@@ -1527,7 +1418,10 @@ export async function buildNarrativeCausalChain(args: {
       },
     });
 
-    const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt },
+    ];
     const res = await chatWithProvider(phaseConfig, messages);
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
@@ -1542,6 +1436,11 @@ export async function buildNarrativeCausalChain(args: {
         message: `阶段4解析失败，尝试修复 JSON...（${summarizeError(err)}）`,
       });
       const fixConfig = stableJsonFixConfig(phaseConfig);
+      const jsonFixSystemPrompt = await loadSystemPrompt({
+        prisma,
+        teamId,
+        key: 'workflow.narrative_causal_chain.json_fix.system',
+      });
       let lastErr: unknown = err;
       let ok = false;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -1550,7 +1449,8 @@ export async function buildNarrativeCausalChain(args: {
           message: `阶段4修复 JSON（第${attempt}/3次）...`,
         });
         const fixRes = await chatWithProvider(fixConfig, [
-          { role: 'user', content: buildJsonFixPrompt(res.content, 4) },
+          { role: 'system', content: jsonFixSystemPrompt },
+          { role: 'user', content: buildJsonFixUserPrompt(res.content, 4) },
         ]);
         if (!fixRes.content?.trim()) {
           lastErr = new Error('修复失败：AI 返回空内容');

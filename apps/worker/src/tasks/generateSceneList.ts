@@ -4,6 +4,7 @@ import type { ChatMessage } from '../providers/types.js';
 import { chatWithProvider } from '../providers/index.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { styleFullPrompt, toProviderChatConfig } from './common.js';
+import { loadSystemPrompt } from './systemPrompts.js';
 
 function parseSceneList(text: string): string[] {
   return text
@@ -65,26 +66,19 @@ export async function generateSceneList(args: {
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
 
-  const prompt = `你是一位专业的分镜师。基于以下信息,将故事拆解为8-12个关键分镜节点:
+  const systemPrompt = await loadSystemPrompt({
+    prisma,
+    teamId,
+    key: 'workflow.scene_list.system',
+  });
 
-**故事梗概**:
-${project.summary}
-
-**画风**: ${styleFullPrompt(project)}
-**主角**: ${project.protagonist}
-
-**要求**:
-1. 每个分镜用1句话概括(15-30字)
-2. 覆盖起承转合的关键节点
-3. 包含情绪转折和视觉冲击点
-4. 适合单幅图像表现
-
-**输出格式**(纯文本,每行一个分镜):
-1. [分镜描述]
-2. [分镜描述]
-...
-
-请开始生成:`;
+  const userPrompt = [
+    '故事梗概：',
+    project.summary || '-',
+    '',
+    `画风：${styleFullPrompt(project) || '-'}`,
+    `主角：${project.protagonist || '-'}`,
+  ].join('\n');
 
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
   const providerConfig = toProviderChatConfig(profile);
@@ -92,7 +86,10 @@ ${project.summary}
 
   await updateProgress({ pct: 25, message: '调用 AI 生成分镜列表...' });
 
-  const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+  const messages: ChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ];
   const res = await chatWithProvider(providerConfig, messages);
 
   await updateProgress({ pct: 70, message: '解析与写入分镜...' });
