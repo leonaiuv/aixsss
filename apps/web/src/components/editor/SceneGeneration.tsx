@@ -133,6 +133,7 @@ export function SceneGeneration() {
           filledPrompt: `POST /workflow/projects/${currentProject.id}/scene-list`,
           messages: [{ role: 'user', content: JSON.stringify({ aiProfileId }, null, 2) }],
           context: {
+            systemPromptKey: 'workflow.scene_list.system',
             projectId: currentProject.id,
             projectTitle: currentProject.title,
             style: currentProject.style,
@@ -234,6 +235,7 @@ export function SceneGeneration() {
           { role: 'user', content: userPrompt },
         ],
         context: {
+          systemPromptKey: 'workflow.scene_list.system',
           projectId: currentProject.id,
           projectTitle: currentProject.title,
           style: currentProject.style,

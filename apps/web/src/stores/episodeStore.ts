@@ -210,7 +210,10 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       promptTemplate: 'POST /workflow/projects/{{projectId}}/episode-plan',
       filledPrompt: `POST /workflow/projects/${input.projectId}/episode-plan`,
       messages: [{ role: 'user', content: safeJson(input) }],
-      context: { projectId: input.projectId },
+      context: {
+        projectId: input.projectId,
+        systemPromptKeys: ['workflow.plan_episodes.system', 'workflow.plan_episodes.json_fix.system'],
+      },
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
@@ -264,7 +267,13 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
         'POST /workflow/projects/{{projectId}}/episodes/{{episodeId}}/core-expression',
       filledPrompt: `POST /workflow/projects/${input.projectId}/episodes/${input.episodeId}/core-expression`,
       messages: [{ role: 'user', content: safeJson(input) }],
-      context: { projectId: input.projectId },
+      context: {
+        projectId: input.projectId,
+        systemPromptKeys: [
+          'workflow.episode_core_expression.system',
+          'workflow.episode_core_expression.json_fix.system',
+        ],
+      },
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
@@ -313,7 +322,7 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       promptTemplate: 'POST /workflow/projects/{{projectId}}/episodes/{{episodeId}}/scene-list',
       filledPrompt: `POST /workflow/projects/${input.projectId}/episodes/${input.episodeId}/scene-list`,
       messages: [{ role: 'user', content: safeJson(input) }],
-      context: { projectId: input.projectId },
+      context: { projectId: input.projectId, systemPromptKey: 'workflow.episode_scene_list.system' },
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
@@ -360,7 +369,17 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       promptTemplate: 'POST /workflow/projects/{{projectId}}/narrative-causal-chain',
       filledPrompt: `POST /workflow/projects/${input.projectId}/narrative-causal-chain`,
       messages: [{ role: 'user', content: safeJson(input) }],
-      context: { projectId: input.projectId },
+      context: {
+        projectId: input.projectId,
+        systemPromptKeys: [
+          'workflow.narrative_causal_chain.phase1.system',
+          'workflow.narrative_causal_chain.phase2.system',
+          'workflow.narrative_causal_chain.phase3a.system',
+          'workflow.narrative_causal_chain.phase3b.system',
+          'workflow.narrative_causal_chain.phase4.system',
+          'workflow.narrative_causal_chain.json_fix.system',
+        ],
+      },
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',

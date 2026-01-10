@@ -72,6 +72,12 @@ export type ParsedJsonError = {
   details?: string;
 };
 
+export type PromptBuildResult = {
+  key: string;
+  template: string;
+  prompt: string;
+};
+
 export async function buildCharacterBasicInfoPrompt(input: {
   briefDescription: string;
   summary: string;
@@ -79,9 +85,9 @@ export async function buildCharacterBasicInfoPrompt(input: {
   artStyle?: ArtStyleConfig;
   worldViewElements?: WorldViewElement[];
   existingCharacters?: Character[];
-}): Promise<string> {
+}): Promise<PromptBuildResult> {
   const template = await getSystemPromptContent(CHARACTER_BASIC_INFO_PROMPT_KEY);
-  return fillPromptTemplate(template, {
+  const prompt = fillPromptTemplate(template, {
     artStyle: input.artStyle,
     worldViewElements: input.worldViewElements ?? [],
     summary: input.summary,
@@ -89,6 +95,7 @@ export async function buildCharacterBasicInfoPrompt(input: {
     characters: input.existingCharacters ?? [],
     briefDescription: input.briefDescription,
   });
+  return { key: CHARACTER_BASIC_INFO_PROMPT_KEY, template, prompt };
 }
 
 export async function buildCharacterPortraitPrompt(input: {
@@ -98,9 +105,9 @@ export async function buildCharacterPortraitPrompt(input: {
   secondaryColor?: string;
   artStyle?: ArtStyleConfig;
   worldViewElements?: WorldViewElement[];
-}): Promise<string> {
+}): Promise<PromptBuildResult> {
   const template = await getSystemPromptContent(CHARACTER_PORTRAIT_PROMPT_KEY);
-  return fillPromptTemplate(template, {
+  const prompt = fillPromptTemplate(template, {
     artStyle: input.artStyle,
     worldViewElements: input.worldViewElements ?? [],
     characterName: input.characterName,
@@ -108,6 +115,7 @@ export async function buildCharacterPortraitPrompt(input: {
     primaryColor: input.primaryColor ?? '',
     secondaryColor: input.secondaryColor ?? '',
   });
+  return { key: CHARACTER_PORTRAIT_PROMPT_KEY, template, prompt };
 }
 
 export function parseCharacterBasicInfo(
@@ -174,7 +182,7 @@ export async function buildJsonRepairPrompt(options: {
   requiredKeys: string[];
   raw: string;
   extraRules?: string[];
-}): Promise<string> {
+}): Promise<PromptBuildResult> {
   const template = await getSystemPromptContent(JSON_REPAIR_PROMPT_KEY);
 
   const keys = options.requiredKeys.join(' / ');
@@ -183,7 +191,8 @@ export async function buildJsonRepairPrompt(options: {
     : '';
   const original = options.raw?.trim() ?? '';
 
-  return template.replace('{keys}', keys).replace('{rules}', rules).replace('{original}', original);
+  const prompt = template.replace('{keys}', keys).replace('{rules}', rules).replace('{original}', original);
+  return { key: JSON_REPAIR_PROMPT_KEY, template, prompt };
 }
 
 export function mergeTokenUsage(

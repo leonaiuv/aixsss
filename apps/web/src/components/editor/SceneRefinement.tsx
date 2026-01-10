@@ -499,6 +499,7 @@ export function SceneRefinement() {
           { role: 'user', content: userPrompt },
         ],
         context: {
+          systemPromptKey: 'workflow.scene_anchor.system',
           projectId: currentProject.id,
           style: styleFullPrompt,
           protagonist: currentProject.protagonist,
@@ -654,6 +655,7 @@ export function SceneRefinement() {
           { role: 'user', content: userPrompt },
         ],
         context: {
+          systemPromptKey: 'workflow.keyframe_prompt.legacy.system',
           projectId: currentProject.id,
           style: styleFullPrompt,
           protagonist: currentProject.protagonist,
@@ -784,6 +786,7 @@ export function SceneRefinement() {
           { role: 'user', content: userPrompt },
         ],
         context: {
+          systemPromptKey: 'workflow.motion_prompt.system',
           projectId: currentProject.id,
           sceneId: latestScene.id,
           sceneOrder: currentSceneIndex + 1,
@@ -928,6 +931,7 @@ export function SceneRefinement() {
           { role: 'user', content: userPrompt },
         ],
         context: {
+          systemPromptKeys: ['workflow.dialogue.system', 'workflow.dialogue.fix.system'],
           projectId: currentProject.id,
           sceneId: latestScene.id,
           sceneOrder: currentSceneIndex + 1,

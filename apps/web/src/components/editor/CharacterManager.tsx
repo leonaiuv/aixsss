@@ -918,7 +918,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         ? `${briefDescription}\n（色彩偏好：${colorHints}）`
         : briefDescription;
 
-      const prompt = await buildCharacterBasicInfoPrompt({
+      const { key: basicInfoPromptKey, template: basicInfoPromptTemplate, prompt } =
+        await buildCharacterBasicInfoPrompt({
         briefDescription: briefForPrompt,
         summary: (currentProject?.summary ?? '').trim(),
         protagonist: (currentProject?.protagonist ?? '').trim(),
@@ -932,13 +933,14 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       // 记录日志
       logId = logAICall('character_basic_info', {
         skillName: CharacterBasicInfoSkill.name,
-        promptTemplate: CharacterBasicInfoSkill.promptTemplate,
+        promptTemplate: basicInfoPromptTemplate,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
         context: {
           projectId,
           characterId: targetCharacterId ?? undefined,
           skipProgressBridge: true,
+          systemPromptKey: basicInfoPromptKey,
           briefDescription,
           style: styleDesc,
           worldViewInjected: shouldInjectWorldView,
@@ -1068,7 +1070,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         .join('\n');
       if (isMountedRef.current) setLastAIDetails(parseDetails);
 
-      const repairPrompt = await buildJsonRepairPrompt({
+      const {
+        key: jsonRepairPromptKey,
+        template: jsonRepairPromptTemplate,
+        prompt: repairPrompt,
+      } = await buildJsonRepairPrompt({
         requiredKeys: [
           'name',
           'appearance',
@@ -1083,13 +1089,14 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
       const repairLogId = logAICall('character_basic_info', {
         skillName: CharacterBasicInfoSkill.name,
-        promptTemplate: CharacterBasicInfoSkill.promptTemplate,
+        promptTemplate: jsonRepairPromptTemplate,
         filledPrompt: repairPrompt,
         messages: [{ role: 'user', content: repairPrompt }],
         context: {
           projectId,
           characterId: targetCharacterId ?? undefined,
           skipProgressBridge: true,
+          systemPromptKey: jsonRepairPromptKey,
           briefDescription,
           style: styleDesc,
           attempt: 2,
@@ -1252,7 +1259,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
       const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
 
-      const prompt = await buildCharacterPortraitPrompt({
+      const { key: portraitPromptKey, template: portraitPromptTemplate, prompt } =
+        await buildCharacterPortraitPrompt({
         characterName: formData.name,
         characterAppearance: formData.appearance,
         primaryColor: formData.primaryColor?.trim() || undefined,
@@ -1266,13 +1274,14 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       // 记录日志
       logId = logAICall('character_portrait', {
         skillName: CharacterPortraitSkill.name,
-        promptTemplate: CharacterPortraitSkill.promptTemplate,
+        promptTemplate: portraitPromptTemplate,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
         context: {
           projectId,
           characterId: targetCharacterId ?? undefined,
           skipProgressBridge: true,
+          systemPromptKey: portraitPromptKey,
           characterName: formData.name,
           appearance: formData.appearance,
           style: styleDesc,
@@ -1392,20 +1401,25 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       updateTask(taskId, { retryCount: 1 });
       updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
 
-      const repairPrompt = await buildJsonRepairPrompt({
+      const {
+        key: jsonRepairPromptKey,
+        template: jsonRepairPromptTemplate,
+        prompt: repairPrompt,
+      } = await buildJsonRepairPrompt({
         requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
         raw: firstResponseContent,
       });
 
       const repairLogId = logAICall('character_portrait', {
         skillName: CharacterPortraitSkill.name,
-        promptTemplate: CharacterPortraitSkill.promptTemplate,
+        promptTemplate: jsonRepairPromptTemplate,
         filledPrompt: repairPrompt,
         messages: [{ role: 'user', content: repairPrompt }],
         context: {
           projectId,
           characterId: targetCharacterId ?? undefined,
           skipProgressBridge: true,
+          systemPromptKey: jsonRepairPromptKey,
           characterName: formData.name,
           attempt: 2,
           worldViewInjected: shouldInjectWorldView,
@@ -1526,7 +1540,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         currentProject?.artStyleConfig ??
         (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
 
-      const prompt = await buildCharacterPortraitPrompt({
+      const { key: portraitPromptKey, template: portraitPromptTemplate, prompt } =
+        await buildCharacterPortraitPrompt({
         characterName: character.name,
         characterAppearance: appearance,
         primaryColor: character.primaryColor?.trim() || undefined,
@@ -1537,13 +1552,14 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
       logId = logAICall('character_portrait', {
         skillName: CharacterPortraitSkill.name,
-        promptTemplate: CharacterPortraitSkill.promptTemplate,
+        promptTemplate: portraitPromptTemplate,
         filledPrompt: prompt,
         messages: [{ role: 'user', content: prompt }],
         context: {
           projectId,
           characterId: character.id,
           skipProgressBridge: true,
+          systemPromptKey: portraitPromptKey,
           characterName: character.name,
           appearance,
           style: styleDesc,
@@ -1606,20 +1622,25 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       updateTask(taskId, { retryCount: 1 });
       updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
 
-      const repairPrompt = await buildJsonRepairPrompt({
+      const {
+        key: jsonRepairPromptKey,
+        template: jsonRepairPromptTemplate,
+        prompt: repairPrompt,
+      } = await buildJsonRepairPrompt({
         requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
         raw: firstResponseContent,
       });
 
       const repairLogId = logAICall('character_portrait', {
         skillName: CharacterPortraitSkill.name,
-        promptTemplate: CharacterPortraitSkill.promptTemplate,
+        promptTemplate: jsonRepairPromptTemplate,
         filledPrompt: repairPrompt,
         messages: [{ role: 'user', content: repairPrompt }],
         context: {
           projectId,
           characterId: character.id,
           skipProgressBridge: true,
+          systemPromptKey: jsonRepairPromptKey,
           characterName: character.name,
           attempt: 2,
           worldViewInjected: shouldInjectWorldView,
@@ -1745,7 +1766,8 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         });
         let logId = '';
         try {
-          const prompt = await buildCharacterPortraitPrompt({
+          const { key: portraitPromptKey, template: portraitPromptTemplate, prompt } =
+            await buildCharacterPortraitPrompt({
             characterName: character.name,
             characterAppearance: character.appearance,
             primaryColor: character.primaryColor?.trim() || undefined,
@@ -1756,13 +1778,14 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
 
           logId = logAICall('character_portrait', {
             skillName: CharacterPortraitSkill.name,
-            promptTemplate: CharacterPortraitSkill.promptTemplate,
+            promptTemplate: portraitPromptTemplate,
             filledPrompt: prompt,
             messages: [{ role: 'user', content: prompt }],
             context: {
               projectId,
               characterId: character.id,
               skipProgressBridge: true,
+              systemPromptKey: portraitPromptKey,
               characterName: character.name,
               style: styleDesc,
               worldViewInjected: shouldInjectWorldView,
@@ -1822,20 +1845,25 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           updateTask(taskId, { retryCount: 1 });
           updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
 
-          const repairPrompt = await buildJsonRepairPrompt({
+          const {
+            key: jsonRepairPromptKey,
+            template: jsonRepairPromptTemplate,
+            prompt: repairPrompt,
+          } = await buildJsonRepairPrompt({
             requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
             raw: firstResponseContent,
           });
 
           const repairLogId = logAICall('character_portrait', {
             skillName: CharacterPortraitSkill.name,
-            promptTemplate: CharacterPortraitSkill.promptTemplate,
+            promptTemplate: jsonRepairPromptTemplate,
             filledPrompt: repairPrompt,
             messages: [{ role: 'user', content: repairPrompt }],
             context: {
               projectId,
               characterId: character.id,
               skipProgressBridge: true,
+              systemPromptKey: jsonRepairPromptKey,
               characterName: character.name,
               attempt: 2,
               style: styleDesc,

@@ -236,6 +236,7 @@ function LegacyEditor() {
                 filledPrompt: userPrompt,
                 messages: [...messages],
                 context: {
+                  systemPromptKey: 'workflow.scene_anchor.system',
                   projectId: currentProject.id,
                   projectTitle: currentProject.title,
                   style: styleFullPrompt,
@@ -366,6 +367,7 @@ function LegacyEditor() {
                 filledPrompt: userPrompt,
                 messages: [...messages],
                 context: {
+                  systemPromptKey: 'workflow.keyframe_prompt.legacy.system',
                   projectId: currentProject.id,
                   projectTitle: currentProject.title,
                   style: styleFullPrompt,
@@ -477,6 +479,7 @@ function LegacyEditor() {
                 filledPrompt: userPrompt,
                 messages: [...messages],
                 context: {
+                  systemPromptKey: 'workflow.motion_prompt.system',
                   projectId: currentProject.id,
                   projectTitle: currentProject.title,
                   style: styleFullPrompt,
@@ -614,6 +617,7 @@ function LegacyEditor() {
                 filledPrompt: userPrompt,
                 messages: [...messages],
                 context: {
+                  systemPromptKey: 'workflow.dialogue.system',
                   projectId: currentProject.id,
                   projectTitle: currentProject.title,
                   style: styleFullPrompt,
