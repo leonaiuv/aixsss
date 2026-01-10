@@ -27,4 +27,3 @@ export async function apiUpdateSystemPrompt(key: string, input: { content: strin
     body: input,
   });
 }
-

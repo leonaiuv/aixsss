@@ -13,6 +13,7 @@
 
 import { Scene, DialogueLine, Character, Skill, ChatMessage } from '@/types';
 import { notifyAIFallback } from './progressBridge';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
 
 // ==========================================
 // 类型定义
@@ -538,7 +539,8 @@ export async function generateAudioPromptWithAI(
       thought: '内心独白',
     };
 
-    const prompt = AudioPromptSkill.promptTemplate
+    const template = await getSystemPromptContent('web.multi_modal.audio_prompt.user');
+    const prompt = template
       .replace('{dialogue_content}', dialogue.content)
       .replace('{character_info}', characterInfo)
       .replace('{dialogue_type}', dialogueTypeMap[dialogue.type] || '对白');
@@ -570,7 +572,8 @@ export async function generateBGMPromptWithAI(
   styleFullPrompt?: string,
 ): Promise<BGMPrompt> {
   try {
-    const prompt = BGMPromptSkill.promptTemplate
+    const template = await getSystemPromptContent('web.multi_modal.bgm_prompt.user');
+    const prompt = template
       .replace('{scene_summary}', scene.summary)
       .replace('{scene_description}', scene.sceneDescription)
       .replace('{style}', styleFullPrompt || '未指定');
@@ -602,7 +605,8 @@ export async function generateTransitionPromptWithAI(
   nextScene: Scene,
 ): Promise<TransitionPrompt> {
   try {
-    const prompt = TransitionPromptSkill.promptTemplate
+    const template = await getSystemPromptContent('web.multi_modal.transition_prompt.user');
+    const prompt = template
       .replace('{prev_scene_summary}', prevScene.summary)
       .replace('{prev_scene}', prevScene.sceneDescription)
       .replace('{next_scene_summary}', nextScene.summary)

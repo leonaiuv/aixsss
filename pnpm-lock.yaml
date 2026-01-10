@@ -111,6 +111,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@aixsss/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@dnd-kit/core':
         specifier: ^6.1.0
         version: 6.3.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

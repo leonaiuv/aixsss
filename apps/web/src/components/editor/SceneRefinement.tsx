@@ -39,6 +39,7 @@ import {
   Square,
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
 import { flushScenePatchQueue } from '@/lib/storage';
 import { getSkillByName, parseDialoguesFromText } from '@/lib/ai/skills';
 import {
@@ -48,7 +49,7 @@ import {
   updateLogWithCancelled,
   updateLogProgress,
 } from '@/lib/ai/debugLogger';
-import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
+import { buildWorldViewContext } from '@/lib/ai/contextBuilder';
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
 import { generateBGMPrompt, generateTransitionPrompt } from '@/lib/ai/multiModalPrompts';
 import {
@@ -451,19 +452,30 @@ export function SceneRefinement() {
       const injectionSettings = getInjectionSettings(currentProject.id);
       const shouldInjectWorldView = shouldInjectAtSceneDescription(injectionSettings);
 
-      // 使用 contextBuilder 填充模板
-      const prompt = fillPromptTemplate(skill.promptTemplate, {
-        artStyle: currentProject.artStyleConfig,
-        characters: projectCharacters,
-        worldViewElements: shouldInjectWorldView ? worldViewElements : [],
-        protagonist: currentProject.protagonist,
-        sceneSummary: currentScene.summary,
-        prevSceneSummary: currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined,
-        summary: currentProject.summary,
-      });
+      const systemPrompt = await getSystemPromptContent('workflow.scene_anchor.system');
+      const prevSceneSummary =
+        currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined;
+
+      const worldViewContext = shouldInjectWorldView ? buildWorldViewContext(worldViewElements) : '';
+      const userPrompt = [
+        '## 输入',
+        '视觉风格参考（可轻量融入，不要堆砌质量词）:',
+        styleFullPrompt || '-',
+        '',
+        '当前分镜概要:',
+        currentScene.summary || '-',
+        '',
+        '上一分镜概要（仅用于理解衔接，不要把人物/动作写进场景锚点）:',
+        prevSceneSummary || '-',
+        worldViewContext.trim()
+          ? ['', '世界观（用于环境/空间一致性；如无可忽略）：', worldViewContext.trim()].join('\n')
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
 
       // 检查 Token 使用情况
-      const tokenEstimate = calculateTotalTokens({ task: prompt });
+      const tokenEstimate = calculateTotalTokens({ task: [systemPrompt, userPrompt].join('\n\n') });
       const tokenCheck = checkTokenLimit(tokenEstimate, 4000);
       console.log(
         `[上下文压缩] Token估算: ${tokenEstimate}, 使用率: ${tokenCheck.usage.toFixed(1)}%`,
@@ -476,13 +488,14 @@ export function SceneRefinement() {
       }
 
       // 记录AI调用日志
-      const prevSceneSummary =
-        currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined;
       logId = logAICall('scene_description', {
         skillName: skill.name,
-        promptTemplate: skill.promptTemplate,
-        filledPrompt: prompt,
-        messages: [{ role: 'user', content: prompt }],
+        promptTemplate: systemPrompt,
+        filledPrompt: userPrompt,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
         context: {
           projectId: currentProject.id,
           style: styleFullPrompt,
@@ -504,9 +517,15 @@ export function SceneRefinement() {
 
       updateLogProgress(logId, 30, '正在生成场景锚点...');
 
-      const response = await client.chat([{ role: 'user', content: prompt }], {
+      const response = await client.chat(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        {
         signal: abortController.signal,
-      });
+        },
+      );
 
       let finalContent = response.content.trim();
       let mergedTokenUsage = response.tokenUsage;
@@ -600,22 +619,35 @@ export function SceneRefinement() {
 
       const styleFullPrompt = getStyleFullPrompt(currentProject);
 
-      // 使用 contextBuilder 填充模板
-      const prompt = fillPromptTemplate(skill.promptTemplate, {
-        artStyle: currentProject.artStyleConfig,
-        characters: castCharacters,
-        protagonist: currentProject.protagonist,
-        sceneDescription: latestScene.sceneDescription,
-        sceneSummary: latestScene.summary,
-        prevSceneSummary: currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined,
-      });
+      const systemPrompt = await getSystemPromptContent('workflow.keyframe_prompt.legacy.system');
+      const castNames =
+        castCharacters.length > 0
+          ? castCharacters.map((c) => c.name).filter(Boolean).join('、')
+          : currentProject.protagonist || '-';
+
+      const userPrompt = [
+        '当前分镜概要（决定三帧的动作分解）:',
+        latestScene.summary || '-',
+        '',
+        '场景锚点 JSON（环境一致性）:',
+        latestScene.sceneDescription || '-',
+        '',
+        '视觉风格参考:',
+        styleFullPrompt || '-',
+        '',
+        '出场角色（仅用于点名，不要写长外观描述）:',
+        castNames || '-',
+      ].join('\n');
 
       // 记录AI调用日志
       logId = logAICall('keyframe_prompt', {
         skillName: skill.name,
-        promptTemplate: skill.promptTemplate,
-        filledPrompt: prompt,
-        messages: [{ role: 'user', content: prompt }],
+        promptTemplate: systemPrompt,
+        filledPrompt: userPrompt,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
         context: {
           projectId: currentProject.id,
           style: styleFullPrompt,
@@ -634,9 +666,13 @@ export function SceneRefinement() {
 
       updateLogProgress(logId, 30, '正在生成关键帧提示词（KF0/KF1/KF2）...');
 
-      const response = await client.chat([{ role: 'user', content: prompt }], {
-        signal: abortController.signal,
-      });
+      const response = await client.chat(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        { signal: abortController.signal },
+      );
 
       let finalContent = response.content.trim();
       let mergedTokenUsage = response.tokenUsage;
@@ -724,20 +760,24 @@ export function SceneRefinement() {
         throw new Error('技能配置未找到');
       }
 
-      const prompt = fillPromptTemplate(skill.promptTemplate, {
-        artStyle: currentProject.artStyleConfig,
-        characters: projectCharacters,
-        sceneSummary: latestScene.summary,
-        sceneDescription: latestScene.sceneDescription,
-        shotPrompt: latestScene.shotPrompt,
-      });
+      const systemPrompt = await getSystemPromptContent('workflow.motion_prompt.system');
+      const userPrompt = [
+        '场景锚点 JSON:',
+        latestScene.sceneDescription || '-',
+        '',
+        '三关键帧 JSON（静止描述，包含 KF0/KF1/KF2）:',
+        latestScene.shotPrompt || '-',
+      ].join('\n');
 
       // 记录AI调用日志
       logId = logAICall('motion_prompt', {
         skillName: skill.name,
-        promptTemplate: skill.promptTemplate,
-        filledPrompt: prompt,
-        messages: [{ role: 'user', content: prompt }],
+        promptTemplate: systemPrompt,
+        filledPrompt: userPrompt,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
         context: {
           projectId: currentProject.id,
           sceneId: latestScene.id,
@@ -754,9 +794,13 @@ export function SceneRefinement() {
 
       updateLogProgress(logId, 30, '正在生成时空/运动提示词...');
 
-      const response = await client.chat([{ role: 'user', content: prompt }], {
-        signal: abortController.signal,
-      });
+      const response = await client.chat(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        { signal: abortController.signal },
+      );
 
       let finalContent = response.content.trim();
       let mergedTokenUsage = response.tokenUsage;
@@ -844,31 +888,44 @@ export function SceneRefinement() {
         throw new Error('技能配置未找到');
       }
 
-      // 使用 contextBuilder 构建角色上下文
-      const characterContext = buildCharacterContext(castCharacters);
-
-      // 使用 fillPromptTemplate 填充模板
-      const prompt = fillPromptTemplate(skill.promptTemplate, {
-        characters: castCharacters,
-        sceneSummary: latestScene.summary,
-        sceneDescription: latestScene.sceneDescription,
-        shotPrompt: latestScene.shotPrompt,
-        motionPrompt: latestScene.motionPrompt,
-      });
+      const systemPrompt = await getSystemPromptContent('workflow.dialogue.system');
+      const castNames =
+        castCharacters.length > 0
+          ? castCharacters.map((c) => c.name).filter(Boolean).join('、')
+          : '-';
+      const userPrompt = [
+        '分镜概要:',
+        latestScene.summary || '-',
+        '',
+        '场景锚点（环境一致性）:',
+        latestScene.sceneDescription || '-',
+        '',
+        '三关键帧（静止）:',
+        latestScene.shotPrompt || '-',
+        '',
+        '运动/时空提示词:',
+        latestScene.motionPrompt || '-',
+        '',
+        '场景中的角色:',
+        castNames,
+      ].join('\n');
 
       // 记录AI调用日志
       logId = logAICall('dialogue', {
         skillName: skill.name,
-        promptTemplate: skill.promptTemplate,
-        filledPrompt: prompt,
-        messages: [{ role: 'user', content: prompt }],
+        promptTemplate: systemPrompt,
+        filledPrompt: userPrompt,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
         context: {
           projectId: currentProject.id,
           sceneId: latestScene.id,
           sceneOrder: currentSceneIndex + 1,
           sceneSummary: latestScene.summary,
           sceneDescription: latestScene.sceneDescription,
-          characters: characterContext,
+          characters: castNames,
         },
         config: {
           provider: config.provider,
@@ -880,20 +937,62 @@ export function SceneRefinement() {
 
       updateLogProgress(logId, 30, '正在生成台词...');
 
-      const response = await client.chat([{ role: 'user', content: prompt }], {
-        signal: abortController.signal,
-      });
+      const response = await client.chat(
+        [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        { signal: abortController.signal },
+      );
 
       updateLogProgress(logId, 80, '正在解析台词...');
 
-      // 更新日志响应
-      updateLogWithResponse(logId, {
-        content: response.content,
-        tokenUsage: response.tokenUsage,
-      });
+      let mergedTokenUsage = response.tokenUsage;
+      let rawDialogueContent = response.content;
+      let dialogues = parseDialoguesFromText(rawDialogueContent);
 
-      // 解析台词文本
-      const dialogues = parseDialoguesFromText(response.content);
+      // If parsing fails, ask once more to reformat.
+      if (dialogues.length === 0 && rawDialogueContent?.trim()) {
+        updateLogProgress(logId, 85, '输出不规范，正在纠偏...');
+        const fixSystemPrompt = await getSystemPromptContent('workflow.dialogue.fix.system');
+        const fixUserPrompt = ['原始内容：', '<<<', rawDialogueContent.trim(), '>>>'].join('\n');
+        const fixed = await client.chat(
+          [
+            { role: 'system', content: fixSystemPrompt },
+            { role: 'user', content: fixUserPrompt },
+          ],
+          { signal: abortController.signal },
+        );
+        mergedTokenUsage = mergeTokenUsage(mergedTokenUsage, fixed.tokenUsage);
+        rawDialogueContent = fixed.content;
+        dialogues = parseDialoguesFromText(rawDialogueContent);
+        if (dialogues.length === 0 && rawDialogueContent?.trim()) {
+          dialogues = [
+            {
+              id: `dialogue_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+              type: 'narration',
+              content: rawDialogueContent.trim(),
+              order: 1,
+            },
+          ];
+        }
+      }
+
+      if (dialogues.length === 0) {
+        dialogues = [
+          {
+            id: `dialogue_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+            type: 'narration',
+            content: '（无台词）',
+            order: 1,
+          },
+        ];
+      }
+
+      updateLogWithResponse(logId, {
+        content: rawDialogueContent,
+        tokenUsage: mergedTokenUsage,
+      });
 
       updateScene(currentProject.id, latestScene.id, {
         dialogues,

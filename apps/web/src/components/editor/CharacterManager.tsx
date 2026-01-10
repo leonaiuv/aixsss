@@ -918,7 +918,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         ? `${briefDescription}\n（色彩偏好：${colorHints}）`
         : briefDescription;
 
-      const prompt = buildCharacterBasicInfoPrompt({
+      const prompt = await buildCharacterBasicInfoPrompt({
         briefDescription: briefForPrompt,
         summary: (currentProject?.summary ?? '').trim(),
         protagonist: (currentProject?.protagonist ?? '').trim(),
@@ -1068,7 +1068,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         .join('\n');
       if (isMountedRef.current) setLastAIDetails(parseDetails);
 
-      const repairPrompt = buildJsonRepairPrompt({
+      const repairPrompt = await buildJsonRepairPrompt({
         requiredKeys: [
           'name',
           'appearance',
@@ -1252,7 +1252,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
       const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
 
-      const prompt = buildCharacterPortraitPrompt({
+      const prompt = await buildCharacterPortraitPrompt({
         characterName: formData.name,
         characterAppearance: formData.appearance,
         primaryColor: formData.primaryColor?.trim() || undefined,
@@ -1392,7 +1392,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       updateTask(taskId, { retryCount: 1 });
       updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
 
-      const repairPrompt = buildJsonRepairPrompt({
+      const repairPrompt = await buildJsonRepairPrompt({
         requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
         raw: firstResponseContent,
       });
@@ -1526,7 +1526,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         currentProject?.artStyleConfig ??
         (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
 
-      const prompt = buildCharacterPortraitPrompt({
+      const prompt = await buildCharacterPortraitPrompt({
         characterName: character.name,
         characterAppearance: appearance,
         primaryColor: character.primaryColor?.trim() || undefined,
@@ -1606,7 +1606,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       updateTask(taskId, { retryCount: 1 });
       updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
 
-      const repairPrompt = buildJsonRepairPrompt({
+      const repairPrompt = await buildJsonRepairPrompt({
         requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
         raw: firstResponseContent,
       });
@@ -1745,7 +1745,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         });
         let logId = '';
         try {
-          const prompt = buildCharacterPortraitPrompt({
+          const prompt = await buildCharacterPortraitPrompt({
             characterName: character.name,
             characterAppearance: character.appearance,
             primaryColor: character.primaryColor?.trim() || undefined,
@@ -1822,7 +1822,7 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
           updateTask(taskId, { retryCount: 1 });
           updateProgress(taskId, 60, '输出格式异常，尝试自动修复...');
 
-          const repairPrompt = buildJsonRepairPrompt({
+          const repairPrompt = await buildJsonRepairPrompt({
             requiredKeys: ['midjourney', 'stableDiffusion', 'general'],
             raw: firstResponseContent,
           });

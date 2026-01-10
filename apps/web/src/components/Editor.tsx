@@ -27,9 +27,10 @@ import {
   updateLogWithError,
   updateLogWithResponse,
 } from '@/lib/ai/debugLogger';
-import { fillPromptTemplate, buildCharacterContext } from '@/lib/ai/contextBuilder';
+import { buildWorldViewContext } from '@/lib/ai/contextBuilder';
 import { shouldInjectAtSceneDescription, getInjectionSettings } from '@/lib/ai/worldViewInjection';
 import { isStructuredOutput, mergeTokenUsage, requestFormatFix } from '@/lib/ai/outputFixer';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
 import { migrateOldStyleToConfig } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
@@ -199,27 +200,39 @@ function LegacyEditor() {
             const sceneIndex = scenes.findIndex((s) => s.id === sceneId);
             const prevScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
 
-            const prompt = fillPromptTemplate(sceneSkill.promptTemplate, {
-              artStyle: currentProject.artStyleConfig,
-              characters: projectCharacters,
-              worldViewElements: shouldInjectWorldView ? worldViewElements : [],
-              protagonist: currentProject.protagonist,
-              sceneSummary: scene.summary,
-              prevSceneSummary: prevScene?.summary,
-              summary: currentProject.summary,
-            });
+            const systemPrompt = await getSystemPromptContent('workflow.scene_anchor.system');
+            const worldViewContext = shouldInjectWorldView ? buildWorldViewContext(worldViewElements) : '';
+            const userPrompt = [
+              '## 输入',
+              '视觉风格参考（可轻量融入，不要堆砌质量词）:',
+              styleFullPrompt || '-',
+              '',
+              '当前分镜概要:',
+              scene.summary || '-',
+              '',
+              '上一分镜概要（仅用于理解衔接，不要把人物/动作写进场景锚点）:',
+              prevScene?.summary || '-',
+              worldViewContext.trim()
+                ? ['', '世界观（用于环境/空间一致性；如无可忽略）：', worldViewContext.trim()].join('\n')
+                : '',
+            ]
+              .filter(Boolean)
+              .join('\n');
 
-            const messages = [{ role: 'user', content: prompt }] as const;
+            const messages = [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ] as const;
             let logId = '';
 
             try {
-              logId = logAICall('scene_description', {
-                skillName: sceneSkill.name,
-                promptTemplate: sceneSkill.promptTemplate,
-                filledPrompt: prompt,
-                messages: [...messages],
-                context: {
-                  projectId: currentProject.id,
+                logId = logAICall('scene_description', {
+                  skillName: sceneSkill.name,
+                  promptTemplate: systemPrompt,
+                  filledPrompt: userPrompt,
+                  messages: [...messages],
+                  context: {
+                    projectId: currentProject.id,
                   projectTitle: currentProject.title,
                   style: styleFullPrompt,
                   protagonist: currentProject.protagonist,
@@ -310,23 +323,41 @@ function LegacyEditor() {
           if (keyframeSkill) {
             const sceneIndex = scenes.findIndex((s) => s.id === sceneId);
             const prevScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
-            const prompt = fillPromptTemplate(keyframeSkill.promptTemplate, {
-              artStyle: currentProject.artStyleConfig,
-              characters: projectCharacters,
-              worldViewElements: shouldInjectWorldView ? worldViewElements : [],
-              sceneDescription: latestScene1.sceneDescription,
-              sceneSummary: latestScene1.summary,
-              prevSceneSummary: prevScene?.summary,
-            });
+            const systemPrompt = await getSystemPromptContent('workflow.keyframe_prompt.legacy.system');
+            const castIds = latestScene1.castCharacterIds ?? [];
+            const castNames =
+              castIds.length > 0
+                ? projectCharacters
+                    .filter((c) => castIds.includes(c.id))
+                    .map((c) => c.name)
+                    .filter(Boolean)
+                    .join('、')
+                : currentProject.protagonist || '-';
+            const userPrompt = [
+              '当前分镜概要（决定三帧的动作分解）:',
+              latestScene1.summary || '-',
+              '',
+              '场景锚点 JSON（环境一致性）:',
+              latestScene1.sceneDescription || '-',
+              '',
+              '视觉风格参考:',
+              styleFullPrompt || '-',
+              '',
+              '出场角色（仅用于点名，不要写长外观描述）:',
+              castNames || '-',
+            ].join('\n');
 
-            const messages = [{ role: 'user', content: prompt }] as const;
+            const messages = [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ] as const;
             let logId = '';
 
             try {
               logId = logAICall('keyframe_prompt', {
                 skillName: keyframeSkill.name,
-                promptTemplate: keyframeSkill.promptTemplate,
-                filledPrompt: prompt,
+                promptTemplate: systemPrompt,
+                filledPrompt: userPrompt,
                 messages: [...messages],
                 context: {
                   projectId: currentProject.id,
@@ -418,23 +449,26 @@ function LegacyEditor() {
         if (latestScene2?.shotPrompt && !latestScene2.motionPrompt) {
           const motionSkill = getSkillByName('generate_motion_prompt');
           if (motionSkill) {
-            const prompt = fillPromptTemplate(motionSkill.promptTemplate, {
-              artStyle: currentProject.artStyleConfig,
-              characters: projectCharacters,
-              worldViewElements,
-              sceneDescription: latestScene2.sceneDescription,
-              shotPrompt: latestScene2.shotPrompt,
-              sceneSummary: latestScene2.summary,
-            });
+            const systemPrompt = await getSystemPromptContent('workflow.motion_prompt.system');
+            const userPrompt = [
+              '场景锚点 JSON:',
+              latestScene2.sceneDescription || '-',
+              '',
+              '三关键帧 JSON（静止描述，包含 KF0/KF1/KF2）:',
+              latestScene2.shotPrompt || '-',
+            ].join('\n');
 
-            const messages = [{ role: 'user', content: prompt }] as const;
+            const messages = [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ] as const;
             let logId = '';
 
             try {
               logId = logAICall('motion_prompt', {
                 skillName: motionSkill.name,
-                promptTemplate: motionSkill.promptTemplate,
-                filledPrompt: prompt,
+                promptTemplate: systemPrompt,
+                filledPrompt: userPrompt,
                 messages: [...messages],
                 context: {
                   projectId: currentProject.id,
@@ -534,25 +568,44 @@ function LegacyEditor() {
         ) {
           const dialogueSkill = getSkillByName('generate_dialogue');
           if (dialogueSkill) {
-            const characterContext = buildCharacterContext(projectCharacters);
-            const prompt = fillPromptTemplate(dialogueSkill.promptTemplate, {
-              artStyle: currentProject.artStyleConfig,
-              characters: projectCharacters,
-              worldViewElements,
-              sceneDescription: latestScene3.sceneDescription || '',
-              sceneSummary: scene.summary,
-              shotPrompt: latestScene3.shotPrompt,
-              motionPrompt: latestScene3.motionPrompt,
-            });
+            const systemPrompt = await getSystemPromptContent('workflow.dialogue.system');
+            const castIds = latestScene3.castCharacterIds ?? [];
+            const castNames =
+              castIds.length > 0
+                ? projectCharacters
+                    .filter((c) => castIds.includes(c.id))
+                    .map((c) => c.name)
+                    .filter(Boolean)
+                    .join('、')
+                : '-';
+            const userPrompt = [
+              '分镜概要:',
+              scene.summary || '-',
+              '',
+              '场景锚点（环境一致性）:',
+              latestScene3.sceneDescription || '-',
+              '',
+              '三关键帧（静止）:',
+              latestScene3.shotPrompt || '-',
+              '',
+              '运动/时空提示词:',
+              latestScene3.motionPrompt || '-',
+              '',
+              '场景中的角色:',
+              castNames,
+            ].join('\n');
 
-            const messages = [{ role: 'user', content: prompt }] as const;
+            const messages = [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ] as const;
             let logId = '';
 
             try {
               logId = logAICall('dialogue', {
                 skillName: dialogueSkill.name,
-                promptTemplate: dialogueSkill.promptTemplate,
-                filledPrompt: prompt,
+                promptTemplate: systemPrompt,
+                filledPrompt: userPrompt,
                 messages: [...messages],
                 context: {
                   projectId: currentProject.id,
@@ -563,7 +616,7 @@ function LegacyEditor() {
                   sceneId,
                   sceneOrder: scene.order,
                   sceneSummary: scene.summary,
-                  characters: characterContext,
+                  characters: castNames,
                   sceneDescription: latestScene3.sceneDescription,
                   shotPrompt: latestScene3.shotPrompt,
                   motionPrompt: latestScene3.motionPrompt,

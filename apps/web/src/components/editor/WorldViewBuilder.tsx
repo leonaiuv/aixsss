@@ -17,9 +17,10 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
-import { Globe, Plus, Trash2, Sparkles, Edit2, Check, X, Loader2, Settings2 } from 'lucide-react';
+import { Globe, Trash2, Sparkles, Edit2, Check, X, Loader2, Settings2 } from 'lucide-react';
 import { WorldViewElement } from '@/types';
 import { AIFactory } from '@/lib/ai/factory';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
 import {
   getInjectionSettings,
   saveInjectionSettings,
@@ -59,6 +60,8 @@ export function WorldViewBuilder() {
     content: '',
   });
 
+  const currentProjectId = currentProject?.id;
+
   // 世界观注入设置状态
   const [injectionSettings, setInjectionSettings] = useState<WorldViewInjectionSettings>({
     enabled: true,
@@ -68,15 +71,15 @@ export function WorldViewBuilder() {
   });
 
   useEffect(() => {
-    if (currentProject) {
-      loadElements(currentProject.id);
+    if (currentProjectId) {
+      loadElements(currentProjectId);
       // 若项目已进入分镜阶段，尝试加载分镜（用于世界观变更后的 needs_update 标记）
-      loadScenes(currentProject.id);
+      loadScenes(currentProjectId);
       // 加载注入设置
-      const settings = getInjectionSettings(currentProject.id);
+      const settings = getInjectionSettings(currentProjectId);
       setInjectionSettings(settings);
     }
-  }, [currentProject?.id, loadElements, loadScenes]);
+  }, [currentProjectId, loadElements, loadScenes]);
 
   const maybeMarkScenesNeedUpdate = async (reason: string) => {
     if (!currentProject) return;
@@ -147,21 +150,18 @@ export function WorldViewBuilder() {
         custom: '世界观要素',
       };
 
-      const prompt = `你是一位资深的世界观设计师。请为以下${typeLabels[formData.type]}生成详细的设定：
+      const template = await getSystemPromptContent('web.world_view.element.user');
+      const existingContextBlock = existingContext
+        ? `已有世界观要素（避免自相矛盾）：\n${existingContext}`
+        : '';
 
-标题：${formData.title}
-故事背景：${currentProject.summary}
-主角设定：${currentProject.protagonist || '（未填写）'}
-视觉风格：${styleFullPrompt || currentProject.style || '（未填写）'}
-${existingContext ? `\n已有世界观要素（避免自相矛盾）：\n${existingContext}\n` : ''}
-
-要求：
-1. 内容要与整体故事风格协调一致
-2. 细节要具体、可视化
-3. 保持内在逻辑自洽
-4. 长度控制在200-400字
-
-请直接输出设定内容：`;
+      const prompt = template
+        .replace('{typeLabel}', typeLabels[formData.type] || '世界观要素')
+        .replace('{title}', formData.title)
+        .replace('{summary}', currentProject.summary)
+        .replace('{protagonist}', currentProject.protagonist || '（未填写）')
+        .replace('{style}', styleFullPrompt || currentProject.style || '（未填写）')
+        .replace('{existingContext}', existingContextBlock);
 
       const response = await client.chat([{ role: 'user', content: prompt }]);
 

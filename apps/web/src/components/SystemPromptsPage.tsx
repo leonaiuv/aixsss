@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isApiMode } from '@/lib/runtime/mode';
+import type { ApiSystemPrompt } from '@/lib/api/systemPrompts';
+import { AIFactory } from '@/lib/ai/factory';
 import {
-  apiListSystemPrompts,
-  apiUpdateSystemPrompt,
-  type ApiSystemPrompt,
-} from '@/lib/api/systemPrompts';
-import { apiLlmChat } from '@/lib/api/llm';
+  listSystemPrompts,
+  resetSystemPromptContent,
+  saveSystemPromptContent,
+} from '@/lib/systemPrompts';
 import { useConfigStore } from '@/stores/configStore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -60,6 +61,8 @@ const OPTIMIZER_SYSTEM_PROMPT = [
   '4) 不要输出解释、不要 Markdown、不要代码块；只输出优化后的“系统提示词正文”。',
 ].join('\n');
 
+const OPTIMIZER_SYSTEM_PROMPT_KEY = 'ui.system_prompts.optimizer.system';
+
 function buildOptimizerUserPrompt(args: {
   key: string;
   title: string;
@@ -103,7 +106,6 @@ export function SystemPromptsPage() {
   const apiMode = isApiMode();
 
   const config = useConfigStore((s) => s.config);
-  const aiProfileId = config?.aiProfileId ?? null;
 
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<SystemPromptViewItem[]>([]);
@@ -114,15 +116,9 @@ export function SystemPromptsPage() {
   const [resetKey, setResetKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!apiMode) {
-      setItems([]);
-      setDraftByKey({});
-      return;
-    }
-
     setLoading(true);
     try {
-      const data = await apiListSystemPrompts();
+      const data = await listSystemPrompts();
       const next = toViewItemsFromApi(data);
       setItems(next);
       setDraftByKey(Object.fromEntries(next.map((it) => [it.key, it.content])));
@@ -132,7 +128,7 @@ export function SystemPromptsPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiMode, toast]);
+  }, [toast]);
 
   useEffect(() => {
     void load();
@@ -168,11 +164,6 @@ export function SystemPromptsPage() {
 
   const handleSave = useCallback(
     async (key: string) => {
-      if (!apiMode) {
-        toast({ title: '本地模式不可保存', description: '切换到后端模式后可进行实时保存与生效。' });
-        return;
-      }
-
       const draft = (draftByKey[key] ?? '').trim();
       if (!draft) {
         toast({ title: '提示词不能为空', variant: 'destructive' });
@@ -181,9 +172,11 @@ export function SystemPromptsPage() {
 
       setSavingKey(key);
       try {
-        const updated = await apiUpdateSystemPrompt(key, { content: draft });
-        setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...toViewItemsFromApi([updated])[0] } : it)));
-        toast({ title: '已保存', description: key });
+        const updated = await saveSystemPromptContent(key, draft);
+        setItems((prev) =>
+          prev.map((it) => (it.key === key ? { ...it, ...toViewItemsFromApi([updated])[0] } : it)),
+        );
+        toast({ title: apiMode ? '已保存到后端' : '已保存到本地', description: key });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         toast({ title: '保存失败', description: message, variant: 'destructive' });
@@ -202,13 +195,13 @@ export function SystemPromptsPage() {
       const nextDraft = target.defaultContent;
       setDraftByKey((prev) => ({ ...prev, [key]: nextDraft }));
 
-      if (!apiMode) return;
-
       setSavingKey(key);
       try {
-        const updated = await apiUpdateSystemPrompt(key, { content: nextDraft });
-        setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...toViewItemsFromApi([updated])[0] } : it)));
-        toast({ title: '已重置为默认并保存', description: key });
+        const updated = await resetSystemPromptContent(key);
+        setItems((prev) =>
+          prev.map((it) => (it.key === key ? { ...it, ...toViewItemsFromApi([updated])[0] } : it)),
+        );
+        toast({ title: apiMode ? '已重置为默认并保存到后端' : '已重置为默认（本地）', description: key });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         toast({ title: '重置失败', description: message, variant: 'destructive' });
@@ -221,8 +214,12 @@ export function SystemPromptsPage() {
 
   const handleOptimize = useCallback(
     async (key: string) => {
-      if (!aiProfileId) {
-        toast({ title: '请先配置 AI', description: '在侧边栏的“AI 设置”中选择可用配置。', variant: 'destructive' });
+      if (!config) {
+        toast({
+          title: '请先配置 AI',
+          description: '在侧边栏的“AI 设置”中选择可用配置。',
+          variant: 'destructive',
+        });
         return;
       }
 
@@ -237,22 +234,25 @@ export function SystemPromptsPage() {
 
       setOptimizingKey(key);
       try {
-        const res = await apiLlmChat({
-          aiProfileId,
-          messages: [
-            { role: 'system', content: OPTIMIZER_SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: buildOptimizerUserPrompt({
-                key: item.key,
-                title: item.title,
-                description: item.description,
-                category: item.category,
-                currentContent,
-              }),
-            },
-          ],
-        });
+        const client = AIFactory.createClient(config);
+        const optimizerItem = items.find((it) => it.key === OPTIMIZER_SYSTEM_PROMPT_KEY);
+        const optimizerSystemPrompt = (
+          draftByKey[OPTIMIZER_SYSTEM_PROMPT_KEY] ?? optimizerItem?.content ?? OPTIMIZER_SYSTEM_PROMPT
+        ).trim();
+
+        const res = await client.chat([
+          { role: 'system', content: optimizerSystemPrompt },
+          {
+            role: 'user',
+            content: buildOptimizerUserPrompt({
+              key: item.key,
+              title: item.title,
+              description: item.description,
+              category: item.category,
+              currentContent,
+            }),
+          },
+        ]);
         const improved = stripOuterCodeFence(res.content);
         if (!improved.trim()) throw new Error('AI 返回空内容');
         setDraftByKey((prev) => ({ ...prev, [key]: improved }));
@@ -264,25 +264,8 @@ export function SystemPromptsPage() {
         setOptimizingKey(null);
       }
     },
-    [aiProfileId, draftByKey, items, toast],
+    [config, draftByKey, items, toast],
   );
-
-  if (!apiMode) {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">系统提示词</h1>
-          <p className="text-sm text-muted-foreground">该功能仅在后端模式（API）下可用。</p>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">未启用后端模式</CardTitle>
-            <CardDescription>请启用后端模式后，再进行系统提示词的查看/编辑/AI 优化。</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -290,13 +273,17 @@ export function SystemPromptsPage() {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">系统提示词</h1>
           <p className="text-sm text-muted-foreground">
-            这里管理 Worker 侧使用的 system role 提示词；保存后下一次任务调用立即生效。
+            管理系统内置提示词（system/user）。{apiMode ? '保存到后端，影响后端链路。' : '保存到浏览器本地，影响本地链路。'}每条提示词下方会标注影响产物与下游链路。
           </p>
         </div>
 
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => void load()} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
             <span className="ml-2">刷新</span>
           </Button>
         </div>
@@ -308,7 +295,11 @@ export function SystemPromptsPage() {
           <CardDescription>按 key / 标题 / 分类过滤</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="例如：scene_anchor / action_beats" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="例如：scene_anchor / action_beats"
+          />
         </CardContent>
       </Card>
 
@@ -350,7 +341,9 @@ export function SystemPromptsPage() {
                         <AccordionContent>
                           <div className="space-y-3">
                             {it.description ? (
-                              <p className="text-sm text-muted-foreground">{it.description}</p>
+                              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                                {it.description}
+                              </p>
                             ) : null}
 
                             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -375,7 +368,7 @@ export function SystemPromptsPage() {
                                   onChange={(e) => handleChangeDraft(it.key, e.target.value)}
                                   rows={14}
                                   className="font-mono text-xs leading-5"
-                                  disabled={!apiMode && !isModified}
+                                  disabled={busy}
                                 />
                               </div>
 
@@ -394,7 +387,7 @@ export function SystemPromptsPage() {
                             <div className="flex flex-wrap gap-2">
                               <Button
                                 onClick={() => void handleSave(it.key)}
-                                disabled={!apiMode || busy}
+                                disabled={busy}
                               >
                                 {savingKey === it.key ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -407,7 +400,7 @@ export function SystemPromptsPage() {
                               <Button
                                 variant="outline"
                                 onClick={() => void handleOptimize(it.key)}
-                                disabled={!apiMode || busy}
+                                disabled={busy}
                               >
                                 {optimizingKey === it.key ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -428,7 +421,7 @@ export function SystemPromptsPage() {
                               <Button
                                 variant="destructive"
                                 onClick={() => setResetKey(it.key)}
-                                disabled={!apiMode || busy}
+                                disabled={busy}
                               >
                                 重置并保存
                               </Button>
@@ -445,12 +438,16 @@ export function SystemPromptsPage() {
         </div>
       )}
 
-      <AlertDialog open={resetKey !== null} onOpenChange={(open) => setResetKey(open ? resetKey : null)}>
+      <AlertDialog
+        open={resetKey !== null}
+        onOpenChange={(open) => setResetKey(open ? resetKey : null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认重置为默认？</AlertDialogTitle>
             <AlertDialogDescription>
-              将把该条系统提示词恢复为默认内容，并立即保存到后端（下一次任务调用起生效）。
+              将把该条提示词恢复为默认内容，并立即
+              {apiMode ? '保存到后端（下一次后端调用起生效）' : '保存到本地（浏览器）'}。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

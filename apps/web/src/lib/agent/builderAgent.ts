@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AIFactory } from '@/lib/ai/factory';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
 import type { AgentCanvasNodeType, ChatMessage, UserConfig } from '@/types';
 
 const AgentCanvasNodeTypeSchema = z.enum([
@@ -103,7 +104,7 @@ function extractJsonFromText(text: string): unknown | null {
   return null;
 }
 
-function buildSystemPrompt(params: {
+function buildLegacySystemPrompt(params: {
   nodeLibrary: Array<{ type: AgentCanvasNodeType; label: string; description: string }>;
 }) {
   const lines = params.nodeLibrary
@@ -135,6 +136,48 @@ function buildSystemPrompt(params: {
   ].join('\n');
 }
 
+const CANVAS_PATCH_BUILDER_SYSTEM_PROMPT_KEY = 'agent.canvas_patch_builder.system';
+const NODE_LIBRARY_PLACEHOLDER = '{{node_library}}';
+
+function formatNodeLibrary(nodeLibrary: Array<{ type: AgentCanvasNodeType; label: string; description: string }>): string {
+  return nodeLibrary.map((n) => `- ${n.type}: ${n.label}（${n.description}）`).join('\n');
+}
+
+function injectNodeLibrary(promptTemplate: string, nodeLibraryLines: string): string {
+  const trimmedLines = nodeLibraryLines.trim();
+
+  if (promptTemplate.includes(NODE_LIBRARY_PLACEHOLDER)) {
+    return promptTemplate
+      .split(NODE_LIBRARY_PLACEHOLDER)
+      .join(trimmedLines ? trimmedLines : '')
+      .trim();
+  }
+
+  if (!trimmedLines) return promptTemplate.trim();
+
+  const marker = '可用节点类型：';
+  if (promptTemplate.includes(marker)) {
+    return promptTemplate.replace(marker, `${marker}\n${trimmedLines}`).trim();
+  }
+
+  return `${promptTemplate.trim()}\n\n${marker}\n${trimmedLines}`.trim();
+}
+
+async function buildSystemPrompt(params: {
+  nodeLibrary: Array<{ type: AgentCanvasNodeType; label: string; description: string }>;
+}): Promise<string> {
+  const nodeLibraryLines = formatNodeLibrary(params.nodeLibrary);
+
+  try {
+    const template = (await getSystemPromptContent(CANVAS_PATCH_BUILDER_SYSTEM_PROMPT_KEY)).trim();
+    if (template) return injectNodeLibrary(template, nodeLibraryLines);
+  } catch {
+    // ignore and fall back to legacy prompt
+  }
+
+  return buildLegacySystemPrompt(params);
+}
+
 export async function buildCanvasPatchWithAgent(input: {
   config: UserConfig;
   userMessage: string;
@@ -142,9 +185,10 @@ export async function buildCanvasPatchWithAgent(input: {
   nodeLibrary: Array<{ type: AgentCanvasNodeType; label: string; description: string }>;
 }): Promise<BuilderResponse> {
   const client = AIFactory.createClient(input.config);
+  const systemPrompt = await buildSystemPrompt({ nodeLibrary: input.nodeLibrary });
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: buildSystemPrompt({ nodeLibrary: input.nodeLibrary }) },
+    { role: 'system', content: systemPrompt },
     {
       role: 'user',
       content: ['当前画布摘要：', input.graphSummary, '', '用户需求：', input.userMessage].join(

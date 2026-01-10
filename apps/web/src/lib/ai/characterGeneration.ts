@@ -7,8 +7,12 @@ import type {
   WorldViewElement,
 } from '@/types';
 import { fillPromptTemplate } from '@/lib/ai/contextBuilder';
-import { CharacterBasicInfoSkill, CharacterPortraitSkill } from '@/lib/ai/skills';
 import { parseFirstJSONObject } from '@/lib/ai/jsonExtractor';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
+
+const CHARACTER_BASIC_INFO_PROMPT_KEY = 'web.character.basic_info.user';
+const CHARACTER_PORTRAIT_PROMPT_KEY = 'web.character.portrait_prompts.user';
+const JSON_REPAIR_PROMPT_KEY = 'web.json_repair.user';
 
 export type CharacterBasicInfoOutput = {
   name: string;
@@ -68,15 +72,16 @@ export type ParsedJsonError = {
   details?: string;
 };
 
-export function buildCharacterBasicInfoPrompt(input: {
+export async function buildCharacterBasicInfoPrompt(input: {
   briefDescription: string;
   summary: string;
   protagonist: string;
   artStyle?: ArtStyleConfig;
   worldViewElements?: WorldViewElement[];
   existingCharacters?: Character[];
-}): string {
-  return fillPromptTemplate(CharacterBasicInfoSkill.promptTemplate, {
+}): Promise<string> {
+  const template = await getSystemPromptContent(CHARACTER_BASIC_INFO_PROMPT_KEY);
+  return fillPromptTemplate(template, {
     artStyle: input.artStyle,
     worldViewElements: input.worldViewElements ?? [],
     summary: input.summary,
@@ -86,15 +91,16 @@ export function buildCharacterBasicInfoPrompt(input: {
   });
 }
 
-export function buildCharacterPortraitPrompt(input: {
+export async function buildCharacterPortraitPrompt(input: {
   characterName: string;
   characterAppearance: string;
   primaryColor?: string;
   secondaryColor?: string;
   artStyle?: ArtStyleConfig;
   worldViewElements?: WorldViewElement[];
-}): string {
-  return fillPromptTemplate(CharacterPortraitSkill.promptTemplate, {
+}): Promise<string> {
+  const template = await getSystemPromptContent(CHARACTER_PORTRAIT_PROMPT_KEY);
+  return fillPromptTemplate(template, {
     artStyle: input.artStyle,
     worldViewElements: input.worldViewElements ?? [],
     characterName: input.characterName,
@@ -164,25 +170,23 @@ export function parseCharacterPortraitPrompts(
   return { ok: true, value: parsed.data };
 }
 
-export function buildJsonRepairPrompt(options: {
+export async function buildJsonRepairPrompt(options: {
   requiredKeys: string[];
   raw: string;
   extraRules?: string[];
-}): string {
+}): Promise<string> {
+  const template = await getSystemPromptContent(JSON_REPAIR_PROMPT_KEY);
+
   const keys = options.requiredKeys.join(' / ');
   const rules = options.extraRules?.length
     ? `\n附加要求：\n- ${options.extraRules.join('\n- ')}\n`
     : '';
   const original = options.raw?.trim() ?? '';
 
-  return `你的上一条回复没有按要求输出严格 JSON（或缺少必要字段）。请把下面内容转换为严格 JSON 对象，并且【只输出 JSON】，不要输出任何解释或代码块标记。
-必须包含并填充以下字段（均为非空字符串，除非明确允许为空）：${keys}。${rules}
-
-【待转换内容】
-<<<
-${original}
->>>
-`;
+  return template
+    .replace('{keys}', keys)
+    .replace('{rules}', rules)
+    .replace('{original}', original);
 }
 
 export function mergeTokenUsage(

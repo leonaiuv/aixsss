@@ -2,7 +2,10 @@ export type SystemPromptCategory =
   | 'workflow'
   | 'workflow.fix'
   | 'workflow.actionBeats'
-  | 'workflow.narrativeCausalChain';
+  | 'workflow.narrativeCausalChain'
+  | 'ui.systemPrompts'
+  | 'agent.canvas'
+  | (string & {});
 
 export type SystemPromptDefinition = {
   /** Stable key used for DB lookup */
@@ -20,6 +23,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.scene_list.system',
     title: '分镜列表生成（系统）',
+    description:
+      '生效范围：API 模式（后端生成分镜列表）/ Web 本地模式（分镜列表生成）。\n影响产物：分镜列表（SceneList）。\n下游影响：场景锚点 → 关键帧 → 运动提示词 → 台词。',
     category: 'workflow',
     defaultContent: [
       '你是一位专业的分镜师。',
@@ -41,6 +46,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.scene_anchor.system',
     title: '场景锚点生成（系统）',
+    description:
+      '生效范围：API 模式（后端生成场景锚点）/ Web 本地模式（场景锚点生成）。\n影响产物：场景锚点 JSON（Scene Anchor）。\n下游影响：关键帧提示词、运动提示词、台词生成的一致性。',
     category: 'workflow',
     defaultContent: [
       '你是专业的提示词工程师与分镜助理。',
@@ -90,6 +97,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.action_beats.action_plan.system',
     title: '动作拆解 ActionPlan（系统）',
+    description:
+      '生效范围：API 模式（后端 ActionBeats 链路）。\n影响产物：ActionPlan JSON（按 beat 拆解 start/mid/end）。\n下游影响：KeyframeGroup 生成与关键帧/镜头一致性。',
     category: 'workflow.actionBeats',
     defaultContent: [
       '你是动画导演/分镜师，负责把一个 Scene 拆成多个可三段式表达的动作单元（ActionBeat）。',
@@ -102,6 +111,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.action_beats.action_plan.repair.system',
     title: '动作拆解 ActionPlan 修复（系统）',
+    description:
+      '生效范围：API 模式（ActionPlan 解析失败时触发）。\n影响产物：可解析的 ActionPlan JSON。\n下游影响：避免后续 KeyframeGroup/连续性修复的级联失败。',
     category: 'workflow.actionBeats',
     defaultContent: [
       '你是 JSON 修复器，只做“最小修改”来让 JSON 通过校验。',
@@ -112,6 +123,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.action_beats.keyframe_group.system',
     title: '关键帧分组 KeyframeGroup（系统）',
+    description:
+      '生效范围：API 模式（后端 ActionBeats 链路）。\n影响产物：KeyframeGroup JSON（把 beat 映射到三段式关键帧）。\n下游影响：关键帧提示词（legacy shotPrompt）生成与稳定性。',
     category: 'workflow.actionBeats',
     defaultContent: [
       '你是动画分镜关键帧导演。',
@@ -124,6 +137,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.action_beats.keyframe_group.repair.system',
     title: '关键帧分组 KeyframeGroup 修复（系统）',
+    description:
+      '生效范围：API 模式（KeyframeGroup 解析失败时触发）。\n影响产物：可解析的 KeyframeGroup JSON。\n下游影响：关键帧与动作节拍的可用性。',
     category: 'workflow.actionBeats',
     defaultContent: [
       '你是 JSON 修复器，只做“最小修改”来让 JSON 通过校验。',
@@ -134,6 +149,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.action_beats.continuity_repair.system',
     title: '镜头连续性修复（系统）',
+    description:
+      '生效范围：API 模式（ActionBeats 链路中的连续性纠偏）。\n影响产物：修复后的 next_start_frame_spec（承接 prev_end_frame_spec）。\n下游影响：关键帧/运动提示词/台词的一致性。',
     category: 'workflow.actionBeats',
     defaultContent: [
       '你是镜头连续性修复器。',
@@ -146,6 +163,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.keyframe_prompt.legacy.system',
     title: '关键帧提示词（旧版 KF0/KF1/KF2，系统）',
+    description:
+      '生效范围：Web 本地模式（关键帧生成）/ API 模式（后端回退旧版时）。\n影响产物：关键帧提示词 JSON（KF0/KF1/KF2）。\n下游影响：运动提示词与台词生成的输入质量。',
     category: 'workflow',
     defaultContent: [
       '你是专业的绘图/视频关键帧提示词工程师。',
@@ -191,6 +210,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.motion_prompt.system',
     title: '运动提示词（系统）',
+    description:
+      '生效范围：API 模式（后端生成运动提示词）/ Web 本地模式（运动提示词生成）。\n影响产物：运动/时空提示词 JSON（short + beats）。\n下游影响：台词节拍、镜头运动一致性与 I2V 效果。',
     category: 'workflow',
     defaultContent: [
       '你是图生视频(I2V)提示词工程师。',
@@ -231,6 +252,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.dialogue.system',
     title: '台词生成（系统）',
+    description:
+      '生效范围：API 模式（后端生成台词）/ Web 本地模式（台词生成）。\n影响产物：可解析台词行（对白/独白/旁白/心理）。\n下游影响：字幕/配音与故事节奏表达。',
     category: 'workflow',
     defaultContent: [
       '你是专业影视编剧。',
@@ -261,6 +284,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.dialogue.fix.system',
     title: '台词纠偏（系统）',
+    description:
+      '生效范围：API 模式/ Web 本地模式（台词解析失败时触发纠偏）。\n影响产物：可解析台词行（按指定格式逐行输出）。\n下游影响：避免台词落库/结构化解析失败。',
     category: 'workflow.fix',
     defaultContent: [
       '你的上一条回复没有按要求输出“可解析台词行”。',
@@ -277,6 +302,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.format_fix.scene_anchor.system',
     title: 'JSON 纠偏：场景锚点（系统）',
+    description:
+      '生效范围：API 模式/ Web 本地模式（场景锚点输出不可解析时）。\n影响产物：可解析的场景锚点 JSON。\n下游影响：关键帧/运动/台词生成的输入稳定性。',
     category: 'workflow.fix',
     defaultContent: [
       '你刚才的输出不符合“可解析 JSON 格式”。请把 user 提供的原始内容重新整理为严格的 JSON 格式。',
@@ -300,6 +327,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.format_fix.keyframe_prompt.system',
     title: 'JSON 纠偏：关键帧提示词（系统）',
+    description:
+      '生效范围：API 模式/ Web 本地模式（关键帧输出不可解析时）。\n影响产物：可解析的关键帧提示词 JSON。\n下游影响：运动提示词/台词输入与一致性。',
     category: 'workflow.fix',
     defaultContent: [
       '你刚才的输出不符合“可解析 JSON 格式”。请把 user 提供的原始内容重新整理为严格的 JSON 格式。',
@@ -320,6 +349,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.format_fix.motion_prompt.system',
     title: 'JSON 纠偏：运动提示词（系统）',
+    description:
+      '生效范围：API 模式/ Web 本地模式（运动提示词输出不可解析时）。\n影响产物：可解析的运动提示词 JSON。\n下游影响：台词节拍与镜头运动表达。',
     category: 'workflow.fix',
     defaultContent: [
       '你刚才的输出不符合“可解析 JSON 格式”。请把 user 提供的原始内容重新整理为严格的 JSON 格式。',
@@ -341,6 +372,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.plan_episodes.system',
     title: '剧集规划（系统）',
+    description:
+      '生效范围：API 模式（后端剧集规划/分集）。\n影响产物：EpisodePlan JSON（每集标题/概要/节拍/场景范围）。\n下游影响：单集核心表达与单集分镜列表生成。',
     category: 'workflow',
     defaultContent: [
       '你是专业的剧集策划。',
@@ -383,6 +416,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.plan_episodes.json_fix.system',
     title: '剧集规划 JSON 修复（系统）',
+    description:
+      '生效范围：API 模式（剧集规划输出不可解析时）。\n影响产物：可解析 EpisodePlan JSON。\n下游影响：避免规划结果无法落库/消费。',
     category: 'workflow.fix',
     defaultContent: [
       '你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象。',
@@ -403,6 +438,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.episode_core_expression.system',
     title: '单集核心表达 Core Expression（系统）',
+    description:
+      '生效范围：API 模式（后端生成单集核心表达）。\n影响产物：Core Expression JSON（主题/情绪弧/冲突/母题）。\n下游影响：单集分镜列表与场景细化质量。',
     category: 'workflow',
     defaultContent: [
       '你是专业编剧/分镜总监。',
@@ -425,6 +462,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.episode_core_expression.json_fix.system',
     title: 'Core Expression JSON 修复（系统）',
+    description:
+      '生效范围：API 模式（单集核心表达输出不可解析时）。\n影响产物：可解析 Core Expression JSON。\n下游影响：避免后续单集分镜列表输入缺失。',
     category: 'workflow.fix',
     defaultContent: [
       '你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象，不要输出 Markdown/代码块/解释/多余文字。',
@@ -441,6 +480,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.episode_scene_list.system',
     title: '单集分镜列表生成（系统）',
+    description:
+      '生效范围：API 模式（后端生成单集分镜列表）。\n影响产物：SceneList（单集场景概要列表）。\n下游影响：场景锚点 → 关键帧 → 运动提示词 → 台词。',
     category: 'workflow',
     defaultContent: [
       '你是一位专业的分镜师。',
@@ -458,6 +499,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.narrative_causal_chain.phase1.system',
     title: '叙事因果链 Phase1（系统）',
+    description:
+      '生效范围：API 模式（叙事因果链构建 Phase1）。\n影响产物：故事大纲 + 核心冲突引擎（JSON）。\n下游影响：Phase2/3/4 的因果链质量与一致性。',
     category: 'workflow.narrativeCausalChain',
     defaultContent: [
       '你是叙事架构师。请基于设定生成【阶段1：故事大纲 + 核心冲突引擎】。',
@@ -493,6 +536,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.narrative_causal_chain.phase2.system',
     title: '叙事因果链 Phase2（系统）',
+    description:
+      '生效范围：API 模式（叙事因果链构建 Phase2）。\n影响产物：信息能见度层 + 角色矩阵（JSON）。\n下游影响：Phase3/4 的节拍目录、分幕补全与交织校验。',
     category: 'workflow.narrativeCausalChain',
     defaultContent: [
       '你是叙事架构师。请基于【阶段1结果】生成【阶段2：信息能见度层 + 角色矩阵】。',
@@ -526,6 +571,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.narrative_causal_chain.phase3a.system',
     title: '叙事因果链 Phase3A 节拍目录（系统）',
+    description:
+      '生效范围：API 模式（叙事因果链构建 Phase3A）。\n影响产物：节拍目录 beatFlow（轻量 JSON）。\n下游影响：Phase3B 按幕补全与 Phase4 交织校验。',
     category: 'workflow.narrativeCausalChain',
     defaultContent: [
       '你是叙事架构师。请基于【阶段1+2结果】生成【阶段3A：节拍目录（轻量）】。',
@@ -558,6 +605,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.narrative_causal_chain.phase3b.system',
     title: '叙事因果链 Phase3B 按幕补全（系统）',
+    description:
+      '生效范围：API 模式（叙事因果链构建 Phase3B）。\n影响产物：按幕补全后的 beatFlow（JSON）。\n下游影响：Phase4 交织校验的可用性与自洽性。',
     category: 'workflow.narrativeCausalChain',
     defaultContent: [
       '你是叙事架构师。请基于【阶段1+2结果】对【阶段3A给定的节拍目录】进行补全，生成【阶段3B：按幕补全节拍详情】。',
@@ -607,6 +656,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.narrative_causal_chain.phase4.system',
     title: '叙事因果链 Phase4 交织校验（系统）',
+    description:
+      '生效范围：API 模式（叙事因果链构建 Phase4）。\n影响产物：plotLines + consistencyChecks（JSON）。\n下游影响：用于评估剧情自洽/可拍性与优化建议。',
     category: 'workflow.narrativeCausalChain',
     defaultContent: [
       '你是叙事架构师。请基于【阶段1+2+3结果】生成【阶段4：叙事线交织 + 自洽校验】。',
@@ -646,6 +697,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
   {
     key: 'workflow.narrative_causal_chain.json_fix.system',
     title: '叙事因果链 JSON 修复（通用，系统）',
+    description:
+      '生效范围：API 模式（叙事因果链各阶段输出不可解析时）。\n影响产物：可解析 JSON。\n下游影响：避免阶段间传递失败。',
     category: 'workflow.narrativeCausalChain',
     defaultContent: [
       '你刚才的输出无法被解析为符合要求的 JSON。请只输出一个 JSON 对象。',
@@ -659,6 +712,381 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
       '6) 严禁尾随逗号（trailing comma）',
       '',
       '请只输出修正后的 JSON：',
+    ].join('\n'),
+  },
+
+  // ===================== Web AI 提示词（本地模式/前端直连） =====================
+  {
+    key: 'web.context_compressor.mood.user',
+    title: '情绪提取（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：情绪关键词（用于上下文压缩/标签）。\n下游影响：分镜摘要、统计与智能提示。',
+    category: 'web.ai.context',
+    defaultContent: `分析以下文本的情绪基调：
+
+文本：{text}
+
+请从以下情绪中选择最匹配的一个：
+- 紧张（危险、追击、冒险）
+- 平静（宁静、安详、日常）
+- 激动（兴奋、热血、振奋）
+- 悲伤（哀伤、失落、绝望）
+- 欢乐（快乐、幸福、喜悦）
+- 神秘（诡异、未知、悬疑）
+- 浪漫（爱情、温馨、感动）
+- 史诗（宏大、决战、命运）
+
+直接输出情绪词，不要解释。`,
+  },
+  {
+    key: 'web.context_compressor.key_element.user',
+    title: '关键元素提取（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：关键元素词（用于压缩与标签）。\n下游影响：分镜摘要、检索与提示。',
+    category: 'web.ai.context',
+    defaultContent: `分析以下场景文本，提取最重要的单一关键元素（人物/物件/地点/事件）：
+
+文本：{text}
+
+直接输出关键元素（2-6个字），不要解释。`,
+  },
+  {
+    key: 'web.context_compressor.smart_summary.user',
+    title: '智能摘要压缩（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：压缩后的文本。\n下游影响：长上下文控制与后续生成稳定性。',
+    category: 'web.ai.context',
+    defaultContent: `将以下文本压缩到{target_length}字以内，保留最核心的信息：
+
+原文：{text}
+
+要求：
+1. 保留关键人物、事件、地点
+2. 去除冗余修饰词
+3. 保持语义完整
+
+直接输出压缩后的文本，不要解释。`,
+  },
+  {
+    key: 'web.cascade_updater.character_impact.user',
+    title: '角色变更影响分析（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：是否需要更新 + 受影响字段（JSON）。\n下游影响：辅助批量更新场景锚点/关键帧/台词等。',
+    category: 'web.ai.cascade',
+    defaultContent: `你是一位专业的漫画剧本编导。分析角色设定变更对分镜的影响。
+
+## 角色变更信息
+角色: {character_name}
+变更字段: {changed_field}
+变更内容: {change_description}
+
+## 分镜内容
+{scene_content}
+
+## 分析要求
+请分析这个角色变更对该分镜的影响，输出JSON格式：
+- needsUpdate: boolean (是否需要更新)
+- affectedFields: string[] (受影响的字段，如["sceneDescription", "shotPrompt", "dialogue"])
+- priority: "high" | "medium" | "low" (更新优先级)
+- reason: string (影响原因)
+
+直接输出JSON，不要额外解释。`,
+  },
+  {
+    key: 'web.cascade_updater.worldview_impact.user',
+    title: '世界观变更影响分析（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：是否需要更新 + 受影响字段（JSON）。\n下游影响：辅助决定哪些分镜需要重生成。',
+    category: 'web.ai.cascade',
+    defaultContent: `你是一位专业的漫画剧本编导。分析世界观设定变更对分镜的影响。
+
+## 世界观变更信息
+类型: {worldview_type}
+变更内容: {change_description}
+
+## 分镜内容
+{scene_content}
+
+## 分析要求
+请分析这个世界观变更对该分镜的影响，输出JSON格式：
+- needsUpdate: boolean (是否需要更新)
+- affectedFields: string[] (受影响的字段，如["sceneDescription", "shotPrompt"])
+- priority: "high" | "medium" | "low" (更新优先级)
+- reason: string (影响原因)
+- relevance: "direct" | "indirect" | "none" (与场景的关联程度)
+
+直接输出JSON，不要额外解释。`,
+  },
+  {
+    key: 'web.multi_modal.audio_prompt.user',
+    title: '音频/配音提示词（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：配音指导 JSON。\n下游影响：配音/音频生成的参数与情绪表达。',
+    category: 'web.ai.multimodal',
+    defaultContent: `你是一位专业的配音导演。根据以下台词和角色信息，生成配音指导。
+
+## 台词内容
+{dialogue_content}
+
+## 角色信息
+{character_info}
+
+## 台词类型
+{dialogue_type}
+
+## 输出要求
+请输出JSON格式，包含：
+- voiceTone: 语调(如energetic, calm, trembling, aggressive)
+- emotion: 情绪(如excited, sad, angry, fearful)
+- voiceStyle: 声线风格(如young male, elderly wise, narrator professional)
+
+直接输出JSON，不要额外解释。`,
+  },
+  {
+    key: 'web.multi_modal.bgm_prompt.user',
+    title: 'BGM/音效提示词（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：BGM/音效建议 JSON。\n下游影响：配乐风格/情绪氛围与音效元素。',
+    category: 'web.ai.multimodal',
+    defaultContent: `你是一位专业的影视配乐师。根据以下场景信息，生成BGM和音效建议。
+
+## 场景概要
+{scene_summary}
+
+## 场景锚点
+{scene_description}
+
+## 整体风格
+{style}
+
+## 输出要求
+请输出JSON格式，包含：
+- mood: 情绪氛围(如hopeful, tense, melancholic, epic, mysterious)
+- genre: 音乐风格(如orchestral, electronic, folk, ambient)
+- instruments: 主要乐器数组(如["piano", "strings", "brass"])
+- tempo: 节奏(如allegro, moderate, adagio)
+- soundEffects: 环境音效数组(如["birds", "wind", "footsteps"])
+
+直接输出JSON，不要额外解释。`,
+  },
+  {
+    key: 'web.multi_modal.transition_prompt.user',
+    title: '转场指令（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：转场指令 JSON。\n下游影响：剪辑转场效果与节奏。',
+    category: 'web.ai.multimodal',
+    defaultContent: `你是一位专业的影视剪辑师。根据前后两个场景，生成合适的转场指令。
+
+## 前一场景
+概要: {prev_scene_summary}
+描述: {prev_scene}
+
+## 后一场景
+概要: {next_scene_summary}
+描述: {next_scene}
+
+## 转场类型参考
+- cut: 硬切，适合连续动作
+- dissolve/cross_dissolve: 溶解，适合场景切换
+- fade_in: 淡入，适合开场
+- fade_to_black: 淡出到黑，适合时间跳跃
+- wipe: 擦除，适合并列叙事
+
+## 输出要求
+请输出JSON格式，包含：
+- type: 转场类型
+- duration: 持续时间(秒)
+- easing: 缓动效果(如ease-in, ease-out, ease-in-out, linear)
+- direction: 方向(可选，如left, right)
+
+直接输出JSON，不要额外解释。`,
+  },
+  {
+    key: 'web.character.basic_info.user',
+    title: '角色卡生成（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：角色卡 JSON（外观/性格/背景/配色）。\n下游影响：角色定妆照提示词、场景/台词的一致性。',
+    category: 'web.ai.character',
+    defaultContent: `你是一位专业的漫画/动画角色设计师。请基于“角色简述”与“项目设定”，生成一个符合故事世界观与画风的角色设定卡。
+
+## 项目设定（必须遵守，不要自相矛盾）
+故事梗概:
+{summary}
+
+主角设定（用于确定气质与叙事风格）:
+{protagonist}
+
+世界观（如果为空表示未启用/未填写）:
+{worldview}
+
+视觉风格参考（可融入但避免堆砌质量词）:
+{style}
+
+已存在角色（避免撞设定/撞外观，可参考其命名风格与叙事基调）:
+{characters_story}
+
+## 角色简述（用户输入）
+{briefDescription}
+
+## 输出要求
+1) “外观描述”必须可视化：年龄/体型/发型发色/眼睛/服装/配饰/独特识别点（让绘图能稳定复现同一人）。
+2) “性格特点”要可演：沟通方式/情绪表达/价值观/弱点与反差。
+3) “背景故事”要与项目设定挂钩：出身/关键事件/动机目标（给后续剧情和台词用）。
+4) 同一角色要有稳定的“视觉锚点词汇”，避免大量同义改写（尤其是发型、衣着、关键饰品）。
+5) 给出推荐配色：primaryColor/secondaryColor 必须是 #RRGGBB（用于后续提示词一致性）。
+
+## 输出格式（严格 JSON；只输出 JSON，不要代码块/解释）
+{
+  "name": "角色名称",
+  "appearance": "外观描述（建议 120-220 字）",
+  "personality": "性格特点（建议 80-160 字）",
+  "background": "背景故事（建议 160-280 字）",
+  "primaryColor": "#RRGGBB",
+  "secondaryColor": "#RRGGBB"
+}`,
+  },
+  {
+    key: 'web.character.portrait_prompts.user',
+    title: '角色定妆照提示词（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：定妆照提示词 JSON（MJ/SD/通用）。\n下游影响：后续分镜生成的人物身份一致性。',
+    category: 'web.ai.character',
+    defaultContent: `你是专业的 AI 绘图提示词工程师。请为下述角色生成"定妆照（全身、白底）"提示词JSON，用于后续分镜生成时锁定同一人物身份。
+
+## 画风（可融入，不要堆砌质量词）
+{style}
+
+## 世界观（用于服装/道具/质感，但不要把剧情写进定妆照）
+{worldview}
+
+## 角色信息（必须锁定外观关键词，避免同义改写）
+{characterName}
+{characterAppearance}
+
+配色参考（如果为空可忽略）:
+primaryColor={primaryColor}
+secondaryColor={secondaryColor}
+
+## 定妆照要求（必须遵守）
+1) 单人、全身、正面或 3/4 站姿；白色或浅色纯背景。
+2) 不要复杂场景，不要文字水印，不要多余人物，不要遮挡脸部。
+3) 角色外观关键词必须稳定：发型/发色/眼睛/服装/配饰/独特识别点不要同义改写。
+4) 生成 3 套：Midjourney / StableDiffusion / 通用（中英双语），均为“正向提示词”；SD 额外给 negative。
+5) 只输出 JSON，不要代码块、不要解释、不要多余文字。
+
+## 输出格式（严格 JSON）
+{
+  "anchors": {
+    "name": "角色名（用于锁定身份）",
+    "hair": "发型发色锚点（如：黑色短发/银色长发双马尾）",
+    "eyes": "眼睛锚点（如：蓝色杏眼/金色竖瞳）",
+    "face": "面部特征锚点（如：大眼睛/高鼻梁/圆脸）",
+    "bodyType": "体型锚点（如：纤细/高挑/健壮）",
+    "outfit": "服装锚点（如：白色衬衫+黑色西裤/红色连衣裙）",
+    "accessories": "配饰锚点（如：银色项链/黑框眼镜/无配饰）",
+    "distinctive": "独特识别特征（如：左眼下有泪痣/右手有疤痕）"
+  },
+  "colors": {
+    "primary": "#RRGGBB（角色主色调）",
+    "secondary": "#RRGGBB（角色副色调）",
+    "accent": "#RRGGBB（点缀色，可选）"
+  },
+  "prompts": {
+    "midjourney": "英文提示词，末尾包含 --ar 2:3 --v 6 --no text --no watermark --no extra people",
+    "stableDiffusion": {
+      "positive": "英文正向提示词（逗号分隔关键词）",
+      "negative": "英文负向提示词（如：text, watermark, multiple people, bad anatomy, extra limbs）"
+    },
+    "general": {
+      "zh": "中文通用描述（适配其他绘图工具）",
+      "en": "English general description"
+    }
+  },
+  "avoid": {
+    "zh": "避免元素（如：多余人物/文字水印/复杂背景/道具）",
+    "en": "Elements to avoid"
+  }
+}`,
+  },
+  {
+    key: 'web.json_repair.user',
+    title: 'JSON 修复（通用，user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：严格 JSON 输出。\n下游影响：用于修复角色卡/定妆照等 JSON 输出解析失败。',
+    category: 'web.ai.utils',
+    defaultContent: `你的上一条回复没有按要求输出严格 JSON（或缺少必要字段）。请把下面内容转换为严格 JSON 对象，并且【只输出 JSON】，不要输出任何解释或代码块标记。
+必须包含并填充以下字段（均为非空字符串，除非明确允许为空）：{keys}。{rules}
+
+【待转换内容】
+<<<
+{original}
+>>>`,
+  },
+  {
+    key: 'web.world_view.element.user',
+    title: '世界观要素生成（user）',
+    description:
+      '生效范围：Web 本地模式/前端直连。\n影响产物：世界观要素文本。\n下游影响：影响场景锚点/关键帧/整体一致性。',
+    category: 'web.ai.worldView',
+    defaultContent: `你是一位资深的世界观设计师。请为以下{typeLabel}生成详细的设定：
+
+标题：{title}
+故事背景：{summary}
+主角设定：{protagonist}
+视觉风格：{style}
+{existingContext}
+
+要求：
+1. 内容要与整体故事风格协调一致
+2. 细节要具体、可视化
+3. 保持内在逻辑自洽
+4. 长度控制在200-400字
+
+请直接输出设定内容：`,
+  },
+  {
+    key: 'ui.system_prompts.optimizer.system',
+    title: '系统提示词优化器（系统）',
+    description: '用于 AI 优化系统提示词文案本身的 system prompt。',
+    category: 'ui.systemPrompts',
+    defaultContent: [
+      '你是资深 Prompt Engineer。',
+      '你的任务是优化“系统提示词”文本，使其更清晰、可执行、约束明确，减少歧义，提高输出格式稳定性。',
+      '',
+      '要求：',
+      '1) 保留原意：不要改变任务目标与输出格式要求。',
+      '2) 不要引入新的占位符或依赖外部上下文。',
+      '3) 优先使用条目化结构，明确“必须/禁止/只输出”等强约束。',
+      '4) 不要输出解释、不要 Markdown、不要代码块；只输出优化后的“系统提示词正文”。',
+    ].join('\n'),
+  },
+  {
+    key: 'agent.canvas_patch_builder.system',
+    title: '画布工作流构建 Agent（系统）',
+    description: '用于将用户自然语言转为画布 patch(JSON ops) 的 system prompt。',
+    category: 'agent.canvas',
+    defaultContent: [
+      '你是“画布工作流构建 Agent”。你的任务：把用户的自然语言需求，转换成对画布的结构化修改。',
+      '',
+      '可用节点类型：',
+      '{{node_library}}',
+      '',
+      '你必须只输出 JSON（不要额外解释、不要 Markdown），格式如下：',
+      '{',
+      '  "assistantMessage": "给用户看的简短说明",',
+      '  "patch": {',
+      '    "ops": [',
+      '      { "op": "add_node", "node": { "type": "project", "data": { "label": "全局设定" } } },',
+      '      { "op": "connect", "edge": { "source": "nodeA", "target": "nodeB" } }',
+      '    ]',
+      '  }',
+      '}',
+      '',
+      '规则：',
+      '- 只能使用上述 op：add_node / update_node / delete_node / connect / delete_edge',
+      '- add_node.id/position 可省略；data 是一个 JSON 对象',
+      '- connect 需要使用现有 node id；edge.id 可省略',
+      '- assistantMessage 简短清晰（中文），不要超过 4 行',
     ].join('\n'),
   },
 ] as const;

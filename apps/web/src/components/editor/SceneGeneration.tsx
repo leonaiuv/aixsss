@@ -20,6 +20,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { AIFactory } from '@/lib/ai/factory';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
 import {
   logAICall,
   updateLogWithResponse,
@@ -214,53 +215,24 @@ export function SceneGeneration() {
       // 获取完整画风提示词
       const styleFullPrompt = getStyleFullPrompt(currentProject);
 
-      // 调用AI生成分镜列表
-      const prompt = `你是一位专业的分镜师。基于以下信息,将故事拆解为8-12个关键分镜节点:
-
-**故事梗概**:
-${currentProject.summary}
-
-**画风**: ${styleFullPrompt}
-**主角**: ${currentProject.protagonist}
-
-**要求**:
-1. 每个分镜用1句话概括(15-30字)
-2. 覆盖起承转合的关键节点
-3. 包含情绪转折和视觉冲击点
-4. 适合单幅图像表现
-
-**输出格式**(纯文本,每行一个分镜):
-1. [分镜描述]
-2. [分镜描述]
-...
-
-请开始生成:`;
+      const systemPrompt = await getSystemPromptContent('workflow.scene_list.system');
+      const userPrompt = [
+        '故事梗概：',
+        currentProject.summary || '-',
+        '',
+        `画风：${styleFullPrompt || '-'}`,
+        `主角：${currentProject.protagonist || '-'}`,
+      ].join('\n');
 
       // 记录AI调用日志
       logId = logAICall('scene_list_generation', {
         skillName: 'scene-list-generator',
-        promptTemplate: `你是一位专业的分镜师。基于以下信息,将故事拆解为8-12个关键分镜节点:
-
-**故事梗概**:
-{{summary}}
-
-**画风**: {{styleFullPrompt}}
-**主角**: {{protagonist}}
-
-**要求**:
-1. 每个分镜用1句话概括(15-30字)
-2. 覆盖起承转合的关键节点
-3. 包含情绪转折和视觉冲击点
-4. 适合单幅图像表现
-
-**输出格式**(纯文本,每行一个分镜):
-1. [分镜描述]
-2. [分镜描述]
-...
-
-请开始生成:`,
-        filledPrompt: prompt,
-        messages: [{ role: 'user', content: prompt }],
+        promptTemplate: systemPrompt,
+        filledPrompt: userPrompt,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
         context: {
           projectId: currentProject.id,
           projectTitle: currentProject.title,
@@ -281,7 +253,10 @@ ${currentProject.summary}
       // 更新进度
       updateLogProgress(logId, 30, '正在调用AI...');
 
-      const response = await client.chat([{ role: 'user', content: prompt }]);
+      const response = await client.chat([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ]);
 
       setGenerationProgress(60);
       updateLogProgress(logId, 70, '正在解析响应...');

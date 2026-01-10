@@ -109,18 +109,16 @@ export function AppSidebar({ onSearch, onConfig, onSettings }: AppSidebarProps) 
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {apiMode && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={isActive('/system-prompts')}
-                    onClick={() => navigate('/system-prompts')}
-                    tooltip="系统提示词"
-                  >
-                    <ScrollText className="h-4 w-4" />
-                    <span>系统提示词</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isActive('/system-prompts')}
+                  onClick={() => navigate('/system-prompts')}
+                  tooltip={apiMode ? '系统提示词（API 模式，保存后后端生效）' : '系统提示词（本地模式，保存到浏览器）'}
+                >
+                  <ScrollText className="h-4 w-4" />
+                  <span>系统提示词</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
               <SidebarMenuItem>
                 <SidebarMenuButton

@@ -13,6 +13,7 @@
 
 import { Scene, Project, SceneStatus, Skill, ChatMessage } from '@/types';
 import { notifyAIFallback } from './progressBridge';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
 
 // 依赖关系类型
 export type DependencyType = 'project_settings' | 'previous_scene' | 'scene_content';
@@ -442,7 +443,7 @@ export function analyzeWorldViewImpact(change: WorldViewChange, scenes: Scene[])
  * 创建单个分镜的快照
  */
 export function createSceneSnapshot(scene: Scene): SceneSnapshot {
-  const { id, projectId, ...data } = scene;
+  const { id: _id, projectId: _projectId, ...data } = scene;
   return {
     sceneId: scene.id,
     data,
@@ -591,10 +592,11 @@ export async function analyzeCharacterImpactWithAI(
 
     const updatePlan: UpdateAction[] = [];
     const affectedScenes: Scene[] = [];
+    const template = await getSystemPromptContent('web.cascade_updater.character_impact.user');
 
     // 为每个相关分镜进行AI分析
     for (const scene of candidateScenes) {
-      const prompt = CharacterImpactAnalysisSkill.promptTemplate
+      const prompt = template
         .replace('{character_name}', characterName)
         .replace('{changed_field}', change.field)
         .replace('{change_description}', changeDescription)
@@ -648,10 +650,11 @@ export async function analyzeWorldViewImpactWithAI(
 
     const updatePlan: UpdateAction[] = [];
     const affectedScenes: Scene[] = [];
+    const template = await getSystemPromptContent('web.cascade_updater.worldview_impact.user');
 
     // 为每个分镜进行AI分析
     for (const scene of candidateScenes) {
-      const prompt = WorldViewImpactAnalysisSkill.promptTemplate
+      const prompt = template
         .replace('{worldview_type}', change.type)
         .replace('{change_description}', changeDescription)
         .replace(

@@ -13,6 +13,7 @@
 
 import { Project, Scene, CompressionStrategy, Skill, ChatMessage } from '@/types';
 import { notifyAIFallback } from './progressBridge';
+import { getSystemPromptContent } from '@/lib/systemPrompts';
 
 // Token估算（简化版，1个汉字≈2 tokens，1个英文词≈1.3 tokens）
 function estimateTokens(text: string): number {
@@ -373,7 +374,8 @@ interface SimpleAIClient {
  */
 export async function extractMoodWithAI(client: SimpleAIClient, text: string): Promise<string> {
   try {
-    const prompt = MoodExtractionSkill.promptTemplate.replace('{text}', text);
+    const template = await getSystemPromptContent('web.context_compressor.mood.user');
+    const prompt = template.replace('{text}', text);
     const response = await client.chat([{ role: 'user', content: prompt }]);
     return response.content.trim();
   } catch (error) {
@@ -392,7 +394,8 @@ export async function extractKeyElementWithAI(
   text: string,
 ): Promise<string> {
   try {
-    const prompt = KeyElementExtractionSkill.promptTemplate.replace('{text}', text);
+    const template = await getSystemPromptContent('web.context_compressor.key_element.user');
+    const prompt = template.replace('{text}', text);
     const response = await client.chat([{ role: 'user', content: prompt }]);
     return response.content.trim();
   } catch (error) {
@@ -412,7 +415,8 @@ export async function compressTextWithAI(
   targetLength: number,
 ): Promise<string> {
   try {
-    const prompt = SmartSummarySkill.promptTemplate
+    const template = await getSystemPromptContent('web.context_compressor.smart_summary.user');
+    const prompt = template
       .replace('{text}', text)
       .replace('{target_length}', String(targetLength));
     const response = await client.chat([{ role: 'user', content: prompt }]);
