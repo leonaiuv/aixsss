@@ -456,7 +456,9 @@ export function SceneRefinement() {
       const prevSceneSummary =
         currentSceneIndex > 0 ? scenes[currentSceneIndex - 1].summary : undefined;
 
-      const worldViewContext = shouldInjectWorldView ? buildWorldViewContext(worldViewElements) : '';
+      const worldViewContext = shouldInjectWorldView
+        ? buildWorldViewContext(worldViewElements)
+        : '';
       const userPrompt = [
         '## 输入',
         '视觉风格参考（可轻量融入，不要堆砌质量词）:',
@@ -523,7 +525,7 @@ export function SceneRefinement() {
           { role: 'user', content: userPrompt },
         ],
         {
-        signal: abortController.signal,
+          signal: abortController.signal,
         },
       );
 
@@ -622,7 +624,10 @@ export function SceneRefinement() {
       const systemPrompt = await getSystemPromptContent('workflow.keyframe_prompt.legacy.system');
       const castNames =
         castCharacters.length > 0
-          ? castCharacters.map((c) => c.name).filter(Boolean).join('、')
+          ? castCharacters
+              .map((c) => c.name)
+              .filter(Boolean)
+              .join('、')
           : currentProject.protagonist || '-';
 
       const userPrompt = [
@@ -891,7 +896,10 @@ export function SceneRefinement() {
       const systemPrompt = await getSystemPromptContent('workflow.dialogue.system');
       const castNames =
         castCharacters.length > 0
-          ? castCharacters.map((c) => c.name).filter(Boolean).join('、')
+          ? castCharacters
+              .map((c) => c.name)
+              .filter(Boolean)
+              .join('、')
           : '-';
       const userPrompt = [
         '分镜概要:',

@@ -183,10 +183,7 @@ export async function buildJsonRepairPrompt(options: {
     : '';
   const original = options.raw?.trim() ?? '';
 
-  return template
-    .replace('{keys}', keys)
-    .replace('{rules}', rules)
-    .replace('{original}', original);
+  return template.replace('{keys}', keys).replace('{rules}', rules).replace('{original}', original);
 }
 
 export function mergeTokenUsage(

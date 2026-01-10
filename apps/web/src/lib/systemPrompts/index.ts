@@ -1,5 +1,9 @@
 import { SYSTEM_PROMPT_DEFINITION_BY_KEY, SYSTEM_PROMPT_DEFINITIONS } from '@aixsss/shared';
-import { apiListSystemPrompts, apiUpdateSystemPrompt, type ApiSystemPrompt } from '@/lib/api/systemPrompts';
+import {
+  apiListSystemPrompts,
+  apiUpdateSystemPrompt,
+  type ApiSystemPrompt,
+} from '@/lib/api/systemPrompts';
 import { isApiMode } from '@/lib/runtime/mode';
 
 const LOCAL_OVERRIDES_STORAGE_KEY = 'aixsss.system_prompts.overrides.v1';
@@ -119,7 +123,10 @@ export async function getSystemPromptContent(key: string): Promise<string> {
   return def.defaultContent;
 }
 
-export async function saveSystemPromptContent(key: string, content: string): Promise<ApiSystemPrompt> {
+export async function saveSystemPromptContent(
+  key: string,
+  content: string,
+): Promise<ApiSystemPrompt> {
   const def = SYSTEM_PROMPT_DEFINITION_BY_KEY[key];
   if (!def) throw new Error(`Unknown system prompt key: ${key}`);
 
@@ -173,4 +180,3 @@ export async function resetSystemPromptContent(key: string): Promise<ApiSystemPr
     updatedAt: null,
   };
 }
-

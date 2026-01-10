@@ -201,7 +201,10 @@ export function SystemPromptsPage() {
         setItems((prev) =>
           prev.map((it) => (it.key === key ? { ...it, ...toViewItemsFromApi([updated])[0] } : it)),
         );
-        toast({ title: apiMode ? '已重置为默认并保存到后端' : '已重置为默认（本地）', description: key });
+        toast({
+          title: apiMode ? '已重置为默认并保存到后端' : '已重置为默认（本地）',
+          description: key,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         toast({ title: '重置失败', description: message, variant: 'destructive' });
@@ -237,7 +240,9 @@ export function SystemPromptsPage() {
         const client = AIFactory.createClient(config);
         const optimizerItem = items.find((it) => it.key === OPTIMIZER_SYSTEM_PROMPT_KEY);
         const optimizerSystemPrompt = (
-          draftByKey[OPTIMIZER_SYSTEM_PROMPT_KEY] ?? optimizerItem?.content ?? OPTIMIZER_SYSTEM_PROMPT
+          draftByKey[OPTIMIZER_SYSTEM_PROMPT_KEY] ??
+          optimizerItem?.content ??
+          OPTIMIZER_SYSTEM_PROMPT
         ).trim();
 
         const res = await client.chat([
@@ -273,7 +278,9 @@ export function SystemPromptsPage() {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">系统提示词</h1>
           <p className="text-sm text-muted-foreground">
-            管理系统内置提示词（system/user）。{apiMode ? '保存到后端，影响后端链路。' : '保存到浏览器本地，影响本地链路。'}每条提示词下方会标注影响产物与下游链路。
+            管理系统内置提示词（system/user）。
+            {apiMode ? '保存到后端，影响后端链路。' : '保存到浏览器本地，影响本地链路。'}
+            每条提示词下方会标注影响产物与下游链路。
           </p>
         </div>
 
@@ -385,10 +392,7 @@ export function SystemPromptsPage() {
                             </div>
 
                             <div className="flex flex-wrap gap-2">
-                              <Button
-                                onClick={() => void handleSave(it.key)}
-                                disabled={busy}
-                              >
+                              <Button onClick={() => void handleSave(it.key)} disabled={busy}>
                                 {savingKey === it.key ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (

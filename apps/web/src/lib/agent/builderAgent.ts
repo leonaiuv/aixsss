@@ -139,7 +139,9 @@ function buildLegacySystemPrompt(params: {
 const CANVAS_PATCH_BUILDER_SYSTEM_PROMPT_KEY = 'agent.canvas_patch_builder.system';
 const NODE_LIBRARY_PLACEHOLDER = '{{node_library}}';
 
-function formatNodeLibrary(nodeLibrary: Array<{ type: AgentCanvasNodeType; label: string; description: string }>): string {
+function formatNodeLibrary(
+  nodeLibrary: Array<{ type: AgentCanvasNodeType; label: string; description: string }>,
+): string {
   return nodeLibrary.map((n) => `- ${n.type}: ${n.label}（${n.description}）`).join('\n');
 }
 

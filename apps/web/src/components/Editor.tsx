@@ -201,7 +201,9 @@ function LegacyEditor() {
             const prevScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
 
             const systemPrompt = await getSystemPromptContent('workflow.scene_anchor.system');
-            const worldViewContext = shouldInjectWorldView ? buildWorldViewContext(worldViewElements) : '';
+            const worldViewContext = shouldInjectWorldView
+              ? buildWorldViewContext(worldViewElements)
+              : '';
             const userPrompt = [
               '## 输入',
               '视觉风格参考（可轻量融入，不要堆砌质量词）:',
@@ -213,7 +215,9 @@ function LegacyEditor() {
               '上一分镜概要（仅用于理解衔接，不要把人物/动作写进场景锚点）:',
               prevScene?.summary || '-',
               worldViewContext.trim()
-                ? ['', '世界观（用于环境/空间一致性；如无可忽略）：', worldViewContext.trim()].join('\n')
+                ? ['', '世界观（用于环境/空间一致性；如无可忽略）：', worldViewContext.trim()].join(
+                    '\n',
+                  )
                 : '',
             ]
               .filter(Boolean)
@@ -226,13 +230,13 @@ function LegacyEditor() {
             let logId = '';
 
             try {
-                logId = logAICall('scene_description', {
-                  skillName: sceneSkill.name,
-                  promptTemplate: systemPrompt,
-                  filledPrompt: userPrompt,
-                  messages: [...messages],
-                  context: {
-                    projectId: currentProject.id,
+              logId = logAICall('scene_description', {
+                skillName: sceneSkill.name,
+                promptTemplate: systemPrompt,
+                filledPrompt: userPrompt,
+                messages: [...messages],
+                context: {
+                  projectId: currentProject.id,
                   projectTitle: currentProject.title,
                   style: styleFullPrompt,
                   protagonist: currentProject.protagonist,
@@ -323,7 +327,9 @@ function LegacyEditor() {
           if (keyframeSkill) {
             const sceneIndex = scenes.findIndex((s) => s.id === sceneId);
             const prevScene = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
-            const systemPrompt = await getSystemPromptContent('workflow.keyframe_prompt.legacy.system');
+            const systemPrompt = await getSystemPromptContent(
+              'workflow.keyframe_prompt.legacy.system',
+            );
             const castIds = latestScene1.castCharacterIds ?? [];
             const castNames =
               castIds.length > 0
