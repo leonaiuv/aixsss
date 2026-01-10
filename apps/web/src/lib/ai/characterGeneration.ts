@@ -191,7 +191,10 @@ export async function buildJsonRepairPrompt(options: {
     : '';
   const original = options.raw?.trim() ?? '';
 
-  const prompt = template.replace('{keys}', keys).replace('{rules}', rules).replace('{original}', original);
+  const prompt = template
+    .replace('{keys}', keys)
+    .replace('{rules}', rules)
+    .replace('{original}', original);
   return { key: JSON_REPAIR_PROMPT_KEY, template, prompt };
 }
 

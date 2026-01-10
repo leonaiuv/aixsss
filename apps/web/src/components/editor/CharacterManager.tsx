@@ -918,8 +918,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         ? `${briefDescription}\n（色彩偏好：${colorHints}）`
         : briefDescription;
 
-      const { key: basicInfoPromptKey, template: basicInfoPromptTemplate, prompt } =
-        await buildCharacterBasicInfoPrompt({
+      const {
+        key: basicInfoPromptKey,
+        template: basicInfoPromptTemplate,
+        prompt,
+      } = await buildCharacterBasicInfoPrompt({
         briefDescription: briefForPrompt,
         summary: (currentProject?.summary ?? '').trim(),
         protagonist: (currentProject?.protagonist ?? '').trim(),
@@ -1259,8 +1262,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
       const shouldInjectWorldView = shouldInjectAtCharacter(injectionSettings);
       const worldViewForPrompt = shouldInjectWorldView ? projectWorldViewElements : [];
 
-      const { key: portraitPromptKey, template: portraitPromptTemplate, prompt } =
-        await buildCharacterPortraitPrompt({
+      const {
+        key: portraitPromptKey,
+        template: portraitPromptTemplate,
+        prompt,
+      } = await buildCharacterPortraitPrompt({
         characterName: formData.name,
         characterAppearance: formData.appearance,
         primaryColor: formData.primaryColor?.trim() || undefined,
@@ -1540,8 +1546,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         currentProject?.artStyleConfig ??
         (currentProject?.style ? migrateOldStyleToConfig(currentProject.style) : undefined);
 
-      const { key: portraitPromptKey, template: portraitPromptTemplate, prompt } =
-        await buildCharacterPortraitPrompt({
+      const {
+        key: portraitPromptKey,
+        template: portraitPromptTemplate,
+        prompt,
+      } = await buildCharacterPortraitPrompt({
         characterName: character.name,
         characterAppearance: appearance,
         primaryColor: character.primaryColor?.trim() || undefined,
@@ -1766,8 +1775,11 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
         });
         let logId = '';
         try {
-          const { key: portraitPromptKey, template: portraitPromptTemplate, prompt } =
-            await buildCharacterPortraitPrompt({
+          const {
+            key: portraitPromptKey,
+            template: portraitPromptTemplate,
+            prompt,
+          } = await buildCharacterPortraitPrompt({
             characterName: character.name,
             characterAppearance: character.appearance,
             primaryColor: character.primaryColor?.trim() || undefined,

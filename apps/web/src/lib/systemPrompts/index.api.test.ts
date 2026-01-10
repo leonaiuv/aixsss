@@ -40,20 +40,22 @@ describe('systemPrompts (api mode)', () => {
     }));
 
     mocks.apiListSystemPrompts.mockResolvedValue(apiItems);
-    mocks.apiUpdateSystemPrompt.mockImplementation(async (key: string, input: { content: string }) => {
-      const def = SYSTEM_PROMPT_DEFINITIONS.find((d) => d.key === key);
-      if (!def) throw new Error(`Unknown system prompt key: ${key}`);
-      return {
-        key,
-        title: def.title,
-        description: def.description ?? null,
-        category: def.category,
-        content: input.content,
-        defaultContent: def.defaultContent,
-        createdAt: null,
-        updatedAt: new Date().toISOString(),
-      };
-    });
+    mocks.apiUpdateSystemPrompt.mockImplementation(
+      async (key: string, input: { content: string }) => {
+        const def = SYSTEM_PROMPT_DEFINITIONS.find((d) => d.key === key);
+        if (!def) throw new Error(`Unknown system prompt key: ${key}`);
+        return {
+          key,
+          title: def.title,
+          description: def.description ?? null,
+          category: def.category,
+          content: input.content,
+          defaultContent: def.defaultContent,
+          createdAt: null,
+          updatedAt: new Date().toISOString(),
+        };
+      },
+    );
   });
 
   it('reads from API list cache', async () => {
@@ -75,4 +77,3 @@ describe('systemPrompts (api mode)', () => {
     expect(await getSystemPromptContent(key)).toBe('NEW_CONTENT');
   });
 });
-

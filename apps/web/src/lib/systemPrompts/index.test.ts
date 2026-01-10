@@ -41,4 +41,3 @@ describe('systemPrompts (local mode)', () => {
     expect(await getSystemPromptContent(key)).toBe(baseline);
   });
 });
-

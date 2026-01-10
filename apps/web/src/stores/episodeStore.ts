@@ -212,7 +212,10 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       messages: [{ role: 'user', content: safeJson(input) }],
       context: {
         projectId: input.projectId,
-        systemPromptKeys: ['workflow.plan_episodes.system', 'workflow.plan_episodes.json_fix.system'],
+        systemPromptKeys: [
+          'workflow.plan_episodes.system',
+          'workflow.plan_episodes.json_fix.system',
+        ],
       },
       config: {
         provider: cfg?.provider ?? 'api',
@@ -322,7 +325,10 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       promptTemplate: 'POST /workflow/projects/{{projectId}}/episodes/{{episodeId}}/scene-list',
       filledPrompt: `POST /workflow/projects/${input.projectId}/episodes/${input.episodeId}/scene-list`,
       messages: [{ role: 'user', content: safeJson(input) }],
-      context: { projectId: input.projectId, systemPromptKey: 'workflow.episode_scene_list.system' },
+      context: {
+        projectId: input.projectId,
+        systemPromptKey: 'workflow.episode_scene_list.system',
+      },
       config: {
         provider: cfg?.provider ?? 'api',
         model: cfg?.model ?? 'workflow',
