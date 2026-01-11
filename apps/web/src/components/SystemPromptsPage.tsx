@@ -280,7 +280,7 @@ export function SystemPromptsPage() {
           <p className="text-sm text-muted-foreground">
             管理系统内置提示词（system/user）。
             {apiMode ? '保存到后端，影响后端链路。' : '保存到浏览器本地，影响本地链路。'}
-            每条提示词下方会标注影响产物与下游链路。
+            「默认（只读）」来自代码内置版本；「当前（可编辑）」为实际生效内容。未自定义的提示词会自动跟随默认更新；保存后视为自定义，将固定使用你的版本，可用“重置并保存”恢复跟随默认。
           </p>
         </div>
 

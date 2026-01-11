@@ -386,6 +386,199 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueGenerateStoryboardSceneBible(
+    teamId: string,
+    projectId: string,
+    sceneId: string,
+    aiProfileId: string,
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'generate_storyboard_scene_bible',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_storyboard_scene_bible',
+      { teamId, projectId, sceneId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueGenerateStoryboardPlan(
+    teamId: string,
+    projectId: string,
+    sceneId: string,
+    aiProfileId: string,
+    options?: { cameraMode?: 'A' | 'B' },
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'generate_storyboard_plan',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_storyboard_plan',
+      {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        jobId: jobRow.id,
+        ...(options?.cameraMode ? { cameraMode: options.cameraMode } : {}),
+      },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueGenerateStoryboardGroup(
+    teamId: string,
+    projectId: string,
+    sceneId: string,
+    aiProfileId: string,
+    groupId: string,
+    options?: { cameraMode?: 'A' | 'B' },
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'generate_storyboard_group',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_storyboard_group',
+      {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        jobId: jobRow.id,
+        groupId,
+        ...(options?.cameraMode ? { cameraMode: options.cameraMode } : {}),
+      },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueTranslateStoryboardPanels(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'translate_storyboard_panels',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'translate_storyboard_panels',
+      { teamId, projectId, sceneId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueBackTranslateStoryboardPanels(
+    teamId: string,
+    projectId: string,
+    sceneId: string,
+    aiProfileId: string,
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'back_translate_storyboard_panels',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'back_translate_storyboard_panels',
+      { teamId, projectId, sceneId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async enqueueGenerateKeyframeImages(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
     await this.requireProject(teamId, projectId);
     await this.requireScene(projectId, sceneId);

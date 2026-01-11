@@ -117,6 +117,80 @@ export async function apiWorkflowGenerateKeyframePrompt(input: {
   );
 }
 
+export async function apiWorkflowGenerateStoryboardSceneBible(input: {
+  projectId: string;
+  sceneId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
+      input.sceneId,
+    )}/storyboard/scene-bible`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
+export async function apiWorkflowGenerateStoryboardPlan(input: {
+  projectId: string;
+  sceneId: string;
+  aiProfileId: string;
+  cameraMode?: 'A' | 'B';
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
+      input.sceneId,
+    )}/storyboard/plan`,
+    {
+      method: 'POST',
+      body: { aiProfileId: input.aiProfileId, ...(input.cameraMode ? { cameraMode: input.cameraMode } : {}) },
+    },
+  );
+}
+
+export async function apiWorkflowGenerateStoryboardGroup(input: {
+  projectId: string;
+  sceneId: string;
+  groupId: string;
+  aiProfileId: string;
+  cameraMode?: 'A' | 'B';
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
+      input.sceneId,
+    )}/storyboard/groups/${encodeURIComponent(input.groupId)}`,
+    {
+      method: 'POST',
+      body: { aiProfileId: input.aiProfileId, ...(input.cameraMode ? { cameraMode: input.cameraMode } : {}) },
+    },
+  );
+}
+
+export async function apiWorkflowTranslateStoryboardPanels(input: {
+  projectId: string;
+  sceneId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
+      input.sceneId,
+    )}/storyboard/translate`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
+export async function apiWorkflowBackTranslateStoryboardPanels(input: {
+  projectId: string;
+  sceneId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
+      input.sceneId,
+    )}/storyboard/back-translate`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
 export async function apiWorkflowGenerateKeyframeImages(input: {
   projectId: string;
   sceneId: string;

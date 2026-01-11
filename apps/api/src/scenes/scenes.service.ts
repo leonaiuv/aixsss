@@ -117,6 +117,9 @@ export class ScenesService {
         shotPrompt: input.shotPrompt ?? '',
         motionPrompt: input.motionPrompt ?? '',
         generatedImages: (input.generatedImages ?? undefined) as Prisma.InputJsonValue,
+        storyboardSceneBibleJson: input.storyboardSceneBibleJson as Prisma.InputJsonValue,
+        storyboardPlanJson: input.storyboardPlanJson as Prisma.InputJsonValue,
+        storyboardGroupsJson: input.storyboardGroupsJson as Prisma.InputJsonValue,
         dialogues: input.dialogues ?? undefined,
         contextSummary: input.contextSummary ?? undefined,
         status: (input.status as SceneStatus) ?? undefined,
@@ -141,6 +144,9 @@ export class ScenesService {
         shotPrompt: input.shotPrompt ?? '',
         motionPrompt: input.motionPrompt ?? '',
         generatedImages: (input.generatedImages ?? undefined) as Prisma.InputJsonValue,
+        storyboardSceneBibleJson: input.storyboardSceneBibleJson as Prisma.InputJsonValue,
+        storyboardPlanJson: input.storyboardPlanJson as Prisma.InputJsonValue,
+        storyboardGroupsJson: input.storyboardGroupsJson as Prisma.InputJsonValue,
         dialogues: input.dialogues ?? undefined,
         contextSummary: input.contextSummary ?? undefined,
         status: (input.status as SceneStatus) ?? undefined,
@@ -170,6 +176,15 @@ export class ScenesService {
         ...(typeof input.motionPrompt === 'string' ? { motionPrompt: input.motionPrompt } : {}),
         ...(input.generatedImages !== undefined
           ? { generatedImages: input.generatedImages as Prisma.InputJsonValue }
+          : {}),
+        ...(input.storyboardSceneBibleJson !== undefined
+          ? { storyboardSceneBibleJson: input.storyboardSceneBibleJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.storyboardPlanJson !== undefined
+          ? { storyboardPlanJson: input.storyboardPlanJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.storyboardGroupsJson !== undefined
+          ? { storyboardGroupsJson: input.storyboardGroupsJson as Prisma.InputJsonValue }
           : {}),
         ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),
         ...(input.contextSummary !== undefined
@@ -208,6 +223,15 @@ export class ScenesService {
         ...(typeof input.motionPrompt === 'string' ? { motionPrompt: input.motionPrompt } : {}),
         ...(input.generatedImages !== undefined
           ? { generatedImages: input.generatedImages as Prisma.InputJsonValue }
+          : {}),
+        ...(input.storyboardSceneBibleJson !== undefined
+          ? { storyboardSceneBibleJson: input.storyboardSceneBibleJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.storyboardPlanJson !== undefined
+          ? { storyboardPlanJson: input.storyboardPlanJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.storyboardGroupsJson !== undefined
+          ? { storyboardGroupsJson: input.storyboardGroupsJson as Prisma.InputJsonValue }
           : {}),
         ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),
         ...(input.contextSummary !== undefined

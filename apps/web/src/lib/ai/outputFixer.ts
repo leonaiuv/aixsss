@@ -25,11 +25,10 @@ export function isStructuredOutput(type: FixableOutputType, text: string): boole
   switch (type) {
     case 'scene_anchor':
       return parseSceneAnchorText(content).isStructured;
-    case 'keyframe_prompt':
-      {
-        const parsed = parseKeyframePromptText(content);
-        return parsed.isStructured && parsed.filledKeyframeCount >= parsed.keyframeKeys.length;
-      }
+    case 'keyframe_prompt': {
+      const parsed = parseKeyframePromptText(content);
+      return parsed.isStructured && parsed.filledKeyframeCount >= parsed.keyframeKeys.length;
+    }
     case 'motion_prompt':
       return parseMotionPromptText(content).isStructured;
     default:

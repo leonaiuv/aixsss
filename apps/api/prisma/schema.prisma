@@ -210,6 +210,9 @@ model Scene {
   keyframeGroupsJson Json?
   /** 可选：按 beat 的运动提示（后续 I2V 用） */
   motionGroupsJson Json?
+  storyboardSceneBibleJson Json?
+  storyboardPlanJson Json?
+  storyboardGroupsJson Json?
   generatedImages  Json?
   dialogues        Json?
   contextSummary   Json?
@@ -330,12 +333,13 @@ model AIJob {
 }
 
 model SystemPrompt {
-  id        String   @id @default(cuid())
-  teamId    String
-  key       String
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  teamId        String
+  key           String
+  content       String
+  isCustomized  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 

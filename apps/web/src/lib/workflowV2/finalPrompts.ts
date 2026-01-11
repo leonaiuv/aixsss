@@ -124,10 +124,7 @@ export function buildSceneAnchorCopyText(scene: Scene): { zh: string; en: string
 /**
  * 构建完整的关键帧提示词复制文本（单个关键帧）
  */
-export function buildKeyframeCopyText(
-  scene: Scene,
-  kfKey: string,
-): { zh: string; en: string } {
+export function buildKeyframeCopyText(scene: Scene, kfKey: string): { zh: string; en: string } {
   const parsed = parseKeyframePromptText(scene.shotPrompt || '');
 
   if (parsed.isJson && parsed.rawJson) {
@@ -204,7 +201,9 @@ export function buildFinalPromptPack(scene: Scene, styleFullPrompt: string): Fin
 
   const buildImage = (locale: PromptLocale): string[] => {
     const anchor = buildAnchorMain(scene, locale);
-    return keyframeKeys.map((kfKey) => joinBlocks([style, anchor, buildKeyframePrompt(scene, kfKey, locale)]));
+    return keyframeKeys.map((kfKey) =>
+      joinBlocks([style, anchor, buildKeyframePrompt(scene, kfKey, locale)]),
+    );
   };
 
   const buildNegative = (locale: PromptLocale): string =>

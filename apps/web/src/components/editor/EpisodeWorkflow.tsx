@@ -14,6 +14,11 @@ import {
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import {
   apiWorkflowGenerateKeyframeImages,
+  apiWorkflowGenerateStoryboardGroup,
+  apiWorkflowGenerateStoryboardPlan,
+  apiWorkflowGenerateStoryboardSceneBible,
+  apiWorkflowBackTranslateStoryboardPanels,
+  apiWorkflowTranslateStoryboardPanels,
   apiWorkflowRefineAllScenes,
   apiWorkflowRefineSceneAll,
 } from '@/lib/api/workflow';
@@ -146,6 +151,10 @@ type BatchRefineProgress = NormalizedJobProgress & {
   completedSceneIds: string[];
   failedScenes: BatchFailedScene[];
 };
+
+type StoryboardJobState =
+  | { sceneId: string; type: 'scene_bible' | 'plan' | 'translate' | 'back_translate' }
+  | { sceneId: string; type: 'group'; groupId: string };
 
 interface JobProgressLike {
   pct?: unknown;
@@ -369,6 +378,8 @@ export function EpisodeWorkflow() {
   const [isRefining, setIsRefining] = useState(false);
   const [refineJobProgress, setRefineJobProgress] = useState<NormalizedJobProgress | null>(null);
   const [generatingImagesSceneId, setGeneratingImagesSceneId] = useState<string | null>(null);
+  const [storyboardJob, setStoryboardJob] = useState<StoryboardJobState | null>(null);
+  const [storyboardJobProgress, setStoryboardJobProgress] = useState<NormalizedJobProgress | null>(null);
   const [refineAllProgress, setRefineAllProgress] = useState<BatchRefineProgress | null>(null);
   const [refineAllJobRunning, setRefineAllJobRunning] = useState(false);
   const [refineAllFailedScenes, setRefineAllFailedScenes] = useState<BatchFailedScene[]>([]);
@@ -865,6 +876,403 @@ export function EpisodeWorkflow() {
       toast({ title: '图片生成失败', description: detail, variant: 'destructive' });
     } finally {
       setGeneratingImagesSceneId(null);
+    }
+  };
+
+  const handleGenerateStoryboardSceneBible = async (sceneId: string) => {
+    if (!aiProfileId || !currentProject?.id) return;
+    const currentScene = scenes.find((s) => s.id === sceneId);
+    const logId = logAICall('storyboard_scene_bible', {
+      skillName: 'workflow:storyboard_scene_bible',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/scene-bible',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/scene-bible`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            sceneId,
+            aiProfileId,
+            sceneOrder: currentScene?.order,
+            sceneSummary: currentScene?.summary,
+          }),
+        },
+      ],
+      context: {
+        systemPromptKeys: ['workflow.storyboard.scene_bible.system'],
+        projectId: currentProject.id,
+        sceneId,
+        sceneOrder: currentScene?.order,
+        sceneSummary: currentScene?.summary,
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    setStoryboardJob({ sceneId, type: 'scene_bible' });
+    setStoryboardJobProgress(null);
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      const job = await apiWorkflowGenerateStoryboardSceneBible({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        timeoutMs: 30 * 60_000,
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          setStoryboardJobProgress(next);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+      const result = (finished.result ?? null) as unknown;
+      const tokenUsage = normalizeJobTokenUsage(
+        result && typeof result === 'object'
+          ? (result as { tokenUsage?: unknown }).tokenUsage
+          : null,
+      );
+      updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+      toast({ title: 'SceneBible 已生成', description: '已写入本分镜的压缩档（SceneBible）。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (isAbortError(error)) {
+        updateLogWithCancelled(logId);
+      } else {
+        updateLogWithError(logId, detail);
+      }
+      toast({ title: 'SceneBible 生成失败', description: detail, variant: 'destructive' });
+    } finally {
+      setStoryboardJob(null);
+      setStoryboardJobProgress(null);
+    }
+  };
+
+  const handleGenerateStoryboardPlan = async (sceneId: string, cameraMode?: 'A' | 'B') => {
+    if (!aiProfileId || !currentProject?.id) return;
+    const currentScene = scenes.find((s) => s.id === sceneId);
+    const logId = logAICall('storyboard_plan', {
+      skillName: 'workflow:storyboard_plan',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/plan',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/plan`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            sceneId,
+            aiProfileId,
+            cameraMode: cameraMode ?? null,
+            sceneOrder: currentScene?.order,
+            sceneSummary: currentScene?.summary,
+          }),
+        },
+      ],
+      context: {
+        systemPromptKeys: ['workflow.storyboard.plan.system'],
+        projectId: currentProject.id,
+        sceneId,
+        sceneOrder: currentScene?.order,
+        sceneSummary: currentScene?.summary,
+        cameraMode,
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    setStoryboardJob({ sceneId, type: 'plan' });
+    setStoryboardJobProgress(null);
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      const job = await apiWorkflowGenerateStoryboardPlan({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+        cameraMode,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        timeoutMs: 30 * 60_000,
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          setStoryboardJobProgress(next);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+      const result = (finished.result ?? null) as unknown;
+      const tokenUsage = normalizeJobTokenUsage(
+        result && typeof result === 'object'
+          ? (result as { tokenUsage?: unknown }).tokenUsage
+          : null,
+      );
+      updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+      toast({ title: 'StoryboardPlan 已生成', description: '已生成 9 组大纲并初始化 KF0-KF8 状态。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (isAbortError(error)) {
+        updateLogWithCancelled(logId);
+      } else {
+        updateLogWithError(logId, detail);
+      }
+      toast({ title: 'StoryboardPlan 生成失败', description: detail, variant: 'destructive' });
+    } finally {
+      setStoryboardJob(null);
+      setStoryboardJobProgress(null);
+    }
+  };
+
+  const handleGenerateStoryboardGroup = async (
+    sceneId: string,
+    groupId: string,
+    cameraMode?: 'A' | 'B',
+  ) => {
+    if (!aiProfileId || !currentProject?.id) return;
+    const currentScene = scenes.find((s) => s.id === sceneId);
+    const logId = logAICall('storyboard_group', {
+      skillName: 'workflow:storyboard_group',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/groups/{{groupId}}',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/groups/${groupId}`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            sceneId,
+            groupId,
+            aiProfileId,
+            cameraMode: cameraMode ?? null,
+            sceneOrder: currentScene?.order,
+            sceneSummary: currentScene?.summary,
+          }),
+        },
+      ],
+      context: {
+        systemPromptKeys: [
+          'workflow.storyboard.group.system',
+          'workflow.format_fix.storyboard_group.system',
+          'workflow.continuity_repair.storyboard_group.system',
+        ],
+        projectId: currentProject.id,
+        sceneId,
+        groupId,
+        sceneOrder: currentScene?.order,
+        sceneSummary: currentScene?.summary,
+        cameraMode,
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    setStoryboardJob({ sceneId, type: 'group', groupId });
+    setStoryboardJobProgress(null);
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      const job = await apiWorkflowGenerateStoryboardGroup({
+        projectId: currentProject.id,
+        sceneId,
+        groupId,
+        aiProfileId,
+        cameraMode,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        timeoutMs: 30 * 60_000,
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          setStoryboardJobProgress(next);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+      const result = (finished.result ?? null) as unknown;
+      const tokenUsage = normalizeJobTokenUsage(
+        result && typeof result === 'object'
+          ? (result as { tokenUsage?: unknown }).tokenUsage
+          : null,
+      );
+      updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+      toast({ title: `${groupId} 已生成`, description: '已生成 9 格内容并更新 continuity.end_state。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (isAbortError(error)) {
+        updateLogWithCancelled(logId);
+      } else {
+        updateLogWithError(logId, detail);
+      }
+      toast({ title: `${groupId} 生成失败`, description: detail, variant: 'destructive' });
+    } finally {
+      setStoryboardJob(null);
+      setStoryboardJobProgress(null);
+    }
+  };
+
+  const handleTranslateStoryboardPanels = async (sceneId: string) => {
+    if (!aiProfileId || !currentProject?.id) return;
+    const currentScene = scenes.find((s) => s.id === sceneId);
+    const logId = logAICall('storyboard_translate', {
+      skillName: 'workflow:storyboard_translate',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/translate',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/translate`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            sceneId,
+            aiProfileId,
+            sceneOrder: currentScene?.order,
+            sceneSummary: currentScene?.summary,
+          }),
+        },
+      ],
+      context: {
+        systemPromptKeys: ['workflow.storyboard.translate_panels.system'],
+        projectId: currentProject.id,
+        sceneId,
+        sceneOrder: currentScene?.order,
+        sceneSummary: currentScene?.summary,
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    setStoryboardJob({ sceneId, type: 'translate' });
+    setStoryboardJobProgress(null);
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      const job = await apiWorkflowTranslateStoryboardPanels({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        timeoutMs: 30 * 60_000,
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          setStoryboardJobProgress(next);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+      const result = (finished.result ?? null) as unknown;
+      const tokenUsage = normalizeJobTokenUsage(
+        result && typeof result === 'object'
+          ? (result as { tokenUsage?: unknown }).tokenUsage
+          : null,
+      );
+      updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+      toast({ title: '翻译完成', description: '已写入 panels[].zh（仅用于阅读/编辑）。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (isAbortError(error)) {
+        updateLogWithCancelled(logId);
+      } else {
+        updateLogWithError(logId, detail);
+      }
+      toast({ title: '翻译失败', description: detail, variant: 'destructive' });
+    } finally {
+      setStoryboardJob(null);
+      setStoryboardJobProgress(null);
+    }
+  };
+
+  const handleBackTranslateStoryboardPanels = async (sceneId: string) => {
+    if (!aiProfileId || !currentProject?.id) return;
+    const currentScene = scenes.find((s) => s.id === sceneId);
+    const logId = logAICall('storyboard_back_translate', {
+      skillName: 'workflow:storyboard_back_translate',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/back-translate',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/back-translate`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            sceneId,
+            aiProfileId,
+            sceneOrder: currentScene?.order,
+            sceneSummary: currentScene?.summary,
+          }),
+        },
+      ],
+      context: {
+        systemPromptKeys: ['workflow.storyboard.back_translate_panels.system'],
+        projectId: currentProject.id,
+        sceneId,
+        sceneOrder: currentScene?.order,
+        sceneSummary: currentScene?.summary,
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    setStoryboardJob({ sceneId, type: 'back_translate' });
+    setStoryboardJobProgress(null);
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      const job = await apiWorkflowBackTranslateStoryboardPanels({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        timeoutMs: 30 * 60_000,
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          setStoryboardJobProgress(next);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+      const result = (finished.result ?? null) as unknown;
+      const tokenUsage = normalizeJobTokenUsage(
+        result && typeof result === 'object'
+          ? (result as { tokenUsage?: unknown }).tokenUsage
+          : null,
+      );
+      updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+      toast({ title: '回译完成', description: '已将 dirty 面板回译覆盖英文并重新渲染 prompt。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (isAbortError(error)) {
+        updateLogWithCancelled(logId);
+      } else {
+        updateLogWithError(logId, detail);
+      }
+      toast({ title: '回译失败', description: detail, variant: 'destructive' });
+    } finally {
+      setStoryboardJob(null);
+      setStoryboardJobProgress(null);
     }
   };
 
@@ -2690,7 +3098,9 @@ ${safeJsonStringify(ep.coreExpression)}
 
   // 关键帧复制处理：使用拼接后的提示词
   const handleCopyKeyframe = async (kfKey: string, locale: 'zh' | 'en') => {
-    const idx = GENERATED_IMAGE_KEYFRAMES.indexOf(kfKey as (typeof GENERATED_IMAGE_KEYFRAMES)[number]);
+    const idx = GENERATED_IMAGE_KEYFRAMES.indexOf(
+      kfKey as (typeof GENERATED_IMAGE_KEYFRAMES)[number],
+    );
     const segment = idx >= 0 ? Math.floor(idx / 3) + 1 : 0;
     const phase = idx >= 0 ? (['起', '中', '终'][idx % 3] ?? '') : '';
     const label = idx >= 0 ? `${kfKey}（段${segment}${phase}）` : kfKey;
@@ -3129,6 +3539,8 @@ ${safeJsonStringify(ep.coreExpression)}
         worldViewElements={worldViewElements}
         isRefining={isRefining && refiningSceneId === refineScene?.id}
         isGeneratingImages={generatingImagesSceneId === refineScene?.id}
+        isStoryboardRunning={Boolean(storyboardJob && storyboardJob.sceneId === refineScene?.id)}
+        storyboardProgress={storyboardJobProgress ?? undefined}
         refineProgress={refineJobProgress ?? undefined}
         isBatchBlocked={isBatchBlocked}
         aiProfileId={aiProfileId}
@@ -3138,6 +3550,11 @@ ${safeJsonStringify(ep.coreExpression)}
         }}
         onRefineScene={handleRefineSceneAll}
         onGenerateImages={handleGenerateKeyframeImages}
+        onGenerateStoryboardSceneBible={handleGenerateStoryboardSceneBible}
+        onGenerateStoryboardPlan={handleGenerateStoryboardPlan}
+        onGenerateStoryboardGroup={handleGenerateStoryboardGroup}
+        onTranslateStoryboardPanels={handleTranslateStoryboardPanels}
+        onBackTranslateStoryboardPanels={handleBackTranslateStoryboardPanels}
         onDeleteScene={(sceneId) => {
           if (!currentEpisode?.id) return;
           void deleteScene(currentProject.id, currentEpisode.id, sceneId);

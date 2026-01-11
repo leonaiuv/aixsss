@@ -592,6 +592,9 @@ export interface Scene {
   actionPlanJson?: unknown;
   keyframeGroupsJson?: unknown;
   motionGroupsJson?: unknown;
+  storyboardSceneBibleJson?: unknown;
+  storyboardPlanJson?: unknown;
+  storyboardGroupsJson?: unknown;
   /** 时空/运动提示词 - 基于关键帧差分的“变化描述”，用于图生视频(I2V)模型（建议中英双语） */
   motionPrompt: string;
   /** 关键帧生成图片 */

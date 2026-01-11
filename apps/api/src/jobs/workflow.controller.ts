@@ -27,6 +27,14 @@ const RefineAllScenesBodySchema = WorkflowBodySchema.extend({
   sceneIds: z.array(z.string().min(1)).optional(),
 });
 
+const StoryboardPlanBodySchema = WorkflowBodySchema.extend({
+  cameraMode: z.enum(['A', 'B']).optional(),
+});
+
+const StoryboardGroupBodySchema = WorkflowBodySchema.extend({
+  cameraMode: z.enum(['A', 'B']).optional(),
+});
+
 @UseGuards(JwtAuthGuard)
 @Controller('workflow')
 export class WorkflowController {
@@ -107,6 +115,66 @@ export class WorkflowController {
   ) {
     const input = parseOrBadRequest(WorkflowBodySchema, body);
     return this.jobs.enqueueGenerateKeyframePrompt(user.teamId, projectId, sceneId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/scenes/:sceneId/storyboard/scene-bible')
+  generateStoryboardSceneBible(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('sceneId') sceneId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueGenerateStoryboardSceneBible(user.teamId, projectId, sceneId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/scenes/:sceneId/storyboard/plan')
+  generateStoryboardPlan(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('sceneId') sceneId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(StoryboardPlanBodySchema, body);
+    return this.jobs.enqueueGenerateStoryboardPlan(user.teamId, projectId, sceneId, input.aiProfileId, {
+      cameraMode: input.cameraMode,
+    });
+  }
+
+  @Post('projects/:projectId/scenes/:sceneId/storyboard/groups/:groupId')
+  generateStoryboardGroup(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('sceneId') sceneId: string,
+    @Param('groupId') groupId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(StoryboardGroupBodySchema, body);
+    return this.jobs.enqueueGenerateStoryboardGroup(user.teamId, projectId, sceneId, input.aiProfileId, groupId, {
+      cameraMode: input.cameraMode,
+    });
+  }
+
+  @Post('projects/:projectId/scenes/:sceneId/storyboard/translate')
+  translateStoryboardPanels(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('sceneId') sceneId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueTranslateStoryboardPanels(user.teamId, projectId, sceneId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/scenes/:sceneId/storyboard/back-translate')
+  backTranslateStoryboardPanels(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('sceneId') sceneId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueBackTranslateStoryboardPanels(user.teamId, projectId, sceneId, input.aiProfileId);
   }
 
   @Post('projects/:projectId/scenes/:sceneId/generate-images')

@@ -16,6 +16,13 @@ import { planEpisodes } from './tasks/planEpisodes.js';
 import { generateEpisodeCoreExpression } from './tasks/generateEpisodeCoreExpression.js';
 import { generateEpisodeSceneList } from './tasks/generateEpisodeSceneList.js';
 import { buildNarrativeCausalChain } from './tasks/buildNarrativeCausalChain.js';
+import {
+  backTranslateStoryboardPanels,
+  generateStoryboardGroup,
+  generateStoryboardPlan,
+  generateStoryboardSceneBible,
+  translateStoryboardPanels,
+} from './tasks/storyboard81.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -278,6 +285,142 @@ async function main() {
           }
           case 'generate_keyframe_prompt': {
             const result = await generateKeyframePrompt({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_storyboard_scene_bible': {
+            const result = await generateStoryboardSceneBible({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_storyboard_plan': {
+            const cameraMode = typeof data.cameraMode === 'string' ? data.cameraMode : undefined;
+            const result = await generateStoryboardPlan({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+              options: cameraMode ? { cameraMode: cameraMode as 'A' | 'B' } : undefined,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_storyboard_group': {
+            const groupId = typeof data.groupId === 'string' ? data.groupId : '';
+            const cameraMode = typeof data.cameraMode === 'string' ? data.cameraMode : undefined;
+            const result = await generateStoryboardGroup({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+              groupId,
+              options: cameraMode ? { cameraMode: cameraMode as 'A' | 'B' } : undefined,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'translate_storyboard_panels': {
+            const result = await translateStoryboardPanels({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'back_translate_storyboard_panels': {
+            const result = await backTranslateStoryboardPanels({
               prisma,
               teamId,
               projectId,

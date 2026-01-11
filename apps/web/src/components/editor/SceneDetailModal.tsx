@@ -7,10 +7,20 @@
 // - 右侧：台词/备注 + 差量对比
 // ==========================================
 
-import { useMemo, useState } from 'react';
-import type { Character, GeneratedImageKeyframe, Scene, SceneStatus, WorldViewElement } from '@/types';
-import type { LocaleText, ParsedKeyframePrompts, ParsedMotionPromptText } from '@/lib/ai/promptParsers';
-import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
+import { useEffect, useMemo, useState } from 'react';
+import type {
+  Character,
+  GeneratedImageKeyframe,
+  Scene,
+  SceneStatus,
+  WorldViewElement,
+} from '@/types';
+import type {
+  LocaleText,
+  ParsedKeyframePrompts,
+  ParsedMotionPromptText,
+} from '@/lib/ai/promptParsers';
+import { GENERATED_IMAGE_KEYFRAMES, StoryboardGroupsJsonSchema } from '@aixsss/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -44,6 +54,7 @@ import {
   Palette,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 // 台词行类型
 interface DialogueLine {
@@ -72,12 +83,19 @@ interface SceneDetailModalProps {
   worldViewElements: WorldViewElement[];
   isRefining: boolean;
   isGeneratingImages: boolean;
+  isStoryboardRunning: boolean;
+  storyboardProgress?: { message?: string | null; pct?: number | null };
   refineProgress?: { message?: string | null; pct?: number | null };
   isBatchBlocked: boolean;
   aiProfileId?: string | null;
   onUpdateScene: (sceneId: string, updates: Partial<Scene>) => void;
   onRefineScene: (sceneId: string) => void;
   onGenerateImages: (sceneId: string) => void;
+  onGenerateStoryboardSceneBible: (sceneId: string) => void;
+  onGenerateStoryboardPlan: (sceneId: string, cameraMode?: 'A' | 'B') => void;
+  onGenerateStoryboardGroup: (sceneId: string, groupId: string, cameraMode?: 'A' | 'B') => void;
+  onTranslateStoryboardPanels: (sceneId: string) => void;
+  onBackTranslateStoryboardPanels: (sceneId: string) => void;
   onDeleteScene: (sceneId: string) => void;
   onCopyImg2ImgPack: () => Promise<void>;
   parsedKeyframes: ParsedKeyframePrompts;
@@ -422,12 +440,19 @@ export function SceneDetailModal({
   worldViewElements,
   isRefining,
   isGeneratingImages,
+  isStoryboardRunning,
+  storyboardProgress,
   refineProgress,
   isBatchBlocked,
   aiProfileId,
   onUpdateScene,
   onRefineScene,
   onGenerateImages,
+  onGenerateStoryboardSceneBible,
+  onGenerateStoryboardPlan,
+  onGenerateStoryboardGroup,
+  onTranslateStoryboardPanels,
+  onBackTranslateStoryboardPanels,
   onDeleteScene,
   onCopyImg2ImgPack,
   parsedKeyframes,
@@ -441,6 +466,155 @@ export function SceneDetailModal({
   getSceneStatusLabel,
 }: SceneDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'prompts' | 'script' | 'dialogue'>('prompts');
+  const { toast } = useToast();
+  const sceneId = scene?.id;
+
+  const storyboardGroups = useMemo(() => {
+    if (!scene) return null;
+    const parsed = StoryboardGroupsJsonSchema.safeParse(scene.storyboardGroupsJson ?? null);
+    return parsed.success ? parsed.data : null;
+  }, [scene]);
+
+  const storyboardGroupsSorted = useMemo(() => {
+    if (!storyboardGroups) return [];
+    const byId = new Map(storyboardGroups.groups.map((g) => [g.group_id, g] as const));
+    return GENERATED_IMAGE_KEYFRAMES.map((id) => byId.get(id)).filter(Boolean) as typeof storyboardGroups.groups;
+  }, [storyboardGroups]);
+
+  const storyboardDefaultCameraMode: 'A' | 'B' =
+    storyboardGroups?.settings?.camera_mode === 'A' ? 'A' : 'B';
+  const [storyboardCameraMode, setStoryboardCameraMode] = useState<'A' | 'B'>(
+    storyboardDefaultCameraMode,
+  );
+  useEffect(() => {
+    if (!sceneId) return;
+    setStoryboardCameraMode(storyboardDefaultCameraMode);
+  }, [sceneId, storyboardDefaultCameraMode]);
+
+  const storyboardHasZh = useMemo(() => {
+    if (!storyboardGroups) return false;
+    for (const g of storyboardGroups.groups) {
+      const panels = g.group?.panels ?? [];
+      for (const p of panels) {
+        if (typeof p.zh === 'string' && p.zh.trim()) return true;
+      }
+    }
+    return false;
+  }, [storyboardGroups]);
+
+  const [storyboardViewLang, setStoryboardViewLang] = useState<'zh' | 'en'>(
+    storyboardHasZh ? 'zh' : 'en',
+  );
+  useEffect(() => {
+    if (!sceneId) return;
+    setStoryboardViewLang(storyboardHasZh ? 'zh' : 'en');
+  }, [sceneId, storyboardHasZh]);
+
+  const [expandedStoryboardGroupId, setExpandedStoryboardGroupId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sceneId) return;
+    setExpandedStoryboardGroupId(null);
+  }, [sceneId]);
+
+  const allStoryboardGroupsReady = useMemo(() => {
+    if (!storyboardGroups || storyboardGroupsSorted.length !== GENERATED_IMAGE_KEYFRAMES.length) return false;
+    return storyboardGroupsSorted.every((g) => g.status === 'ready' && Boolean(g.group));
+  }, [storyboardGroups, storyboardGroupsSorted]);
+
+  const storyboardDirtyCount = useMemo(() => {
+    if (!storyboardGroups) return 0;
+    let count = 0;
+    for (const g of storyboardGroups.groups) {
+      for (const p of g.group?.panels ?? []) {
+        if (p.dirtyZh === true) count += 1;
+      }
+    }
+    return count;
+  }, [storyboardGroups]);
+
+  const canGenerateStoryboardGroup = useMemo(() => {
+    const byId = new Map(storyboardGroupsSorted.map((g) => [g.group_id, g] as const));
+    return (groupId: string): boolean => {
+      if (!scene?.storyboardSceneBibleJson || !scene?.storyboardPlanJson) return false;
+      if (!storyboardGroups) return false;
+      const idx = GENERATED_IMAGE_KEYFRAMES.indexOf(groupId as (typeof GENERATED_IMAGE_KEYFRAMES)[number]);
+      if (idx < 0) return false;
+      if (idx === 0) return true;
+      const prevId = GENERATED_IMAGE_KEYFRAMES[idx - 1];
+      const prev = byId.get(prevId);
+      return Boolean(prev && prev.status === 'ready' && prev.group);
+    };
+  }, [scene?.storyboardSceneBibleJson, scene?.storyboardPlanJson, storyboardGroups, storyboardGroupsSorted]);
+
+  const updateStoryboardPanelZh = (groupId: string, panelIndex: number, zh: string) => {
+    if (!scene || !storyboardGroups) return;
+    const next = {
+      ...storyboardGroups,
+      groups: storyboardGroups.groups.map((g) => {
+        if (g.group_id !== groupId || !g.group) return g;
+        return {
+          ...g,
+          group: {
+            ...g.group,
+            panels: (g.group.panels ?? []).map((p) =>
+              p.index === panelIndex ? { ...p, zh, dirtyZh: true } : p,
+            ),
+          },
+        };
+      }),
+    };
+    onUpdateScene(scene.id, { storyboardGroupsJson: next });
+  };
+
+  const copyText = async (label: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: '已复制', description: label });
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      toast({ title: '复制失败', description: detail, variant: 'destructive' });
+    }
+  };
+
+  const buildStoryboardRenderJsonExport = () => {
+    if (!scene || !storyboardGroups) return '';
+    const items = storyboardGroupsSorted
+      .map((g) => ({
+        group_id: g.group_id,
+        shot_range: g.shot_range,
+        render_json: g.group?.render?.render_json ?? null,
+      }))
+      .filter((x) => x.render_json !== null);
+    return JSON.stringify({ sceneId: scene.id, items }, null, 2);
+  };
+
+  const buildStoryboardShotListExport = () => {
+    if (!scene || !storyboardGroups) return '';
+    const shots: Array<{
+      shot: number;
+      group_id: string;
+      panel_index: number;
+      en: string;
+      zh: string | null;
+    }> = [];
+
+    for (let gIdx = 0; gIdx < storyboardGroupsSorted.length; gIdx += 1) {
+      const g = storyboardGroupsSorted[gIdx];
+      const panels = (g.group?.panels ?? []).slice().sort((a, b) => a.index - b.index);
+      for (const p of panels) {
+        const shot = gIdx * 9 + p.index;
+        shots.push({
+          shot,
+          group_id: g.group_id,
+          panel_index: p.index,
+          en: p.en ?? '',
+          zh: typeof p.zh === 'string' ? p.zh : null,
+        });
+      }
+    }
+
+    return JSON.stringify({ sceneId: scene.id, shots }, null, 2);
+  };
 
   // 计算差量
   const deltaItems = useMemo<DeltaItem[]>(() => {
@@ -737,6 +911,542 @@ export function SceneDetailModal({
                       />
                     </CollapsibleSection>
 
+                    {/* 分镜组（81镜头） */}
+                    <CollapsibleSection
+                      title="分镜组（81镜头）"
+                      icon={<Layers className="h-4 w-4" />}
+                      badge={
+                        <Badge variant="secondary" className="text-xs">
+                          Storyboard 9×9
+                        </Badge>
+                      }
+                    >
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant={scene.storyboardSceneBibleJson ? 'default' : 'secondary'}
+                              className="text-xs gap-1.5"
+                            >
+                              {scene.storyboardSceneBibleJson ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <X className="h-3.5 w-3.5" />
+                              )}
+                              SceneBible
+                            </Badge>
+                            <Badge
+                              variant={scene.storyboardPlanJson ? 'default' : 'secondary'}
+                              className="text-xs gap-1.5"
+                            >
+                              {scene.storyboardPlanJson ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                <X className="h-3.5 w-3.5" />
+                              )}
+                              Plan
+                            </Badge>
+                            <Badge
+                              variant={allStoryboardGroupsReady ? 'default' : 'secondary'}
+                              className="text-xs"
+                            >
+                              Groups{' '}
+                              {(storyboardGroups?.groups ?? []).filter(
+                                (g) => g.status === 'ready' && Boolean(g.group),
+                              ).length ?? 0}
+                              /9
+                            </Badge>
+                            {storyboardDirtyCount > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                dirty {storyboardDirtyCount}
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1 rounded-md border bg-muted/20 p-1">
+                              <Button
+                                type="button"
+                                variant={storyboardCameraMode === 'B' ? 'secondary' : 'outline'}
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setStoryboardCameraMode('B')}
+                              >
+                                B
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={storyboardCameraMode === 'A' ? 'secondary' : 'outline'}
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setStoryboardCameraMode('A')}
+                              >
+                                A
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-1 rounded-md border bg-muted/20 p-1">
+                              <Button
+                                type="button"
+                                variant={storyboardViewLang === 'zh' ? 'secondary' : 'outline'}
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setStoryboardViewLang('zh')}
+                                disabled={!storyboardHasZh && storyboardViewLang !== 'zh'}
+                                aria-label="分镜组视图：中文"
+                              >
+                                ZH
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={storyboardViewLang === 'en' ? 'secondary' : 'outline'}
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setStoryboardViewLang('en')}
+                                aria-label="分镜组视图：英文"
+                              >
+                                EN
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {isStoryboardRunning && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>{storyboardProgress?.message || '正在生成分镜组...'}</span>
+                              {typeof storyboardProgress?.pct === 'number' && (
+                                <span>{Math.round(storyboardProgress.pct)}%</span>
+                              )}
+                            </div>
+                            <Progress
+                              value={typeof storyboardProgress?.pct === 'number' ? storyboardProgress.pct : 0}
+                              className="h-1.5"
+                            />
+                          </div>
+                        )}
+
+                        <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground leading-relaxed">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span>流程：SceneBible → Plan → KF0..KF8（逐组）→ 翻译 →（编辑中文）→ 回译</span>
+                            <span className="text-[11px]">
+                              生图只使用英文 render.prompt_en；中文仅用于阅读/编辑
+                            </span>
+                          </div>
+                          {storyboardGroups?.running_summary && (
+                            <div className="mt-2 whitespace-pre-wrap">
+                              <span className="font-medium text-foreground">running_summary：</span>
+                              {storyboardGroups.running_summary}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={!aiProfileId || isStoryboardRunning || isBatchBlocked}
+                            onClick={() => onGenerateStoryboardSceneBible(scene.id)}
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            生成 SceneBible
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={
+                              !aiProfileId ||
+                              isStoryboardRunning ||
+                              isBatchBlocked ||
+                              !scene.storyboardSceneBibleJson
+                            }
+                            onClick={() => onGenerateStoryboardPlan(scene.id, storyboardCameraMode)}
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            生成 Plan（初始化 KF0-KF8）
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={!aiProfileId || isStoryboardRunning || isBatchBlocked || !storyboardGroups}
+                            onClick={() => {
+                              const next = storyboardGroupsSorted.find(
+                                (g) => g.status !== 'ready' && canGenerateStoryboardGroup(g.group_id),
+                              );
+                              if (!next) {
+                                toast({
+                                  title: '无可生成分镜组',
+                                  description: '请先生成 Plan，或检查上一组是否已完成。',
+                                  variant: 'destructive',
+                                });
+                                return;
+                              }
+                              onGenerateStoryboardGroup(scene.id, next.group_id, storyboardCameraMode);
+                            }}
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            生成下一组
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={
+                              !aiProfileId ||
+                              isStoryboardRunning ||
+                              isBatchBlocked ||
+                              !storyboardGroups ||
+                              !allStoryboardGroupsReady
+                            }
+                            onClick={() => onTranslateStoryboardPanels(scene.id)}
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            翻译到中文（panels.zh）
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={
+                              !aiProfileId ||
+                              isStoryboardRunning ||
+                              isBatchBlocked ||
+                              !storyboardGroups ||
+                              storyboardDirtyCount === 0
+                            }
+                            onClick={() => onBackTranslateStoryboardPanels(scene.id)}
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            回译 dirty（zh→en）
+                          </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={!storyboardGroups}
+                            onClick={() => {
+                              const text = buildStoryboardRenderJsonExport();
+                              if (!text) {
+                                toast({
+                                  title: '暂无可导出内容',
+                                  description: '请至少生成 1 个分镜组后再导出 render_json。',
+                                  variant: 'destructive',
+                                });
+                                return;
+                              }
+                              void copyText('render_json × 9（可批量生图）', text);
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                            复制 9 组 render_json
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            disabled={!storyboardGroups}
+                            onClick={() => {
+                              const text = buildStoryboardShotListExport();
+                              if (!text) {
+                                toast({
+                                  title: '暂无可导出内容',
+                                  description: '请至少生成 1 个分镜组后再导出 81 镜头清单。',
+                                  variant: 'destructive',
+                                });
+                                return;
+                              }
+                              void copyText('81 镜头清单（按 1..81 汇总）', text);
+                            }}
+                          >
+                            <Copy className="h-4 w-4" />
+                            复制 81 镜头清单
+                          </Button>
+                        </div>
+
+                        {!storyboardGroups ? (
+                          <div className="text-xs text-muted-foreground">
+                            还未初始化分镜组。先生成 SceneBible 与 Plan，然后可逐组生成 KF0-KF8。
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {storyboardGroupsSorted.map((g, idx) => {
+                              const isExpanded = expandedStoryboardGroupId === g.group_id;
+                              const canGen = canGenerateStoryboardGroup(g.group_id);
+                              const laterReady = storyboardGroupsSorted
+                                .slice(idx + 1)
+                                .some((x) => x.status === 'ready' && Boolean(x.group));
+
+                              const statusVariant =
+                                g.status === 'ready'
+                                  ? 'default'
+                                  : g.status === 'needs_fix'
+                                    ? 'destructive'
+                                    : g.status === 'generating'
+                                      ? 'outline'
+                                      : 'secondary';
+                              const statusLabel =
+                                g.status === 'ready'
+                                  ? '已就绪'
+                                  : g.status === 'needs_fix'
+                                    ? '需修复'
+                                    : g.status === 'generating'
+                                      ? '生成中'
+                                      : '待生成';
+
+                              const panels = (g.group?.panels ?? [])
+                                .slice()
+                                .sort((a, b) => a.index - b.index);
+                              const endState = g.group?.continuity?.end_state;
+
+                              return (
+                                <div key={g.group_id} className="rounded-lg border bg-muted/10 p-3">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="font-mono text-sm font-semibold shrink-0">
+                                        {g.group_id}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground shrink-0">
+                                        镜头 {g.shot_range}
+                                      </div>
+                                      <Badge variant={statusVariant} className="text-xs shrink-0">
+                                        {statusLabel}
+                                      </Badge>
+                                      {g.group?.render?.template_version !== undefined && (
+                                        <Badge variant="outline" className="text-xs shrink-0">
+                                          v{g.group.render.template_version}
+                                        </Badge>
+                                      )}
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs gap-1.5"
+                                        disabled={!aiProfileId || isStoryboardRunning || isBatchBlocked || !canGen}
+                                        title={
+                                          canGen
+                                            ? '生成/重试本组'
+                                            : '需先生成上一组（确保连续性承接）'
+                                        }
+                                        onClick={() => {
+                                          if (laterReady) {
+                                            const ok = window.confirm(
+                                              `重新生成 ${g.group_id} 可能导致后续分镜组不连贯，建议同时重做后续组。继续？`,
+                                            );
+                                            if (!ok) return;
+                                          }
+                                          onGenerateStoryboardGroup(scene.id, g.group_id, storyboardCameraMode);
+                                        }}
+                                      >
+                                        {g.status === 'ready' ? (
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        ) : (
+                                          <Sparkles className="h-3.5 w-3.5" />
+                                        )}
+                                        {g.status === 'ready'
+                                          ? '重新生成'
+                                          : g.status === 'needs_fix'
+                                            ? '修复/重试'
+                                            : '生成本组'}
+                                      </Button>
+
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs gap-1.5"
+                                        disabled={!g.group?.render?.render_json}
+                                        onClick={() => {
+                                          const payload = g.group?.render?.render_json ?? null;
+                                          if (!payload) return;
+                                          void copyText(
+                                            `${g.group_id} render_json`,
+                                            JSON.stringify(payload, null, 2),
+                                          );
+                                        }}
+                                      >
+                                        <Copy className="h-3.5 w-3.5" />
+                                        render_json
+                                      </Button>
+
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs gap-1.5"
+                                        onClick={() =>
+                                          setExpandedStoryboardGroupId(isExpanded ? null : g.group_id)
+                                        }
+                                      >
+                                        {isExpanded ? (
+                                          <ChevronDown className="h-3.5 w-3.5" />
+                                        ) : (
+                                          <ChevronRight className="h-3.5 w-3.5" />
+                                        )}
+                                        {isExpanded ? '收起' : '展开'}
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {g.last_error && (
+                                    <div className="mt-2 rounded-md border border-destructive/20 bg-destructive/5 p-2 text-xs text-destructive whitespace-pre-wrap">
+                                      {g.last_error}
+                                    </div>
+                                  )}
+
+                                  {isExpanded && (
+                                    <div className="mt-3 space-y-3">
+                                      {!g.group ? (
+                                        <div className="text-xs text-muted-foreground">
+                                          （本组尚未生成）
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="grid gap-2">
+                                            {panels.map((p) => {
+                                              const cameraText = p.camera
+                                                ? `${p.camera.shot_size}|${p.camera.angle}|${p.camera.lens}|${p.camera.motion}`
+                                                : '';
+                                              return (
+                                                <div
+                                                  key={p.index}
+                                                  className="rounded-md border bg-background p-3 space-y-2"
+                                                >
+                                                  <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                      <div className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-xs font-bold text-primary shrink-0">
+                                                        {p.index}
+                                                      </div>
+                                                      {cameraText && (
+                                                        <span className="text-xs font-mono text-muted-foreground truncate">
+                                                          {cameraText}
+                                                        </span>
+                                                      )}
+                                                      {p.dirtyZh && (
+                                                        <Badge variant="outline" className="text-xs">
+                                                          dirty
+                                                        </Badge>
+                                                      )}
+                                                    </div>
+                                                    <Button
+                                                      type="button"
+                                                      variant="outline"
+                                                      size="sm"
+                                                      className="h-7 px-2 text-xs gap-1.5"
+                                                      onClick={() =>
+                                                        void copyText(
+                                                          `${g.group_id}#${p.index} ${storyboardViewLang.toUpperCase()}`,
+                                                          storyboardViewLang === 'zh'
+                                                            ? (p.zh ?? '')
+                                                            : p.en ?? '',
+                                                        )
+                                                      }
+                                                    >
+                                                      <Copy className="h-3.5 w-3.5" />
+                                                      复制
+                                                    </Button>
+                                                  </div>
+
+                                                  {storyboardViewLang === 'zh' ? (
+                                                    <div className="space-y-2">
+                                                      <Textarea
+                                                        value={typeof p.zh === 'string' ? p.zh : ''}
+                                                        onChange={(e) =>
+                                                          updateStoryboardPanelZh(
+                                                            g.group_id,
+                                                            p.index,
+                                                            e.target.value,
+                                                          )
+                                                        }
+                                                        className="min-h-[70px] text-sm leading-relaxed resize-none"
+                                                        placeholder="中文（可编辑；编辑后标记 dirty，可回译覆盖英文）"
+                                                      />
+                                                      <div className="text-xs text-muted-foreground whitespace-pre-wrap">
+                                                        EN: {p.en}
+                                                      </div>
+                                                    </div>
+                                                  ) : (
+                                                    <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                                                      {p.en}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+
+                                          <div className="rounded-md border bg-muted/20 p-3 space-y-2">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                              <div className="text-xs text-muted-foreground">
+                                                continuity.end_state.next_intent_hint：
+                                                <span className="ml-1 text-foreground">
+                                                  {endState?.next_intent_hint?.trim()
+                                                    ? endState.next_intent_hint
+                                                    : '（无）'}
+                                                </span>
+                                              </div>
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="h-7 px-2 text-xs gap-1.5"
+                                                  disabled={!endState}
+                                                  onClick={() =>
+                                                    void copyText(
+                                                      `${g.group_id} end_state`,
+                                                      JSON.stringify(endState ?? {}, null, 2),
+                                                    )
+                                                  }
+                                                >
+                                                  <Copy className="h-3.5 w-3.5" />
+                                                  end_state
+                                                </Button>
+                                                <Button
+                                                  type="button"
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="h-7 px-2 text-xs gap-1.5"
+                                                  disabled={!g.group?.render?.prompt_en}
+                                                  onClick={() =>
+                                                    void copyText(
+                                                      `${g.group_id} prompt_en`,
+                                                      g.group?.render?.prompt_en ?? '',
+                                                    )
+                                                  }
+                                                >
+                                                  <Copy className="h-3.5 w-3.5" />
+                                                  prompt_en
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleSection>
+
                     {/* 关键帧提示词 */}
                     <CollapsibleSection
                       title="关键帧提示词"
@@ -835,7 +1545,8 @@ export function SceneDetailModal({
                           return (
                             <div key={label} className="space-y-2">
                               <div className="text-xs font-medium text-muted-foreground">
-                                {label}（段{segment}{phase}）
+                                {label}（段{segment}
+                                {phase}）
                               </div>
                               {image ? (
                                 <div className="overflow-hidden rounded-lg border">

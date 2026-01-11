@@ -7,3 +7,4 @@ export * from './aiProfile.js';
 export * from './character.js';
 export * from './worldView.js';
 export * from './systemPrompt.js';
+export * from './storyboard.js';

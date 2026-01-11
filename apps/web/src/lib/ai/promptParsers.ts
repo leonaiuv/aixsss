@@ -415,7 +415,9 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
     };
 
     const keyframes = keyframeKeys.map((kfKey) => buildKfText(kfKey));
-    const filledKeyframeCount = keyframes.filter((kf) => Boolean(kf.zh?.trim() || kf.en?.trim())).length;
+    const filledKeyframeCount = keyframes.filter((kf) =>
+      Boolean(kf.zh?.trim() || kf.en?.trim()),
+    ).length;
 
     return {
       keyframes,
@@ -449,7 +451,9 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
     en: get(`${kfKey}_EN`),
   }));
 
-  const filledKeyframeCount = keyframes.filter((kf) => Boolean(kf.zh?.trim() || kf.en?.trim())).length;
+  const filledKeyframeCount = keyframes.filter((kf) =>
+    Boolean(kf.zh?.trim() || kf.en?.trim()),
+  ).length;
 
   const avoid: LocaleText | undefined =
     get('AVOID_ZH') || get('AVOID_EN') ? { zh: get('AVOID_ZH'), en: get('AVOID_EN') } : undefined;
