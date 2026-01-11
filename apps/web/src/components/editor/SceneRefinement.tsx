@@ -190,7 +190,7 @@ export function SceneRefinement() {
 
   const { confirm, ConfirmDialog } = useConfirm();
 
-  // 关键帧提示词解析（用于拆分 KF0/KF1/KF2 的快速复制）
+  // 关键帧提示词解析（用于拆分 KF0-KF8 的快速复制）
   const currentSceneForParse = scenes[currentSceneIndex];
   const currentSceneId = currentSceneForParse?.id;
   const parsedSceneAnchor = useMemo(
@@ -590,7 +590,7 @@ export function SceneRefinement() {
     }
   };
 
-  // 生成关键帧提示词（KF0/KF1/KF2）
+  // 生成关键帧提示词（KF0-KF8）
   const generateKeyframePrompt = async () => {
     // 从 store 获取最新的场景数据，避免闭包问题
     const { scenes: latestScenes } = useStoryboardStore.getState();
@@ -632,7 +632,7 @@ export function SceneRefinement() {
           : currentProject.protagonist || '-';
 
       const userPrompt = [
-        '当前分镜概要（决定三帧的动作分解）:',
+        '当前分镜概要（决定九帧的动作分解）:',
         latestScene.summary || '-',
         '',
         '场景锚点 JSON（环境一致性）:',
@@ -671,7 +671,7 @@ export function SceneRefinement() {
         },
       });
 
-      updateLogProgress(logId, 30, '正在生成关键帧提示词（KF0/KF1/KF2）...');
+      updateLogProgress(logId, 30, '正在生成关键帧提示词（KF0-KF8）...');
 
       const response = await client.chat(
         [
@@ -732,7 +732,7 @@ export function SceneRefinement() {
       }
       const errorMsg = err instanceof Error ? err.message : '生成失败';
       setError(errorMsg);
-      console.error('生成关键帧提示词（KF0/KF1/KF2）失败:', err);
+      console.error('生成关键帧提示词（KF0-KF8）失败:', err);
       if (logId) updateLogWithError(logId, errorMsg);
     } finally {
       abortControllerRef.current = null;
@@ -772,7 +772,7 @@ export function SceneRefinement() {
         '场景锚点 JSON:',
         latestScene.sceneDescription || '-',
         '',
-        '三关键帧 JSON（静止描述，包含 KF0/KF1/KF2）:',
+        '9关键帧 JSON（静止描述，包含 KF0-KF8）:',
         latestScene.shotPrompt || '-',
       ].join('\n');
 
@@ -911,7 +911,7 @@ export function SceneRefinement() {
         '场景锚点（环境一致性）:',
         latestScene.sceneDescription || '-',
         '',
-        '三关键帧（静止）:',
+        '9关键帧（静止）:',
         latestScene.shotPrompt || '-',
         '',
         '运动/时空提示词:',
@@ -1091,7 +1091,7 @@ export function SceneRefinement() {
         throw new Error('场景锚点生成失败');
       }
 
-      // 第二阶段：生成关键帧提示词（KF0/KF1/KF2）
+      // 第二阶段：生成关键帧提示词（KF0-KF8）
       if (!latestScene1.shotPrompt) {
         setGeneratingStep('keyframe_prompt');
         if (currentSkipSteps.shotPrompt) {
@@ -1109,7 +1109,7 @@ export function SceneRefinement() {
       const latestScene2 = updatedScenes2.find((s) => s.id === currentScene.id);
 
       if (!latestScene2?.shotPrompt) {
-        throw new Error('关键帧提示词（KF0/KF1/KF2）生成失败');
+        throw new Error('关键帧提示词（KF0-KF8）生成失败');
       }
 
       // 第三阶段：生成时空/运动提示词
@@ -1710,7 +1710,7 @@ export function SceneRefinement() {
             </AccordionContent>
           </AccordionItem>
 
-          {/* 阶段2: 关键帧提示词（KF0/KF1/KF2） */}
+          {/* 阶段2: 关键帧提示词（KF0-KF8） */}
           <AccordionItem value="keyframe" className="border rounded-lg px-4">
             <AccordionTrigger className="hover:no-underline">
               <div className="flex items-center gap-3">
@@ -1726,9 +1726,9 @@ export function SceneRefinement() {
                   )}
                 </div>
                 <div className="text-left">
-                  <h4 className="font-semibold">关键帧提示词（KF0/KF1/KF2）</h4>
+                  <h4 className="font-semibold">关键帧提示词（KF0-KF8）</h4>
                   <p className="text-xs text-muted-foreground">
-                    三张静止关键帧（起/中/终），用于生图模型
+                    九张静止关键帧（3段×起/中/终），用于生图模型
                   </p>
                 </div>
               </div>
@@ -1781,15 +1781,15 @@ export function SceneRefinement() {
               </div>
               {currentScene.shotPrompt ? (
                 <div className="space-y-3">
-                  {/* KF0/KF1/KF2 快速复制区块（识别到结构化标签时显示） */}
+                  {/* KF0-KF8 快速复制区块（识别到结构化标签/JSON 时显示） */}
                   {parsedKeyframes.isStructured && (
                     <div className="space-y-3">
-                      <div className="grid gap-3 lg:grid-cols-3">
-                        {[
-                          { label: 'KF0（起始）', data: parsedKeyframes.keyframes[0] },
-                          { label: 'KF1（中间）', data: parsedKeyframes.keyframes[1] },
-                          { label: 'KF2（结束）', data: parsedKeyframes.keyframes[2] },
-                        ].map(({ label, data }) => {
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        {parsedKeyframes.keyframeKeys.map((kfKey, index) => {
+                          const data = parsedKeyframes.keyframes[index] ?? {};
+                          const segment = Math.floor(index / 3) + 1;
+                          const phase = ['起', '中', '终'][index % 3] ?? '';
+                          const label = `${kfKey}（段${segment}${phase}）`;
                           const hasAny = Boolean(data.zh || data.en);
                           const preview = [
                             data.zh ? `ZH: ${data.zh}` : '',
@@ -1800,7 +1800,7 @@ export function SceneRefinement() {
 
                           return (
                             <div
-                              key={label}
+                              key={kfKey}
                               className="rounded-lg border bg-muted/30 p-3 space-y-2"
                             >
                               <div className="flex items-center justify-between gap-2">
@@ -1843,7 +1843,7 @@ export function SceneRefinement() {
                                 value={
                                   hasAny
                                     ? preview
-                                    : '（未解析到该关键帧，请检查 KF0/KF1/KF2 标签是否完整）'
+                                    : '（未解析到该关键帧，请检查 KF0-KF8 标签/JSON 是否完整）'
                                 }
                                 readOnly
                                 className="min-h-[220px] resize-y font-mono text-sm leading-relaxed bg-background/60"
@@ -1926,7 +1926,7 @@ export function SceneRefinement() {
                       variant="ghost"
                       size="icon"
                       className="absolute right-2 top-2 h-8 w-8"
-                      onClick={() => openPromptEditor('shotPrompt', '关键帧提示词（KF0/KF1/KF2）')}
+                      onClick={() => openPromptEditor('shotPrompt', '关键帧提示词（KF0-KF8）')}
                       title="全屏编辑"
                     >
                       <Maximize2 className="h-4 w-4" />
@@ -1939,7 +1939,7 @@ export function SceneRefinement() {
                         })
                       }
                       className="min-h-[320px] resize-y font-mono text-sm leading-relaxed pr-12"
-                      placeholder="三关键帧提示词（KF0/KF1/KF2）..."
+                      placeholder="九关键帧提示词（KF0-KF8）..."
                     />
                   </div>
                   <Button
@@ -1962,7 +1962,7 @@ export function SceneRefinement() {
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">
                     {canGenerateKeyframe
-                      ? '准备就绪，可以生成关键帧提示词（KF0/KF1/KF2）'
+                      ? '准备就绪，可以生成关键帧提示词（KF0-KF8）'
                       : '请先完成场景锚点'}
                   </p>
                   <Button
@@ -2011,7 +2011,7 @@ export function SceneRefinement() {
                 <div className="text-left">
                   <h4 className="font-semibold">时空/运动提示词</h4>
                   <p className="text-xs text-muted-foreground">
-                    基于三关键帧差分生成“变化描述”，用于图生视频模型
+                    基于九关键帧差分生成“变化描述”，用于图生视频模型
                   </p>
                 </div>
               </div>
@@ -2130,7 +2130,7 @@ export function SceneRefinement() {
                   <p className="text-sm text-muted-foreground">
                     {canGenerateMotion
                       ? '准备就绪，可以生成时空/运动提示词'
-                      : '请先完成关键帧提示词（KF0/KF1/KF2）'}
+                      : '请先完成关键帧提示词（KF0-KF8）'}
                   </p>
                   <Button
                     onClick={generateMotionPrompt}
@@ -2507,10 +2507,10 @@ export function SceneRefinement() {
             • <strong>渐进式生成</strong>: 按顺序完成四个阶段，每步都可手动编辑优化
           </li>
           <li>
-            • <strong>关键帧提示词（KF0/KF1/KF2）</strong>: 三张静止画面描述，可分别用于生图模型
+            • <strong>关键帧提示词（KF0-KF8）</strong>: 九张静止画面描述，可分别用于生图模型
           </li>
           <li>
-            • <strong>时空/运动提示词</strong>: 基于三关键帧的变化描述，用于图生视频模型
+            • <strong>时空/运动提示词</strong>: 基于九关键帧的变化描述，用于图生视频模型
           </li>
           <li>
             • <strong>台词生成</strong>: 对白/独白/旁白/心理活动，可用于配音或字幕

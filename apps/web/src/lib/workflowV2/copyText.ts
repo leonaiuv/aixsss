@@ -120,14 +120,12 @@ export function buildImg2ImgPackCopyText(args: {
 
   lines.push(``);
   lines.push(`## 最终提示词（可直接喂模型）`);
-  lines.push(`IMAGE_PROMPT_KF0_ZH:`);
-  lines.push(finalPrompts.imagePrompt.zh[0]);
-  lines.push(``);
-  lines.push(`IMAGE_PROMPT_KF1_ZH:`);
-  lines.push(finalPrompts.imagePrompt.zh[1]);
-  lines.push(``);
-  lines.push(`IMAGE_PROMPT_KF2_ZH:`);
-  lines.push(finalPrompts.imagePrompt.zh[2]);
+  for (let i = 0; i < finalPrompts.imagePrompt.keys.length; i += 1) {
+    const key = finalPrompts.imagePrompt.keys[i];
+    lines.push(`IMAGE_PROMPT_${key}_ZH:`);
+    lines.push(finalPrompts.imagePrompt.zh[i] ?? '-');
+    lines.push(``);
+  }
   lines.push(``);
   lines.push(`NEGATIVE_ZH:`);
   lines.push(finalPrompts.negativePrompt.zh || '-');

@@ -6,7 +6,7 @@ import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput } from './formatFix.js';
 import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
-import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupToLegacyShotPrompt } from './actionBeats.js';
+import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupsToLegacyShotPrompt } from './actionBeats.js';
 
 function buildPrompt(args: {
   style: string;
@@ -15,10 +15,10 @@ function buildPrompt(args: {
   characters: string;
   panelHints: string;
 }): string {
-  return `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 3 张「静止」关键帧的"主体差分提示词"JSON：KF0(起始) / KF1(中间) / KF2(结束)。
+  return `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 9 张「静止」关键帧的"主体差分提示词"JSON：KF0-KF8（按顺序）。
 
 ## 输入
-当前分镜概要（决定三帧的动作分解）:
+当前分镜概要（决定九帧的动作分解）:
 ${args.currentSummary}
 
 场景锚点 JSON（环境一致性）:
@@ -33,12 +33,13 @@ ${args.panelHints}
 
 ## 关键规则（必须遵守）
 1. 只描述主体（人物/物品）在场景中的【位置、姿势、动作定格、交互关系】，不要描述人物外貌细节（发型/脸/服装款式等由定妆照资产保证）。
-2. 三帧默认同一镜头/构图/透视/光照，背景参考图不变：不要改背景、不要新增场景物件。
-3. 每个关键帧都是"定格瞬间"，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
-4. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
-5. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名，不要重新描述环境细节。
-6. KF0/KF1/KF2 必须明显不同：每帧至少 3 个可见差异（位置/姿态/手部/道具/视线/距离），但都必须是定格瞬间。
-7. 只输出 JSON，不要代码块、不要解释、不要多余文字。
+2. 9 帧必须连贯：相邻两帧之间人物位置/朝向/道具状态要有合理衔接，禁止无理由跳变。
+3. 默认同一场景/光照/透视，背景参考图不变：不要改背景、不要新增场景物件。
+4. 每个关键帧都是"定格瞬间"，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
+5. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
+6. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名，不要重新描述环境细节。
+7. KF0-KF8 需要形成“序列感”：相邻两帧至少 2 个可见差异；每三帧一组应体现 start/mid/end 的推进。
+8. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
 ## 输出格式（严格 JSON）
 {
@@ -89,7 +90,13 @@ ${args.panelHints}
     "KF2": {
       "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
       "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
-    }
+    },
+    "KF3": { "zh": {...}, "en": {...} },
+    "KF4": { "zh": {...}, "en": {...} },
+    "KF5": { "zh": {...}, "en": {...} },
+    "KF6": { "zh": {...}, "en": {...} },
+    "KF7": { "zh": {...}, "en": {...} },
+    "KF8": { "zh": {...}, "en": {...} }
   },
   "avoid": {
     "zh": "避免元素（如：多余角色/背景变化/文字水印/运动模糊/解剖错误）",
@@ -204,8 +211,7 @@ export async function generateKeyframePrompt(args: {
     });
     tokenUsage = mergeTokenUsage(tokenUsage, keyframeGroupsRes.tokenUsage);
 
-    const firstGroup = keyframeGroupsRes.keyframeGroups.groups[0];
-    const legacyShotPrompt = keyframeGroupToLegacyShotPrompt(firstGroup);
+    const legacyShotPrompt = keyframeGroupsToLegacyShotPrompt(keyframeGroupsRes.keyframeGroups.groups);
 
     await updateProgress({ pct: 85, message: '写入数据库...' });
     await prisma.scene.update({
@@ -229,7 +235,7 @@ export async function generateKeyframePrompt(args: {
       tokenUsage: tokenUsage ?? null,
     };
   } catch (err) {
-    await updateProgress({ pct: 25, message: '动作拆解失败，回退到旧版 KF0/KF1/KF2 提示词生成...' });
+    await updateProgress({ pct: 25, message: '动作拆解失败，回退到直接生成 9 帧 KF0-KF8...' });
 
     const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
     const res = await chatWithProvider(providerConfig, messages);
@@ -269,4 +275,3 @@ export async function generateKeyframePrompt(args: {
     };
   }
 }
-

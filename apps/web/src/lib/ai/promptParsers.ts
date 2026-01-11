@@ -1,3 +1,5 @@
+import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
+
 export type PromptLocale = 'zh' | 'en';
 
 export interface LocaleText {
@@ -6,8 +8,12 @@ export interface LocaleText {
 }
 
 export interface ParsedKeyframePrompts {
-  /** KF0/KF1/KF2（起/中/终） */
-  keyframes: [LocaleText, LocaleText, LocaleText];
+  /** 关键帧提示词（默认 KF0-KF8 共9帧；按顺序） */
+  keyframes: LocaleText[];
+  /** 对应 keyframes 的 key 列表（默认 KF0-KF8；按顺序） */
+  keyframeKeys: string[];
+  /** 有内容的关键帧数量（zh 或 en 任一非空即计入） */
+  filledKeyframeCount: number;
   /** 负面/避免项 */
   avoid?: LocaleText;
   /** 摄像机/镜头信息 */
@@ -90,11 +96,7 @@ export interface KeyframeLocaleData {
 
 export interface KeyframeJsonData {
   camera?: { type?: string; angle?: string; aspectRatio?: string };
-  keyframes?: {
-    KF0?: { zh?: KeyframeLocaleData; en?: KeyframeLocaleData };
-    KF1?: { zh?: KeyframeLocaleData; en?: KeyframeLocaleData };
-    KF2?: { zh?: KeyframeLocaleData; en?: KeyframeLocaleData };
-  };
+  keyframes?: Record<string, { zh?: KeyframeLocaleData; en?: KeyframeLocaleData } | undefined>;
   avoid?: { zh?: string; en?: string };
 }
 
@@ -385,10 +387,16 @@ function parseLabeledBlocks(
 }
 
 export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
-  const emptyKeyframes: [LocaleText, LocaleText, LocaleText] = [{}, {}, {}];
+  const keyframeKeys = [...GENERATED_IMAGE_KEYFRAMES];
+  const emptyKeyframes: LocaleText[] = keyframeKeys.map(() => ({}));
 
   if (!text || !text.trim()) {
-    return { keyframes: emptyKeyframes, isStructured: false };
+    return {
+      keyframes: emptyKeyframes,
+      keyframeKeys,
+      filledKeyframeCount: 0,
+      isStructured: false,
+    };
   }
 
   // 尝试解析 JSON 格式
@@ -398,16 +406,21 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
     const kfs = json.keyframes || {};
 
     // 将 JSON 结构转换为拼接后的字符串
-    const buildKfText = (kfKey: 'KF0' | 'KF1' | 'KF2'): LocaleText => {
-      const kf = kfs[kfKey];
+    const buildKfText = (kfKey: string): LocaleText => {
+      const kf = kfs[kfKey] as { zh?: KeyframeLocaleData; en?: KeyframeLocaleData } | undefined;
       return {
         zh: buildKeyframePromptFromJson(kf?.zh, json.camera, 'zh') || undefined,
         en: buildKeyframePromptFromJson(kf?.en, json.camera, 'en') || undefined,
       };
     };
 
+    const keyframes = keyframeKeys.map((kfKey) => buildKfText(kfKey));
+    const filledKeyframeCount = keyframes.filter((kf) => Boolean(kf.zh?.trim() || kf.en?.trim())).length;
+
     return {
-      keyframes: [buildKfText('KF0'), buildKfText('KF1'), buildKfText('KF2')],
+      keyframes,
+      keyframeKeys,
+      filledKeyframeCount,
       avoid: json.avoid,
       camera: json.camera,
       isStructured: true,
@@ -418,12 +431,7 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
 
   // 回退到旧的行标签格式解析
   const allowedLabels = new Set<string>([
-    'KF0_ZH',
-    'KF0_EN',
-    'KF1_ZH',
-    'KF1_EN',
-    'KF2_ZH',
-    'KF2_EN',
+    ...keyframeKeys.flatMap((kf) => [`${kf}_ZH`, `${kf}_EN`]),
     'AVOID_ZH',
     'AVOID_EN',
   ]);
@@ -436,17 +444,20 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
     return value && value.trim() ? value.trim() : undefined;
   };
 
-  const keyframes: [LocaleText, LocaleText, LocaleText] = [
-    { zh: get('KF0_ZH'), en: get('KF0_EN') },
-    { zh: get('KF1_ZH'), en: get('KF1_EN') },
-    { zh: get('KF2_ZH'), en: get('KF2_EN') },
-  ];
+  const keyframes: LocaleText[] = keyframeKeys.map((kfKey) => ({
+    zh: get(`${kfKey}_ZH`),
+    en: get(`${kfKey}_EN`),
+  }));
+
+  const filledKeyframeCount = keyframes.filter((kf) => Boolean(kf.zh?.trim() || kf.en?.trim())).length;
 
   const avoid: LocaleText | undefined =
     get('AVOID_ZH') || get('AVOID_EN') ? { zh: get('AVOID_ZH'), en: get('AVOID_EN') } : undefined;
 
   return {
     keyframes,
+    keyframeKeys,
+    filledKeyframeCount,
     avoid,
     rawUnlabeled: blocks.__unlabeled,
     isStructured: hasAnyLabel,

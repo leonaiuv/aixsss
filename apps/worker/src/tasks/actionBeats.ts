@@ -1126,11 +1126,7 @@ type LegacyKeyframeJsonData = {
     angle?: string;
     aspectRatio?: string;
   };
-  keyframes?: {
-    KF0?: { zh?: LegacyKeyframeLocaleBlock; en?: LegacyKeyframeLocaleBlock };
-    KF1?: { zh?: LegacyKeyframeLocaleBlock; en?: LegacyKeyframeLocaleBlock };
-    KF2?: { zh?: LegacyKeyframeLocaleBlock; en?: LegacyKeyframeLocaleBlock };
-  };
+  keyframes?: Record<string, { zh?: LegacyKeyframeLocaleBlock; en?: LegacyKeyframeLocaleBlock } | undefined>;
   avoid?: { zh?: string; en?: string };
 };
 
@@ -1200,6 +1196,51 @@ export function keyframeGroupToLegacyShotPrompt(group: KeyframeGroup): string {
       KF1: { zh: frameSpecToLegacyBlock(mid), en: frameSpecToLegacyBlock(mid) },
       KF2: { zh: frameSpecToLegacyBlock(end), en: frameSpecToLegacyBlock(end) },
     },
+    avoid: { zh: avoidText, en: avoidText },
+  };
+
+  return JSON.stringify(data, null, 2);
+}
+
+export function keyframeGroupsToLegacyShotPrompt(groups: KeyframeGroup[], options?: { maxGroups?: number }): string {
+  const maxGroups = Math.max(1, Math.min(3, options?.maxGroups ?? 3));
+  const selected = (groups ?? []).slice(0, maxGroups);
+
+  if (selected.length < maxGroups) {
+    throw new Error(`Expected at least ${maxGroups} keyframe groups, got ${selected.length}`);
+  }
+
+  const avoidList = selected.flatMap((g) => g.negative?.avoid ?? []).filter(Boolean);
+  const avoidText = Array.from(new Set(avoidList)).join('; ');
+
+  const keyframes: NonNullable<LegacyKeyframeJsonData['keyframes']> = {};
+  let idx = 0;
+
+  for (const group of selected) {
+    const start = group.frames.start.frame_spec;
+    const mid = group.frames.mid.frame_spec;
+    const end = group.frames.end.frame_spec;
+
+    const pushFrame = (frame: FrameSpec) => {
+      const key = `KF${idx}`;
+      keyframes[key] = { zh: frameSpecToLegacyBlock(frame), en: frameSpecToLegacyBlock(frame) };
+      idx += 1;
+    };
+
+    pushFrame(start);
+    pushFrame(mid);
+    pushFrame(end);
+  }
+
+  const first = selected[0];
+
+  const data: LegacyKeyframeJsonData = {
+    camera: {
+      type: first.camera?.shot_size,
+      angle: first.camera?.angle,
+      aspectRatio: first.camera?.aspect_ratio,
+    },
+    keyframes,
     avoid: { zh: avoidText, en: avoidText },
   };
 

@@ -135,7 +135,14 @@ export async function saveSystemPromptContent(
 
   if (isApiMode()) {
     const updated = await apiUpdateSystemPrompt(key, { content: trimmed });
-    apiCache?.set(key, updated);
+    // 确保缓存已初始化，如果未初始化则先加载
+    if (!apiCache) {
+      await loadApiPrompts();
+    }
+    // 更新缓存
+    if (apiCache) {
+      apiCache.set(key, updated);
+    }
     return updated;
   }
 
@@ -161,7 +168,14 @@ export async function resetSystemPromptContent(key: string): Promise<ApiSystemPr
 
   if (isApiMode()) {
     const updated = await apiUpdateSystemPrompt(key, { content: def.defaultContent });
-    apiCache?.set(key, updated);
+    // 确保缓存已初始化，如果未初始化则先加载
+    if (!apiCache) {
+      await loadApiPrompts();
+    }
+    // 更新缓存
+    if (apiCache) {
+      apiCache.set(key, updated);
+    }
     return updated;
   }
 

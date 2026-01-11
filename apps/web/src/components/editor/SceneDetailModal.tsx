@@ -8,7 +8,9 @@
 // ==========================================
 
 import { useMemo, useState } from 'react';
-import type { Character, Scene, SceneStatus, WorldViewElement } from '@/types';
+import type { Character, GeneratedImageKeyframe, Scene, SceneStatus, WorldViewElement } from '@/types';
+import type { LocaleText, ParsedKeyframePrompts, ParsedMotionPromptText } from '@/lib/ai/promptParsers';
+import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -54,25 +56,6 @@ interface DialogueLine {
   order: number;
 }
 
-// 关键帧解析结果
-interface ParsedKeyframe {
-  zh?: string;
-  en?: string;
-}
-
-interface ParsedKeyframes {
-  isStructured: boolean;
-  keyframes: [ParsedKeyframe, ParsedKeyframe, ParsedKeyframe];
-  avoid?: { zh?: string; en?: string };
-}
-
-interface ParsedMotion {
-  isStructured: boolean;
-  motionShort: { zh?: string; en?: string };
-  motionBeats: { zh?: string; en?: string };
-  constraints: { zh?: string; en?: string };
-}
-
 // 差量项
 interface DeltaItem {
   label: string;
@@ -97,9 +80,9 @@ interface SceneDetailModalProps {
   onGenerateImages: (sceneId: string) => void;
   onDeleteScene: (sceneId: string) => void;
   onCopyImg2ImgPack: () => Promise<void>;
-  parsedKeyframes: ParsedKeyframes;
-  parsedMotion: ParsedMotion;
-  onCopyKeyframe: (idx: 0 | 1 | 2, lang: 'zh' | 'en') => Promise<void>;
+  parsedKeyframes: ParsedKeyframePrompts;
+  parsedMotion: ParsedMotionPromptText;
+  onCopyKeyframe: (kfKey: string, lang: 'zh' | 'en') => Promise<void>;
   onCopyKeyframeAvoid: (lang: 'zh' | 'en') => Promise<void>;
   onCopyMotion: (
     key: 'motionShort' | 'motionBeats' | 'constraints',
@@ -110,8 +93,6 @@ interface SceneDetailModalProps {
   sceneAnchorCopyText: { zh: string; en: string };
   getSceneStatusLabel: (status: SceneStatus) => string;
 }
-
-const KEYFRAME_LABELS = ['KF0', 'KF1', 'KF2'] as const;
 
 // 可折叠区块组件
 function CollapsibleSection({
@@ -204,14 +185,16 @@ function CopyButtonGroup({
 // 关键帧卡片
 function KeyframeCard({
   label,
+  kfKey,
   index,
   keyframe,
   onCopy,
 }: {
   label: string;
-  index: 0 | 1 | 2;
-  keyframe: ParsedKeyframe;
-  onCopy: (idx: 0 | 1 | 2, lang: 'zh' | 'en') => void;
+  kfKey: string;
+  index: number;
+  keyframe: LocaleText;
+  onCopy: (kfKey: string, lang: 'zh' | 'en') => void;
 }) {
   const hasZh = Boolean(keyframe.zh);
   const hasEn = Boolean(keyframe.en);
@@ -229,8 +212,8 @@ function KeyframeCard({
         <CopyButtonGroup
           hasZh={hasZh}
           hasEn={hasEn}
-          onCopyZh={() => onCopy(index, 'zh')}
-          onCopyEn={() => onCopy(index, 'en')}
+          onCopyZh={() => onCopy(kfKey, 'zh')}
+          onCopyEn={() => onCopy(kfKey, 'en')}
           size="xs"
         />
       </div>
@@ -533,10 +516,7 @@ export function SceneDetailModal({
   }, [scene]);
 
   const generatedImageMap = useMemo(() => {
-    const map = new Map<
-      (typeof KEYFRAME_LABELS)[number],
-      NonNullable<Scene['generatedImages']>[number]
-    >();
+    const map = new Map<GeneratedImageKeyframe, NonNullable<Scene['generatedImages']>[number]>();
     if (!scene?.generatedImages) return map;
     for (const image of scene.generatedImages) {
       if (image?.keyframe && image?.url) {
@@ -772,24 +752,21 @@ export function SceneDetailModal({
                         {parsedKeyframes.isStructured && (
                           <div className="space-y-3">
                             <div className="grid gap-3 sm:grid-cols-3">
-                              <KeyframeCard
-                                label="起始帧"
-                                index={0}
-                                keyframe={parsedKeyframes.keyframes[0]}
-                                onCopy={onCopyKeyframe}
-                              />
-                              <KeyframeCard
-                                label="中间帧"
-                                index={1}
-                                keyframe={parsedKeyframes.keyframes[1]}
-                                onCopy={onCopyKeyframe}
-                              />
-                              <KeyframeCard
-                                label="结束帧"
-                                index={2}
-                                keyframe={parsedKeyframes.keyframes[2]}
-                                onCopy={onCopyKeyframe}
-                              />
+                              {GENERATED_IMAGE_KEYFRAMES.map((kfKey, index) => {
+                                const segment = Math.floor(index / 3) + 1;
+                                const phase = ['起', '中', '终'][index % 3] ?? '';
+                                const label = `${kfKey}（段${segment}${phase}）`;
+                                return (
+                                  <KeyframeCard
+                                    key={kfKey}
+                                    label={label}
+                                    kfKey={kfKey}
+                                    index={index}
+                                    keyframe={parsedKeyframes.keyframes[index] ?? {}}
+                                    onCopy={onCopyKeyframe}
+                                  />
+                                );
+                              })}
                             </div>
                             {parsedKeyframes.avoid && (
                               <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3">
@@ -814,7 +791,7 @@ export function SceneDetailModal({
                           value={scene.shotPrompt}
                           onChange={(e) => onUpdateScene(scene.id, { shotPrompt: e.target.value })}
                           className="min-h-[200px] font-mono text-sm leading-relaxed resize-none"
-                          placeholder="KF0_ZH: (人物差分: ...) ...&#10;KF0_EN: (Character Diff: ...) ...&#10;KF1_ZH: ...&#10;..."
+                          placeholder="支持 JSON 或行标签格式：KF0_ZH: ...&#10;KF0_EN: ...&#10;...&#10;KF8_ZH: ...&#10;KF8_EN: ..."
                         />
                       </div>
                     </CollapsibleSection>
@@ -851,12 +828,14 @@ export function SceneDetailModal({
                       }
                     >
                       <div className="grid gap-4 sm:grid-cols-3">
-                        {KEYFRAME_LABELS.map((label, index) => {
+                        {GENERATED_IMAGE_KEYFRAMES.map((label, index) => {
                           const image = generatedImageMap.get(label);
+                          const segment = Math.floor(index / 3) + 1;
+                          const phase = ['起', '中', '终'][index % 3] ?? '';
                           return (
                             <div key={label} className="space-y-2">
                               <div className="text-xs font-medium text-muted-foreground">
-                                {label}（{index === 0 ? '起始' : index === 1 ? '中间' : '结束'}）
+                                {label}（段{segment}{phase}）
                               </div>
                               {image ? (
                                 <div className="overflow-hidden rounded-lg border">

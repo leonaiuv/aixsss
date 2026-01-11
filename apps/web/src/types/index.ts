@@ -335,7 +335,16 @@ export type SceneStatus =
   | 'completed'
   | 'needs_update';
 
-export type GeneratedImageKeyframe = 'KF0' | 'KF1' | 'KF2';
+export type GeneratedImageKeyframe =
+  | 'KF0'
+  | 'KF1'
+  | 'KF2'
+  | 'KF3'
+  | 'KF4'
+  | 'KF5'
+  | 'KF6'
+  | 'KF7'
+  | 'KF8';
 
 export interface GeneratedImage {
   keyframe: GeneratedImageKeyframe;
@@ -578,7 +587,7 @@ export interface Scene {
   actionDescription: string;
   /** 出场角色ID列表 */
   castCharacterIds?: string[];
-  /** 关键帧提示词（KF0/KF1/KF2）- 静止画面描述，用于生图AI（建议中英双语） */
+  /** 关键帧提示词（KF0-KF8）- 静止画面描述，用于生图AI（建议中英双语） */
   shotPrompt: string;
   actionPlanJson?: unknown;
   keyframeGroupsJson?: unknown;

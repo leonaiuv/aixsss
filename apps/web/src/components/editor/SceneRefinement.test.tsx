@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -179,7 +180,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
     });
 
     // Mock parseDialoguesFromText
-    vi.mocked(skillsModule.parseDialoguesFromText).mockImplementation((text: string) => {
+    vi.mocked(skillsModule.parseDialoguesFromText).mockImplementation((_text: string) => {
       return [
         {
           id: 'dl1',
@@ -213,6 +214,18 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       'KF1_EN: protagonist at center, hand holding the prop (frozen moment)',
       'KF2_ZH: 主角退到右侧，低头凝视道具（定格）',
       'KF2_EN: protagonist right side, head lowered, looking at the prop (frozen moment)',
+      'KF3_ZH: 主角靠近门口，身体前倾，手指向远处（定格）',
+      'KF3_EN: protagonist near the doorway, leaning forward, pointing into the distance (frozen moment)',
+      'KF4_ZH: 主角回到画面中央偏左，双手握住道具举起（定格）',
+      'KF4_EN: protagonist slightly left of center, holding the prop with both hands raised (frozen moment)',
+      'KF5_ZH: 主角站在前景中央，目光锐利，护住道具（定格）',
+      'KF5_EN: protagonist center foreground, sharp gaze, guarding the prop (frozen moment)',
+      'KF6_ZH: 主角退到背景右侧，背对镜头，肩膀紧绷（定格）',
+      'KF6_EN: protagonist back right, back to camera, tense shoulders (frozen moment)',
+      'KF7_ZH: 主角转身面向镜头，单手持道具贴近胸前（定格）',
+      'KF7_EN: protagonist turns to face the camera, holding the prop close to the chest (frozen moment)',
+      'KF8_ZH: 主角站在画面中央，手臂下垂，目光坚定（定格）',
+      'KF8_EN: protagonist center frame, arms lowered, determined gaze (frozen moment)',
       'AVOID_ZH: 不要文字，不要水印',
       'AVOID_EN: no text, no watermark',
     ].join('\n');
@@ -326,6 +339,18 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       'KF1_EN: KF1 test',
       'KF2_ZH: KF2 测试',
       'KF2_EN: KF2 test',
+      'KF3_ZH: KF3 测试',
+      'KF3_EN: KF3 test',
+      'KF4_ZH: KF4 测试',
+      'KF4_EN: KF4 test',
+      'KF5_ZH: KF5 测试',
+      'KF5_EN: KF5 test',
+      'KF6_ZH: KF6 测试',
+      'KF6_EN: KF6 test',
+      'KF7_ZH: KF7 测试',
+      'KF7_EN: KF7 test',
+      'KF8_ZH: KF8 测试',
+      'KF8_EN: KF8 test',
       'AVOID_ZH: 不要文字',
       'AVOID_EN: no text',
     ].join('\n');
@@ -385,6 +410,18 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       'KF1_EN: KF1 test',
       'KF2_ZH: KF2 测试',
       'KF2_EN: KF2 test',
+      'KF3_ZH: KF3 测试',
+      'KF3_EN: KF3 test',
+      'KF4_ZH: KF4 测试',
+      'KF4_EN: KF4 test',
+      'KF5_ZH: KF5 测试',
+      'KF5_EN: KF5 test',
+      'KF6_ZH: KF6 测试',
+      'KF6_EN: KF6 test',
+      'KF7_ZH: KF7 测试',
+      'KF7_EN: KF7 test',
+      'KF8_ZH: KF8 测试',
+      'KF8_EN: KF8 test',
       'AVOID_ZH: 不要文字',
       'AVOID_EN: no text',
     ].join('\n');
@@ -507,7 +544,7 @@ describe('SceneRefinement - 一键生成全部功能', () => {
         ...mockScene,
         sceneDescription: '已有场景锚点',
         actionDescription: '',
-        shotPrompt: '已有关键帧提示词（KF0/KF1/KF2）',
+        shotPrompt: '已有关键帧提示词（KF0-KF8）',
         motionPrompt: '已有时空/运动提示词',
         dialogues: [
           {
@@ -545,6 +582,18 @@ describe('SceneRefinement - 一键生成全部功能', () => {
       'KF1_EN: stage 2 KF1',
       'KF2_ZH: 阶段2 KF2',
       'KF2_EN: stage 2 KF2',
+      'KF3_ZH: 阶段2 KF3',
+      'KF3_EN: stage 2 KF3',
+      'KF4_ZH: 阶段2 KF4',
+      'KF4_EN: stage 2 KF4',
+      'KF5_ZH: 阶段2 KF5',
+      'KF5_EN: stage 2 KF5',
+      'KF6_ZH: 阶段2 KF6',
+      'KF6_EN: stage 2 KF6',
+      'KF7_ZH: 阶段2 KF7',
+      'KF7_EN: stage 2 KF7',
+      'KF8_ZH: 阶段2 KF8',
+      'KF8_EN: stage 2 KF8',
       'AVOID_ZH: 不要文字',
       'AVOID_EN: no text',
     ].join('\n');

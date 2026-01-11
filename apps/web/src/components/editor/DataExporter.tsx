@@ -784,7 +784,7 @@ ${char.portraitPrompts.general}
         }
 
         if (scene.shotPrompt) {
-          markdown += `**关键帧提示词（KF0/KF1/KF2）:**
+          markdown += `**关键帧提示词（KF0-KF8）:**
 \`\`\`
 ${scene.shotPrompt}
 \`\`\`

@@ -3,6 +3,7 @@ import type { ChatMessage, ChatResult, ProviderChatConfig } from '../providers/t
 import { chatWithProvider } from '../providers/index.js';
 import { mergeTokenUsage, type TokenUsage } from './common.js';
 import { loadSystemPrompt } from './systemPrompts.js';
+import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
 
 export type FixableOutputType = 'scene_anchor' | 'keyframe_prompt' | 'motion_prompt';
 
@@ -44,10 +45,19 @@ function isValidSceneAnchorJson(obj: unknown): boolean {
 function isValidKeyframeJson(obj: unknown): boolean {
   if (!obj || typeof obj !== 'object') return false;
   const o = obj as Record<string, unknown>;
+  const keyframes = o.keyframes as Record<string, unknown> | undefined;
+  if (!keyframes || typeof keyframes !== 'object') return false;
+
+  // 需要包含完整 9 帧（KF0-KF8），否则视为不结构化以触发 format-fix。
+  const hasAllKeyframes = GENERATED_IMAGE_KEYFRAMES.every((kf) => {
+    const entry = keyframes[kf];
+    return entry && typeof entry === 'object';
+  });
+
   return (
     typeof o.camera === 'object' &&
-    typeof o.keyframes === 'object' &&
-    typeof o.avoid === 'object'
+    typeof o.avoid === 'object' &&
+    hasAllKeyframes
   );
 }
 
@@ -151,6 +161,5 @@ export async function fixStructuredOutput(args: {
 
   return { content: fixedCleaned, tokenUsage: merged, fixed: true };
 }
-
 
 

@@ -13,7 +13,7 @@ function buildUserPrompt(args: { sceneAnchor: string; shotPrompt: string; panelH
     '场景锚点 JSON:',
     args.sceneAnchor || '-',
     '',
-    '三关键帧 JSON（静止描述，包含 KF0/KF1/KF2）:',
+    '9关键帧 JSON（静止描述，包含 KF0-KF8）:',
     args.shotPrompt || '-',
     args.panelHints || '',
   ]
@@ -105,5 +105,4 @@ export async function generateMotionPrompt(args: {
     tokenUsage: fixed.tokenUsage ?? null,
   };
 }
-
 

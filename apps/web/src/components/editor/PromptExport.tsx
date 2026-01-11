@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
 import { useCustomStyleStore } from '@/stores/customStyleStore';
@@ -52,37 +52,25 @@ export function PromptExport() {
   const [exportContent, setExportContent] = useState('');
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (currentProject) {
-      loadScenes(currentProject.id);
-    }
-  }, [currentProject?.id]);
-
-  useEffect(() => {
-    if (currentProject && scenes.length > 0) {
-      setExportContent(generateMarkdown());
-    }
-  }, [currentProject, scenes]);
-
-  if (!currentProject) {
-    return null;
-  }
-
   const completedScenes = scenes.filter((s) => s.status === 'completed');
-  const completionRate = Math.round((completedScenes.length / scenes.length) * 100);
+  const completionRate =
+    scenes.length > 0 ? Math.round((completedScenes.length / scenes.length) * 100) : 0;
 
-  // 生成Markdown格式内容
-  const generateMarkdown = () => {
+  const generateMarkdown = useCallback(() => {
+    if (!currentProject) return '';
+
     const styleLabel = getStyleLabel(currentProject);
     const styleFullPrompt = getStyleFullPrompt(currentProject);
+    const projectScenes = scenes;
+    const rate = completionRate;
 
     let md = `# ${currentProject.title}\n\n`;
     md += `## 项目信息\n\n`;
     md += `- **创建时间**: ${new Date(currentProject.createdAt).toLocaleString('zh-CN')}\n`;
     md += `- **更新时间**: ${new Date(currentProject.updatedAt).toLocaleString('zh-CN')}\n`;
     md += `- **画风**: ${styleLabel}\n`;
-    md += `- **分镜总数**: ${scenes.length}\n`;
-    md += `- **完成进度**: ${completionRate}%\n\n`;
+    md += `- **分镜总数**: ${projectScenes.length}\n`;
+    md += `- **完成进度**: ${rate}%\n\n`;
 
     md += `### 完整画风描述 (Full Style Prompt)\n\n`;
     md += `\`\`\`
@@ -100,7 +88,7 @@ ${styleFullPrompt}
     md += `---\n\n`;
     md += `## 分镜列表\n\n`;
 
-    scenes.forEach((scene, index) => {
+    projectScenes.forEach((scene, index) => {
       md += `### 分镜 ${index + 1}: ${scene.summary}\n\n`;
 
       if (scene.sceneDescription) {
@@ -109,7 +97,7 @@ ${styleFullPrompt}
       }
 
       if (scene.shotPrompt) {
-        md += `**关键帧提示词（KF0/KF1/KF2）**（给绘图AI）:\n\n`;
+        md += `**关键帧提示词（KF0-KF8）**（给绘图AI）:\n\n`;
         md += `\`\`\`
 ${scene.shotPrompt}
 \`\`\`
@@ -134,7 +122,22 @@ ${scene.motionPrompt}
     });
 
     return md;
-  };
+  }, [completionRate, currentProject, scenes]);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    loadScenes(currentProject.id);
+  }, [currentProject, loadScenes]);
+
+  useEffect(() => {
+    if (currentProject && scenes.length > 0) {
+      setExportContent(generateMarkdown());
+    }
+  }, [currentProject, scenes, generateMarkdown]);
+
+  if (!currentProject) {
+    return null;
+  }
 
   // 生成JSON格式
   const generateJSON = () => {
@@ -172,11 +175,11 @@ ${scene.motionPrompt}
     return JSON.stringify(data, null, 2);
   };
 
-  // 仅导出关键帧提示词（KF0/KF1/KF2）
+  // 仅导出关键帧提示词（KF0-KF8）
   const generateKeyframePromptsOnly = () => {
     const styleFullPrompt = getStyleFullPrompt(currentProject);
 
-    let content = `# ${currentProject.title} - 关键帧提示词（KF0/KF1/KF2，绘图AI用）\n\n`;
+    let content = `# ${currentProject.title} - 关键帧提示词（KF0-KF8，绘图AI用）\n\n`;
     content += `## 画风
 
 \`\`\`
@@ -354,7 +357,7 @@ ${currentProject.protagonist}
             className="gap-2"
           >
             <Download className="h-4 w-4" />
-            <span>导出关键帧提示词（KF0/KF1/KF2）</span>
+            <span>导出关键帧提示词（KF0-KF8）</span>
           </Button>
 
           <Button
@@ -397,7 +400,7 @@ ${currentProject.protagonist}
             • <strong>JSON</strong>: 适合程序处理,可导入其他工具或备份数据
           </li>
           <li>
-            • <strong>关键帧提示词（KF0/KF1/KF2）</strong>: 三张静止关键帧提示词，可分别用于生图模型
+            • <strong>关键帧提示词（KF0-KF8）</strong>: 九张静止关键帧提示词，可分别用于生图模型
           </li>
           <li>
             • <strong>时空/运动提示词</strong>: 基于关键帧差分的变化描述，用于图生视频模型

@@ -462,7 +462,7 @@ function LegacyEditor() {
               '场景锚点 JSON:',
               latestScene2.sceneDescription || '-',
               '',
-              '三关键帧 JSON（静止描述，包含 KF0/KF1/KF2）:',
+              '9关键帧 JSON（静止描述，包含 KF0-KF8）:',
               latestScene2.shotPrompt || '-',
             ].join('\n');
 
@@ -594,7 +594,7 @@ function LegacyEditor() {
               '场景锚点（环境一致性）:',
               latestScene3.sceneDescription || '-',
               '',
-              '三关键帧（静止）:',
+              '9关键帧（静止）:',
               latestScene3.shotPrompt || '-',
               '',
               '运动/时空提示词:',
@@ -721,7 +721,7 @@ function LegacyEditor() {
           return (
             `## 分镜 ${index + 1}: ${scene.summary}\n\n` +
             `### 场景锚点（Scene Anchor）\n${scene.sceneDescription || '(未生成)'}\n\n` +
-            `### 关键帧提示词（KF0/KF1/KF2）
+            `### 关键帧提示词（KF0-KF8）
 \`\`\`
 ${scene.shotPrompt || '(未生成)'}
 \`\`\`

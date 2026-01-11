@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // ==========================================
 // P0-3: 上下文构建器
 // ==========================================
@@ -31,7 +32,7 @@ export interface ContextBuildOptions {
   protagonist?: string;
   /** 场景锚点（环境一致性，原字段名 sceneDescription） */
   sceneDescription?: string;
-  /** 关键帧提示词（可包含 KF0/KF1/KF2） */
+  /** 关键帧提示词（可包含 KF0-KF8） */
   shotPrompt?: string;
   /** 时空/运动提示词 */
   motionPrompt?: string;

@@ -2,15 +2,17 @@
 
 ## 背景与目标
 
-现有“一个分镜 → 3 张关键帧（KF0/KF1/KF2）”在剪辑上经常出现动作断裂、跳帧、观众“看不出在动”的问题。根因通常不是动画/补间技术，而是**分镜内部的动作拆解能力**不足：一个 Scene 往往包含多个动作点/信息点，3 张图承载不下，也缺少可用于下游 I2V 的稳定运动线索。
+旧版“一个分镜 → 3 张关键帧（KF0/KF1/KF2）”在剪辑上经常出现动作断裂、跳帧、观众“看不出在动”的问题。根因通常不是动画/补间技术，而是**分镜内部的动作拆解能力**不足：一个 Scene 往往包含多个动作点/信息点，3 张图承载不下，也缺少可用于下游 I2V 的稳定运动线索。
 
 V1 的工程化目标是：在 `Scene` 与 `Keyframes` 之间新增一层 **ActionBeat（动作段）**，把“start-mid-end 三段式”变成硬约束，并结构化落库，便于校验、修复、复用与后续迭代（画布/可视化编辑/局部重生成）。
+
+为增强分镜内部连贯性，链路已升级为“一个分镜 → 9 张关键帧（KF0-KF8）”，默认由前 3 个 beat 的 start/mid/end 合并映射得到（共 9 帧）。
 
 ## V1 落地范围（传统构建）
 
 - Scene 先生成 `ActionPlanJson`（beats 列表，每个 beat 强制 start/mid/end 状态）
 - 再按 beat 生成 `KeyframeGroupsJson`（每个 beat 输出 start/mid/end 的 `frame_spec`）
-- **兼容旧链路**：把第 1 个 beat 的 start/mid/end 映射回老的 `scene.shotPrompt`（KF0/KF1/KF2 JSON），不改现有 UI 与生图链路
+- **兼容旧链路**：把前 3 个 beat 的 start/mid/end 合并映射写入 `scene.shotPrompt`（KF0-KF8 JSON，共 9 帧），尽量不改现有 UI 与生图链路
 
 ## 存储方案（方案 A：Scene 增加 JSON 字段）
 
@@ -34,9 +36,9 @@ V1 的工程化目标是：在 `Scene` 与 `Keyframes` 之间新增一层 **Acti
 
 ## Pipeline 接入点（传统版本）
 
-- `generate_keyframe_prompt`：先生成 `actionPlanJson/keyframeGroupsJson`，再把第 1 组映射写入 `scene.shotPrompt`；若 ActionBeat 流程失败，会回退旧版 KF0/KF1/KF2 生成。
+- `generate_keyframe_prompt`：先生成 `actionPlanJson/keyframeGroupsJson`，再把前 3 组映射写入 `scene.shotPrompt`（KF0-KF8，共 9 帧）；若 ActionBeat 流程失败，会回退到直接生成 9 帧 KF0-KF8。
   - 入口：`apps/worker/src/tasks/generateKeyframePrompt.ts`
-- `refine_scene_all`：keyframe 步骤切到 ActionBeat；失败回退旧版 KF0/KF1/KF2，保证 refine-all 可用性。
+- `refine_scene_all`：keyframe 步骤切到 ActionBeat；失败回退到直接生成 9 帧 KF0-KF8，保证 refine-all 可用性。
   - 入口：`apps/worker/src/tasks/refineSceneAll.ts`
 
 ## 校验与自动修复（V1 关键）
@@ -55,7 +57,7 @@ V1 的思路是“尽量用纯代码校验 + 必要时 LLM repair 兜底”：
 
 ## 兼容策略与已知限制
 
-- 兼容优先：老 UI/生图仍只用 `scene.shotPrompt`（第 1 个 beat 的三帧）
+- 兼容优先：UI/生图使用 `scene.shotPrompt`（前 3 个 beat 合并后的九帧 KF0-KF8）
 - 多 beat 的“逐组生图/逐组 motionGroups”尚未贯通（字段已落库，导出已携带）
 - 后续要做可视化编辑/局部重生成，建议升级到方案 B（Beat 表）
 

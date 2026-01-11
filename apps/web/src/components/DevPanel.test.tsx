@@ -169,7 +169,7 @@ describe('DevPanel', () => {
       const { addTask } = useAIProgressStore.getState();
       addTask({
         type: 'keyframe_prompt',
-        title: '生成关键帧提示词（KF0/KF1/KF2）',
+        title: '生成关键帧提示词（KF0-KF8）',
         status: 'running',
         priority: 'normal',
         progress: 30,

@@ -6,7 +6,7 @@ import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput } from './formatFix.js';
 import { styleFullPrompt, toProviderChatConfig, type TokenUsage, mergeTokenUsage } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript, type PanelScriptV1 } from './panelScriptHints.js';
-import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupToLegacyShotPrompt } from './actionBeats.js';
+import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupsToLegacyShotPrompt } from './actionBeats.js';
 import { loadSystemPrompt } from './systemPrompts.js';
 
 function isPrismaNotFoundError(err: unknown): boolean {
@@ -121,15 +121,16 @@ function buildKeyframePrompt(args: {
   characters: string;
   panelHints: string;
 }): string {
-  return `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了背景参考图，角色定妆照也已预先生成。现在请输出 3 张「静止」关键帧的"主体差分提示词"JSON：KF0 / KF1 / KF2。
+  return `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了背景参考图，角色定妆照也已预先生成。现在请输出 9 张「静止」关键帧的"主体差分提示词"JSON：KF0-KF8。
 
 ## 关键规则（必须遵守）
 1. 只描述主体（人物/物品）在场景中的【位置、姿势、动作定格、交互关系】，不要描述人物外貌细节。
-2. 三帧默认同一镜头/构图/透视/光照，背景参考图不变：不要改背景、不要新增场景物件。
-3. 每个关键帧都是"定格瞬间"，禁止写连续过程词。
-4. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名。
-5. KF0/KF1/KF2 必须明显不同：每帧至少 3 个可见差异。
-6. 只输出 JSON，不要代码块、不要解释、不要多余文字。
+2. 9 帧必须连贯：相邻两帧之间人物位置/朝向/道具状态要有合理衔接，禁止无理由跳变。
+3. 默认同一场景/光照/透视，背景参考图不变：不要改背景、不要新增场景物件。
+4. 每个关键帧都是"定格瞬间"，禁止写连续过程词。
+5. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名。
+6. KF0-KF8 需要形成“序列感”：相邻两帧至少 2 个可见差异；每三帧一组应体现 start/mid/end 的推进。
+7. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
 ## 输入
 当前分镜概要:
@@ -163,7 +164,13 @@ ${args.panelHints}
       "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
     },
     "KF1": { "zh": {...}, "en": {...} },
-    "KF2": { "zh": {...}, "en": {...} }
+    "KF2": { "zh": {...}, "en": {...} },
+    "KF3": { "zh": {...}, "en": {...} },
+    "KF4": { "zh": {...}, "en": {...} },
+    "KF5": { "zh": {...}, "en": {...} },
+    "KF6": { "zh": {...}, "en": {...} },
+    "KF7": { "zh": {...}, "en": {...} },
+    "KF8": { "zh": {...}, "en": {...} }
   },
   "avoid": {
     "zh": "避免元素",
@@ -177,7 +184,7 @@ function buildMotionUserPrompt(args: { sceneAnchor: string; shotPrompt: string; 
     '场景锚点 JSON:',
     args.sceneAnchor || '-',
     '',
-    '三关键帧 JSON:',
+    '9关键帧 JSON:',
     args.shotPrompt || '-',
     args.panelHints || '',
   ]
@@ -200,7 +207,7 @@ function buildDialogueUserPrompt(args: {
     '场景锚点（环境一致性）:',
     args.sceneAnchor || '-',
     '',
-    '三关键帧（静止）:',
+    '9关键帧（静止）:',
     args.shotPrompt || '-',
     '',
     '运动/时空提示词:',
@@ -431,10 +438,10 @@ export async function refineSceneAll(args: {
       tokens = mergeTokenUsage(tokens, keyframeGroupsRes.tokenUsage);
       keyframeGroupsJson = keyframeGroupsRes.keyframeGroups;
 
-      keyframeContent = keyframeGroupToLegacyShotPrompt(keyframeGroupsRes.keyframeGroups.groups[0]);
+      keyframeContent = keyframeGroupsToLegacyShotPrompt(keyframeGroupsRes.keyframeGroups.groups);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await updateProgress({ pct: 40, message: `ActionBeat 失败，回退旧版 KF0/KF1/KF2：${message}` });
+      await updateProgress({ pct: 40, message: `ActionBeat 失败，回退直接生成 9 帧 KF0-KF8：${message}` });
 
       const kfRes = await doChat({
         providerConfig,

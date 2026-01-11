@@ -92,12 +92,12 @@ export const ActionDescriptionSkill: Skill = {
 export const KeyframePromptSkill: Skill = {
   name: 'keyframe-prompt',
   description:
-    '生成三张静止关键帧（起/中/终）的"主体差分提示词"JSON（适配图生图/参考图流程，中英双语）',
+    '生成九张静止关键帧（3段×起/中/终）的"主体差分提示词"JSON（适配图生图/参考图流程，中英双语）',
   requiredContext: ['project_essence', 'confirmed_content'],
-  promptTemplate: `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 3 张「静止」关键帧的"主体差分提示词"JSON：KF0(起始) / KF1(中间) / KF2(结束)。
+  promptTemplate: `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 9 张「静止」关键帧的"主体差分提示词"JSON：KF0-KF8（按顺序）。
 
 ## 输入
-当前分镜概要（决定三帧的动作分解）:
+当前分镜概要（决定九帧的动作分解）:
 {current_scene_summary}
 
 场景锚点 JSON（环境一致性）:
@@ -112,11 +112,11 @@ export const KeyframePromptSkill: Skill = {
 ## 关键规则（必须遵守）
 1. 只描述主体（人物/物品）在场景中的【位置、姿势、动作定格、交互关系】，不要描述人物外貌细节（发型/脸/服装款式等由定妆照资产保证）。
 2. 必须列出所有出场角色名，每个主要角色在每个关键帧至少有一个 subjects 描述。
-3. 三帧默认同一镜头/构图/透视/光照，背景参考图不变：不要改背景、不要新增场景物件。
+3. 默认同一场景/光照/透视，背景参考图不变：不要改背景、不要新增场景物件。
 4. 每个关键帧都是"定格瞬间"，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
 5. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
 6. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名，不要重新描述环境细节。
-7. KF0/KF1/KF2 必须明显不同：每帧至少 3 个可见差异（位置/姿态/手部/道具/视线/距离），但都必须是定格瞬间。
+7. KF0-KF8 需要形成“序列感”：相邻两帧至少 2 个可见差异；每三帧一组应体现 start/mid/end 的推进。
 8. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
 ## 输出格式（严格 JSON）
@@ -168,32 +168,38 @@ export const KeyframePromptSkill: Skill = {
     "KF2": {
       "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
       "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
-    }
+    },
+    "KF3": { "zh": {...}, "en": {...} },
+    "KF4": { "zh": {...}, "en": {...} },
+    "KF5": { "zh": {...}, "en": {...} },
+    "KF6": { "zh": {...}, "en": {...} },
+    "KF7": { "zh": {...}, "en": {...} },
+    "KF8": { "zh": {...}, "en": {...} }
   },
   "avoid": {
     "zh": "避免元素（如：多余角色/背景变化/文字水印/运动模糊/解剖错误）",
     "en": "Elements to avoid (e.g., extra characters, background changes, text/watermark, motion blur, bad anatomy)"
   }
 }`,
-  outputFormat: { type: 'json', maxLength: 5000 },
+  outputFormat: { type: 'json', maxLength: 15000 },
   maxTokens: 1500,
 };
 
 export const MotionPromptSkill: Skill = {
   name: 'motion-prompt',
-  description: '生成图生视频用的运动/时空提示词JSON（基于三关键帧差分）',
+  description: '生成图生视频用的运动/时空提示词JSON（基于九关键帧差分）',
   requiredContext: ['project_essence', 'confirmed_content'],
-  promptTemplate: `你是图生视频(I2V)提示词工程师。请基于「三张静止关键帧 KF0/KF1/KF2」生成"描述变化"的运动/时空提示词JSON，用于多家视频模型。
+  promptTemplate: `你是图生视频(I2V)提示词工程师。请基于「九张静止关键帧 KF0-KF8」生成"描述变化"的运动/时空提示词JSON，用于多家视频模型。
 
 ## 输入
 场景锚点 JSON:
 {scene_description}
 
-三关键帧 JSON（静止描述，包含 KF0/KF1/KF2）:
+9关键帧 JSON（静止描述，包含 KF0-KF8）:
 {shot_prompt}
 
 ## 关键规则（必须遵守）
-1. 只描述"从 KF0→KF1→KF2 发生了什么变化"，不要重述静态画面细节。
+1. 只描述"从 KF0→…→KF8 发生了什么变化"，不要重述静态画面细节。
 2. 变化分三类：主体变化（人物/物品）/ 镜头变化 / 环境变化；每类最多 2 个要点，避免打架。
 3. 给两种输出：短版（适配多数模型）+ 分拍版（0-1s/1-2s/2-3s 时间节拍）。
 4. 强约束必须写明：保持同一人物身份/脸/服装/发型/背景锚点不变；禁止凭空新增物体；禁止场景跳变；禁止文字水印。
@@ -254,7 +260,7 @@ export const DialogueSkill: Skill = {
 ## 场景锚点（环境一致性）
 {scene_description}
 
-## 三关键帧（静止）
+## 9关键帧（静止）
 {shot_prompt}
 
 ## 运动/时空提示词（若已生成）

@@ -12,7 +12,7 @@ export type AICallType =
   | 'scene_description' // 场景锚点生成
   | 'action_description' // 动作描述生成（已废弃，保留兼容）
   | 'shot_prompt' // 镜头提示词生成（已废弃，保留兼容）
-  | 'keyframe_prompt' // 关键帧提示词生成（KF0/KF1/KF2）
+  | 'keyframe_prompt' // 关键帧提示词生成（KF0-KF8）
   | 'motion_prompt' // 时空/运动提示词生成
   | 'dialogue' // 台词生成
   | 'episode_plan' // 剧集规划生成
@@ -189,7 +189,7 @@ function formatLogOutput(entry: AICallLogEntry): void {
     scene_description: '🎬 场景锚点生成',
     action_description: '🏃 动作描述生成',
     shot_prompt: '🎯 镜头提示词生成',
-    keyframe_prompt: '🖼️ 关键帧提示词生成（KF0/KF1/KF2）',
+    keyframe_prompt: '🖼️ 关键帧提示词生成（KF0-KF8）',
     motion_prompt: '🎬 时空/运动提示词生成',
     dialogue: '💬 台词生成',
     episode_plan: '🎞️ 剧集规划生成',

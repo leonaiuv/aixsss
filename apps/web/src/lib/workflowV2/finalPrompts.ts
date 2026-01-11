@@ -60,19 +60,19 @@ function buildKeyframeAvoid(scene: Scene, locale: PromptLocale): string {
  * 构建单个关键帧提示词
  * 支持 JSON 和旧行标签格式
  */
-function buildKeyframePrompt(scene: Scene, kfIndex: 0 | 1 | 2, locale: PromptLocale): string {
+function buildKeyframePrompt(scene: Scene, kfKey: string, locale: PromptLocale): string {
   const parsed = parseKeyframePromptText(scene.shotPrompt || '');
 
   // 如果是 JSON 格式且有原始数据，使用拼接函数
   if (parsed.isJson && parsed.rawJson) {
-    const kfKey = ['KF0', 'KF1', 'KF2'][kfIndex] as 'KF0' | 'KF1' | 'KF2';
     const kfData = parsed.rawJson.keyframes?.[kfKey]?.[locale];
     return buildKeyframePromptFromJson(kfData, parsed.rawJson.camera, locale);
   }
 
   // 旧格式
-  const kf = parsed.keyframes[kfIndex];
-  return pickLocale(kf, locale);
+  const idx = parsed.keyframeKeys.indexOf(kfKey);
+  if (idx < 0) return '';
+  return pickLocale(parsed.keyframes[idx], locale);
 }
 
 /**
@@ -126,12 +126,11 @@ export function buildSceneAnchorCopyText(scene: Scene): { zh: string; en: string
  */
 export function buildKeyframeCopyText(
   scene: Scene,
-  kfIndex: 0 | 1 | 2,
+  kfKey: string,
 ): { zh: string; en: string } {
   const parsed = parseKeyframePromptText(scene.shotPrompt || '');
 
   if (parsed.isJson && parsed.rawJson) {
-    const kfKey = ['KF0', 'KF1', 'KF2'][kfIndex] as 'KF0' | 'KF1' | 'KF2';
     return {
       zh: buildKeyframePromptFromJson(
         parsed.rawJson.keyframes?.[kfKey]?.zh,
@@ -147,7 +146,9 @@ export function buildKeyframeCopyText(
   }
 
   // 旧格式
-  const kf = parsed.keyframes[kfIndex];
+  const idx = parsed.keyframeKeys.indexOf(kfKey);
+  if (idx < 0) return { zh: '', en: '' };
+  const kf = parsed.keyframes[idx];
   return { zh: kf.zh || '', en: kf.en || '' };
 }
 
@@ -178,8 +179,9 @@ export function buildMotionCopyText(scene: Scene): { zh: string; en: string } {
 
 export interface FinalPromptPack {
   imagePrompt: {
-    zh: [string, string, string];
-    en: [string, string, string];
+    keys: string[];
+    zh: string[];
+    en: string[];
   };
   negativePrompt: {
     zh: string;
@@ -193,12 +195,16 @@ export interface FinalPromptPack {
 
 export function buildFinalPromptPack(scene: Scene, styleFullPrompt: string): FinalPromptPack {
   const style = safeTrim(styleFullPrompt);
+  const parsedKeyframes = parseKeyframePromptText(scene.shotPrompt || '');
 
-  const buildImage = (locale: PromptLocale): [string, string, string] => {
+  const keyframeKeys = parsedKeyframes.keyframeKeys.filter((kfKey, idx) => {
+    const kf = parsedKeyframes.keyframes[idx];
+    return Boolean(safeTrim(kf?.zh) || safeTrim(kf?.en));
+  });
+
+  const buildImage = (locale: PromptLocale): string[] => {
     const anchor = buildAnchorMain(scene, locale);
-    return ([0, 1, 2] as const).map((idx) =>
-      joinBlocks([style, anchor, buildKeyframePrompt(scene, idx, locale)]),
-    ) as [string, string, string];
+    return keyframeKeys.map((kfKey) => joinBlocks([style, anchor, buildKeyframePrompt(scene, kfKey, locale)]));
   };
 
   const buildNegative = (locale: PromptLocale): string =>
@@ -209,6 +215,7 @@ export function buildFinalPromptPack(scene: Scene, styleFullPrompt: string): Fin
 
   return {
     imagePrompt: {
+      keys: keyframeKeys,
       zh: buildImage('zh'),
       en: buildImage('en'),
     },

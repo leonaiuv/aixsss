@@ -51,14 +51,15 @@ describe('技能定义', () => {
   });
 
   describe('KeyframePromptSkill', () => {
-    it('应输出三关键帧（起/中/终）且中英双语（JSON格式）', () => {
+    it('应输出九关键帧（KF0-KF8）且中英双语（JSON格式）', () => {
       expect(KeyframePromptSkill.name).toBe('keyframe-prompt');
       expect(KeyframePromptSkill.outputFormat.type).toBe('json');
-      expect(KeyframePromptSkill.outputFormat.maxLength).toBe(5000);
+      expect(KeyframePromptSkill.outputFormat.maxLength).toBe(15000);
       expect(KeyframePromptSkill.maxTokens).toBe(1500);
       expect(KeyframePromptSkill.promptTemplate).toContain('KF0');
       expect(KeyframePromptSkill.promptTemplate).toContain('KF1');
       expect(KeyframePromptSkill.promptTemplate).toContain('KF2');
+      expect(KeyframePromptSkill.promptTemplate).toContain('KF8');
       expect(KeyframePromptSkill.promptTemplate).toContain('{scene_description}');
       expect(KeyframePromptSkill.promptTemplate).toContain('{characters}');
       expect(KeyframePromptSkill.promptTemplate).toContain('{style}');
@@ -72,7 +73,7 @@ describe('技能定义', () => {
   });
 
   describe('MotionPromptSkill', () => {
-    it('应基于三关键帧差分输出运动提示词（短版+分拍版，中英双语，JSON格式）', () => {
+    it('应基于九关键帧（KF0-KF8）差分输出运动提示词（短版+分拍版，中英双语，JSON格式）', () => {
       expect(MotionPromptSkill.name).toBe('motion-prompt');
       expect(MotionPromptSkill.outputFormat.type).toBe('json');
       expect(MotionPromptSkill.outputFormat.maxLength).toBe(2500);
@@ -169,7 +170,7 @@ describe('边界/一致性', () => {
       expect(skill.maxTokens).toBeLessThanOrEqual(10000);
       if (skill.outputFormat.maxLength !== undefined) {
         expect(skill.outputFormat.maxLength).toBeGreaterThan(0);
-        expect(skill.outputFormat.maxLength).toBeLessThanOrEqual(10000);
+        expect(skill.outputFormat.maxLength).toBeLessThanOrEqual(20000);
       }
     });
   });

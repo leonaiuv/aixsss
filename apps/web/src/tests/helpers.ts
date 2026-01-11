@@ -51,7 +51,7 @@ export function createMockScene(overrides?: Partial<Scene>): Scene {
     summary: '测试分镜摘要',
     sceneDescription: '场景锚点:教室内景，靠窗一侧，下午自然光',
     actionDescription: '动作描述:主角站起来',
-    shotPrompt: '关键帧提示词（KF0/KF1/KF2）:anime style, classroom, student standing',
+    shotPrompt: '关键帧提示词（KF0-KF8）:anime style, classroom, student standing',
     motionPrompt: '时空/运动提示词:camera pans from left to right',
     status: 'pending',
     notes: '',

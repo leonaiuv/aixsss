@@ -89,7 +89,7 @@ function buildUserPrompt(args: {
     '场景锚点（环境一致性）:',
     args.sceneAnchor || '-',
     '',
-    '三关键帧（静止）:',
+    '9关键帧（静止）:',
     args.shotPrompt || '-',
     '',
     '运动/时空提示词:',

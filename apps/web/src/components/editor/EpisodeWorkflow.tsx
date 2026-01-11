@@ -43,6 +43,7 @@ import {
   type Project,
   type Scene,
 } from '@/types';
+import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
 import { useToast } from '@/hooks/use-toast';
 import {
   logAICall,
@@ -2608,17 +2609,15 @@ ${safeJsonStringify(ep.coreExpression)}
 
   // 关键帧复制文本：使用新的 JSON 拼接工具函数
   const refineKeyframeCopyTexts = useMemo(() => {
-    if (!refineScene)
-      return [
-        { zh: '', en: '' },
-        { zh: '', en: '' },
-        { zh: '', en: '' },
-      ] as const;
-    return [
-      buildKeyframeCopyText(refineScene, 0),
-      buildKeyframeCopyText(refineScene, 1),
-      buildKeyframeCopyText(refineScene, 2),
-    ] as const;
+    const empty = Object.fromEntries(
+      GENERATED_IMAGE_KEYFRAMES.map((kf) => [kf, { zh: '', en: '' }] as const),
+    ) as Record<string, { zh: string; en: string }>;
+
+    if (!refineScene) return empty;
+
+    return Object.fromEntries(
+      GENERATED_IMAGE_KEYFRAMES.map((kf) => [kf, buildKeyframeCopyText(refineScene, kf)] as const),
+    ) as Record<string, { zh: string; en: string }>;
   }, [refineScene]);
 
   // 运动提示词复制文本：使用新的 JSON 拼接工具函数
@@ -2690,13 +2689,16 @@ ${safeJsonStringify(ep.coreExpression)}
   };
 
   // 关键帧复制处理：使用拼接后的提示词
-  const handleCopyKeyframe = async (kfIndex: 0 | 1 | 2, locale: 'zh' | 'en') => {
-    const kfLabels = ['KF0（起始）', 'KF1（中间）', 'KF2（结束）'];
-    const text = refineKeyframeCopyTexts[kfIndex][locale] || '';
+  const handleCopyKeyframe = async (kfKey: string, locale: 'zh' | 'en') => {
+    const idx = GENERATED_IMAGE_KEYFRAMES.indexOf(kfKey as (typeof GENERATED_IMAGE_KEYFRAMES)[number]);
+    const segment = idx >= 0 ? Math.floor(idx / 3) + 1 : 0;
+    const phase = idx >= 0 ? (['起', '中', '终'][idx % 3] ?? '') : '';
+    const label = idx >= 0 ? `${kfKey}（段${segment}${phase}）` : kfKey;
+    const text = refineKeyframeCopyTexts[kfKey]?.[locale] || '';
     await copyToClipboard(
       text,
       '已复制',
-      `${kfLabels[kfIndex]} ${locale.toUpperCase()} 已复制（完整提示词）。`,
+      `${label} ${locale.toUpperCase()} 已复制（完整提示词）。`,
     );
   };
 

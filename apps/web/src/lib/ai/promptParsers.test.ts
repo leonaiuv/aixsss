@@ -10,10 +10,12 @@ describe('promptParsers', () => {
     it('空文本应返回非结构化结果', () => {
       const parsed = parseKeyframePromptText('');
       expect(parsed.isStructured).toBe(false);
-      expect(parsed.keyframes).toHaveLength(3);
+      expect(parsed.keyframes).toHaveLength(9);
+      expect(parsed.keyframeKeys).toHaveLength(9);
+      expect(parsed.filledKeyframeCount).toBe(0);
     });
 
-    it('应解析 KF0/KF1/KF2 的中英双语', () => {
+    it('应解析 KF0/KF1/KF2 的中英双语（其余关键帧为空）', () => {
       const text = [
         'KF0_ZH: 室内，靠窗的桌边，人物静止站立',
         'KF0_EN: interior, by the window-side table, person standing still',
@@ -25,10 +27,14 @@ describe('promptParsers', () => {
 
       const parsed = parseKeyframePromptText(text);
       expect(parsed.isStructured).toBe(true);
+      expect(parsed.keyframes).toHaveLength(9);
+      expect(parsed.filledKeyframeCount).toBe(3);
       expect(parsed.keyframes[0].zh).toContain('靠窗');
       expect(parsed.keyframes[0].en).toContain('window-side');
       expect(parsed.keyframes[2].zh).toContain('信封');
       expect(parsed.keyframes[2].en).toContain('envelope');
+      expect(parsed.keyframes[3].zh).toBeUndefined();
+      expect(parsed.keyframes[8].en).toBeUndefined();
     });
 
     it('应支持多行续写（续行归入最近的标签）', () => {
@@ -43,6 +49,8 @@ describe('promptParsers', () => {
 
       const parsed = parseKeyframePromptText(text);
       expect(parsed.isStructured).toBe(true);
+      expect(parsed.keyframes).toHaveLength(9);
+      expect(parsed.filledKeyframeCount).toBe(1);
       expect(parsed.keyframes[0].zh).toContain('翻倒的画笔筒');
       expect(parsed.keyframes[0].en).toContain('overturned brush holder');
       expect(parsed.avoid?.zh).toContain('不要水印');
@@ -54,6 +62,8 @@ describe('promptParsers', () => {
 
       const parsed = parseKeyframePromptText(text);
       expect(parsed.isStructured).toBe(true);
+      expect(parsed.keyframes).toHaveLength(9);
+      expect(parsed.filledKeyframeCount).toBe(1);
       expect(parsed.keyframes[0].zh).toBe('中文内容');
       expect(parsed.keyframes[0].en).toBe('English content');
     });
@@ -68,6 +78,8 @@ describe('promptParsers', () => {
 
       const parsed = parseKeyframePromptText(text);
       expect(parsed.isStructured).toBe(true);
+      expect(parsed.keyframes).toHaveLength(9);
+      expect(parsed.filledKeyframeCount).toBe(1);
       expect(parsed.keyframes[0].zh).toBe('中文内容');
       expect(parsed.keyframes[0].en).toBe('English content');
       expect(parsed.avoid?.zh).toBe('不要文字');

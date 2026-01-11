@@ -4,6 +4,7 @@ import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { generateImagesWithProvider } from '../providers/index.js';
 import type { ImageResult } from '../providers/types.js';
 import { styleFullPrompt, toProviderImageConfig } from './common.js';
+import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
 
 type KeyframeLocaleBlock = {
   subjects?: Array<{
@@ -26,13 +27,11 @@ type KeyframeJsonData = {
     angle?: string;
     aspectRatio?: string;
   };
-  keyframes?: {
-    KF0?: { zh?: KeyframeLocaleBlock; en?: KeyframeLocaleBlock };
-    KF1?: { zh?: KeyframeLocaleBlock; en?: KeyframeLocaleBlock };
-    KF2?: { zh?: KeyframeLocaleBlock; en?: KeyframeLocaleBlock };
-  };
+  keyframes?: Record<string, { zh?: KeyframeLocaleBlock; en?: KeyframeLocaleBlock } | undefined>;
   avoid?: { zh?: string; en?: string };
 };
+
+type KeyframeKey = (typeof GENERATED_IMAGE_KEYFRAMES)[number];
 
 function tryParseJson(text: string): KeyframeJsonData | null {
   try {
@@ -85,7 +84,7 @@ function buildKeyframePromptFromJson(args: {
   return lines.join('\n').trim();
 }
 
-function buildKeyframePrompt(text: string, keyframe: 'KF0' | 'KF1' | 'KF2'): string {
+function buildKeyframePrompt(text: string, keyframe: KeyframeKey): string {
   const json = tryParseJson(text);
   if (!json?.keyframes) return `${text}\n\nKeyframe: ${keyframe}`.trim();
 
@@ -140,9 +139,17 @@ export async function generateKeyframeImages(args: {
   const providerConfig = toProviderImageConfig(profile);
   providerConfig.apiKey = apiKey;
 
-  const keyframes: Array<'KF0' | 'KF1' | 'KF2'> = ['KF0', 'KF1', 'KF2'];
+  const keyframes: KeyframeKey[] = (() => {
+    const json = tryParseJson(scene.shotPrompt);
+    if (json?.keyframes && typeof json.keyframes === 'object') {
+      const present = GENERATED_IMAGE_KEYFRAMES.filter((kf) => Boolean(json.keyframes?.[kf]));
+      if (present.length > 0) return present;
+    }
+    return ['KF0', 'KF1', 'KF2'] as KeyframeKey[];
+  })();
+
   const results: Array<{
-    keyframe: 'KF0' | 'KF1' | 'KF2';
+    keyframe: KeyframeKey;
     prompt: string;
     image: ImageResult | null;
   }> = [];
