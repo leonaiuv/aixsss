@@ -142,7 +142,10 @@ export async function apiWorkflowGenerateStoryboardPlan(input: {
     )}/storyboard/plan`,
     {
       method: 'POST',
-      body: { aiProfileId: input.aiProfileId, ...(input.cameraMode ? { cameraMode: input.cameraMode } : {}) },
+      body: {
+        aiProfileId: input.aiProfileId,
+        ...(input.cameraMode ? { cameraMode: input.cameraMode } : {}),
+      },
     },
   );
 }
@@ -160,7 +163,10 @@ export async function apiWorkflowGenerateStoryboardGroup(input: {
     )}/storyboard/groups/${encodeURIComponent(input.groupId)}`,
     {
       method: 'POST',
-      body: { aiProfileId: input.aiProfileId, ...(input.cameraMode ? { cameraMode: input.cameraMode } : {}) },
+      body: {
+        aiProfileId: input.aiProfileId,
+        ...(input.cameraMode ? { cameraMode: input.cameraMode } : {}),
+      },
     },
   );
 }

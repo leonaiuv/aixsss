@@ -50,7 +50,8 @@ const callTypeToDesc: Record<AICallType, string> = {
   storyboard_plan: '生成 KF0-KF8 的 9 组大纲（含镜头范围与起止状态）并初始化分组状态',
   storyboard_group: '仅生成 1 组九宫格（9 panels）并输出 continuity.end_state 承接下一组',
   storyboard_translate: '将 panels.en 翻译为 panels.zh（保留镜头语言缩写）',
-  storyboard_back_translate: '将被编辑的 panels.zh 回译覆盖 panels.en 并重新渲染 prompt/render_json',
+  storyboard_back_translate:
+    '将被编辑的 panels.zh 回译覆盖 panels.en 并重新渲染 prompt/render_json',
   character_basic_info: '生成角色的基础设定与属性信息',
   character_portrait: '生成适合绘图AI的角色定妆照提示词',
   custom: '执行自定义AI操作',

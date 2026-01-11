@@ -379,7 +379,9 @@ export function EpisodeWorkflow() {
   const [refineJobProgress, setRefineJobProgress] = useState<NormalizedJobProgress | null>(null);
   const [generatingImagesSceneId, setGeneratingImagesSceneId] = useState<string | null>(null);
   const [storyboardJob, setStoryboardJob] = useState<StoryboardJobState | null>(null);
-  const [storyboardJobProgress, setStoryboardJobProgress] = useState<NormalizedJobProgress | null>(null);
+  const [storyboardJobProgress, setStoryboardJobProgress] = useState<NormalizedJobProgress | null>(
+    null,
+  );
   const [refineAllProgress, setRefineAllProgress] = useState<BatchRefineProgress | null>(null);
   const [refineAllJobRunning, setRefineAllJobRunning] = useState(false);
   const [refineAllFailedScenes, setRefineAllFailedScenes] = useState<BatchFailedScene[]>([]);
@@ -884,7 +886,8 @@ export function EpisodeWorkflow() {
     const currentScene = scenes.find((s) => s.id === sceneId);
     const logId = logAICall('storyboard_scene_bible', {
       skillName: 'workflow:storyboard_scene_bible',
-      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/scene-bible',
+      promptTemplate:
+        'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/scene-bible',
       filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/scene-bible`,
       messages: [
         {
@@ -1019,7 +1022,10 @@ export function EpisodeWorkflow() {
           : null,
       );
       updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
-      toast({ title: 'StoryboardPlan 已生成', description: '已生成 9 组大纲并初始化 KF0-KF8 状态。' });
+      toast({
+        title: 'StoryboardPlan 已生成',
+        description: '已生成 9 组大纲并初始化 KF0-KF8 状态。',
+      });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       if (isAbortError(error)) {
@@ -1043,7 +1049,8 @@ export function EpisodeWorkflow() {
     const currentScene = scenes.find((s) => s.id === sceneId);
     const logId = logAICall('storyboard_group', {
       skillName: 'workflow:storyboard_group',
-      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/groups/{{groupId}}',
+      promptTemplate:
+        'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/groups/{{groupId}}',
       filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/groups/${groupId}`,
       messages: [
         {
@@ -1109,7 +1116,10 @@ export function EpisodeWorkflow() {
           : null,
       );
       updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
-      toast({ title: `${groupId} 已生成`, description: '已生成 9 格内容并更新 continuity.end_state。' });
+      toast({
+        title: `${groupId} 已生成`,
+        description: '已生成 9 格内容并更新 continuity.end_state。',
+      });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       if (isAbortError(error)) {
@@ -1129,7 +1139,8 @@ export function EpisodeWorkflow() {
     const currentScene = scenes.find((s) => s.id === sceneId);
     const logId = logAICall('storyboard_translate', {
       skillName: 'workflow:storyboard_translate',
-      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/translate',
+      promptTemplate:
+        'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/translate',
       filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/translate`,
       messages: [
         {
@@ -1205,7 +1216,8 @@ export function EpisodeWorkflow() {
     const currentScene = scenes.find((s) => s.id === sceneId);
     const logId = logAICall('storyboard_back_translate', {
       skillName: 'workflow:storyboard_back_translate',
-      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/back-translate',
+      promptTemplate:
+        'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/storyboard/back-translate',
       filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/storyboard/back-translate`,
       messages: [
         {

@@ -478,7 +478,9 @@ export function SceneDetailModal({
   const storyboardGroupsSorted = useMemo(() => {
     if (!storyboardGroups) return [];
     const byId = new Map(storyboardGroups.groups.map((g) => [g.group_id, g] as const));
-    return GENERATED_IMAGE_KEYFRAMES.map((id) => byId.get(id)).filter(Boolean) as typeof storyboardGroups.groups;
+    return GENERATED_IMAGE_KEYFRAMES.map((id) => byId.get(id)).filter(
+      Boolean,
+    ) as typeof storyboardGroups.groups;
   }, [storyboardGroups]);
 
   const storyboardDefaultCameraMode: 'A' | 'B' =
@@ -517,7 +519,8 @@ export function SceneDetailModal({
   }, [sceneId]);
 
   const allStoryboardGroupsReady = useMemo(() => {
-    if (!storyboardGroups || storyboardGroupsSorted.length !== GENERATED_IMAGE_KEYFRAMES.length) return false;
+    if (!storyboardGroups || storyboardGroupsSorted.length !== GENERATED_IMAGE_KEYFRAMES.length)
+      return false;
     return storyboardGroupsSorted.every((g) => g.status === 'ready' && Boolean(g.group));
   }, [storyboardGroups, storyboardGroupsSorted]);
 
@@ -537,14 +540,21 @@ export function SceneDetailModal({
     return (groupId: string): boolean => {
       if (!scene?.storyboardSceneBibleJson || !scene?.storyboardPlanJson) return false;
       if (!storyboardGroups) return false;
-      const idx = GENERATED_IMAGE_KEYFRAMES.indexOf(groupId as (typeof GENERATED_IMAGE_KEYFRAMES)[number]);
+      const idx = GENERATED_IMAGE_KEYFRAMES.indexOf(
+        groupId as (typeof GENERATED_IMAGE_KEYFRAMES)[number],
+      );
       if (idx < 0) return false;
       if (idx === 0) return true;
       const prevId = GENERATED_IMAGE_KEYFRAMES[idx - 1];
       const prev = byId.get(prevId);
       return Boolean(prev && prev.status === 'ready' && prev.group);
     };
-  }, [scene?.storyboardSceneBibleJson, scene?.storyboardPlanJson, storyboardGroups, storyboardGroupsSorted]);
+  }, [
+    scene?.storyboardSceneBibleJson,
+    scene?.storyboardPlanJson,
+    storyboardGroups,
+    storyboardGroupsSorted,
+  ]);
 
   const updateStoryboardPanelZh = (groupId: string, panelIndex: number, zh: string) => {
     if (!scene || !storyboardGroups) return;
@@ -1019,7 +1029,11 @@ export function SceneDetailModal({
                               )}
                             </div>
                             <Progress
-                              value={typeof storyboardProgress?.pct === 'number' ? storyboardProgress.pct : 0}
+                              value={
+                                typeof storyboardProgress?.pct === 'number'
+                                  ? storyboardProgress.pct
+                                  : 0
+                              }
                               className="h-1.5"
                             />
                           </div>
@@ -1027,7 +1041,9 @@ export function SceneDetailModal({
 
                         <div className="rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground leading-relaxed">
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span>流程：SceneBible → Plan → KF0..KF8（逐组）→ 翻译 →（编辑中文）→ 回译</span>
+                            <span>
+                              流程：SceneBible → Plan → KF0..KF8（逐组）→ 翻译 →（编辑中文）→ 回译
+                            </span>
                             <span className="text-[11px]">
                               生图只使用英文 render.prompt_en；中文仅用于阅读/编辑
                             </span>
@@ -1073,10 +1089,16 @@ export function SceneDetailModal({
                             variant="outline"
                             size="sm"
                             className="gap-2"
-                            disabled={!aiProfileId || isStoryboardRunning || isBatchBlocked || !storyboardGroups}
+                            disabled={
+                              !aiProfileId ||
+                              isStoryboardRunning ||
+                              isBatchBlocked ||
+                              !storyboardGroups
+                            }
                             onClick={() => {
                               const next = storyboardGroupsSorted.find(
-                                (g) => g.status !== 'ready' && canGenerateStoryboardGroup(g.group_id),
+                                (g) =>
+                                  g.status !== 'ready' && canGenerateStoryboardGroup(g.group_id),
                               );
                               if (!next) {
                                 toast({
@@ -1086,7 +1108,11 @@ export function SceneDetailModal({
                                 });
                                 return;
                               }
-                              onGenerateStoryboardGroup(scene.id, next.group_id, storyboardCameraMode);
+                              onGenerateStoryboardGroup(
+                                scene.id,
+                                next.group_id,
+                                storyboardCameraMode,
+                              );
                             }}
                           >
                             <Sparkles className="h-4 w-4" />
@@ -1236,7 +1262,12 @@ export function SceneDetailModal({
                                         variant="outline"
                                         size="sm"
                                         className="h-7 px-2 text-xs gap-1.5"
-                                        disabled={!aiProfileId || isStoryboardRunning || isBatchBlocked || !canGen}
+                                        disabled={
+                                          !aiProfileId ||
+                                          isStoryboardRunning ||
+                                          isBatchBlocked ||
+                                          !canGen
+                                        }
                                         title={
                                           canGen
                                             ? '生成/重试本组'
@@ -1249,7 +1280,11 @@ export function SceneDetailModal({
                                             );
                                             if (!ok) return;
                                           }
-                                          onGenerateStoryboardGroup(scene.id, g.group_id, storyboardCameraMode);
+                                          onGenerateStoryboardGroup(
+                                            scene.id,
+                                            g.group_id,
+                                            storyboardCameraMode,
+                                          );
                                         }}
                                       >
                                         {g.status === 'ready' ? (
@@ -1289,7 +1324,9 @@ export function SceneDetailModal({
                                         size="sm"
                                         className="h-7 px-2 text-xs gap-1.5"
                                         onClick={() =>
-                                          setExpandedStoryboardGroupId(isExpanded ? null : g.group_id)
+                                          setExpandedStoryboardGroupId(
+                                            isExpanded ? null : g.group_id,
+                                          )
                                         }
                                       >
                                         {isExpanded ? (
@@ -1337,7 +1374,10 @@ export function SceneDetailModal({
                                                         </span>
                                                       )}
                                                       {p.dirtyZh && (
-                                                        <Badge variant="outline" className="text-xs">
+                                                        <Badge
+                                                          variant="outline"
+                                                          className="text-xs"
+                                                        >
                                                           dirty
                                                         </Badge>
                                                       )}
@@ -1352,7 +1392,7 @@ export function SceneDetailModal({
                                                           `${g.group_id}#${p.index} ${storyboardViewLang.toUpperCase()}`,
                                                           storyboardViewLang === 'zh'
                                                             ? (p.zh ?? '')
-                                                            : p.en ?? '',
+                                                            : (p.en ?? ''),
                                                         )
                                                       }
                                                     >
