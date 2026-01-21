@@ -54,7 +54,8 @@ function mapUsageToTokenUsage(usage: unknown): AIResponse['tokenUsage'] | undefi
         ? (prompt ?? 0) + (completion ?? 0)
         : undefined;
 
-  if (typeof prompt !== 'number' || typeof completion !== 'number' || typeof total !== 'number') return undefined;
+  if (typeof prompt !== 'number' || typeof completion !== 'number' || typeof total !== 'number')
+    return undefined;
   return { prompt, completion, total };
 }
 
@@ -88,7 +89,9 @@ export class DoubaoArkProvider implements AIProvider {
       }
     }
     const suffix = detail ? ` - ${detail}` : '';
-    const err = new Error(`Doubao/ARK error (${response.status} ${response.statusText})${suffix}`) as ArkHttpError;
+    const err = new Error(
+      `Doubao/ARK error (${response.status} ${response.statusText})${suffix}`,
+    ) as ArkHttpError;
     err.status = response.status;
     err.statusText = response.statusText;
     err.detail = detail;
@@ -116,14 +119,19 @@ export class DoubaoArkProvider implements AIProvider {
         ...(typeof p?.topP === 'number' ? { top_p: p.topP } : {}),
         ...(typeof p?.maxTokens === 'number' ? { max_output_tokens: p.maxTokens } : {}),
         ...(typeof p?.presencePenalty === 'number' ? { presence_penalty: p.presencePenalty } : {}),
-        ...(typeof p?.frequencyPenalty === 'number' ? { frequency_penalty: p.frequencyPenalty } : {}),
+        ...(typeof p?.frequencyPenalty === 'number'
+          ? { frequency_penalty: p.frequencyPenalty }
+          : {}),
       }),
       signal: options?.signal,
     });
 
     if (!response.ok) await this.throwResponseError(response);
     const data = (await response.json()) as ArkResponsesResponse;
-    return { content: extractResponsesText(data) || '', tokenUsage: mapUsageToTokenUsage(data?.usage) };
+    return {
+      content: extractResponsesText(data) || '',
+      tokenUsage: mapUsageToTokenUsage(data?.usage),
+    };
   }
 
   async *streamChat(
@@ -136,4 +144,3 @@ export class DoubaoArkProvider implements AIProvider {
     yield res.content;
   }
 }
-

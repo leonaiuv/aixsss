@@ -718,7 +718,10 @@ export function SceneDetailModal({
     const raw = scene?.generatedVideos;
     if (!Array.isArray(raw)) return [];
     return raw.filter(
-      (v) => v && typeof v === 'object' && typeof (v as unknown as Record<string, unknown>).url === 'string',
+      (v) =>
+        v &&
+        typeof v === 'object' &&
+        typeof (v as unknown as Record<string, unknown>).url === 'string',
     ) as NonNullable<Scene['generatedVideos']>;
   }, [scene?.generatedVideos]);
 

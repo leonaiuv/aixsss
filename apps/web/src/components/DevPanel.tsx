@@ -789,7 +789,9 @@ function TaskItem({
       </div>
 
       {liveTask.description && (
-        <p className="text-[11px] text-muted-foreground/80 mb-2 line-clamp-1">{liveTask.description}</p>
+        <p className="text-[11px] text-muted-foreground/80 mb-2 line-clamp-1">
+          {liveTask.description}
+        </p>
       )}
 
       <div className="space-y-1.5">
@@ -974,7 +976,8 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
     await handleCopy(JSON.stringify(errorInfo, null, 2), '错误信息');
   };
 
-  const rawOutput = liveTask.currentOutput || liveTask.rawOutput || liveTask.response?.content || '';
+  const rawOutput =
+    liveTask.currentOutput || liveTask.rawOutput || liveTask.response?.content || '';
   const outputLength = rawOutput.length;
 
   return (
@@ -1095,7 +1098,9 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
                   </Badge>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground uppercase font-bold">创建时间</span>
+                  <span className="text-xs text-muted-foreground uppercase font-bold">
+                    创建时间
+                  </span>
                   <div className="text-sm font-mono text-muted-foreground">
                     {new Date(liveTask.createdAt).toLocaleString()}
                   </div>
@@ -1105,15 +1110,19 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
                     <span className="text-xs text-muted-foreground uppercase font-bold">耗时</span>
                     <div className="text-sm font-mono text-muted-foreground">
                       {(
-                        (new Date(liveTask.completedAt).getTime() - new Date(liveTask.createdAt).getTime()) /
+                        (new Date(liveTask.completedAt).getTime() -
+                          new Date(liveTask.createdAt).getTime()) /
                         1000
-                      ).toFixed(2)}s
+                      ).toFixed(2)}
+                      s
                     </div>
                   </div>
                 )}
                 {liveTask.response?.tokenUsage && (
                   <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground uppercase font-bold">Token 用量</span>
+                    <span className="text-xs text-muted-foreground uppercase font-bold">
+                      Token 用量
+                    </span>
                     <div className="text-sm font-mono text-muted-foreground">
                       {liveTask.response.tokenUsage.total.toLocaleString()} tokens
                     </div>
@@ -1121,7 +1130,9 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
                 )}
                 {outputLength > 0 && (
                   <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground uppercase font-bold">输出长度</span>
+                    <span className="text-xs text-muted-foreground uppercase font-bold">
+                      输出长度
+                    </span>
                     <div className="text-sm font-mono text-muted-foreground">
                       {outputLength.toLocaleString()} chars
                     </div>
@@ -1169,7 +1180,8 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
                       </p>
                       <pre className="text-[10px] font-mono text-amber-600/80 dark:text-amber-400/80 whitespace-pre-wrap break-all max-h-[120px] overflow-auto">
                         {(liveTask.error.rawOutput || liveTask.rawOutput || '').slice(0, 500)}
-                        {(liveTask.error.rawOutput || liveTask.rawOutput || '').length > 500 && '...'}
+                        {(liveTask.error.rawOutput || liveTask.rawOutput || '').length > 500 &&
+                          '...'}
                       </pre>
                     </div>
                   )}

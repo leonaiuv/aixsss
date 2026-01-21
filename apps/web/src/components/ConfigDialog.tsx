@@ -967,31 +967,32 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               )?.text as string | undefined) ?? '')
             : '';
       const usageRaw = data?.usage ?? null;
-      const usage = usageRaw && typeof usageRaw === 'object' ? usageRaw as Record<string, unknown> : null;
-      const tokenUsage =
-        usage
-          ? {
-              prompt:
-                typeof usage.prompt_tokens === 'number'
-                  ? usage.prompt_tokens
-                  : typeof usage.input_tokens === 'number'
-                    ? usage.input_tokens
-                    : undefined,
-              completion:
-                typeof usage.completion_tokens === 'number'
-                  ? usage.completion_tokens
-                  : typeof usage.output_tokens === 'number'
-                    ? usage.output_tokens
-                    : undefined,
-              total:
-                typeof usage.total_tokens === 'number'
-                  ? usage.total_tokens
-                  : typeof usage.prompt_tokens === 'number' ||
-                      typeof usage.completion_tokens === 'number'
-                    ? ((usage.prompt_tokens as number) ?? 0) + ((usage.completion_tokens as number) ?? 0)
-                    : undefined,
-            }
-          : undefined;
+      const usage =
+        usageRaw && typeof usageRaw === 'object' ? (usageRaw as Record<string, unknown>) : null;
+      const tokenUsage = usage
+        ? {
+            prompt:
+              typeof usage.prompt_tokens === 'number'
+                ? usage.prompt_tokens
+                : typeof usage.input_tokens === 'number'
+                  ? usage.input_tokens
+                  : undefined,
+            completion:
+              typeof usage.completion_tokens === 'number'
+                ? usage.completion_tokens
+                : typeof usage.output_tokens === 'number'
+                  ? usage.output_tokens
+                  : undefined,
+            total:
+              typeof usage.total_tokens === 'number'
+                ? usage.total_tokens
+                : typeof usage.prompt_tokens === 'number' ||
+                    typeof usage.completion_tokens === 'number'
+                  ? ((usage.prompt_tokens as number) ?? 0) +
+                    ((usage.completion_tokens as number) ?? 0)
+                  : undefined,
+          }
+        : undefined;
 
       let jsonOk = false;
       let jsonError: string | undefined;

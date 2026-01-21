@@ -130,7 +130,9 @@ function buildConnectionTestResult(
     suggestions.push('豆包/方舟(ARK) Base URL：`https://ark.cn-beijing.volces.com/api/v3`。');
     suggestions.push('文本模型示例：`doubao-seed-1-8-251215`、`doubao-seed-1-6-251015`。');
     suggestions.push('图片模型示例：`doubao-seedream-4-5-251128`（可在“图片模型”中单独配置）。');
-    suggestions.push('视频模型示例：`doubao-seedance-1-5-pro-251215`（可在“视频模型”中单独配置）。');
+    suggestions.push(
+      '视频模型示例：`doubao-seedance-1-5-pro-251215`（可在“视频模型”中单独配置）。',
+    );
   }
 
   if (httpStatus === 401 || httpStatus === 403) {

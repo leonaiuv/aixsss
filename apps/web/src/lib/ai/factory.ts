@@ -47,10 +47,10 @@ class AIClient {
   async *streamChat(messages: ChatMessage[], options?: AIRequestOptions): AsyncGenerator<string> {
     const taskId = options?.taskId;
     const store = taskId ? useAIProgressStore.getState() : null;
-    
+
     // 包装底层生成器，拦截每个 chunk 并更新 store
     const baseGenerator = this.provider.streamChat(messages, this.config, options);
-    
+
     try {
       for await (const chunk of baseGenerator) {
         // 如果有 taskId，追加输出到 store
@@ -64,7 +64,9 @@ class AIClient {
       if (taskId && store) {
         const task = store.getTask(taskId);
         if (task) {
-          console.debug(`[AIClient] Stream error for task ${taskId}, raw output length: ${task.currentOutput?.length ?? 0}`);
+          console.debug(
+            `[AIClient] Stream error for task ${taskId}, raw output length: ${task.currentOutput?.length ?? 0}`,
+          );
         }
       }
       throw error;

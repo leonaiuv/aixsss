@@ -88,7 +88,10 @@ function normalizeStructuredTestFromJob(job: ApiAIJob): ApiStructuredTestResult 
     durationMs,
     json:
       jsonResult && typeof jsonResult.ok === 'boolean'
-        ? { ok: Boolean(jsonResult.ok), ...(typeof jsonResult.error === 'string' ? { error: jsonResult.error } : {}) }
+        ? {
+            ok: Boolean(jsonResult.ok),
+            ...(typeof jsonResult.error === 'string' ? { error: jsonResult.error } : {}),
+          }
         : undefined,
     schema:
       schemaResult === null
@@ -96,9 +99,15 @@ function normalizeStructuredTestFromJob(job: ApiAIJob): ApiStructuredTestResult 
         : schemaResult && typeof schemaResult.ok === 'boolean'
           ? {
               ok: Boolean(schemaResult.ok),
-              ...(typeof schemaResult.compileError === 'string' ? { compileError: schemaResult.compileError } : {}),
+              ...(typeof schemaResult.compileError === 'string'
+                ? { compileError: schemaResult.compileError }
+                : {}),
               ...(Array.isArray(schemaResult.errors)
-                ? { errors: schemaResult.errors.filter((e: unknown) => typeof e === 'string') as string[] }
+                ? {
+                    errors: schemaResult.errors.filter(
+                      (e: unknown) => typeof e === 'string',
+                    ) as string[],
+                  }
                 : {}),
             }
           : undefined,
