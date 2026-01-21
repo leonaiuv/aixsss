@@ -188,6 +188,17 @@ export class WorkflowController {
     return this.jobs.enqueueGenerateKeyframeImages(user.teamId, projectId, sceneId, input.aiProfileId);
   }
 
+  @Post('projects/:projectId/scenes/:sceneId/generate-video')
+  generateSceneVideo(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('sceneId') sceneId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueGenerateSceneVideo(user.teamId, projectId, sceneId, input.aiProfileId);
+  }
+
   @Post('projects/:projectId/scenes/:sceneId/motion-prompt')
   generateMotionPrompt(
     @CurrentUser() user: AuthUser,

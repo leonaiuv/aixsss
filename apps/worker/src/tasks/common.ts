@@ -50,6 +50,19 @@ function extractGenerationParams(raw: JsonValue | null): GenerationParams | unde
   };
 }
 
+export type ModelOverrides = {
+  imageModel?: string;
+  videoModel?: string;
+};
+
+export function extractModelOverrides(raw: JsonValue | null): ModelOverrides | undefined {
+  if (!raw || !isRecord(raw)) return undefined;
+  return {
+    ...(typeof raw.imageModel === 'string' && raw.imageModel.trim() ? { imageModel: raw.imageModel.trim() } : {}),
+    ...(typeof raw.videoModel === 'string' && raw.videoModel.trim() ? { videoModel: raw.videoModel.trim() } : {}),
+  };
+}
+
 function defaultBaseURL(provider: 'deepseek' | 'kimi' | 'openai_compatible'): string | undefined {
   switch (provider) {
     case 'deepseek':
@@ -66,7 +79,7 @@ function defaultBaseURL(provider: 'deepseek' | 'kimi' | 'openai_compatible'): st
 }
 
 export function toProviderChatConfig(profile: {
-  provider: 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible';
+  provider: 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible' | 'doubao_ark';
   model: string;
   baseURL: string | null;
   generationParams: JsonValue | null;
@@ -83,6 +96,16 @@ export function toProviderChatConfig(profile: {
     };
   }
 
+  if (profile.provider === 'doubao_ark') {
+    return {
+      kind: 'doubao_ark',
+      apiKey: '', // fill later
+      baseURL: profile.baseURL ?? 'https://ark.cn-beijing.volces.com/api/v3',
+      model: profile.model,
+      params,
+    };
+  }
+
   return {
     kind: 'openai_compatible',
     apiKey: '', // fill later
@@ -93,16 +116,31 @@ export function toProviderChatConfig(profile: {
 }
 
 export function toProviderImageConfig(profile: {
-  provider: 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible';
+  provider: 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible' | 'doubao_ark';
   model: string;
   baseURL: string | null;
+  generationParams?: JsonValue | null;
 }): ProviderImageConfig {
+  const overrides = extractModelOverrides(profile.generationParams ?? null);
+  const imageModel =
+    overrides?.imageModel ??
+    (profile.provider === 'doubao_ark' ? 'doubao-seedream-4-5-251128' : profile.model);
+
   if (profile.provider === 'gemini') {
     return {
       kind: 'gemini',
       apiKey: '',
       baseURL: profile.baseURL ?? undefined,
-      model: profile.model,
+      model: imageModel,
+    };
+  }
+
+  if (profile.provider === 'doubao_ark') {
+    return {
+      kind: 'doubao_ark',
+      apiKey: '',
+      baseURL: profile.baseURL ?? 'https://ark.cn-beijing.volces.com/api/v3',
+      model: imageModel,
     };
   }
 
@@ -110,8 +148,6 @@ export function toProviderImageConfig(profile: {
     kind: 'openai_compatible',
     apiKey: '',
     baseURL: profile.baseURL ?? defaultBaseURL(profile.provider),
-    model: profile.model,
+    model: imageModel,
   };
 }
-
-

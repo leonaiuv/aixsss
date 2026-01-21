@@ -64,6 +64,10 @@ export interface AITask {
   startedAt?: number;
   completedAt?: number;
 
+  // 流式输出监控
+  currentOutput?: string; // 当前累积的AI输出（用于实时监控）
+  rawOutput?: string; // 原始完整输出（用于错误调试）
+
   // 响应信息
   response?: {
     content: string;
@@ -80,6 +84,7 @@ export interface AITask {
     code?: string;
     details?: string;
     retryable: boolean;
+    rawOutput?: string; // 导致错误的原始输出
   };
 
   // 重试信息
@@ -160,6 +165,10 @@ interface AIProgressActions {
 
   // 进度更新
   updateProgress: (taskId: string, progress: number, currentStep?: string) => void;
+
+  // 流式输出更新
+  updateTaskOutput: (taskId: string, output: string) => void;
+  appendTaskOutput: (taskId: string, chunk: string) => void;
 
   // 队列控制
   pauseQueue: () => void;
@@ -358,6 +367,9 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
               completedAt: Date.now(),
               progress: 100,
               response,
+              // 保留 rawOutput 供调试，但清理 currentOutput 节省内存
+              rawOutput: task.rawOutput || task.currentOutput || response?.content,
+              currentOutput: undefined,
             }
           : task,
       ),
@@ -375,16 +387,23 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
   // 任务失败
   failTask: (taskId, error) => {
     set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              status: 'error' as AITaskStatus,
-              completedAt: Date.now(),
-              error,
-            }
-          : task,
-      ),
+      tasks: state.tasks.map((task) => {
+        if (task.id !== taskId) return task;
+        // 将当前输出附加到错误信息中，方便调试
+        const errorWithRawOutput: NonNullable<AITask['error']> = {
+          message: error?.message ?? 'Unknown error',
+          code: error?.code,
+          details: error?.details,
+          retryable: error?.retryable ?? false,
+          rawOutput: error?.rawOutput ?? task.rawOutput ?? task.currentOutput,
+        };
+        return {
+          ...task,
+          status: 'error' as AITaskStatus,
+          completedAt: Date.now(),
+          error: errorWithRawOutput,
+        };
+      }),
       activeTaskId: state.activeTaskId === taskId ? null : state.activeTaskId,
     }));
 
@@ -447,6 +466,30 @@ export const useAIProgressStore = create<AIProgressState & AIProgressActions>((s
     if (task) {
       get().emit('task:progress', task);
     }
+  },
+
+  // 更新流式输出（覆盖）
+  updateTaskOutput: (taskId, output) => {
+    set((state) => ({
+      tasks: state.tasks.map((task) =>
+        task.id === taskId ? { ...task, currentOutput: output, rawOutput: output } : task,
+      ),
+    }));
+  },
+
+  // 追加流式输出（增量）
+  appendTaskOutput: (taskId, chunk) => {
+    set((state) => ({
+      tasks: state.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              currentOutput: (task.currentOutput || '') + chunk,
+              rawOutput: (task.rawOutput || '') + chunk,
+            }
+          : task,
+      ),
+    }));
   },
 
   // 暂停队列

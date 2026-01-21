@@ -14,6 +14,7 @@
   "dependencies": {
     "@aixsss/shared": "workspace:*",
     "@prisma/client": "6.19.1",
+    "ajv": "^8.17.1",
     "bullmq": "^5.58.0",
     "dotenv": "^16.6.1",
     "ioredis": "^5.7.0",

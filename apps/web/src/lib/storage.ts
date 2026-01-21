@@ -143,6 +143,10 @@ export function decrypt(encryptedData: string, purpose: KeyPurpose = KeyPurpose.
 
   // 遗留格式数据，使用遗留密钥解密
   try {
+    // 兼容：明显不是 CryptoJS(AES) 输出的内容直接视为无效，避免解密出乱码
+    const trimmed = (encryptedData ?? '').trim();
+    if (!trimmed || !/^[A-Za-z0-9+/=]+$/.test(trimmed)) return '';
+
     const bytes = CryptoJS.AES.decrypt(encryptedData, LEGACY_ENCRYPTION_KEY);
     return bytes.toString(CryptoJS.enc.Utf8);
   } catch {

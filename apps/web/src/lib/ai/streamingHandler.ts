@@ -10,6 +10,65 @@
 
 import { ChatMessage, UserConfig } from '@/types';
 
+type ArkResponsesOutputPart = { type?: string; text?: string };
+type ArkResponsesOutputItem = { content?: ArkResponsesOutputPart[] };
+type ArkResponsesResponse = { output_text?: string; output?: ArkResponsesOutputItem[] };
+
+function extractArkResponsesText(data: ArkResponsesResponse): string {
+  if (typeof data?.output_text === 'string') return data.output_text;
+  const output = data?.output;
+  if (!Array.isArray(output)) return '';
+  for (const item of output) {
+    const parts = item?.content;
+    if (!Array.isArray(parts)) continue;
+    for (const part of parts) {
+      if (typeof part?.text === 'string' && part.text) return part.text;
+    }
+  }
+  return '';
+}
+
+async function streamChatDoubaoArk(
+  messages: ChatMessage[],
+  config: UserConfig,
+  options: StreamOptions,
+): Promise<void> {
+  const { onChunk, onError, onComplete, signal } = options;
+  try {
+    const base = (config.baseURL || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/+$/, '');
+    const response = await fetch(`${base}/responses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        input: messages,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = (await response.json()) as ArkResponsesResponse;
+    const content = extractArkResponsesText(data) || '';
+    if (content) onChunk(content, false);
+    onChunk('', true);
+    onComplete?.();
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        console.log('Stream aborted by user');
+      } else {
+        onError?.(error);
+      }
+    }
+  }
+}
+
 // 流式响应回调
 export type StreamCallback = (chunk: string, isComplete: boolean) => void;
 
@@ -339,6 +398,8 @@ export async function streamChatUniversal(
       return streamChatKimi(messages, config, options);
     case 'gemini':
       return streamChatGemini(messages, config, options);
+    case 'doubao-ark':
+      return streamChatDoubaoArk(messages, config, options);
     case 'openai-compatible':
       return streamChat(messages, config, options);
     default:

@@ -6,12 +6,15 @@ import type {
   ImageGenerationResult,
 } from './types.js';
 import { chatOpenAICompatible, generateImagesOpenAICompatible } from './openaiCompatible.js';
+import { chatDoubaoArk, generateImagesDoubaoArk } from './doubaoArk.js';
 import { chatGemini } from './gemini.js';
 
 export async function chatWithProvider(config: ProviderChatConfig, messages: ChatMessage[]): Promise<ChatResult> {
   switch (config.kind) {
     case 'openai_compatible':
       return chatOpenAICompatible(config, messages);
+    case 'doubao_ark':
+      return chatDoubaoArk(config, messages);
     case 'gemini':
       return chatGemini(config, messages);
     default: {
@@ -28,6 +31,8 @@ export async function generateImagesWithProvider(
   switch (config.kind) {
     case 'openai_compatible':
       return generateImagesOpenAICompatible(config, prompt);
+    case 'doubao_ark':
+      return generateImagesDoubaoArk(config, prompt);
     case 'gemini':
       throw new Error('Gemini image generation not supported yet');
     default: {
@@ -36,4 +41,3 @@ export async function generateImagesWithProvider(
     }
   }
 }
-

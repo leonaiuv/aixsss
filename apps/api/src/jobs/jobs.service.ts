@@ -610,6 +610,37 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueGenerateSceneVideo(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'generate_scene_video',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_scene_video',
+      { teamId, projectId, sceneId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 1,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async enqueueGenerateMotionPrompt(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
     await this.requireProject(teamId, projectId);
     await this.requireScene(projectId, sceneId);
@@ -867,6 +898,51 @@ export class JobsService {
     await this.queue.add(
       'llm_chat',
       { teamId, aiProfileId, messages, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return { jobId: jobRow.id };
+  }
+
+  async enqueueLlmStructuredTest(
+    teamId: string,
+    aiProfileId: string,
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    responseFormat:
+      | { type: 'json_object' }
+      | {
+          type: 'json_schema';
+          json_schema: { name: string; strict: boolean; schema: Record<string, unknown> };
+        },
+    overrideParams?: {
+      temperature?: number;
+      topP?: number;
+      maxTokens?: number;
+      presencePenalty?: number;
+      frequencyPenalty?: number;
+      reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+    },
+  ): Promise<{ jobId: string }> {
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        aiProfileId,
+        type: 'llm_structured_test',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'llm_structured_test',
+      { teamId, aiProfileId, messages, responseFormat, overrideParams, jobId: jobRow.id },
       {
         jobId: jobRow.id,
         attempts: 2,

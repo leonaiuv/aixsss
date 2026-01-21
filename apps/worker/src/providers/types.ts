@@ -18,7 +18,7 @@ export type GenerationParams = {
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 };
 
-export type ProviderKind = 'openai_compatible' | 'gemini';
+export type ProviderKind = 'openai_compatible' | 'doubao_ark' | 'gemini';
 
 export type JsonSchemaResponseFormat = {
   type: 'json_schema';
@@ -41,8 +41,9 @@ export type ProviderChatConfig = {
   model: string;
   params?: GenerationParams;
   /**
-   * 结构化输出（OpenAI Structured Outputs / Responses API）
-   * - 仅 openai_compatible 支持；其它 provider 会忽略
+   * 结构化输出（JSON Schema / JSON Object）
+   * - openai_compatible：透传为 `response_format`
+   * - doubao_ark：透传为 Responses API 的 `text.format`
    */
   responseFormat?: ResponseFormat;
 };
@@ -80,4 +81,3 @@ export type ImageResult = {
 export type ImageGenerationResult = {
   images: ImageResult[];
 };
-

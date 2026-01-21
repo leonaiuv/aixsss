@@ -11,7 +11,7 @@ export type ApiAIProfile = {
   id: string;
   teamId?: string;
   name: string;
-  provider: 'deepseek' | 'kimi' | 'gemini' | 'openai-compatible';
+  provider: 'deepseek' | 'kimi' | 'gemini' | 'openai-compatible' | 'doubao-ark';
   model: string;
   baseURL: string | null;
   generationParams: unknown | null;

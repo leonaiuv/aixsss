@@ -83,6 +83,7 @@ interface SceneDetailModalProps {
   worldViewElements: WorldViewElement[];
   isRefining: boolean;
   isGeneratingImages: boolean;
+  isGeneratingVideo: boolean;
   isStoryboardRunning: boolean;
   storyboardProgress?: { message?: string | null; pct?: number | null };
   refineProgress?: { message?: string | null; pct?: number | null };
@@ -91,6 +92,7 @@ interface SceneDetailModalProps {
   onUpdateScene: (sceneId: string, updates: Partial<Scene>) => void;
   onRefineScene: (sceneId: string) => void;
   onGenerateImages: (sceneId: string) => void;
+  onGenerateVideo: (sceneId: string) => void;
   onGenerateStoryboardSceneBible: (sceneId: string) => void;
   onGenerateStoryboardPlan: (sceneId: string, cameraMode?: 'A' | 'B') => void;
   onGenerateStoryboardGroup: (sceneId: string, groupId: string, cameraMode?: 'A' | 'B') => void;
@@ -440,6 +442,7 @@ export function SceneDetailModal({
   worldViewElements,
   isRefining,
   isGeneratingImages,
+  isGeneratingVideo,
   isStoryboardRunning,
   storyboardProgress,
   refineProgress,
@@ -448,6 +451,7 @@ export function SceneDetailModal({
   onUpdateScene,
   onRefineScene,
   onGenerateImages,
+  onGenerateVideo,
   onGenerateStoryboardSceneBible,
   onGenerateStoryboardPlan,
   onGenerateStoryboardGroup,
@@ -709,6 +713,14 @@ export function SceneDetailModal({
     }
     return map;
   }, [scene?.generatedImages]);
+
+  const generatedVideos = useMemo(() => {
+    const raw = scene?.generatedVideos;
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (v) => v && typeof v === 'object' && typeof (v as unknown as Record<string, unknown>).url === 'string',
+    ) as NonNullable<Scene['generatedVideos']>;
+  }, [scene?.generatedVideos]);
 
   // 解析纯文本台词格式
   // 格式: - [类型|情绪] 角色: 内容
@@ -1653,6 +1665,83 @@ export function SceneDetailModal({
                           placeholder="SHORT_ZH: ...&#10;SHORT_EN: ...&#10;BEATS_ZH: ...&#10;..."
                         />
                       </div>
+                    </CollapsibleSection>
+
+                    {/* 视频 */}
+                    <CollapsibleSection
+                      title="生成视频"
+                      icon={<Video className="h-4 w-4" />}
+                      badge={
+                        <Badge variant="secondary" className="text-xs">
+                          Video
+                        </Badge>
+                      }
+                      actions={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onGenerateVideo(scene.id)}
+                          disabled={
+                            !aiProfileId ||
+                            isGeneratingVideo ||
+                            isBatchBlocked ||
+                            !scene.motionPrompt?.trim()
+                          }
+                          className="gap-2"
+                        >
+                          {isGeneratingVideo ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              生成中...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4" />
+                              一键生成视频
+                            </>
+                          )}
+                        </Button>
+                      }
+                    >
+                      {generatedVideos.length > 0 ? (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {generatedVideos.map((v, idx) => (
+                            <div key={`${v.url}_${idx}`} className="space-y-2">
+                              <div className="text-xs text-muted-foreground">
+                                {v.model ? `model=${v.model}` : '视频'}
+                                {v.createdAt ? ` · ${v.createdAt}` : ''}
+                              </div>
+                              <div className="overflow-hidden rounded-lg border">
+                                <video
+                                  src={v.url}
+                                  controls
+                                  className="h-48 w-full bg-black object-contain"
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => navigator.clipboard.writeText(v.url)}
+                                  className="gap-2"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                  复制链接
+                                </Button>
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={v.url} target="_blank" rel="noreferrer">
+                                    打开
+                                  </a>
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-48 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
+                          未生成
+                        </div>
+                      )}
                     </CollapsibleSection>
 
                     {/* 备注 */}

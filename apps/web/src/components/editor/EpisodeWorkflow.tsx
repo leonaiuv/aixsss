@@ -14,6 +14,7 @@ import {
 import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import {
   apiWorkflowGenerateKeyframeImages,
+  apiWorkflowGenerateSceneVideo,
   apiWorkflowGenerateStoryboardGroup,
   apiWorkflowGenerateStoryboardPlan,
   apiWorkflowGenerateStoryboardSceneBible,
@@ -378,6 +379,7 @@ export function EpisodeWorkflow() {
   const [isRefining, setIsRefining] = useState(false);
   const [refineJobProgress, setRefineJobProgress] = useState<NormalizedJobProgress | null>(null);
   const [generatingImagesSceneId, setGeneratingImagesSceneId] = useState<string | null>(null);
+  const [generatingVideoSceneId, setGeneratingVideoSceneId] = useState<string | null>(null);
   const [storyboardJob, setStoryboardJob] = useState<StoryboardJobState | null>(null);
   const [storyboardJobProgress, setStoryboardJobProgress] = useState<NormalizedJobProgress | null>(
     null,
@@ -878,6 +880,27 @@ export function EpisodeWorkflow() {
       toast({ title: '图片生成失败', description: detail, variant: 'destructive' });
     } finally {
       setGeneratingImagesSceneId(null);
+    }
+  };
+
+  const handleGenerateSceneVideo = async (sceneId: string) => {
+    if (!aiProfileId || !currentProject?.id) return;
+    setGeneratingVideoSceneId(sceneId);
+    try {
+      await flushApiEpisodeScenePatchQueue().catch(() => {});
+      const job = await apiWorkflowGenerateSceneVideo({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+      });
+      await apiWaitForAIJob(job.id, { timeoutMs: 30 * 60_000 });
+      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+      toast({ title: '视频生成完成', description: '已生成视频。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '视频生成失败', description: detail, variant: 'destructive' });
+    } finally {
+      setGeneratingVideoSceneId(null);
     }
   };
 
@@ -3551,6 +3574,7 @@ ${safeJsonStringify(ep.coreExpression)}
         worldViewElements={worldViewElements}
         isRefining={isRefining && refiningSceneId === refineScene?.id}
         isGeneratingImages={generatingImagesSceneId === refineScene?.id}
+        isGeneratingVideo={generatingVideoSceneId === refineScene?.id}
         isStoryboardRunning={Boolean(storyboardJob && storyboardJob.sceneId === refineScene?.id)}
         storyboardProgress={storyboardJobProgress ?? undefined}
         refineProgress={refineJobProgress ?? undefined}
@@ -3562,6 +3586,7 @@ ${safeJsonStringify(ep.coreExpression)}
         }}
         onRefineScene={handleRefineSceneAll}
         onGenerateImages={handleGenerateKeyframeImages}
+        onGenerateVideo={handleGenerateSceneVideo}
         onGenerateStoryboardSceneBible={handleGenerateStoryboardSceneBible}
         onGenerateStoryboardPlan={handleGenerateStoryboardPlan}
         onGenerateStoryboardGroup={handleGenerateStoryboardGroup}

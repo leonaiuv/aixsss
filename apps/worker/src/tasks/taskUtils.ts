@@ -2,7 +2,7 @@ import type { JsonValue } from '@prisma/client/runtime/library';
 import type { ChatMessage, ChatResult, GenerationParams, ProviderChatConfig } from '../providers/types.js';
 import { chatWithProvider } from '../providers/index.js';
 
-export type DbProviderType = 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible';
+export type DbProviderType = 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible' | 'doubao_ark';
 
 export type TaskProgress = {
   pct: number;
@@ -49,6 +49,14 @@ export function toProviderConfig(profile: {
           model: profile.model,
           params,
         }
+      : profile.provider === 'doubao_ark'
+        ? {
+            kind: 'doubao_ark',
+            apiKey: '', // fill later
+            baseURL: profile.baseURL ?? 'https://ark.cn-beijing.volces.com/api/v3',
+            model: profile.model,
+            params,
+          }
       : {
           kind: 'openai_compatible',
           apiKey: '', // fill later
@@ -283,5 +291,3 @@ export function createScaledProgress(
     await updateProgress({ ...progress, pct: Math.round(scaled) });
   };
 }
-
-

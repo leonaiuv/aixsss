@@ -245,7 +245,13 @@ describe('API 配置操作', () => {
   });
 
   it('应处理所有供应商类型', () => {
-    const providers: UserConfig['provider'][] = ['deepseek', 'kimi', 'gemini', 'openai-compatible'];
+    const providers: UserConfig['provider'][] = [
+      'deepseek',
+      'kimi',
+      'gemini',
+      'openai-compatible',
+      'doubao-ark',
+    ];
 
     providers.forEach((provider) => {
       const config: UserConfig = {

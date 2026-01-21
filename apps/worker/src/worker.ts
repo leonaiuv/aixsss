@@ -9,9 +9,11 @@ import { generateKeyframePrompt } from './tasks/generateKeyframePrompt.js';
 import { generateKeyframeImages } from './tasks/generateKeyframeImages.js';
 import { generateMotionPrompt } from './tasks/generateMotionPrompt.js';
 import { generateDialogue } from './tasks/generateDialogue.js';
+import { generateSceneVideo } from './tasks/generateSceneVideo.js';
 import { refineSceneAll } from './tasks/refineSceneAll.js';
 import { refineSceneBatch } from './tasks/refineSceneBatch.js';
 import { llmChat } from './tasks/llmChat.js';
+import { llmStructuredTest } from './tasks/llmStructuredTest.js';
 import { planEpisodes } from './tasks/planEpisodes.js';
 import { generateEpisodeCoreExpression } from './tasks/generateEpisodeCoreExpression.js';
 import { generateEpisodeSceneList } from './tasks/generateEpisodeSceneList.js';
@@ -93,6 +95,33 @@ async function main() {
               teamId,
               aiProfileId,
               messages: data.messages,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'llm_structured_test': {
+            const result = await llmStructuredTest({
+              prisma,
+              teamId,
+              aiProfileId,
+              messages: data.messages,
+              responseFormat: data.responseFormat,
+              overrideParams: data.overrideParams,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               updateProgress,
             });
@@ -447,6 +476,32 @@ async function main() {
           }
           case 'generate_keyframe_images': {
             const result = await generateKeyframeImages({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_scene_video': {
+            const result = await generateSceneVideo({
               prisma,
               teamId,
               projectId,

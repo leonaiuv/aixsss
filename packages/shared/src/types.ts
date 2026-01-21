@@ -1,6 +1,6 @@
 // 共享领域类型：供 web/api/worker 共用
 
-export const PROVIDER_TYPES = ['deepseek', 'kimi', 'gemini', 'openai-compatible'] as const;
+export const PROVIDER_TYPES = ['deepseek', 'kimi', 'gemini', 'openai-compatible', 'doubao-ark'] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
 
 export const WORKFLOW_STATES = [

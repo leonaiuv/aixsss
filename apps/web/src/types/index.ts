@@ -357,6 +357,15 @@ export interface GeneratedImage {
   metadata?: Record<string, unknown>;
 }
 
+export interface GeneratedVideo {
+  url: string;
+  prompt?: string;
+  provider?: string;
+  model?: string;
+  createdAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
 // 单集工作流状态
 export type EpisodeWorkflowState =
   | 'IDLE'
@@ -599,6 +608,8 @@ export interface Scene {
   motionPrompt: string;
   /** 关键帧生成图片 */
   generatedImages?: GeneratedImage[];
+  /** 生成视频（如 Doubao/ARK Seedance） */
+  generatedVideos?: GeneratedVideo[];
   /** 台词列表 - 对白/独白/旁白/心理活动 */
   dialogues?: DialogueLine[];
   contextSummary?: SceneContextSummary;
@@ -630,7 +641,7 @@ export interface EpisodeContextCache {
 // ==========================================
 
 // AI供应商类型
-export type ProviderType = 'deepseek' | 'kimi' | 'gemini' | 'openai-compatible';
+export type ProviderType = 'deepseek' | 'kimi' | 'gemini' | 'openai-compatible' | 'doubao-ark';
 
 // 用户API配置
 export interface UserConfig {
@@ -928,6 +939,17 @@ export interface AIGenerationParams {
    * - 参考 AiHubMix Responses API：reasoning.effort
    */
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  /**
+   * 可选：生图模型（同一 Provider 下用于图片生成）
+   * - OpenAI 示例：gpt-image-1
+   * - Doubao/ARK 示例：doubao-seedream-4-5-251128
+   */
+  imageModel?: string;
+  /**
+   * 可选：生视频模型（同一 Provider 下用于视频生成）
+   * - Doubao/ARK 示例：doubao-seedance-1-5-pro-251215
+   */
+  videoModel?: string;
 }
 
 // 搜索过滤器

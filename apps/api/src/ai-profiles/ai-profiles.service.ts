@@ -13,6 +13,7 @@ const PROVIDER_TO_DB: Record<ProviderType, DbProviderType> = {
   kimi: 'kimi',
   gemini: 'gemini',
   'openai-compatible': 'openai_compatible',
+  'doubao-ark': 'doubao_ark',
 };
 
 function toDbProvider(provider: ProviderType): DbProviderType {
@@ -20,7 +21,9 @@ function toDbProvider(provider: ProviderType): DbProviderType {
 }
 
 function fromDbProvider(provider: string): ProviderType {
-  return provider === 'openai_compatible' ? 'openai-compatible' : (provider as ProviderType);
+  if (provider === 'openai_compatible') return 'openai-compatible';
+  if (provider === 'doubao_ark') return 'doubao-ark';
+  return provider as ProviderType;
 }
 
 @Injectable()
@@ -127,5 +130,4 @@ export class AIProfilesService {
     return { ok: true };
   }
 }
-
 

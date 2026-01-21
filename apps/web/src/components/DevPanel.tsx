@@ -44,7 +44,11 @@ import {
   History,
   Bug,
   Sparkles,
+  FileCode,
+  Eye,
+  ClipboardCopy,
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 export function DevPanel() {
@@ -166,7 +170,7 @@ export function DevPanel() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[520px] h-[600px] flex flex-col animate-in slide-in-from-bottom-4 duration-300 shadow-2xl rounded-xl">
+    <div className="fixed bottom-4 right-4 z-50 w-[680px] h-[720px] flex flex-col animate-in slide-in-from-bottom-4 duration-300 shadow-2xl rounded-xl">
       <Card className="flex flex-col h-full border-2 border-primary/5 bg-background/95 backdrop-blur-xl overflow-hidden rounded-xl shadow-inner">
         {/* 头部 */}
         <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 select-none">
@@ -742,6 +746,13 @@ function TaskItem({
   onSelect: () => void;
   onCopy: () => void;
 }) {
+  // 获取实时更新的任务数据
+  const liveTask = useAIProgressStore((state) => state.tasks.find((t) => t.id === task.id)) || task;
+  const outputLength = liveTask.currentOutput?.length || 0;
+  const outputPreview = liveTask.currentOutput
+    ? liveTask.currentOutput.slice(-200).replace(/\n/g, ' ')
+    : '';
+
   return (
     <div
       className="group relative pl-4 py-3 rounded-r-lg border-l-2 border-l-muted hover:border-l-primary hover:bg-muted/30 transition-all cursor-pointer"
@@ -751,7 +762,7 @@ function TaskItem({
       <div
         className={cn(
           'absolute -left-[5px] top-4 w-2.5 h-2.5 rounded-full border-2 bg-background transition-colors',
-          task.status === 'running'
+          liveTask.status === 'running'
             ? 'border-blue-500 animate-pulse'
             : 'border-muted group-hover:border-primary',
         )}
@@ -759,10 +770,10 @@ function TaskItem({
 
       <div className="flex items-start justify-between mb-1.5">
         <div className="flex items-center gap-2">
-          {task.status === 'running' && (
+          {liveTask.status === 'running' && (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
           )}
-          <span className="font-semibold text-xs text-foreground/90">{task.title}</span>
+          <span className="font-semibold text-xs text-foreground/90">{liveTask.title}</span>
         </div>
         <Button
           variant="ghost"
@@ -777,28 +788,46 @@ function TaskItem({
         </Button>
       </div>
 
-      {task.description && (
-        <p className="text-[11px] text-muted-foreground/80 mb-2 line-clamp-1">{task.description}</p>
+      {liveTask.description && (
+        <p className="text-[11px] text-muted-foreground/80 mb-2 line-clamp-1">{liveTask.description}</p>
       )}
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-[10px]">
           <span className="text-muted-foreground font-mono">
-            {task.currentStep || 'Initializing...'}
+            {liveTask.currentStep || 'Initializing...'}
           </span>
-          <span className="font-mono">{task.progress}%</span>
+          <span className="font-mono">{liveTask.progress}%</span>
         </div>
         <div className="h-1.5 w-full bg-muted/50 rounded-full overflow-hidden">
           <div
             className="h-full bg-primary transition-all duration-300 rounded-full"
-            style={{ width: `${task.progress}%` }}
+            style={{ width: `${liveTask.progress}%` }}
           />
         </div>
       </div>
 
-      {task.sceneOrder && (
+      {/* 实时流式输出预览 */}
+      {liveTask.status === 'running' && outputLength > 0 && (
+        <div className="mt-2 p-2 rounded bg-muted/50 border border-border/50">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <FileCode className="h-3 w-3" />
+              <span>流式输出</span>
+            </div>
+            <span className="text-[10px] font-mono text-muted-foreground">
+              {outputLength > 1000 ? `${(outputLength / 1000).toFixed(1)}k` : outputLength} chars
+            </span>
+          </div>
+          <p className="text-[10px] font-mono text-muted-foreground/80 line-clamp-2 break-all">
+            {outputPreview}
+          </p>
+        </div>
+      )}
+
+      {liveTask.sceneOrder && (
         <div className="mt-2 inline-flex items-center px-1.5 py-0.5 rounded bg-muted/50 text-[10px] text-muted-foreground border border-border/50">
-          SCENE #{task.sceneOrder}
+          SCENE #{liveTask.sceneOrder}
         </div>
       )}
     </div>
@@ -915,121 +944,322 @@ function StatCard({
 }
 
 function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void }) {
+  const { toast } = useToast();
+  const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'output' | 'raw'>('info');
+
+  // 获取实时更新的任务数据
+  const liveTask = useAIProgressStore((state) => state.tasks.find((t) => t.id === task.id)) || task;
+
+  // 复制到剪贴板
+  const handleCopy = async (content: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast({ title: `已复制${label}`, description: `${content.length} 字符` });
+    } catch {
+      toast({ title: '复制失败', variant: 'destructive' });
+    }
+  };
+
+  // 复制完整错误信息（包含原始输出）
+  const handleCopyError = async () => {
+    const errorInfo = {
+      message: liveTask.error?.message,
+      code: liveTask.error?.code,
+      details: liveTask.error?.details,
+      rawOutput: liveTask.error?.rawOutput || liveTask.rawOutput,
+      taskId: liveTask.id,
+      taskType: liveTask.type,
+      timestamp: new Date().toISOString(),
+    };
+    await handleCopy(JSON.stringify(errorInfo, null, 2), '错误信息');
+  };
+
+  const rawOutput = liveTask.currentOutput || liveTask.rawOutput || liveTask.response?.content || '';
+  const outputLength = rawOutput.length;
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <Card
-        className="w-[600px] max-h-[85vh] overflow-hidden shadow-2xl border-primary/10 animate-in zoom-in-95 duration-200"
+        className="w-[800px] max-h-[90vh] overflow-hidden shadow-2xl border-primary/10 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b bg-muted/30">
           <div className="flex items-center gap-2">
             <Terminal className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold text-sm">Task Details</h3>
+            <h3 className="font-semibold text-sm">任务详情</h3>
+            {liveTask.status === 'running' && (
+              <Badge variant="secondary" className="animate-pulse text-[10px]">
+                运行中
+              </Badge>
+            )}
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
 
-        <ScrollArea className="max-h-[65vh]">
-          <div className="p-5 space-y-6">
-            {/* Header Info */}
-            <div className="flex items-start gap-4">
-              <div
-                className={cn(
-                  'p-3 rounded-xl',
-                  task.status === 'success'
-                    ? 'bg-green-500/10 text-green-600'
-                    : task.status === 'error'
-                      ? 'bg-red-500/10 text-red-600'
-                      : 'bg-blue-500/10 text-blue-600',
-                )}
-              >
-                {task.status === 'success' ? (
-                  <CheckCircle2 className="h-6 w-6" />
-                ) : task.status === 'error' ? (
-                  <XCircle className="h-6 w-6" />
-                ) : (
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                )}
-              </div>
-              <div>
-                <h2 className="text-lg font-bold">{task.title}</h2>
-                <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
-              </div>
-            </div>
+        {/* 详情选项卡 */}
+        <div className="border-b bg-muted/20 px-4">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setActiveDetailTab('info')}
+              className={cn(
+                'px-3 py-2 text-xs font-medium border-b-2 transition-colors',
+                activeDetailTab === 'info'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              基本信息
+            </button>
+            <button
+              onClick={() => setActiveDetailTab('output')}
+              className={cn(
+                'px-3 py-2 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5',
+                activeDetailTab === 'output'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Eye className="h-3 w-3" />
+              输出内容
+              {outputLength > 0 && (
+                <span className="text-[10px] font-mono opacity-70">
+                  ({outputLength > 1000 ? `${(outputLength / 1000).toFixed(1)}k` : outputLength})
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveDetailTab('raw')}
+              className={cn(
+                'px-3 py-2 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5',
+                activeDetailTab === 'raw'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <FileCode className="h-3 w-3" />
+              原始输出
+            </button>
+          </div>
+        </div>
 
-            <Separator />
-
-            {/* 基本信息 Grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground uppercase font-bold">Type</span>
-                <div className="text-sm">{getTaskTypeLabel(task.type)}</div>
-              </div>
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground uppercase font-bold">Status</span>
-                <Badge
-                  variant={task.status === 'error' ? 'destructive' : 'secondary'}
-                  className="capitalize"
+        <ScrollArea className="max-h-[70vh]">
+          {/* 基本信息标签页 */}
+          {activeDetailTab === 'info' && (
+            <div className="p-5 space-y-6">
+              {/* Header Info */}
+              <div className="flex items-start gap-4">
+                <div
+                  className={cn(
+                    'p-3 rounded-xl',
+                    liveTask.status === 'success'
+                      ? 'bg-green-500/10 text-green-600'
+                      : liveTask.status === 'error'
+                        ? 'bg-red-500/10 text-red-600'
+                        : 'bg-blue-500/10 text-blue-600',
+                  )}
                 >
-                  {task.status}
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground uppercase font-bold">Created</span>
-                <div className="text-sm font-mono text-muted-foreground">
-                  {new Date(task.createdAt).toLocaleString()}
+                  {liveTask.status === 'success' ? (
+                    <CheckCircle2 className="h-6 w-6" />
+                  ) : liveTask.status === 'error' ? (
+                    <XCircle className="h-6 w-6" />
+                  ) : (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-lg font-bold">{liveTask.title}</h2>
+                  <p className="text-sm text-muted-foreground mt-1">{liveTask.description}</p>
                 </div>
               </div>
-              {task.completedAt && (
+
+              <Separator />
+
+              {/* 基本信息 Grid */}
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground uppercase font-bold">
-                    Duration
-                  </span>
+                  <span className="text-xs text-muted-foreground uppercase font-bold">类型</span>
+                  <div className="text-sm">{getTaskTypeLabel(liveTask.type)}</div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground uppercase font-bold">状态</span>
+                  <Badge
+                    variant={liveTask.status === 'error' ? 'destructive' : 'secondary'}
+                    className="capitalize"
+                  >
+                    {liveTask.status}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground uppercase font-bold">创建时间</span>
                   <div className="text-sm font-mono text-muted-foreground">
-                    {(
-                      (new Date(task.completedAt).getTime() - new Date(task.createdAt).getTime()) /
-                      1000
-                    ).toFixed(2)}
-                    s
+                    {new Date(liveTask.createdAt).toLocaleString()}
                   </div>
+                </div>
+                {liveTask.completedAt && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground uppercase font-bold">耗时</span>
+                    <div className="text-sm font-mono text-muted-foreground">
+                      {(
+                        (new Date(liveTask.completedAt).getTime() - new Date(liveTask.createdAt).getTime()) /
+                        1000
+                      ).toFixed(2)}s
+                    </div>
+                  </div>
+                )}
+                {liveTask.response?.tokenUsage && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground uppercase font-bold">Token 用量</span>
+                    <div className="text-sm font-mono text-muted-foreground">
+                      {liveTask.response.tokenUsage.total.toLocaleString()} tokens
+                    </div>
+                  </div>
+                )}
+                {outputLength > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground uppercase font-bold">输出长度</span>
+                    <div className="text-sm font-mono text-muted-foreground">
+                      {outputLength.toLocaleString()} chars
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 错误信息 */}
+              {liveTask.error && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-red-500 uppercase flex items-center gap-2">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      错误信息
+                    </h4>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-[10px] text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={handleCopyError}
+                    >
+                      <ClipboardCopy className="h-3 w-3 mr-1.5" />
+                      复制错误+原始输出
+                    </Button>
+                  </div>
+                  <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30">
+                    <p className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">
+                      {liveTask.error.message}
+                    </p>
+                    {liveTask.error.code && (
+                      <p className="text-xs text-red-600/70 dark:text-red-400/70">
+                        错误码: {liveTask.error.code}
+                      </p>
+                    )}
+                    {liveTask.error.details && (
+                      <p className="text-xs text-red-600/70 dark:text-red-400/70 mt-1">
+                        详情: {liveTask.error.details}
+                      </p>
+                    )}
+                  </div>
+                  {(liveTask.error.rawOutput || liveTask.rawOutput) && (
+                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30">
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mb-2 font-medium">
+                        导致错误的原始输出（前 500 字符）:
+                      </p>
+                      <pre className="text-[10px] font-mono text-amber-600/80 dark:text-amber-400/80 whitespace-pre-wrap break-all max-h-[120px] overflow-auto">
+                        {(liveTask.error.rawOutput || liveTask.rawOutput || '').slice(0, 500)}
+                        {(liveTask.error.rawOutput || liveTask.rawOutput || '').length > 500 && '...'}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
+          )}
 
-            {/* 响应内容 */}
-            {task.response && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase">
-                    Response Output
-                  </h4>
-                  {task.response.tokenUsage && (
+          {/* 输出内容标签页 */}
+          {activeDetailTab === 'output' && (
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-muted-foreground uppercase">
+                  {liveTask.status === 'running' ? '实时流式输出' : '最终输出'}
+                </h4>
+                <div className="flex items-center gap-2">
+                  {liveTask.response?.tokenUsage && (
                     <Badge variant="outline" className="font-mono text-[10px]">
-                      {task.response.tokenUsage.total} Tokens
+                      {liveTask.response.tokenUsage.total} Tokens
                     </Badge>
                   )}
-                </div>
-                <div className="p-4 rounded-lg bg-muted/50 border text-xs font-mono whitespace-pre-wrap max-h-[300px] overflow-auto leading-relaxed">
-                  {task.response.content}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-[10px]"
+                    onClick={() => handleCopy(liveTask.response?.content || rawOutput, '输出内容')}
+                    disabled={!rawOutput}
+                  >
+                    <Copy className="h-3 w-3 mr-1.5" />
+                    复制
+                  </Button>
                 </div>
               </div>
-            )}
+              {rawOutput ? (
+                <div className="p-4 rounded-lg bg-muted/50 border text-xs font-mono whitespace-pre-wrap max-h-[450px] overflow-auto leading-relaxed">
+                  {liveTask.response?.content || rawOutput}
+                  {liveTask.status === 'running' && (
+                    <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-0.5" />
+                  )}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-muted-foreground/50">
+                  <FileCode className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-xs">暂无输出内容</p>
+                </div>
+              )}
+            </div>
+          )}
 
-            {/* 错误信息 */}
-            {task.error && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-red-500 uppercase">Error Trace</h4>
-                <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 text-xs font-mono text-red-600 dark:text-red-400">
-                  {task.error.message}
+          {/* 原始输出标签页 */}
+          {activeDetailTab === 'raw' && (
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase">
+                    原始 AI 输出
+                  </h4>
+                  <Badge variant="outline" className="font-mono text-[10px]">
+                    {outputLength.toLocaleString()} chars
+                  </Badge>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  onClick={() => handleCopy(rawOutput, '原始输出')}
+                  disabled={!rawOutput}
+                >
+                  <Copy className="h-3 w-3 mr-1.5" />
+                  复制原始内容
+                </Button>
               </div>
-            )}
-          </div>
+              <div className="text-[10px] text-muted-foreground bg-muted/30 p-2 rounded">
+                此处显示 AI 的原始完整输出，用于调试 JSON 解析错误等问题。
+              </div>
+              {rawOutput ? (
+                <div className="p-4 rounded-lg bg-zinc-900 dark:bg-zinc-950 border border-zinc-700 text-xs font-mono whitespace-pre-wrap max-h-[450px] overflow-auto leading-relaxed text-zinc-300">
+                  {rawOutput}
+                  {liveTask.status === 'running' && (
+                    <span className="inline-block w-2 h-4 bg-green-500/50 animate-pulse ml-0.5" />
+                  )}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-muted-foreground/50">
+                  <FileCode className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-xs">暂无原始输出</p>
+                </div>
+              )}
+            </div>
+          )}
         </ScrollArea>
       </Card>
     </div>

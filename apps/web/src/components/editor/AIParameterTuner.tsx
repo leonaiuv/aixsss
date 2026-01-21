@@ -89,8 +89,13 @@ export function AIParameterTuner({
   const handlePresetChange = (presetName: string) => {
     setPreset(presetName);
     const next = presets[presetName as keyof typeof presets];
-    // 保留“推理强度”等非数值型参数，避免切换预设后丢失
-    onParamsChange({ ...next, reasoningEffort: params.reasoningEffort });
+    // 保留“推理强度/模型覆盖”等非数值型参数，避免切换预设后丢失
+    onParamsChange({
+      ...next,
+      reasoningEffort: params.reasoningEffort,
+      imageModel: params.imageModel,
+      videoModel: params.videoModel,
+    });
   };
 
   const handleReset = () => {

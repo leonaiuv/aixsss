@@ -24,6 +24,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { Textarea } from './ui/textarea';
+import { Switch } from './ui/switch';
 import {
   Eye,
   EyeOff,
@@ -47,6 +49,12 @@ import {
 import { AIParameterTuner } from './editor/AIParameterTuner';
 import { clampMaxTokens, getMaxTokensPolicy } from '@/lib/ai/maxTokensPolicy';
 import { cn } from '@/lib/utils';
+import type { ChatMessage } from '@/types';
+import {
+  apiLlmStructuredTest,
+  type ApiResponseFormat,
+  type ApiStructuredTestResult,
+} from '@/lib/api/llm';
 
 const DEFAULT_GENERATION_PARAMS: AIGenerationParams = {
   temperature: 0.7,
@@ -97,6 +105,20 @@ const PROVIDER_PRESETS: Record<
       label: 'Gemini 旧版（gemini-pro）',
       model: 'gemini-pro',
       baseURL: 'https://generativelanguage.googleapis.com',
+    },
+  ],
+  'doubao-ark': [
+    {
+      id: 'doubao-seed-1-8',
+      label: '豆包文本（doubao-seed-1-8，推荐）',
+      model: 'doubao-seed-1-8-251215',
+      baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+    },
+    {
+      id: 'doubao-seed-1-6',
+      label: '豆包文本（doubao-seed-1-6）',
+      model: 'doubao-seed-1-6-251015',
+      baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
     },
   ],
   'openai-compatible': [
@@ -150,6 +172,36 @@ const PROVIDER_PRESETS: Record<
     },
   ],
 };
+
+const DEFAULT_STRUCTURED_TEST_PROMPT =
+  '请按照给定 Schema 输出 JSON（不要输出任何 JSON 以外的内容）。要求：\n' +
+  '- items 至少 10 条\n' +
+  '- 每条 text 用简体中文，尽量详细一些\n';
+
+const DEFAULT_STRUCTURED_TEST_SCHEMA = JSON.stringify(
+  {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            text: { type: 'string' },
+          },
+          required: ['id', 'text'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['title', 'items'],
+    additionalProperties: false,
+  },
+  null,
+  2,
+);
 
 function normalizeGenerationParams(
   params: AIGenerationParams | undefined,
@@ -227,6 +279,20 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const [generationParams, setGenerationParams] =
     useState<AIGenerationParams>(DEFAULT_GENERATION_PARAMS);
   const [aiTunerOpen, setAiTunerOpen] = useState(false);
+
+  // 结构化输出(JSON)测试（Doubao/ARK）
+  type StructuredTestMode = 'json_schema' | 'json_object';
+  const [structuredMode, setStructuredMode] = useState<StructuredTestMode>('json_schema');
+  const [structuredSchemaName, setStructuredSchemaName] = useState('structured_output_test');
+  const [structuredStrict, setStructuredStrict] = useState(true);
+  const [structuredPrompt, setStructuredPrompt] = useState(DEFAULT_STRUCTURED_TEST_PROMPT);
+  const [structuredSchemaText, setStructuredSchemaText] = useState(DEFAULT_STRUCTURED_TEST_SCHEMA);
+  const [structuredMaxTokensOverride, setStructuredMaxTokensOverride] = useState('');
+  const [structuredTesting, setStructuredTesting] = useState(false);
+  const [structuredError, setStructuredError] = useState<string>('');
+  const [structuredResult, setStructuredResult] = useState<
+    (ApiStructuredTestResult & { jobId?: string }) | null
+  >(null);
 
   // 加密密码相关状态
   const [unlockPassword, setUnlockPassword] = useState('');
@@ -722,6 +788,259 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     }
   };
 
+  function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  async function validateJsonSchemaInBrowser(schema: Record<string, unknown>, data: unknown) {
+    try {
+      const mod = await import('ajv');
+      const AjvCtor = (mod as Record<string, unknown>)?.default ?? mod;
+      const ajv = new (AjvCtor as typeof import('ajv').default)({ allErrors: true, strict: false });
+      const validate = ajv.compile(schema);
+      const ok = Boolean(validate(data));
+      if (ok) return { ok: true as const };
+      const errors = Array.isArray(validate.errors)
+        ? validate.errors.map((e: import('ajv').ErrorObject) => {
+            const path =
+              typeof e?.instancePath === 'string' && e.instancePath ? e.instancePath : '/';
+            const msg = typeof e?.message === 'string' && e.message ? ` ${e.message}` : '';
+            return `${path}${msg}`.trim();
+          })
+        : [];
+      return {
+        ok: false as const,
+        errors: errors.length ? errors : ['Schema 校验失败（无详细错误）'],
+      };
+    } catch (err) {
+      return { ok: false as const, compileError: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  async function runStructuredTest() {
+    if (isLocked) {
+      toast({
+        title: '配置已锁定',
+        description: '请输入加密密码解锁后再测试',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (provider !== 'doubao-ark') return;
+    if (hasConfigValidationErrors) {
+      toast({ title: '请检查表单错误', variant: 'destructive' });
+      return;
+    }
+
+    const prompt = structuredPrompt.trim();
+    if (!prompt) {
+      toast({ title: '请输入测试提示词', variant: 'destructive' });
+      return;
+    }
+
+    setStructuredTesting(true);
+    setStructuredError('');
+    setStructuredResult(null);
+
+    try {
+      let responseFormat: ApiResponseFormat;
+      let schemaObject: Record<string, unknown> | undefined;
+      if (structuredMode === 'json_object') {
+        responseFormat = { type: 'json_object' };
+      } else {
+        const raw = structuredSchemaText.trim();
+        if (!raw) throw new Error('Schema 不能为空');
+        const parsed = JSON.parse(raw) as unknown;
+        if (!isPlainObject(parsed)) throw new Error('Schema 必须是 JSON 对象');
+        schemaObject = parsed;
+        responseFormat = {
+          type: 'json_schema',
+          json_schema: {
+            name: structuredSchemaName.trim() || 'structured_output_test',
+            strict: structuredStrict,
+            schema: parsed,
+          },
+        };
+      }
+
+      const maxTokensRaw = structuredMaxTokensOverride.trim();
+      const maxTokens = maxTokensRaw ? Number(maxTokensRaw) : undefined;
+      const overrideParams =
+        typeof maxTokens === 'number' && Number.isFinite(maxTokens) && maxTokens > 0
+          ? { maxTokens: Math.floor(maxTokens) }
+          : undefined;
+
+      const messages: ChatMessage[] = [
+        {
+          role: 'system',
+          content:
+            '你是一个只输出 JSON 的助手。必须严格遵循结构化输出要求，不要输出任何 JSON 以外的内容。',
+        },
+        { role: 'user', content: prompt },
+      ];
+
+      if (apiMode) {
+        let aiProfileId = activeProfileId;
+
+        // 若仍是 draft：先用“连接测试”帮用户创建服务端档案（会额外发一次 ping）
+        if (!aiProfileId || aiProfileId.startsWith('draft_')) {
+          const ok = await testConnection({
+            provider,
+            apiKey,
+            baseURL: normalizedBaseURL(baseURL),
+            model,
+            generationParams,
+          });
+          if (!ok) throw new Error('连接测试失败：请先修正配置后重试');
+          aiProfileId = useConfigStore.getState().activeProfileId;
+        }
+
+        if (!aiProfileId || aiProfileId.startsWith('draft_')) {
+          throw new Error('未绑定服务端 AI Profile：请先保存配置或点击“测试连接”');
+        }
+
+        const res = await apiLlmStructuredTest({
+          aiProfileId,
+          messages,
+          responseFormat,
+          ...(overrideParams ? { overrideParams } : {}),
+        });
+        setStructuredResult(res);
+        return;
+      }
+
+      // local mode：浏览器直连 ARK
+      const startedAt = Date.now();
+      const url = `${normalizedBaseURL(baseURL) || 'https://ark.cn-beijing.volces.com/api/v3'}/responses`;
+      const p = generationParams;
+
+      const body: Record<string, unknown> = {
+        model,
+        input: messages,
+        ...(typeof p?.temperature === 'number' ? { temperature: p.temperature } : {}),
+        ...(typeof p?.topP === 'number' ? { top_p: p.topP } : {}),
+        ...(typeof (overrideParams?.maxTokens ?? p?.maxTokens) === 'number'
+          ? { max_output_tokens: overrideParams?.maxTokens ?? p?.maxTokens }
+          : {}),
+        text:
+          structuredMode === 'json_object'
+            ? { format: { type: 'json_object' } }
+            : {
+                format: {
+                  type: 'json_schema',
+                  name: structuredSchemaName.trim() || 'structured_output_test',
+                  strict: structuredStrict,
+                  schema: schemaObject!,
+                },
+              },
+        thinking: { type: 'disabled' },
+      };
+
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => '');
+        throw new Error(
+          `上游错误：${resp.status} ${resp.statusText}${detail ? ` - ${detail}` : ''}`,
+        );
+      }
+
+      const data = (await resp.json()) as Record<string, unknown>;
+      const content =
+        typeof data?.output_text === 'string'
+          ? data.output_text
+          : Array.isArray(data?.output)
+            ? (((
+                (data.output as Array<Record<string, unknown>>)
+                  .flatMap((o) => (o?.content as unknown[]) ?? [])
+                  .find((p) => typeof (p as Record<string, unknown>)?.text === 'string') as
+                  | Record<string, unknown>
+                  | undefined
+              )?.text as string | undefined) ?? '')
+            : '';
+      const usageRaw = data?.usage ?? null;
+      const usage = usageRaw && typeof usageRaw === 'object' ? usageRaw as Record<string, unknown> : null;
+      const tokenUsage =
+        usage
+          ? {
+              prompt:
+                typeof usage.prompt_tokens === 'number'
+                  ? usage.prompt_tokens
+                  : typeof usage.input_tokens === 'number'
+                    ? usage.input_tokens
+                    : undefined,
+              completion:
+                typeof usage.completion_tokens === 'number'
+                  ? usage.completion_tokens
+                  : typeof usage.output_tokens === 'number'
+                    ? usage.output_tokens
+                    : undefined,
+              total:
+                typeof usage.total_tokens === 'number'
+                  ? usage.total_tokens
+                  : typeof usage.prompt_tokens === 'number' ||
+                      typeof usage.completion_tokens === 'number'
+                    ? ((usage.prompt_tokens as number) ?? 0) + ((usage.completion_tokens as number) ?? 0)
+                    : undefined,
+            }
+          : undefined;
+
+      let jsonOk = false;
+      let jsonError: string | undefined;
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(content);
+        jsonOk = true;
+      } catch (err) {
+        jsonOk = false;
+        jsonError = err instanceof Error ? err.message : String(err);
+      }
+
+      const schema =
+        structuredMode === 'json_schema' && jsonOk && schemaObject
+          ? await validateJsonSchemaInBrowser(schemaObject, parsed)
+          : structuredMode === 'json_schema'
+            ? { ok: false as const, errors: ['JSON 解析失败，无法进行 Schema 校验'] }
+            : null;
+
+      const durationMs = Math.max(0, Date.now() - startedAt);
+
+      setStructuredResult({
+        content,
+        tokenUsage:
+          tokenUsage &&
+          typeof tokenUsage.prompt === 'number' &&
+          typeof tokenUsage.completion === 'number'
+            ? {
+                prompt: tokenUsage.prompt,
+                completion: tokenUsage.completion,
+                total:
+                  typeof tokenUsage.total === 'number'
+                    ? tokenUsage.total
+                    : tokenUsage.prompt + tokenUsage.completion,
+              }
+            : undefined,
+        durationMs,
+        json: jsonOk ? { ok: true } : { ok: false, ...(jsonError ? { error: jsonError } : {}) },
+        schema,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setStructuredError(msg);
+      toast({ title: '结构化输出测试失败', description: msg, variant: 'destructive' });
+    } finally {
+      setStructuredTesting(false);
+    }
+  }
+
   const handleUnlock = async () => {
     setUnlockError('');
 
@@ -918,6 +1237,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               <SelectItem value="deepseek">DeepSeek</SelectItem>
               <SelectItem value="kimi">Kimi (月之暗面)</SelectItem>
               <SelectItem value="gemini">Gemini</SelectItem>
+              <SelectItem value="doubao-ark">豆包 / 方舟(ARK)</SelectItem>
               <SelectItem value="openai-compatible">OpenAI 兼容</SelectItem>
             </SelectContent>
           </Select>
@@ -992,7 +1312,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             placeholder={
               provider === 'gemini'
                 ? 'https://generativelanguage.googleapis.com'
-                : 'https://api.example.com'
+                : provider === 'doubao-ark'
+                  ? 'https://ark.cn-beijing.volces.com/api/v3'
+                  : 'https://api.example.com'
             }
             value={baseURL}
             onChange={(e) => setBaseURL(e.target.value)}
@@ -1009,7 +1331,13 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         <Label htmlFor="model">模型名称</Label>
         <Input
           id="model"
-          placeholder={provider === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'}
+          placeholder={
+            provider === 'deepseek'
+              ? 'deepseek-chat'
+              : provider === 'doubao-ark'
+                ? 'doubao-seed-1-8-251215'
+                : 'gpt-3.5-turbo'
+          }
           value={model}
           onChange={(e) => setModel(e.target.value)}
           disabled={isLocked}
@@ -1018,6 +1346,53 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           <p className="text-sm text-destructive">{validationErrors.model}</p>
         )}
       </div>
+
+      {/* 多能力模型（可选） */}
+      {provider === 'openai-compatible' || provider === 'doubao-ark' ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="imageModel">图片模型（可选）</Label>
+            <Input
+              id="imageModel"
+              value={generationParams.imageModel ?? ''}
+              onChange={(e) =>
+                setGenerationParams((prev) => {
+                  const v = e.target.value;
+                  return { ...prev, imageModel: v.trim() ? v : undefined };
+                })
+              }
+              disabled={isLocked}
+              placeholder={provider === 'doubao-ark' ? 'doubao-seedream-4-5-251128' : 'gpt-image-1'}
+            />
+            <p className="text-xs text-muted-foreground">
+              用于关键帧图片生成；留空则使用默认（豆包默认 Seedream 4.5）。
+            </p>
+          </div>
+
+          {provider === 'doubao-ark' ? (
+            <div className="space-y-2">
+              <Label htmlFor="videoModel">视频模型（可选）</Label>
+              <Input
+                id="videoModel"
+                value={generationParams.videoModel ?? ''}
+                onChange={(e) =>
+                  setGenerationParams((prev) => {
+                    const v = e.target.value;
+                    return { ...prev, videoModel: v.trim() ? v : undefined };
+                  })
+                }
+                disabled={isLocked}
+                placeholder="doubao-seedance-1-5-pro-251215"
+              />
+              <p className="text-xs text-muted-foreground">
+                用于视频生成；留空则使用默认（Seedance 1.5 Pro）。
+              </p>
+            </div>
+          ) : (
+            <div />
+          )}
+        </div>
+      ) : null}
 
       {/* 测试连接 */}
       <div className="flex items-center gap-3">
@@ -1074,6 +1449,218 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           </Button>
         </div>
       )}
+
+      {/* Doubao/ARK：结构化输出测试（强制 JSON / JSON Schema） */}
+      {provider === 'doubao-ark' ? (
+        <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">结构化输出(JSON)测试</p>
+              <p className="text-xs text-muted-foreground">
+                使用 ARK Responses API 的 <span className="font-mono">text.format</span>
+                （json_object / json_schema） 强制输出 JSON，用于验证长 JSON 是否可解析/是否符合
+                Schema。
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void runStructuredTest()}
+              disabled={
+                structuredTesting ||
+                isLocked ||
+                hasConfigValidationErrors ||
+                !structuredPrompt.trim()
+              }
+            >
+              {structuredTesting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  测试中...
+                </>
+              ) : (
+                '运行测试'
+              )}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>模式</Label>
+              <Select
+                value={structuredMode}
+                onValueChange={(v) => setStructuredMode(v as StructuredTestMode)}
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="json_schema">json_schema（推荐）</SelectItem>
+                  <SelectItem value="json_object">json_object</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="structuredMaxTokens">MaxTokens 覆盖（可选）</Label>
+              <Input
+                id="structuredMaxTokens"
+                inputMode="numeric"
+                placeholder={`留空使用当前档案：${generationParams.maxTokens}`}
+                value={structuredMaxTokensOverride}
+                onChange={(e) => setStructuredMaxTokensOverride(e.target.value)}
+                disabled={isLocked}
+              />
+              <p className="text-xs text-muted-foreground">用于测试“很长 JSON”是否会被截断。</p>
+            </div>
+          </div>
+
+          {structuredMode === 'json_schema' ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="structuredSchemaName">Schema Name</Label>
+                  <Input
+                    id="structuredSchemaName"
+                    value={structuredSchemaName}
+                    onChange={(e) => setStructuredSchemaName(e.target.value)}
+                    disabled={isLocked}
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border bg-background px-3 py-2">
+                  <div className="space-y-0.5">
+                    <p className="text-sm">Strict</p>
+                    <p className="text-xs text-muted-foreground">严格模式：要求完全符合 Schema</p>
+                  </div>
+                  <Switch
+                    checked={structuredStrict}
+                    onCheckedChange={setStructuredStrict}
+                    disabled={isLocked}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="structuredSchema">JSON Schema</Label>
+                <Textarea
+                  id="structuredSchema"
+                  className="min-h-[160px] font-mono text-xs"
+                  value={structuredSchemaText}
+                  onChange={(e) => setStructuredSchemaText(e.target.value)}
+                  disabled={isLocked}
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              <span className="font-mono">json_object</span> 仅保证输出是合法
+              JSON，不保证字段结构；如需强结构，请用 <span className="font-mono">json_schema</span>
+              。
+            </p>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="structuredPrompt">提示词</Label>
+            <Textarea
+              id="structuredPrompt"
+              className="min-h-[120px]"
+              value={structuredPrompt}
+              onChange={(e) => setStructuredPrompt(e.target.value)}
+              disabled={isLocked}
+            />
+          </div>
+
+          {structuredError ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-sm text-destructive">{structuredError}</p>
+            </div>
+          ) : null}
+
+          {structuredResult ? (
+            <div className="space-y-3">
+              <div className="rounded-lg border bg-background p-3 space-y-2">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="inline-flex items-center gap-1.5">
+                    {structuredResult.json?.ok ? (
+                      <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <X className="h-4 w-4 text-destructive" />
+                    )}
+                    JSON 可解析
+                  </span>
+
+                  {structuredMode === 'json_schema' ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      {structuredResult.schema?.ok ? (
+                        <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      ) : (
+                        <X className="h-4 w-4 text-destructive" />
+                      )}
+                      Schema 校验
+                    </span>
+                  ) : null}
+
+                  {typeof structuredResult.durationMs === 'number' ? (
+                    <span className="text-muted-foreground">
+                      耗时 {formatDuration(structuredResult.durationMs)}
+                    </span>
+                  ) : null}
+                  {structuredResult.tokenUsage ? (
+                    <span className="text-muted-foreground">
+                      Tokens {structuredResult.tokenUsage.total.toLocaleString()}（in{' '}
+                      {structuredResult.tokenUsage.prompt.toLocaleString()} · out{' '}
+                      {structuredResult.tokenUsage.completion.toLocaleString()}）
+                    </span>
+                  ) : null}
+                </div>
+
+                {structuredResult.json &&
+                !structuredResult.json.ok &&
+                structuredResult.json.error ? (
+                  <p className="text-xs text-destructive">
+                    JSON 解析错误：{structuredResult.json.error}
+                  </p>
+                ) : null}
+
+                {structuredMode === 'json_schema' &&
+                structuredResult.schema &&
+                !structuredResult.schema.ok ? (
+                  <div className="text-xs text-destructive space-y-1">
+                    {structuredResult.schema.compileError ? (
+                      <p>Schema 编译失败：{structuredResult.schema.compileError}</p>
+                    ) : null}
+                    {structuredResult.schema.errors?.length ? (
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {structuredResult.schema.errors.slice(0, 5).map((e, i) => (
+                          <li key={i}>{e}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void navigator.clipboard.writeText(structuredResult.content || '')}
+                >
+                  <Copy className="mr-2 h-3 w-3" />
+                  复制输出
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label>模型输出</Label>
+                <Textarea
+                  readOnly
+                  className="min-h-[220px] font-mono text-xs"
+                  value={structuredResult.content}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 
@@ -1386,8 +1973,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-3xl min-h-[500px] max-h-[90vh] p-0 gap-0 overflow-hidden">
-        <div className="flex h-full">
+      <DialogContent className="w-[95vw] max-w-3xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden">
+        <div className="flex h-full min-h-0">
           {/* 左侧标签导航 */}
           <div className="w-44 shrink-0 border-r bg-muted/30 flex flex-col">
             <DialogHeader className="px-4 py-4 border-b">
@@ -1417,7 +2004,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           </div>
 
           {/* 右侧内容区 */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
             <div className="flex-1 overflow-y-auto p-5">
               {activeTab === 'connection' && renderConnectionTab()}
               {activeTab === 'params' && renderParamsTab()}

@@ -14,6 +14,15 @@ const GeneratedImageSchema = z.object({
   metadata: z.unknown().optional(),
 });
 
+const GeneratedVideoSchema = z.object({
+  url: z.string().min(1),
+  prompt: z.string().min(1).optional(),
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  createdAt: z.string().min(1).optional(),
+  metadata: z.unknown().optional(),
+});
+
 export const CreateSceneInputSchema = z.object({
   id: z
     .string()
@@ -29,6 +38,7 @@ export const CreateSceneInputSchema = z.object({
   shotPrompt: z.string().min(0).max(36000).default(''),
   motionPrompt: z.string().min(0).max(20000).default(''),
   generatedImages: z.array(GeneratedImageSchema).optional(),
+  generatedVideos: z.array(GeneratedVideoSchema).optional(),
   storyboardSceneBibleJson: z.unknown().optional(),
   storyboardPlanJson: z.unknown().optional(),
   storyboardGroupsJson: z.unknown().optional(),

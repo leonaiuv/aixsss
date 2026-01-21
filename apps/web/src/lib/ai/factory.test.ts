@@ -4,6 +4,7 @@ import { DeepSeekProvider } from '@/lib/ai/providers/deepseek';
 import { OpenAICompatibleProvider } from '@/lib/ai/providers/openai';
 import { GeminiProvider } from '@/lib/ai/providers/gemini';
 import { KimiProvider } from '@/lib/ai/providers/kimi';
+import { DoubaoArkProvider } from '@/lib/ai/providers/doubaoArk';
 import { ChatMessage, UserConfig, ProviderType } from '@/types';
 
 // ==========================================
@@ -33,6 +34,12 @@ describe('createAIProvider', () => {
     const provider = createAIProvider('gemini');
     expect(provider).toBeInstanceOf(GeminiProvider);
     expect(provider.name).toBe('Gemini');
+  });
+
+  it('应根据 doubao-ark 类型返回 DoubaoArkProvider 实例', () => {
+    const provider = createAIProvider('doubao-ark');
+    expect(provider).toBeInstanceOf(DoubaoArkProvider);
+    expect(provider.name).toBe('Doubao / ARK');
   });
 
   it('不支持的类型应抛出错误', () => {
@@ -258,7 +265,6 @@ describe('AIFactory.createClient', () => {
       const stream = client.streamChat([{ role: 'user', content: 'test' }]);
 
       await expect(async () => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         for await (const _chunk of stream) {
           // consume stream
         }
@@ -281,6 +287,7 @@ describe('不同 Provider 类型测试', () => {
     { type: 'openai-compatible', name: 'OpenAI Compatible' },
     { type: 'kimi', name: 'Kimi' },
     { type: 'gemini', name: 'Gemini' },
+    { type: 'doubao-ark', name: 'Doubao / ARK' },
   ];
 
   providers.forEach(({ type, name }) => {

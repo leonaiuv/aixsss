@@ -4,8 +4,10 @@ import { DeepSeekProvider } from './providers/deepseek';
 import { OpenAICompatibleProvider } from './providers/openai';
 import { GeminiProvider } from './providers/gemini';
 import { KimiProvider } from './providers/kimi';
+import { DoubaoArkProvider } from './providers/doubaoArk';
 import { BackendProvider } from './providers/backend';
 import { isApiMode } from '@/lib/runtime/mode';
+import { useAIProgressStore } from '@/stores/aiProgressStore';
 
 // 工厂函数 - 根据供应商类型创建适配器
 export function createAIProvider(provider: ProviderType): AIProvider {
@@ -14,6 +16,8 @@ export function createAIProvider(provider: ProviderType): AIProvider {
       return new DeepSeekProvider();
     case 'kimi':
       return new KimiProvider();
+    case 'doubao-ark':
+      return new DoubaoArkProvider();
     case 'openai-compatible':
       return new OpenAICompatibleProvider();
     case 'gemini':
@@ -40,8 +44,31 @@ class AIClient {
     return this.provider.chat(messages, this.config, options);
   }
 
-  streamChat(messages: ChatMessage[], options?: AIRequestOptions): AsyncGenerator<string> {
-    return this.provider.streamChat(messages, this.config, options);
+  async *streamChat(messages: ChatMessage[], options?: AIRequestOptions): AsyncGenerator<string> {
+    const taskId = options?.taskId;
+    const store = taskId ? useAIProgressStore.getState() : null;
+    
+    // 包装底层生成器，拦截每个 chunk 并更新 store
+    const baseGenerator = this.provider.streamChat(messages, this.config, options);
+    
+    try {
+      for await (const chunk of baseGenerator) {
+        // 如果有 taskId，追加输出到 store
+        if (taskId && store) {
+          store.appendTaskOutput(taskId, chunk);
+        }
+        yield chunk;
+      }
+    } catch (error) {
+      // 错误时也更新 store，保留当前已收到的输出
+      if (taskId && store) {
+        const task = store.getTask(taskId);
+        if (task) {
+          console.debug(`[AIClient] Stream error for task ${taskId}, raw output length: ${task.currentOutput?.length ?? 0}`);
+        }
+      }
+      throw error;
+    }
   }
 }
 

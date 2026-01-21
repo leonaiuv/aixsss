@@ -126,7 +126,7 @@ export async function generateKeyframeImages(args: {
 
   const profile = await prisma.aIProfile.findFirst({
     where: { id: aiProfileId, teamId },
-    select: { provider: true, model: true, baseURL: true, apiKeyEncrypted: true },
+    select: { provider: true, model: true, baseURL: true, apiKeyEncrypted: true, generationParams: true },
   });
   if (!profile) throw new Error('AI profile not found');
 
@@ -182,7 +182,7 @@ export async function generateKeyframeImages(args: {
       prompt: entry.prompt,
       revisedPrompt: entry.image?.revisedPrompt,
       provider: profile.provider,
-      model: profile.model,
+      model: providerConfig.model,
       createdAt: new Date().toISOString(),
     }));
 

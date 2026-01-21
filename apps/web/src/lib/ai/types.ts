@@ -10,6 +10,8 @@ export interface AIProviderConfig {
 
 export interface AIRequestOptions {
   signal?: AbortSignal;
+  /** 关联的任务ID，用于更新DevPanel中的流式输出监控 */
+  taskId?: string;
 }
 
 export interface AIProvider {

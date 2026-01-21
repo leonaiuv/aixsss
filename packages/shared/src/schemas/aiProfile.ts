@@ -32,6 +32,9 @@ export const CreateAIProfileInputSchema = z.object({
       frequencyPenalty: z.number().min(-2).max(2).optional(),
       // GPT-5 / 推理类模型：推理强度（Responses API: reasoning.effort）
       reasoningEffort: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']).optional(),
+      // 可选：生图/生视频模型（用于同一 Provider 下多能力）
+      imageModel: z.string().min(1).max(120).optional(),
+      videoModel: z.string().min(1).max(120).optional(),
     })
     .optional(),
   pricing: AIPricingSchema.optional(),
@@ -45,4 +48,3 @@ export const UpdateAIProfileInputSchema = CreateAIProfileInputSchema.partial().e
 });
 
 export type UpdateAIProfileInput = z.infer<typeof UpdateAIProfileInputSchema>;
-

@@ -55,6 +55,7 @@ enum ProviderType {
   kimi
   gemini
   openai_compatible
+  doubao_ark
 }
 
 enum AIJobStatus {
@@ -214,6 +215,7 @@ model Scene {
   storyboardPlanJson Json?
   storyboardGroupsJson Json?
   generatedImages  Json?
+  generatedVideos  Json?
   dialogues        Json?
   contextSummary   Json?
   status           SceneStatus @default(pending)
