@@ -68,7 +68,9 @@ export async function apiWorkflowGenerateEpisodeCoreExpressionBatch(input: {
       method: 'POST',
       body: {
         aiProfileId: input.aiProfileId,
-        ...(Array.isArray(input.episodeIds) && input.episodeIds.length > 0 ? { episodeIds: input.episodeIds } : {}),
+        ...(Array.isArray(input.episodeIds) && input.episodeIds.length > 0
+          ? { episodeIds: input.episodeIds }
+          : {}),
         ...(input.force ? { force: true } : {}),
       },
     },
