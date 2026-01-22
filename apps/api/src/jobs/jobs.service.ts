@@ -230,6 +230,78 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueGenerateEpisodeCoreExpressionBatch(
+    teamId: string,
+    projectId: string,
+    aiProfileId: string,
+    options?: { episodeIds?: string[]; force?: boolean },
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const episodeIds = options?.episodeIds?.filter(Boolean);
+    const episodes = await this.prisma.episode.findMany({
+      where: {
+        projectId,
+        ...(episodeIds && episodeIds.length > 0 ? { id: { in: episodeIds } } : {}),
+      },
+      select: { id: true, order: true },
+      orderBy: { order: 'asc' },
+    });
+
+    if (episodeIds && episodeIds.length > 0 && episodes.length !== episodeIds.length) {
+      const got = new Set(episodes.map((e) => e.id));
+      const missing = episodeIds.filter((id) => !got.has(id));
+      throw new BadRequestException({ message: `Episodes not found: ${missing.join(', ')}` });
+    }
+
+    if (episodes.length === 0) {
+      throw new BadRequestException('No episodes found');
+    }
+
+    const orderedEpisodeIds = episodes.map((e) => e.id);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        aiProfileId,
+        type: 'generate_episode_core_expression_batch',
+        status: 'queued',
+      },
+    });
+
+    try {
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: { workflowState: 'EPISODE_CREATING', currentSceneOrder: 0 },
+      });
+    } catch {
+      // ignore
+    }
+
+    await this.queue.add(
+      'generate_episode_core_expression_batch',
+      {
+        teamId,
+        projectId,
+        aiProfileId,
+        jobId: jobRow.id,
+        episodeIds: orderedEpisodeIds,
+        force: options?.force === true,
+      },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async enqueueGenerateEpisodeSceneList(
     teamId: string,
     projectId: string,

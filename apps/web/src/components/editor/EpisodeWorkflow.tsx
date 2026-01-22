@@ -343,6 +343,7 @@ export function EpisodeWorkflow() {
     deleteEpisode,
     planEpisodes,
     generateCoreExpression,
+    generateCoreExpressionBatch,
     generateSceneList,
     buildNarrativeCausalChain,
   } = useEpisodeStore();
@@ -657,6 +658,30 @@ export function EpisodeWorkflow() {
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       toast({ title: '核心表达生成失败', description: detail, variant: 'destructive' });
+    }
+  };
+
+  const handleGenerateCoreExpressionBatch = async () => {
+    if (!aiProfileId || !currentProject?.id) return;
+    try {
+      const missingEpisodeIds = episodes.filter((ep) => !ep.coreExpression).map((ep) => ep.id);
+      if (missingEpisodeIds.length === 0) {
+        toast({ title: '无需生成', description: '所有 Episode 都已有核心表达。' });
+        return;
+      }
+      toast({
+        title: '批量生成核心表达',
+        description: `已入队，将生成 ${missingEpisodeIds.length} 集（自动跳过已生成）。`,
+      });
+      await generateCoreExpressionBatch({
+        projectId: currentProject.id,
+        aiProfileId,
+        episodeIds: missingEpisodeIds,
+      });
+      toast({ title: '批量生成完成', description: '核心表达已写入 Episodes。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '批量生成失败', description: detail, variant: 'destructive' });
     }
   };
 
@@ -2482,6 +2507,28 @@ ${safeJsonStringify(ep.coreExpression)}
                   ))}
                 </select>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateCoreExpressionBatch}
+                disabled={
+                  !aiProfileId ||
+                  episodes.length === 0 ||
+                  isRunningWorkflow ||
+                  isRefining ||
+                  isBatchBlocked ||
+                  isBatchRefineRunning
+                }
+                className="gap-2"
+                title="一键为未生成的 Episode 批量生成核心表达"
+              >
+                {isRunningWorkflow ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Layers className="h-4 w-4" />
+                )}
+                批量核心表达
+              </Button>
             </div>
           </div>
 

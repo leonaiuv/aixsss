@@ -56,6 +56,25 @@ export async function apiWorkflowGenerateEpisodeCoreExpression(input: {
   );
 }
 
+export async function apiWorkflowGenerateEpisodeCoreExpressionBatch(input: {
+  projectId: string;
+  aiProfileId: string;
+  episodeIds?: string[];
+  force?: boolean;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/episodes/core-expression/batch`,
+    {
+      method: 'POST',
+      body: {
+        aiProfileId: input.aiProfileId,
+        ...(Array.isArray(input.episodeIds) && input.episodeIds.length > 0 ? { episodeIds: input.episodeIds } : {}),
+        ...(input.force ? { force: true } : {}),
+      },
+    },
+  );
+}
+
 export async function apiWorkflowGenerateEpisodeSceneList(input: {
   projectId: string;
   episodeId: string;

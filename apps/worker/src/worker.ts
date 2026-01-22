@@ -16,6 +16,7 @@ import { llmChat } from './tasks/llmChat.js';
 import { llmStructuredTest } from './tasks/llmStructuredTest.js';
 import { planEpisodes } from './tasks/planEpisodes.js';
 import { generateEpisodeCoreExpression } from './tasks/generateEpisodeCoreExpression.js';
+import { generateEpisodeCoreExpressionBatch } from './tasks/generateEpisodeCoreExpressionBatch.js';
 import { generateEpisodeSceneList } from './tasks/generateEpisodeSceneList.js';
 import { buildNarrativeCausalChain } from './tasks/buildNarrativeCausalChain.js';
 import {
@@ -236,6 +237,39 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_episode_core_expression_batch': {
+            const episodeIds = Array.isArray(data.episodeIds)
+              ? data.episodeIds.filter((id): id is string => typeof id === 'string')
+              : undefined;
+            const force = typeof data.force === 'boolean' ? data.force : undefined;
+
+            const result = await generateEpisodeCoreExpressionBatch({
+              prisma,
+              teamId,
+              projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              episodeIds,
+              force,
+              updateProgress,
+              previousProgress: job.progress,
             });
 
             const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });

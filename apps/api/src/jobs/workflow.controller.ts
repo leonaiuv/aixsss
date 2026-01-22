@@ -18,6 +18,12 @@ const EpisodeSceneListBodySchema = WorkflowBodySchema.extend({
   sceneCountHint: z.number().int().min(6).max(24).optional(),
 });
 
+const EpisodeCoreExpressionBatchBodySchema = WorkflowBodySchema.extend({
+  episodeIds: z.array(z.string().min(1)).optional(),
+  /** 强制覆盖：对已有 coreExpression 的集也重新生成 */
+  force: z.boolean().optional(),
+});
+
 const NarrativeCausalChainBodySchema = WorkflowBodySchema.extend({
   phase: z.number().int().min(1).max(4).optional(),
   force: z.boolean().optional(),
@@ -70,6 +76,19 @@ export class WorkflowController {
   ) {
     const input = parseOrBadRequest(WorkflowBodySchema, body);
     return this.jobs.enqueueGenerateEpisodeCoreExpression(user.teamId, projectId, episodeId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/episodes/core-expression/batch')
+  generateEpisodeCoreExpressionBatch(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(EpisodeCoreExpressionBatchBodySchema, body);
+    return this.jobs.enqueueGenerateEpisodeCoreExpressionBatch(user.teamId, projectId, input.aiProfileId, {
+      episodeIds: input.episodeIds,
+      force: input.force === true,
+    });
   }
 
   @Post('projects/:projectId/episodes/:episodeId/scene-list')

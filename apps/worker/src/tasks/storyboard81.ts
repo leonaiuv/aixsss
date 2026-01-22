@@ -297,14 +297,102 @@ const STORYBOARD_PLAN_RESPONSE_FORMAT: ResponseFormat = {
           maxItems: 9,
           items: {
             type: 'object',
-            additionalProperties: true,
+            additionalProperties: false,
             required: ['group_id', 'shot_range', 'goal_en'],
             properties: {
               group_id: { type: 'string', enum: GENERATED_IMAGE_KEYFRAMES as unknown as string[] },
               shot_range: { type: 'string' },
               goal_en: { type: 'string' },
-              start_state: { type: 'object' },
-              end_state: { type: 'object' },
+              start_state: {
+                type: 'object',
+                additionalProperties: true,
+                required: ['characters', 'props', 'next_intent_hint'],
+                properties: {
+                  characters: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                      required: ['name', 'location', 'stance', 'facing', 'emotion', 'props_in_hand'],
+                      properties: {
+                        name: { type: 'string' },
+                        location: { type: 'string' },
+                        stance: { type: 'string' },
+                        facing: { type: 'string' },
+                        emotion: { type: 'string' },
+                        props_in_hand: {
+                          type: 'object',
+                          additionalProperties: true,
+                          required: ['left', 'right'],
+                          properties: {
+                            left: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+                            right: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  props: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                      required: ['name', 'state', 'holder'],
+                      properties: {
+                        name: { type: 'string' },
+                        state: { type: 'string' },
+                        holder: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+                      },
+                    },
+                  },
+                  next_intent_hint: { type: 'string' },
+                },
+              },
+              end_state: {
+                type: 'object',
+                additionalProperties: true,
+                required: ['characters', 'props', 'next_intent_hint'],
+                properties: {
+                  characters: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                      required: ['name', 'location', 'stance', 'facing', 'emotion', 'props_in_hand'],
+                      properties: {
+                        name: { type: 'string' },
+                        location: { type: 'string' },
+                        stance: { type: 'string' },
+                        facing: { type: 'string' },
+                        emotion: { type: 'string' },
+                        props_in_hand: {
+                          type: 'object',
+                          additionalProperties: true,
+                          required: ['left', 'right'],
+                          properties: {
+                            left: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+                            right: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  props: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: true,
+                      required: ['name', 'state', 'holder'],
+                      properties: {
+                        name: { type: 'string' },
+                        state: { type: 'string' },
+                        holder: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+                      },
+                    },
+                  },
+                  next_intent_hint: { type: 'string' },
+                },
+              },
             },
           },
         },

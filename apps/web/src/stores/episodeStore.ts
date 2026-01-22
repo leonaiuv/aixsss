@@ -11,6 +11,7 @@ import { apiWaitForAIJob } from '@/lib/api/aiJobs';
 import {
   apiWorkflowBuildNarrativeCausalChain,
   apiWorkflowGenerateEpisodeCoreExpression,
+  apiWorkflowGenerateEpisodeCoreExpressionBatch,
   apiWorkflowGenerateEpisodeSceneList,
   apiWorkflowPlanEpisodes,
 } from '@/lib/api/workflow';
@@ -97,6 +98,13 @@ interface EpisodeStore {
     projectId: string;
     episodeId: string;
     aiProfileId: string;
+  }) => Promise<void>;
+  generateCoreExpressionBatch: (input: {
+    projectId: string;
+    aiProfileId: string;
+    episodeIds?: string[];
+    /** 强制覆盖：对已有 coreExpression 的集也重新生成 */
+    force?: boolean;
   }) => Promise<void>;
   generateSceneList: (input: {
     projectId: string;
@@ -303,6 +311,63 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
       const content =
         typeof result?.extractedJson === 'string' ? result.extractedJson : safeJson(result);
       updateLogWithResponse(logId, { content, tokenUsage });
+      get().loadEpisodes(input.projectId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      updateLogWithError(logId, message);
+      set({ error: message });
+      throw error;
+    } finally {
+      set({ isRunningWorkflow: false });
+    }
+  },
+
+  generateCoreExpressionBatch: async (input) => {
+    if (!isApiMode()) {
+      throw new Error('核心表达批量生成仅在 API 模式可用');
+    }
+    set({ isRunningWorkflow: true, error: null, lastJobId: null, lastJobProgress: null });
+
+    const cfg = useConfigStore.getState().config;
+    const logId = logAICall('episode_core_expression_batch', {
+      skillName: 'workflow:generate_episode_core_expression_batch',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/episodes/core-expression/batch',
+      filledPrompt: `POST /workflow/projects/${input.projectId}/episodes/core-expression/batch`,
+      messages: [{ role: 'user', content: safeJson(input) }],
+      context: {
+        projectId: input.projectId,
+        systemPromptKeys: [
+          'workflow.episode_core_expression.system',
+          'workflow.episode_core_expression.json_fix.system',
+        ],
+      },
+      config: {
+        provider: cfg?.provider ?? 'api',
+        model: cfg?.model ?? 'workflow',
+        maxTokens: cfg?.generationParams?.maxTokens,
+        profileId: cfg?.aiProfileId ?? input.aiProfileId,
+      },
+    });
+
+    try {
+      const job = await apiWorkflowGenerateEpisodeCoreExpressionBatch(input);
+      set({ lastJobId: job.id });
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          set({ lastJobProgress: next });
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+
+          const output = (progress as { output?: unknown } | null)?.output;
+          if (typeof output === 'string' && output) updateLogOutput(logId, output);
+        },
+      });
+
+      const result = (finished.result ?? null) as ResultLike | null;
+      const tokenUsage = normalizeJobTokenUsage(result?.tokenUsage);
+      updateLogWithResponse(logId, { content: safeJson(result), tokenUsage });
       get().loadEpisodes(input.projectId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
