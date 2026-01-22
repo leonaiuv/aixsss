@@ -553,7 +553,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     if (requiresApiKey && !apiKey.trim()) errors.apiKey = 'API Key 不能为空';
 
     if (!model.trim()) {
-      errors.model = provider === 'doubao-ark' ? '推理接入点 ID / Model ID 不能为空' : '模型名称不能为空';
+      errors.model =
+        provider === 'doubao-ark' ? '推理接入点 ID / Model ID 不能为空' : '模型名称不能为空';
     }
 
     if (provider !== 'kimi') {
@@ -853,7 +854,10 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
   function normalizeApiKey(value: string): string {
     const trimmed = (value || '').trim();
-    return trimmed.replace(/^Bearer\s+/i, '').trim().replace(/\s+/g, '');
+    return trimmed
+      .replace(/^Bearer\s+/i, '')
+      .trim()
+      .replace(/\s+/g, '');
   }
 
   function normalizeArkModel(value: string): string {
@@ -947,7 +951,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
     try {
       const modelId = normalizeArkModel(model);
-      if (!modelId) throw new Error('模型/接入点不能为空：请填写推理接入点 ID（ep-...）或 Model ID。');
+      if (!modelId)
+        throw new Error('模型/接入点不能为空：请填写推理接入点 ID（ep-...）或 Model ID。');
 
       let responseFormat: ApiResponseFormat;
       let schemaObject: Record<string, unknown> | undefined;
@@ -1027,7 +1032,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       const url = `${normalizedBaseURL(baseURL) || 'https://ark.cn-beijing.volces.com/api/v3'}/responses`;
       const p = generationParams;
       const normalizedKey = normalizeApiKey(apiKey);
-      if (!normalizedKey) throw new Error('API Key 为空：请填写正确的 API Key（无需包含 Bearer 前缀）。');
+      if (!normalizedKey)
+        throw new Error('API Key 为空：请填写正确的 API Key（无需包含 Bearer 前缀）。');
 
       const body: Record<string, unknown> = {
         model: modelId,
@@ -1128,21 +1134,23 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
       const durationMs = Math.max(0, Date.now() - startedAt);
 
+      const safeTokenUsage =
+        tokenUsage &&
+        typeof tokenUsage.prompt === 'number' &&
+        typeof tokenUsage.completion === 'number'
+          ? {
+              prompt: tokenUsage.prompt,
+              completion: tokenUsage.completion,
+              total:
+                typeof tokenUsage.total === 'number'
+                  ? tokenUsage.total
+                  : tokenUsage.prompt + tokenUsage.completion,
+            }
+          : undefined;
+
       setStructuredResult({
         content,
-        tokenUsage:
-          tokenUsage &&
-          typeof tokenUsage.prompt === 'number' &&
-          typeof tokenUsage.completion === 'number'
-            ? {
-                prompt: tokenUsage.prompt,
-                completion: tokenUsage.completion,
-                total:
-                  typeof tokenUsage.total === 'number'
-                    ? tokenUsage.total
-                    : tokenUsage.prompt + tokenUsage.completion,
-              }
-            : undefined,
+        tokenUsage: safeTokenUsage,
         durationMs,
         json: jsonOk ? { ok: true } : { ok: false, ...(jsonError ? { error: jsonError } : {}) },
         schema,
@@ -1150,7 +1158,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       updateLogProgress(logId, 100, '完成');
       updateLogWithResponse(logId, {
         content,
-        ...(tokenUsage ? { tokenUsage } : {}),
+        ...(safeTokenUsage ? { tokenUsage: safeTokenUsage } : {}),
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1450,7 +1458,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
       {/* 模型名称 */}
       <div className="space-y-2">
-        <Label htmlFor="model">{provider === 'doubao-ark' ? '推理接入点 ID / Model ID' : '模型名称'}</Label>
+        <Label htmlFor="model">
+          {provider === 'doubao-ark' ? '推理接入点 ID / Model ID' : '模型名称'}
+        </Label>
         <Input
           id="model"
           placeholder={
@@ -1489,7 +1499,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                   const raw = e.target.value;
                   const trimmed = raw.trim();
                   if (!trimmed) return { ...prev, imageModel: undefined };
-                  const normalized = provider === 'doubao-ark' ? normalizeArkModel(trimmed) : trimmed;
+                  const normalized =
+                    provider === 'doubao-ark' ? normalizeArkModel(trimmed) : trimmed;
                   return { ...prev, imageModel: normalized || undefined };
                 })
               }
@@ -1497,8 +1508,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               placeholder={provider === 'doubao-ark' ? 'ep-...（图片接入点）' : 'gpt-image-1'}
             />
             <p className="text-xs text-muted-foreground">
-              用于关键帧图片生成；豆包可填写图片推理接入点 ID（ep-...）或 Model ID。留空则使用默认（Seedream
-              4.5）。
+              用于关键帧图片生成；豆包可填写图片推理接入点 ID（ep-...）或 Model
+              ID。留空则使用默认（Seedream 4.5）。
             </p>
           </div>
 
@@ -1521,8 +1532,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 placeholder="ep-...（视频接入点）"
               />
               <p className="text-xs text-muted-foreground">
-                用于视频生成；建议填写视频推理接入点 ID（ep-...）或 Model ID。留空则使用默认（Seedance 1.5
-                Pro）。
+                用于视频生成；建议填写视频推理接入点 ID（ep-...）或 Model
+                ID。留空则使用默认（Seedance 1.5 Pro）。
               </p>
             </div>
           ) : (
