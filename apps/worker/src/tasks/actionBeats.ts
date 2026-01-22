@@ -746,10 +746,9 @@ async function generateJsonWithValidation<T>(args: {
   let lastIssues: ValidationIssue[] = [];
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const cfg: ProviderChatConfig =
-      attempt === 1 && args.responseFormat
-        ? { ...args.providerConfig, responseFormat: args.responseFormat }
-        : args.providerConfig;
+    const cfg: ProviderChatConfig = args.responseFormat
+      ? { ...args.providerConfig, responseFormat: args.responseFormat }
+      : args.providerConfig;
 
     const res = await chatWithProvider(cfg, args.messages);
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage);

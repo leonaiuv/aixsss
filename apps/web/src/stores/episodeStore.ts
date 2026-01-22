@@ -16,6 +16,7 @@ import {
 } from '@/lib/api/workflow';
 import {
   logAICall,
+  updateLogOutput,
   updateLogProgress,
   updateLogWithError,
   updateLogWithResponse,
@@ -397,12 +398,19 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
     try {
       const job = await apiWorkflowBuildNarrativeCausalChain(input);
       set({ lastJobId: job.id });
+      let lastOutput = '';
       const finished = await apiWaitForAIJob(job.id, {
         onProgress: (progress) => {
           const next = normalizeJobProgress(progress);
           set({ lastJobProgress: next });
           if (typeof next.pct === 'number')
             updateLogProgress(logId, next.pct, next.message ?? undefined);
+
+          const output = (progress as { output?: unknown } | null)?.output;
+          if (typeof output === 'string' && output && output !== lastOutput) {
+            lastOutput = output;
+            updateLogOutput(logId, output);
+          }
         },
       });
 

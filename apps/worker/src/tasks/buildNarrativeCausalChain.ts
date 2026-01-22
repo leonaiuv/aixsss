@@ -397,6 +397,17 @@ function summarizeError(err: unknown): string {
   return compact.length > 220 ? `${compact.slice(0, 220)}…` : compact;
 }
 
+function previewLLMOutput(text: string, maxChars = 5000): string {
+  const raw = (text ?? '').trim();
+  if (!raw) return '';
+  if (raw.length <= maxChars) return raw;
+  const headLen = Math.max(800, Math.floor(maxChars * 0.6));
+  const tailLen = Math.max(800, maxChars - headLen);
+  const head = raw.slice(0, headLen);
+  const tail = raw.slice(-tailLen);
+  return `${head}\n\n...TRUNCATED...\n\n${tail}`.trim();
+}
+
 // ===================== 阶段1：核心冲突引擎 =====================
 
 function buildPhase1UserPrompt(args: {
@@ -860,6 +871,12 @@ export async function buildNarrativeCausalChain(args: {
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
 
+    await updateProgress({
+      pct: 30,
+      message: '阶段1：解析输出...',
+      output: previewLLMOutput(res.content),
+    });
+
     let parsed: Phase1ConflictEngine | null = null;
     try {
       ({ parsed, extractedJson } = parsePhase1(res.content));
@@ -891,6 +908,11 @@ export async function buildNarrativeCausalChain(args: {
           continue;
         }
         tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+        await updateProgress({
+          pct: 40 + attempt,
+          message: `阶段1修复输出已返回，解析中（第${attempt}/3次）...`,
+          output: previewLLMOutput(fixRes.content),
+        });
         try {
           ({ parsed, extractedJson } = parsePhase1(fixRes.content));
           ok = true;
@@ -949,6 +971,12 @@ export async function buildNarrativeCausalChain(args: {
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
 
+    await updateProgress({
+      pct: 30,
+      message: '阶段2：解析输出...',
+      output: previewLLMOutput(res.content),
+    });
+
     let parsed: Phase2InfoLayers | null = null;
     try {
       ({ parsed, extractedJson } = parsePhase2(res.content));
@@ -980,6 +1008,11 @@ export async function buildNarrativeCausalChain(args: {
           continue;
         }
         tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+        await updateProgress({
+          pct: 40 + attempt,
+          message: `阶段2修复输出已返回，解析中（第${attempt}/3次）...`,
+          output: previewLLMOutput(fixRes.content),
+        });
         try {
           ({ parsed, extractedJson } = parsePhase2(fixRes.content));
           ok = true;
@@ -1053,6 +1086,12 @@ export async function buildNarrativeCausalChain(args: {
       if (!resA.content?.trim()) throw new Error('AI 返回空内容');
       tokenUsage = mergeTokenUsage(tokenUsage, resA.tokenUsage) ?? tokenUsage;
 
+      await updateProgress({
+        pct: 22,
+        message: '阶段3A：解析输出...',
+        output: previewLLMOutput(resA.content),
+      });
+
       let parsedA: Phase3BeatFlow | null = null;
       try {
         ({ parsed: parsedA, extractedJson } = parsePhase3(resA.content));
@@ -1079,6 +1118,11 @@ export async function buildNarrativeCausalChain(args: {
             continue;
           }
           tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+          await updateProgress({
+            pct: 26 + attempt,
+            message: `阶段3A修复输出已返回，解析中（第${attempt}/3次）...`,
+            output: previewLLMOutput(fixRes.content),
+          });
           try {
             ({ parsed: parsedA, extractedJson } = parsePhase3(fixRes.content));
             ok = true;
@@ -1168,6 +1212,12 @@ export async function buildNarrativeCausalChain(args: {
       if (!resB.content?.trim()) throw new Error('AI 返回空内容');
       tokenUsage = mergeTokenUsage(tokenUsage, resB.tokenUsage) ?? tokenUsage;
 
+      await updateProgress({
+        pct: 34 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 45),
+        message: `阶段3B：第${actNo}幕解析输出...`,
+        output: previewLLMOutput(resB.content),
+      });
+
       let parsedB: Phase3BeatFlow | null = null;
       try {
         ({ parsed: parsedB, extractedJson } = parsePhase3(resB.content));
@@ -1194,6 +1244,11 @@ export async function buildNarrativeCausalChain(args: {
             continue;
           }
           tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+          await updateProgress({
+            pct: 40 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 45) + attempt,
+            message: `阶段3B：第${actNo}幕修复输出已返回，解析中（第${attempt}/3次）...`,
+            output: previewLLMOutput(fixRes.content),
+          });
           try {
             ({ parsed: parsedB, extractedJson } = parsePhase3(fixRes.content));
             ok = true;
@@ -1260,6 +1315,12 @@ export async function buildNarrativeCausalChain(args: {
         if (!repairRes.content?.trim()) throw new Error('AI 返回空内容');
         tokenUsage = mergeTokenUsage(tokenUsage, repairRes.tokenUsage) ?? tokenUsage;
 
+        await updateProgress({
+          pct: 58 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 35) + repairAttempt,
+          message: `阶段3B：第${actNo}幕修复输出已返回，解析中...`,
+          output: previewLLMOutput(repairRes.content),
+        });
+
         let parsedRepair: Phase3BeatFlow | null = null;
         try {
           ({ parsed: parsedRepair, extractedJson } = parsePhase3(repairRes.content));
@@ -1282,6 +1343,11 @@ export async function buildNarrativeCausalChain(args: {
               continue;
             }
             tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+            await updateProgress({
+              pct: 62 + Math.round(((actNo - 1) / Math.max(1, actCount)) * 35) + attempt,
+              message: `阶段3B：第${actNo}幕修复解析失败，JSON 修复输出已返回（第${attempt}/3次）...`,
+              output: previewLLMOutput(fixRes.content),
+            });
             try {
               ({ parsed: parsedRepair, extractedJson } = parsePhase3(fixRes.content));
               ok = true;
@@ -1426,6 +1492,12 @@ export async function buildNarrativeCausalChain(args: {
     if (!res.content?.trim()) throw new Error('AI 返回空内容');
     tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage) ?? tokenUsage;
 
+    await updateProgress({
+      pct: 30,
+      message: '阶段4：解析输出...',
+      output: previewLLMOutput(res.content),
+    });
+
     let parsed: Phase4PlotLines | null = null;
     try {
       ({ parsed, extractedJson } = parsePhase4(res.content));
@@ -1457,6 +1529,11 @@ export async function buildNarrativeCausalChain(args: {
           continue;
         }
         tokenUsage = mergeTokenUsage(tokenUsage, fixRes.tokenUsage) ?? tokenUsage;
+        await updateProgress({
+          pct: 40 + attempt,
+          message: `阶段4修复输出已返回，解析中（第${attempt}/3次）...`,
+          output: previewLLMOutput(fixRes.content),
+        });
         try {
           ({ parsed, extractedJson } = parsePhase4(fixRes.content));
           ok = true;
@@ -1525,4 +1602,3 @@ export async function buildNarrativeCausalChain(args: {
     tokenUsage,
   };
 }
-

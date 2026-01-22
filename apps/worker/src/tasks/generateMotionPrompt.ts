@@ -3,7 +3,7 @@ import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
-import { fixStructuredOutput } from './formatFix.js';
+import { fixStructuredOutput, responseFormatForFixableOutputType } from './formatFix.js';
 import { toProviderChatConfig } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
 import { loadSystemPrompt } from './systemPrompts.js';
@@ -65,6 +65,7 @@ export async function generateMotionPrompt(args: {
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
   const providerConfig = toProviderChatConfig(profile);
   providerConfig.apiKey = apiKey;
+  providerConfig.responseFormat = responseFormatForFixableOutputType('motion_prompt');
 
   await updateProgress({ pct: 25, message: '调用 AI 生成运动提示词...' });
 
@@ -105,4 +106,3 @@ export async function generateMotionPrompt(args: {
     tokenUsage: fixed.tokenUsage ?? null,
   };
 }
-

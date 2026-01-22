@@ -47,6 +47,7 @@ export function AIParameterTuner({
 }: AIParameterTunerProps) {
   const [preset, setPreset] = useState<string>('balanced');
   const maxTokensPolicy = useMemo(() => getMaxTokensPolicy(provider, model), [provider, model]);
+  const supportsPenaltyParams = provider !== 'doubao-ark';
 
   const canTuneReasoningEffort = useMemo(() => {
     if (provider !== 'openai-compatible') return false;
@@ -280,29 +281,38 @@ export function AIParameterTuner({
 
         <Separator />
 
-        {/* 主题惩罚 (Presence Penalty) */}
-        <ParameterSlider
-          label="主题惩罚 (Presence Penalty)"
-          value={params.presencePenalty || 0}
-          onChange={(value) => updateParam('presencePenalty', value)}
-          min={-2}
-          max={2}
-          step={0.1}
-          description="惩罚已出现的主题，鼓励谈论新主题"
-          tooltip="正值增加探索新主题的可能性"
-        />
+        {supportsPenaltyParams ? (
+          <>
+            {/* 主题惩罚 (Presence Penalty) */}
+            <ParameterSlider
+              label="主题惩罚 (Presence Penalty)"
+              value={params.presencePenalty || 0}
+              onChange={(value) => updateParam('presencePenalty', value)}
+              min={-2}
+              max={2}
+              step={0.1}
+              description="惩罚已出现的主题，鼓励谈论新主题"
+              tooltip="正值增加探索新主题的可能性"
+            />
 
-        {/* 重复惩罚 (Frequency Penalty) */}
-        <ParameterSlider
-          label="重复惩罚 (Frequency Penalty)"
-          value={params.frequencyPenalty || 0}
-          onChange={(value) => updateParam('frequencyPenalty', value)}
-          min={-2}
-          max={2}
-          step={0.1}
-          description="惩罚重复的词语，减少重复表达"
-          tooltip="正值减少逐字重复的可能性"
-        />
+            {/* 重复惩罚 (Frequency Penalty) */}
+            <ParameterSlider
+              label="重复惩罚 (Frequency Penalty)"
+              value={params.frequencyPenalty || 0}
+              onChange={(value) => updateParam('frequencyPenalty', value)}
+              min={-2}
+              max={2}
+              step={0.1}
+              description="惩罚重复的词语，减少重复表达"
+              tooltip="正值减少逐字重复的可能性"
+            />
+          </>
+        ) : (
+          <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+            提示：豆包/方舟(ARK) 的 Responses API 不支持 <code>presence_penalty</code>/
+            <code>frequency_penalty</code>（且与结构化输出可能冲突），系统会自动忽略这两个参数。
+          </div>
+        )}
       </div>
 
       {/* 效果预览 */}

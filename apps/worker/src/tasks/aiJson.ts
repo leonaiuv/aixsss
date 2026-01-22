@@ -71,6 +71,51 @@ function stripBom(text: string): string {
   return text.replace(/^\uFEFF/, '');
 }
 
+function removeTrailingCommasOutsideStrings(text: string): string {
+  let out = '';
+  let inString = false;
+  let escaping = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (inString) {
+      out += ch;
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaping = true;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') {
+      out += ch;
+      inString = true;
+      continue;
+    }
+
+    if (ch === ',') {
+      // 如果逗号后面（跳过空白）直接跟 } 或 ]，则视为 trailing comma，安全移除
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j += 1;
+      const next = j < text.length ? text[j] : '';
+      if (next === '}' || next === ']') {
+        // skip this comma
+        continue;
+      }
+    }
+
+    out += ch;
+  }
+
+  return out;
+}
+
 /**
  * 修复 JSON 字符串中的未转义控制字符（常见：换行/回车/制表符）。
  * JSON 标准要求字符串内部不能出现原始换行符，需要写成 \\n / \\t。
@@ -135,15 +180,19 @@ function escapeControlCharsInStrings(text: string): string {
 function repairCommonJsonIssues(text: string): string {
   let s = stripBom(text.trim());
 
-  // 智能引号 -> 标准引号（常见于模型输出/复制粘贴）
-  s = s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+  // 重要：不要“无脑替换”中文引号。合法 JSON 的字符串内容里允许包含 “”，
+  // 如果把它替换成 " 反而会制造未转义引号，导致解析失败。
+  // 仅在“完全没有标准双引号”的情况下，才认为模型可能用中文引号充当 JSON 分隔符。
+  if (!s.includes('"') && /[“”]/.test(s)) {
+    s = s.replace(/[“”]/g, '"');
+  }
 
   // 字符串内控制字符修复（避免 JSON.parse 因未转义换行失败）
   s = escapeControlCharsInStrings(s);
 
-  // 去掉对象/数组中的 trailing comma
+  // 去掉对象/数组中的 trailing comma（需避免误伤字符串内容）
   // e.g. { "a": 1, } 或 [1,2,]
-  s = s.replace(/,\s*([}\]])/g, '$1');
+  s = removeTrailingCommasOutsideStrings(s);
 
   return s;
 }
@@ -152,14 +201,39 @@ export type ParseJsonFromTextOptions = {
   expectedKind?: 'object' | 'array';
 };
 
+function parsePositionFromJsonErrorMessage(message: string): number | null {
+  const m = message.match(/\bposition\s+(\d+)\b/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function buildParseErrorContext(text: string, position: number, radius = 90): string {
+  const safe = (text ?? '').replace(/\r/g, '');
+  const start = Math.max(0, position - radius);
+  const end = Math.min(safe.length, position + radius);
+  const snippet = safe.slice(start, end).replace(/\n/g, '\\n');
+  const head = start > 0 ? '…' : '';
+  const tail = end < safe.length ? '…' : '';
+  const caretPos = head.length + (position - start);
+  return `${head}${snippet}${tail}\n${' '.repeat(caretPos)}^`;
+}
+
 export function parseJsonFromText(
   text: string,
   options?: ParseJsonFromTextOptions,
 ): { json: unknown; extractedJson: string } {
-  const raw = (text ?? '').trim();
+  const raw = stripBom((text ?? '').trim());
   if (!raw) throw new Error('AI 返回空内容（content 为空），无法解析 JSON');
 
-  // 1) 直接 parse（输出纯 JSON 时最快）
+  // 1) 直接 parse（输出纯 JSON 时最快，且避免“修复逻辑误伤合法 JSON”）
+  try {
+    return { json: JSON.parse(raw) as unknown, extractedJson: raw };
+  } catch {
+    // continue
+  }
+
+  // 2) 轻量修复后再 parse（处理控制字符/trailing comma 等）
   try {
     const normalized = repairCommonJsonIssues(raw);
     return { json: JSON.parse(normalized) as unknown, extractedJson: normalized };
@@ -167,7 +241,7 @@ export function parseJsonFromText(
     // continue
   }
 
-  // 2) 提取第一段完整 JSON 再 parse
+  // 3) 提取第一段完整 JSON 再 parse
   const extracted = extractFirstJson(raw);
   if (!extracted.ok) {
     if (extracted.reason === 'unterminated') {
@@ -224,9 +298,13 @@ export function parseJsonFromText(
     return { json: JSON.parse(repaired) as unknown, extractedJson: repaired };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const pos = parsePositionFromJsonErrorMessage(message);
+    const context =
+      typeof pos === 'number' ? `\n【附近片段】\n${buildParseErrorContext(repaired, pos)}` : '';
     throw new Error(
       `AI 输出 JSON 解析失败。\n` +
       `【错误详情】${message}\n` +
+      `${context}\n` +
       `【可能原因】\n` +
       `  1. JSON 中存在未转义的特殊字符（如换行符、引号）\n` +
       `  2. 数字/布尔值格式错误（如 "true" 应为 true）\n` +
@@ -235,4 +313,3 @@ export function parseJsonFromText(
     );
   }
 }
-

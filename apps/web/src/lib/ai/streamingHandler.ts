@@ -14,18 +14,39 @@ type ArkResponsesOutputPart = { type?: string; text?: string };
 type ArkResponsesOutputItem = { content?: ArkResponsesOutputPart[] };
 type ArkResponsesResponse = { output_text?: string; output?: ArkResponsesOutputItem[] };
 
+function normalizeApiKey(apiKey: string): string {
+  const trimmed = (apiKey || '').trim();
+  return trimmed.replace(/^Bearer\s+/i, '').trim().replace(/\s+/g, '');
+}
+
+function normalizeArkModel(model: string): string {
+  const trimmed = (model || '').trim();
+  if (!trimmed) return '';
+  const endpointMatch = trimmed.match(/\bep-[0-9a-zA-Z][0-9a-zA-Z-]*\b/);
+  if (endpointMatch?.[0]) return endpointMatch[0];
+  return trimmed.replace(/\s+/g, '');
+}
+
 function extractArkResponsesText(data: ArkResponsesResponse): string {
-  if (typeof data?.output_text === 'string') return data.output_text;
   const output = data?.output;
   if (!Array.isArray(output)) return '';
+  const prefer: string[] = [];
+  const fallback: string[] = [];
+
   for (const item of output) {
     const parts = item?.content;
     if (!Array.isArray(parts)) continue;
     for (const part of parts) {
-      if (typeof part?.text === 'string' && part.text) return part.text;
+      const text = typeof part?.text === 'string' ? part.text : '';
+      if (!text) continue;
+      const partType = typeof part?.type === 'string' ? part.type : '';
+      if (!partType || partType === 'output_text') prefer.push(text);
+      else fallback.push(text);
     }
   }
-  return '';
+
+  if (prefer.length) return prefer.join('');
+  return fallback.join('');
 }
 
 async function streamChatDoubaoArk(
@@ -35,15 +56,19 @@ async function streamChatDoubaoArk(
 ): Promise<void> {
   const { onChunk, onError, onComplete, signal } = options;
   try {
+    const apiKey = normalizeApiKey(config.apiKey);
+    if (!apiKey) throw new Error('Doubao/ARK API Key 为空：请检查「AI 设置」。');
+    const model = normalizeArkModel(config.model);
+    if (!model) throw new Error('Doubao/ARK 模型/接入点为空：请检查「AI 设置」。');
     const base = (config.baseURL || 'https://ark.cn-beijing.volces.com/api/v3').replace(/\/+$/, '');
     const response = await fetch(`${base}/responses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: config.model,
+        model,
         input: messages,
       }),
       signal,

@@ -5,6 +5,19 @@ import { extractModelOverrides, styleFullPrompt } from './common.js';
 
 type ArkHttpError = Error & { status?: number; statusText?: string; detail?: string };
 
+function normalizeApiKey(apiKey: string): string {
+  const trimmed = (apiKey || '').trim();
+  return trimmed.replace(/^Bearer\s+/i, '').trim().replace(/\s+/g, '');
+}
+
+function normalizeArkModel(model: string): string {
+  const trimmed = (model || '').trim();
+  if (!trimmed) return '';
+  const endpointMatch = trimmed.match(/\bep-[0-9a-zA-Z][0-9a-zA-Z-]*\b/);
+  if (endpointMatch?.[0]) return endpointMatch[0];
+  return trimmed.replace(/\s+/g, '');
+}
+
 function getRequestTimeoutMs(): number {
   const raw = process.env.AI_REQUEST_TIMEOUT_MS;
   const n = raw ? Number(raw) : NaN;
@@ -68,7 +81,13 @@ async function throwResponseError(response: Response): Promise<never> {
   }
 
   const suffix = detail ? ` - ${detail}` : '';
-  const err = new Error(`Doubao/ARK error (${response.status} ${response.statusText})${suffix}`) as ArkHttpError;
+  const hint =
+    response.status === 401 || response.status === 403
+      ? '\n提示：请确认使用“方舟控制台”生成的 API Key（不是火山引擎 AccessKey/SecretKey），且不要包含 `Bearer ` 前缀或多余空格/换行。'
+      : '';
+  const err = new Error(
+    `Doubao/ARK error (${response.status} ${response.statusText})${suffix}${hint}`,
+  ) as ArkHttpError;
   err.status = response.status;
   err.statusText = response.statusText;
   err.detail = detail;
@@ -208,9 +227,11 @@ export async function generateSceneVideo(args: {
     throw new Error('当前仅支持使用「豆包/方舟(ARK)」配置生成视频。请在 AI 设置中选择豆包/ARK。');
   }
 
-  const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
+  const apiKey = normalizeApiKey(decryptApiKey(profile.apiKeyEncrypted, apiKeySecret));
+  if (!apiKey) throw new Error('Doubao/ARK API Key 为空：请在 AI 设置中填写正确的 API Key（无需包含 Bearer 前缀）。');
   const overrides = extractModelOverrides(profile.generationParams ?? null);
-  const videoModel = overrides?.videoModel ?? 'doubao-seedance-1-5-pro-251215';
+  const videoModel =
+    normalizeArkModel(overrides?.videoModel ?? '') || 'doubao-seedance-1-5-pro-251215';
   const baseURL = profile.baseURL ?? 'https://ark.cn-beijing.volces.com/api/v3';
 
   const style = styleFullPrompt(project);

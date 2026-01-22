@@ -55,6 +55,12 @@ import {
   type ApiResponseFormat,
   type ApiStructuredTestResult,
 } from '@/lib/api/llm';
+import {
+  logAICall,
+  updateLogProgress,
+  updateLogWithError,
+  updateLogWithResponse,
+} from '@/lib/ai/debugLogger';
 
 const DEFAULT_GENERATION_PARAMS: AIGenerationParams = {
   temperature: 0.7,
@@ -110,13 +116,13 @@ const PROVIDER_PRESETS: Record<
   'doubao-ark': [
     {
       id: 'doubao-seed-1-8',
-      label: '豆包文本（doubao-seed-1-8，推荐）',
+      label: '豆包文本 Model ID（doubao-seed-1-8，推荐）',
       model: 'doubao-seed-1-8-251215',
       baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
     },
     {
       id: 'doubao-seed-1-6',
-      label: '豆包文本（doubao-seed-1-6）',
+      label: '豆包文本 Model ID（doubao-seed-1-6）',
       model: 'doubao-seed-1-6-251015',
       baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
     },
@@ -546,7 +552,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       (typeof activeProfileId === 'string' && activeProfileId.startsWith('draft_'));
     if (requiresApiKey && !apiKey.trim()) errors.apiKey = 'API Key 不能为空';
 
-    if (!model.trim()) errors.model = '模型名称不能为空';
+    if (!model.trim()) {
+      errors.model = provider === 'doubao-ark' ? '推理接入点 ID / Model ID 不能为空' : '模型名称不能为空';
+    }
 
     if (provider !== 'kimi') {
       const normalized = normalizedBaseURL(baseURL);
@@ -685,6 +693,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       return;
     }
 
+    const normalizedModel =
+      provider === 'doubao-ark' ? normalizeArkModel(model) : (model || '').trim();
+
     if (!activeProfileId) {
       createProfile({
         name: profileName.trim() || '默认档案',
@@ -692,7 +703,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           provider,
           apiKey,
           baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
-          model,
+          model: normalizedModel,
           generationParams,
         },
         pricing: parsePricing(),
@@ -704,7 +715,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           provider,
           apiKey,
           baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
-          model,
+          model: normalizedModel,
           generationParams,
         },
         pricing: parsePricing(),
@@ -737,15 +748,63 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       return;
     }
 
+    const normalizedModel =
+      provider === 'doubao-ark' ? normalizeArkModel(model) : (model || '').trim();
+    if (!normalizedModel) {
+      toast({
+        title: '请填写模型/接入点',
+        description:
+          provider === 'doubao-ark'
+            ? '请填写推理接入点 ID（ep-...）或 Model ID。'
+            : '请填写模型名称。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const logId = logAICall('custom', {
+      skillName: 'ai-settings:test-connection',
+      promptTemplate: 'ping',
+      filledPrompt: 'ping',
+      messages: [{ role: 'user', content: 'ping' }],
+      context: {
+        source: 'config_dialog',
+        action: 'test_connection',
+      },
+      config: {
+        provider,
+        model: normalizedModel,
+        maxTokens: generationParams.maxTokens,
+        profileId: activeProfileId || undefined,
+      },
+    });
+
+    updateLogProgress(logId, 10, '开始连接测试...');
+
     setIsTesting(true);
     const success = await testConnection({
       provider,
       apiKey,
       baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
-      model,
+      model: normalizedModel,
       generationParams,
     });
     setIsTesting(false);
+
+    const store = useConfigStore.getState();
+    const testedId = store.activeProfileId || activeProfileId || '';
+    const testedProfile = store.profiles.find((p) => p.id === testedId);
+    const result = testedProfile?.lastTest ?? null;
+
+    if (success) {
+      updateLogProgress(logId, 100, '连接正常');
+      updateLogWithResponse(logId, {
+        content: JSON.stringify({ ok: true, result }, null, 2),
+      });
+    } else {
+      updateLogProgress(logId, 100, '连接失败');
+      updateLogWithError(logId, result?.errorMessage || '连接测试失败');
+    }
 
     if (success) {
       toast({
@@ -790,6 +849,19 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
   function isPlainObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
+
+  function normalizeApiKey(value: string): string {
+    const trimmed = (value || '').trim();
+    return trimmed.replace(/^Bearer\s+/i, '').trim().replace(/\s+/g, '');
+  }
+
+  function normalizeArkModel(value: string): string {
+    const trimmed = (value || '').trim();
+    if (!trimmed) return '';
+    const endpointMatch = trimmed.match(/\bep-[0-9a-zA-Z][0-9a-zA-Z-]*\b/);
+    if (endpointMatch?.[0]) return endpointMatch[0];
+    return trimmed.replace(/\s+/g, '');
   }
 
   async function validateJsonSchemaInBrowser(schema: Record<string, unknown>, data: unknown) {
@@ -843,7 +915,40 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     setStructuredError('');
     setStructuredResult(null);
 
+    const logId = logAICall('custom', {
+      skillName: 'ai-settings:structured-output-test',
+      promptTemplate:
+        structuredMode === 'json_schema'
+          ? `mode=json_schema strict=${structuredStrict}\n\n${structuredSchemaText.trim()}`
+          : 'mode=json_object',
+      filledPrompt: prompt,
+      messages: [
+        {
+          role: 'system',
+          content:
+            '你是一个只输出 JSON 的助手。必须严格遵循结构化输出要求，不要输出任何 JSON 以外的内容。',
+        },
+        { role: 'user', content: prompt },
+      ],
+      context: {
+        source: 'config_dialog',
+        action: 'structured_test',
+        responseFormat: structuredMode,
+      },
+      config: {
+        provider,
+        model,
+        maxTokens: generationParams.maxTokens,
+        profileId: activeProfileId || undefined,
+      },
+    });
+
+    updateLogProgress(logId, 10, '准备请求...');
+
     try {
+      const modelId = normalizeArkModel(model);
+      if (!modelId) throw new Error('模型/接入点不能为空：请填写推理接入点 ID（ep-...）或 Model ID。');
+
       let responseFormat: ApiResponseFormat;
       let schemaObject: Record<string, unknown> | undefined;
       if (structuredMode === 'json_object') {
@@ -881,6 +986,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       ];
 
       if (apiMode) {
+        updateLogProgress(logId, 30, '已入队，等待执行...');
         let aiProfileId = activeProfileId;
 
         // 若仍是 draft：先用“连接测试”帮用户创建服务端档案（会额外发一次 ping）
@@ -889,7 +995,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             provider,
             apiKey,
             baseURL: normalizedBaseURL(baseURL),
-            model,
+            model: modelId,
             generationParams,
           });
           if (!ok) throw new Error('连接测试失败：请先修正配置后重试');
@@ -907,16 +1013,24 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
           ...(overrideParams ? { overrideParams } : {}),
         });
         setStructuredResult(res);
+        updateLogProgress(logId, 100, '完成');
+        updateLogWithResponse(logId, {
+          content: res.content,
+          ...(res.tokenUsage ? { tokenUsage: res.tokenUsage } : {}),
+        });
         return;
       }
 
       // local mode：浏览器直连 ARK
+      updateLogProgress(logId, 30, '请求上游...');
       const startedAt = Date.now();
       const url = `${normalizedBaseURL(baseURL) || 'https://ark.cn-beijing.volces.com/api/v3'}/responses`;
       const p = generationParams;
+      const normalizedKey = normalizeApiKey(apiKey);
+      if (!normalizedKey) throw new Error('API Key 为空：请填写正确的 API Key（无需包含 Bearer 前缀）。');
 
       const body: Record<string, unknown> = {
-        model,
+        model: modelId,
         input: messages,
         ...(typeof p?.temperature === 'number' ? { temperature: p.temperature } : {}),
         ...(typeof p?.topP === 'number' ? { top_p: p.topP } : {}),
@@ -941,7 +1055,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${normalizedKey}`,
         },
         body: JSON.stringify(body),
       });
@@ -1033,10 +1147,17 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         json: jsonOk ? { ok: true } : { ok: false, ...(jsonError ? { error: jsonError } : {}) },
         schema,
       });
+      updateLogProgress(logId, 100, '完成');
+      updateLogWithResponse(logId, {
+        content,
+        ...(tokenUsage ? { tokenUsage } : {}),
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setStructuredError(msg);
       toast({ title: '结构化输出测试失败', description: msg, variant: 'destructive' });
+      updateLogProgress(logId, 100, '失败');
+      updateLogWithError(logId, msg);
     } finally {
       setStructuredTesting(false);
     }
@@ -1329,20 +1450,27 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
       {/* 模型名称 */}
       <div className="space-y-2">
-        <Label htmlFor="model">模型名称</Label>
+        <Label htmlFor="model">{provider === 'doubao-ark' ? '推理接入点 ID / Model ID' : '模型名称'}</Label>
         <Input
           id="model"
           placeholder={
             provider === 'deepseek'
               ? 'deepseek-chat'
               : provider === 'doubao-ark'
-                ? 'doubao-seed-1-8-251215'
+                ? 'ep-xxxxxxxxxxxxxxxxxxxx'
                 : 'gpt-3.5-turbo'
           }
           value={model}
           onChange={(e) => setModel(e.target.value)}
           disabled={isLocked}
         />
+        {provider === 'doubao-ark' ? (
+          <p className="text-xs text-muted-foreground">
+            推荐使用你创建的推理接入点 ID（形如 <code>ep-...</code>）。也可使用官方 Model ID（如{' '}
+            <code>doubao-seed-1-8-251215</code>）。支持直接粘贴“接入点名称/ID”，系统会自动提取{' '}
+            <code>ep-...</code>。
+          </p>
+        ) : null}
         {validationErrors.model && (
           <p className="text-sm text-destructive">{validationErrors.model}</p>
         )}
@@ -1358,15 +1486,19 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               value={generationParams.imageModel ?? ''}
               onChange={(e) =>
                 setGenerationParams((prev) => {
-                  const v = e.target.value;
-                  return { ...prev, imageModel: v.trim() ? v : undefined };
+                  const raw = e.target.value;
+                  const trimmed = raw.trim();
+                  if (!trimmed) return { ...prev, imageModel: undefined };
+                  const normalized = provider === 'doubao-ark' ? normalizeArkModel(trimmed) : trimmed;
+                  return { ...prev, imageModel: normalized || undefined };
                 })
               }
               disabled={isLocked}
-              placeholder={provider === 'doubao-ark' ? 'doubao-seedream-4-5-251128' : 'gpt-image-1'}
+              placeholder={provider === 'doubao-ark' ? 'ep-...（图片接入点）' : 'gpt-image-1'}
             />
             <p className="text-xs text-muted-foreground">
-              用于关键帧图片生成；留空则使用默认（豆包默认 Seedream 4.5）。
+              用于关键帧图片生成；豆包可填写图片推理接入点 ID（ep-...）或 Model ID。留空则使用默认（Seedream
+              4.5）。
             </p>
           </div>
 
@@ -1378,15 +1510,19 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 value={generationParams.videoModel ?? ''}
                 onChange={(e) =>
                   setGenerationParams((prev) => {
-                    const v = e.target.value;
-                    return { ...prev, videoModel: v.trim() ? v : undefined };
+                    const raw = e.target.value;
+                    const trimmed = raw.trim();
+                    if (!trimmed) return { ...prev, videoModel: undefined };
+                    const normalized = normalizeArkModel(trimmed);
+                    return { ...prev, videoModel: normalized || undefined };
                   })
                 }
                 disabled={isLocked}
-                placeholder="doubao-seedance-1-5-pro-251215"
+                placeholder="ep-...（视频接入点）"
               />
               <p className="text-xs text-muted-foreground">
-                用于视频生成；留空则使用默认（Seedance 1.5 Pro）。
+                用于视频生成；建议填写视频推理接入点 ID（ep-...）或 Model ID。留空则使用默认（Seedance 1.5
+                Pro）。
               </p>
             </div>
           ) : (

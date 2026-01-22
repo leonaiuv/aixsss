@@ -83,11 +83,21 @@ function buildConnectionTestResult(
   const baseURL = typeof config.baseURL === 'string' ? config.baseURL.trim() : '';
 
   if (!config.apiKey?.trim()) {
-    suggestions.push('API Key 为空：请先填写 API Key。');
+    if (isApiMode()) {
+      suggestions.push(
+        'API Key 留空：浏览器不会保存明文；如需更新密钥请重新粘贴。留空会沿用服务端已保存的 Key。',
+      );
+    } else {
+      suggestions.push('API Key 为空：请先填写 API Key。');
+    }
   }
 
   if (!config.model?.trim()) {
-    suggestions.push('模型名称为空：请先填写模型名称。');
+    suggestions.push(
+      config.provider === 'doubao-ark'
+        ? '模型/接入点为空：请先填写推理接入点 ID（ep-...）或 Model ID。'
+        : '模型名称为空：请先填写模型名称。',
+    );
   }
 
   if (baseURL && /\/v1(beta)?\/?$/.test(baseURL)) {
@@ -128,15 +138,25 @@ function buildConnectionTestResult(
 
   if (config.provider === 'doubao-ark') {
     suggestions.push('豆包/方舟(ARK) Base URL：`https://ark.cn-beijing.volces.com/api/v3`。');
-    suggestions.push('文本模型示例：`doubao-seed-1-8-251215`、`doubao-seed-1-6-251015`。');
-    suggestions.push('图片模型示例：`doubao-seedream-4-5-251128`（可在“图片模型”中单独配置）。');
+    suggestions.push('推荐：使用你创建的推理接入点 ID（形如 `ep-...`），可从方舟控制台“自定义推理接入点”列表复制。');
     suggestions.push(
-      '视频模型示例：`doubao-seedance-1-5-pro-251215`（可在“视频模型”中单独配置）。',
+      '也可直接使用官方 Model ID（文本示例：`doubao-seed-1-8-251215`、`doubao-seed-1-6-251015`）。',
+    );
+    suggestions.push(
+      '图片模型建议填写图片推理接入点 ID（`ep-...`）；官方 Model ID 示例：`doubao-seedream-4-5-251128`。',
+    );
+    suggestions.push(
+      '视频模型建议填写视频推理接入点 ID（`ep-...`）；官方 Model ID 示例：`doubao-seedance-1-5-pro-251215`。',
     );
   }
 
   if (httpStatus === 401 || httpStatus === 403) {
     suggestions.unshift('鉴权失败：检查 API Key 是否正确/未过期，且对应当前供应商。');
+    if (config.provider === 'doubao-ark') {
+      suggestions.unshift(
+        '豆包/方舟(ARK) 鉴权：请确认使用“方舟控制台”生成的 API Key（不是火山引擎 AccessKey/SecretKey），并且不要包含 `Bearer ` 前缀或多余空格/换行。',
+      );
+    }
   } else if (httpStatus === 404) {
     suggestions.unshift('资源不存在：检查 Base URL 与模型名称是否正确。');
   } else if (httpStatus === 429) {

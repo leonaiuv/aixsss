@@ -38,6 +38,7 @@ export type AILogEvent =
   | 'call:success'
   | 'call:error'
   | 'call:progress'
+  | 'call:output'
   | 'call:cancel';
 
 type EventCallback = (entry: AICallLogEntry, extra?: unknown) => void;
@@ -437,6 +438,21 @@ export function updateLogProgress(logId: string, progress: number, step?: string
   if (entry) {
     // 发射进度事件
     emitAIEvent('call:progress', entry, { progress, step });
+  }
+}
+
+/**
+ * 更新日志输出（用于 DevPanel 的“流式输出/原始输出”监控）
+ * 注意：这不是最终 response（不会标记 success），只是调试侧的中间输出快照。
+ */
+export function updateLogOutput(
+  logId: string,
+  output: string,
+  options?: { append?: boolean },
+): void {
+  const entry = logHistory.find((e) => e.id === logId);
+  if (entry) {
+    emitAIEvent('call:output', entry, { output, append: options?.append === true });
   }
 }
 

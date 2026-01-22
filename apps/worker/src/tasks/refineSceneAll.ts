@@ -3,7 +3,7 @@ import { UnrecoverableError, type JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
-import { fixStructuredOutput } from './formatFix.js';
+import { fixStructuredOutput, responseFormatForFixableOutputType } from './formatFix.js';
 import { styleFullPrompt, toProviderChatConfig, type TokenUsage, mergeTokenUsage } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript, type PanelScriptV1 } from './panelScriptHints.js';
 import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupsToLegacyShotPrompt } from './actionBeats.js';
@@ -351,8 +351,9 @@ export async function refineSceneAll(args: {
       prevSummary: prev?.summary || '-',
       panelHints,
     });
+    const anchorConfig = { ...providerConfig, responseFormat: responseFormatForFixableOutputType('scene_anchor') };
     const anchorRes = await doChat({
-      providerConfig,
+      providerConfig: anchorConfig,
       messages: [
         { role: 'system', content: anchorSystemPrompt },
         { role: 'user', content: anchorUserPrompt },
@@ -362,7 +363,7 @@ export async function refineSceneAll(args: {
     const anchorFixed = await fixStructuredOutput({
       prisma,
       teamId,
-      providerConfig,
+      providerConfig: anchorConfig,
       type: 'scene_anchor',
       raw: anchorRes.content,
       tokenUsage: tokens,
@@ -443,8 +444,12 @@ export async function refineSceneAll(args: {
       const message = err instanceof Error ? err.message : String(err);
       await updateProgress({ pct: 40, message: `ActionBeat 失败，回退直接生成 9 帧 KF0-KF8：${message}` });
 
+      const keyframeConfig = {
+        ...providerConfig,
+        responseFormat: responseFormatForFixableOutputType('keyframe_prompt'),
+      };
       const kfRes = await doChat({
-        providerConfig,
+        providerConfig: keyframeConfig,
         messages: [
           {
             role: 'user',
@@ -462,7 +467,7 @@ export async function refineSceneAll(args: {
       const kfFixed = await fixStructuredOutput({
         prisma,
         teamId,
-        providerConfig,
+        providerConfig: keyframeConfig,
         type: 'keyframe_prompt',
         raw: kfRes.content,
         tokenUsage: tokens,
@@ -509,8 +514,9 @@ export async function refineSceneAll(args: {
     shotPrompt: keyframeContent,
     panelHints,
   });
+  const motionConfig = { ...providerConfig, responseFormat: responseFormatForFixableOutputType('motion_prompt') };
   const motionRes = await doChat({
-    providerConfig,
+    providerConfig: motionConfig,
     messages: [
       { role: 'system', content: motionSystemPrompt },
       { role: 'user', content: motionUserPrompt },
@@ -520,7 +526,7 @@ export async function refineSceneAll(args: {
   const motionFixed = await fixStructuredOutput({
     prisma,
     teamId,
-    providerConfig,
+    providerConfig: motionConfig,
     type: 'motion_prompt',
     raw: motionRes.content,
     tokenUsage: tokens,

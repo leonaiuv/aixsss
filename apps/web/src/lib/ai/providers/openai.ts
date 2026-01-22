@@ -116,14 +116,24 @@ function extractResponsesText(data: OpenAIResponsesResponse): string {
   if (typeof data?.output_text === 'string') return data.output_text;
   const output = data?.output;
   if (!Array.isArray(output)) return '';
+
+  const prefer: string[] = [];
+  const fallback: string[] = [];
+
   for (const item of output) {
     const parts = item?.content;
     if (!Array.isArray(parts)) continue;
     for (const part of parts) {
-      if (typeof part?.text === 'string' && part.text) return part.text;
+      const text = typeof part?.text === 'string' ? part.text : '';
+      if (!text) continue;
+      const partType = typeof part?.type === 'string' ? part.type : '';
+      if (!partType || partType === 'output_text') prefer.push(text);
+      else fallback.push(text);
     }
   }
-  return '';
+
+  if (prefer.length) return prefer.join('');
+  return fallback.join('');
 }
 
 function isEndpointOrModelUnsupportedForResponses(err: unknown): boolean {

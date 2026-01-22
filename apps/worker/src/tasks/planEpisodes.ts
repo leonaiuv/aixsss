@@ -73,6 +73,107 @@ function parseEpisodePlan(raw: string): { parsed: EpisodePlan; extractedJson: st
   return { parsed: EpisodePlanSchema.parse(json), extractedJson };
 }
 
+type EpisodeDedupeIssue = {
+  aOrder: number;
+  bOrder: number;
+  similarity: number;
+  aTitle: string;
+  bTitle: string;
+};
+
+function normalizeForSimilarity(text: string): string {
+  return (text ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function buildBigramSet(text: string): Set<string> {
+  const s = normalizeForSimilarity(text);
+  const out = new Set<string>();
+  if (!s) return out;
+  if (s.length < 2) {
+    out.add(s);
+    return out;
+  }
+  for (let i = 0; i < s.length - 1; i += 1) {
+    out.add(s.slice(i, i + 2));
+  }
+  return out;
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter += 1;
+  const union = a.size + b.size - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+function textSimilarity(a: string, b: string): number {
+  return jaccardSimilarity(buildBigramSet(a), buildBigramSet(b));
+}
+
+function episodeSignature(ep: EpisodePlan['episodes'][number]): string {
+  const beats = Array.isArray(ep.beats) ? ep.beats.join(' ') : '';
+  return [ep.title, ep.logline, ep.sceneScope, beats].filter(Boolean).join(' ');
+}
+
+function findEpisodeDedupeIssues(episodes: EpisodePlan['episodes']): {
+  issues: EpisodeDedupeIssue[];
+  rewriteOrders: number[];
+} {
+  const issues: EpisodeDedupeIssue[] = [];
+  const rewrite = new Set<number>();
+  const threshold = 0.58;
+
+  for (let i = 0; i < episodes.length; i += 1) {
+    for (let j = i + 1; j < episodes.length; j += 1) {
+      const a = episodes[i];
+      const b = episodes[j];
+      const sim = textSimilarity(episodeSignature(a), episodeSignature(b));
+      if (sim < threshold) continue;
+      issues.push({
+        aOrder: a.order,
+        bOrder: b.order,
+        similarity: sim,
+        aTitle: a.title,
+        bTitle: b.title,
+      });
+      // 倾向保留更早的集，改写更晚的集（减少连锁影响）
+      rewrite.add(b.order);
+    }
+  }
+
+  const rewriteOrders = Array.from(rewrite).sort((a, b) => a - b);
+  issues.sort((a, b) => b.similarity - a.similarity);
+  return { issues, rewriteOrders };
+}
+
+function buildEpisodeDedupeUserPrompt(args: {
+  episodePlanJson: string;
+  rewriteOrders: number[];
+  issues: EpisodeDedupeIssue[];
+}): string {
+  const clip = (s: string, max = 80) => (s.length > max ? `${s.slice(0, max)}…` : s);
+  return [
+    '当前 EpisodePlan JSON：',
+    '<<<',
+    args.episodePlanJson.trim(),
+    '>>>',
+    '',
+    `需要改写的集数（order）：${args.rewriteOrders.join(', ')}`,
+    '',
+    '重复度报告（节选）：',
+    ...args.issues.slice(0, 10).map((i) => {
+      const score = i.similarity.toFixed(2);
+      return `- 第${i.aOrder}集「${clip(i.aTitle)}」 vs 第${i.bOrder}集「${clip(i.bTitle)}」 similarity=${score}`;
+    }),
+    '',
+    '请输出修订后的 EpisodePlan JSON：',
+  ].join('\n');
+}
+
 function formatWorldView(items: Array<{ type: string; title: string; content: string; order: number }>): string {
   if (items.length === 0) return '-';
   return items
@@ -371,6 +472,7 @@ export async function planEpisodes(args: {
     throw new Error('AI 返回空内容（content 为空）。请检查模型/供应商可用性，或稍后重试。');
   }
   let tokenUsage = res.tokenUsage;
+  let finalRaw = res.content;
 
   await updateProgress({ pct: 55, message: '解析输出...' });
 
@@ -422,6 +524,43 @@ export async function planEpisodes(args: {
     throw new Error('剧集规划解析失败：结果为空');
   }
 
+  // ===================== 去重优化：避免多集“换皮复述” =====================
+  await updateProgress({ pct: 62, message: '检查集间重复度...' });
+  const dedupe = parsed.episodes.length > 1 ? findEpisodeDedupeIssues(parsed.episodes) : { issues: [], rewriteOrders: [] };
+  if (dedupe.rewriteOrders.length > 0) {
+    await updateProgress({
+      pct: 68,
+      message: `检测到规划重复度偏高，正在去重优化（改写 ${dedupe.rewriteOrders.length} 集）...`,
+    });
+
+    const dedupeSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.plan_episodes.dedupe.system',
+    });
+    const dedupeUserPrompt = buildEpisodeDedupeUserPrompt({
+      episodePlanJson: extractedJson,
+      rewriteOrders: dedupe.rewriteOrders,
+      issues: dedupe.issues,
+    });
+
+    const dedupeRes = await chatWithProvider(providerConfig, [
+      { role: 'system', content: dedupeSystemPrompt },
+      { role: 'user', content: dedupeUserPrompt },
+    ]);
+    tokenUsage = mergeTokenUsage(tokenUsage, dedupeRes.tokenUsage);
+
+    try {
+      const deduped = parseEpisodePlan(dedupeRes.content);
+      parsed = deduped.parsed;
+      extractedJson = deduped.extractedJson;
+      finalRaw = dedupeRes.content;
+    } catch {
+      // 若去重输出反而不可解析，则保留原规划（避免阻塞主流程）
+      await updateProgress({ pct: 70, message: '去重优化输出解析失败，已回退保留原规划继续落库。' });
+    }
+  }
+
   await updateProgress({ pct: 80, message: '写入数据库...' });
 
   const episodeCount = parsed.episodeCount;
@@ -464,7 +603,7 @@ export async function planEpisodes(args: {
     episodeCount: parsed.episodeCount,
     episodes: parsed.episodes,
     parsed,
-    raw: res.content,
+    raw: finalRaw,
     extractedJson,
     fixed,
     tokenUsage: tokenUsage ?? null,

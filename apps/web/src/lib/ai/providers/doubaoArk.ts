@@ -26,6 +26,21 @@ type ArkResponsesResponse = {
 
 type ArkHttpError = Error & { status?: number; statusText?: string; detail?: string };
 
+function normalizeApiKey(apiKey: string): string {
+  const trimmed = (apiKey || '').trim();
+  return trimmed.replace(/^Bearer\s+/i, '').trim().replace(/\s+/g, '');
+}
+
+function normalizeArkModel(model: string): string {
+  const trimmed = (model || '').trim();
+  if (!trimmed) return '';
+  // 允许用户粘贴「接入点名称 + ID」等复杂文本：优先从中提取 ep-xxxx
+  const endpointMatch = trimmed.match(/\bep-[0-9a-zA-Z][0-9a-zA-Z-]*\b/);
+  if (endpointMatch?.[0]) return endpointMatch[0];
+  // Model ID/Endpoint ID 均不应包含空白
+  return trimmed.replace(/\s+/g, '');
+}
+
 function normalizeBaseURL(baseURL?: string): string {
   let base = (baseURL || '').trim();
   if (!base) base = 'https://ark.cn-beijing.volces.com/api/v3';
@@ -60,17 +75,26 @@ function mapUsageToTokenUsage(usage: unknown): AIResponse['tokenUsage'] | undefi
 }
 
 function extractResponsesText(data: ArkResponsesResponse): string {
-  if (typeof data?.output_text === 'string') return data.output_text;
   const output = data?.output;
   if (!Array.isArray(output)) return '';
+  const prefer: string[] = [];
+  const fallback: string[] = [];
+
   for (const item of output) {
     const parts = item?.content;
     if (!Array.isArray(parts)) continue;
+
     for (const part of parts) {
-      if (typeof part?.text === 'string' && part.text) return part.text;
+      const text = typeof part?.text === 'string' ? part.text : '';
+      if (!text) continue;
+      const partType = typeof part?.type === 'string' ? part.type : '';
+      if (!partType || partType === 'output_text') prefer.push(text);
+      else fallback.push(text);
     }
   }
-  return '';
+
+  if (prefer.length) return prefer.join('');
+  return fallback.join('');
 }
 
 export class DoubaoArkProvider implements AIProvider {
@@ -89,8 +113,12 @@ export class DoubaoArkProvider implements AIProvider {
       }
     }
     const suffix = detail ? ` - ${detail}` : '';
+    const hint =
+      response.status === 401 || response.status === 403
+        ? '\n提示：请确认使用“方舟控制台”生成的 API Key（不是火山引擎 AccessKey/SecretKey），且不要包含 `Bearer ` 前缀或多余空格/换行。'
+        : '';
     const err = new Error(
-      `Doubao/ARK error (${response.status} ${response.statusText})${suffix}`,
+      `Doubao/ARK error (${response.status} ${response.statusText})${suffix}${hint}`,
     ) as ArkHttpError;
     err.status = response.status;
     err.statusText = response.statusText;
@@ -103,6 +131,16 @@ export class DoubaoArkProvider implements AIProvider {
     config: AIProviderConfig,
     options?: AIRequestOptions,
   ): Promise<AIResponse> {
+    const apiKey = normalizeApiKey(config.apiKey);
+    if (!apiKey) {
+      throw new Error('Doubao/ARK API Key 为空：请在「AI 设置」中填写正确的 API Key（无需包含 Bearer 前缀）。');
+    }
+    const model = normalizeArkModel(config.model);
+    if (!model) {
+      throw new Error(
+        'Doubao/ARK 模型/接入点为空：请在「AI 设置」中填写推理接入点 ID（ep-...）或 Model ID（如 doubao-seed-1-8-251215）。',
+      );
+    }
     const url = `${normalizeBaseURL(config.baseURL)}/responses`;
     const p = config.generationParams;
 
@@ -110,18 +148,14 @@ export class DoubaoArkProvider implements AIProvider {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: config.model,
+        model,
         input: messages,
         ...(typeof p?.temperature === 'number' ? { temperature: p.temperature } : {}),
         ...(typeof p?.topP === 'number' ? { top_p: p.topP } : {}),
         ...(typeof p?.maxTokens === 'number' ? { max_output_tokens: p.maxTokens } : {}),
-        ...(typeof p?.presencePenalty === 'number' ? { presence_penalty: p.presencePenalty } : {}),
-        ...(typeof p?.frequencyPenalty === 'number'
-          ? { frequency_penalty: p.frequencyPenalty }
-          : {}),
       }),
       signal: options?.signal,
     });

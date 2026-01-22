@@ -122,6 +122,13 @@ function buildUserPrompt(args: {
   characters: string;
   narrativeCausalChain?: string;
   episode: { order: number; title: string; summary: string; outline: unknown; coreExpression: unknown };
+  prevEpisode?: {
+    order: number;
+    title: string | null;
+    summary: string | null;
+    coreExpression: unknown;
+    scenes: Array<{ order: number; summary: string }>;
+  };
   sceneCount: number;
 }): string {
   return [
@@ -152,6 +159,25 @@ function buildUserPrompt(args: {
     '',
     '- Core Expression（结构化 JSON）：',
     JSON.stringify(args.episode.coreExpression ?? null),
+    ...(args.prevEpisode
+      ? [
+          '',
+          '上一集（用于避免重复，不要复述上一集桥段）：',
+          `- 集数：第 ${args.prevEpisode.order} 集`,
+          `- 标题：${args.prevEpisode.title || '-'}`,
+          `- 一句话概要：${args.prevEpisode.summary || '-'}`,
+          '- 上一集 Core Expression（结构化 JSON，可用于避免重复主题/母题）：',
+          JSON.stringify(args.prevEpisode.coreExpression ?? null),
+          '',
+          '- 上一集分镜列表（如为空表示未生成）：',
+          args.prevEpisode.scenes.length
+            ? args.prevEpisode.scenes
+                .slice(0, 24)
+                .map((s) => `${s.order}. ${String(s.summary ?? '').slice(0, 80)}`)
+                .join('\n')
+            : '-',
+        ]
+      : []),
   ].join('\n');
 }
 
@@ -179,6 +205,22 @@ export async function generateEpisodeSceneList(args: {
   });
   if (!episode) throw new Error('Episode not found');
   if (!episode.coreExpression) throw new Error('Episode coreExpression missing');
+
+  const prevEpisode =
+    episode.order > 1
+      ? await prisma.episode.findFirst({
+          where: { projectId, order: episode.order - 1 },
+          select: { id: true, order: true, title: true, summary: true, coreExpression: true },
+        })
+      : null;
+  const prevScenes = prevEpisode
+    ? await prisma.scene.findMany({
+        where: { episodeId: prevEpisode.id },
+        orderBy: { order: 'asc' },
+        take: 24,
+        select: { order: true, summary: true },
+      })
+    : [];
 
   const profile = await prisma.aIProfile.findFirst({
     where: { id: aiProfileId, teamId },
@@ -227,6 +269,15 @@ export async function generateEpisodeSceneList(args: {
       outline: episode.outline,
       coreExpression: episode.coreExpression,
     },
+    prevEpisode: prevEpisode
+      ? {
+          order: prevEpisode.order,
+          title: prevEpisode.title,
+          summary: prevEpisode.summary,
+          coreExpression: prevEpisode.coreExpression,
+          scenes: prevScenes.map((s) => ({ order: s.order, summary: s.summary || '' })),
+        }
+      : undefined,
     sceneCount,
   });
 

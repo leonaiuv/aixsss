@@ -3,7 +3,7 @@ import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
-import { fixStructuredOutput } from './formatFix.js';
+import { fixStructuredOutput, responseFormatForFixableOutputType } from './formatFix.js';
 import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
 import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupsToLegacyShotPrompt } from './actionBeats.js';
@@ -238,14 +238,18 @@ export async function generateKeyframePrompt(args: {
     await updateProgress({ pct: 25, message: '动作拆解失败，回退到直接生成 9 帧 KF0-KF8...' });
 
     const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
-    const res = await chatWithProvider(providerConfig, messages);
+    const fallbackConfig = {
+      ...providerConfig,
+      responseFormat: responseFormatForFixableOutputType('keyframe_prompt'),
+    };
+    const res = await chatWithProvider(fallbackConfig, messages);
 
     await updateProgress({ pct: 60, message: '检查输出格式...' });
 
     const fixed = await fixStructuredOutput({
       prisma,
       teamId,
-      providerConfig,
+      providerConfig: fallbackConfig,
       type: 'keyframe_prompt',
       raw: res.content,
       tokenUsage: res.tokenUsage,

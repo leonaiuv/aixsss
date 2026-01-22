@@ -1,9 +1,10 @@
 import type { PrismaClient } from '@prisma/client';
-import type { ChatMessage, ChatResult, ProviderChatConfig } from '../providers/types.js';
+import type { ChatMessage, ChatResult, ProviderChatConfig, ResponseFormat } from '../providers/types.js';
 import { chatWithProvider } from '../providers/index.js';
 import { mergeTokenUsage, type TokenUsage } from './common.js';
 import { loadSystemPrompt } from './systemPrompts.js';
 import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
+import { parseJsonFromText } from './aiJson.js';
 
 export type FixableOutputType = 'scene_anchor' | 'keyframe_prompt' | 'motion_prompt';
 
@@ -14,15 +15,125 @@ function tryParseJson(text: string): { valid: boolean; parsed?: unknown; cleaned
   const content = text?.trim() ?? '';
   if (!content) return { valid: false };
 
-  // 尝试提取被 ```json ... ``` 或 ``` ... ``` 包裹的内容
-  const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonStr = codeBlockMatch ? codeBlockMatch[1].trim() : content;
-
   try {
-    const parsed = JSON.parse(jsonStr);
-    return { valid: true, parsed, cleaned: jsonStr };
+    const { json, extractedJson } = parseJsonFromText(content, { expectedKind: 'object' });
+    return { valid: true, parsed: json, cleaned: extractedJson };
   } catch {
     return { valid: false };
+  }
+}
+
+function jsonSchemaFormat(name: string, schema: Record<string, unknown>): ResponseFormat {
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name,
+      strict: true,
+      schema,
+    },
+  };
+}
+
+function schemaSceneAnchor(): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: true,
+    required: ['scene', 'anchors', 'avoid'],
+    properties: {
+      scene: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['zh', 'en'],
+        properties: {
+          zh: { type: 'string' },
+          en: { type: 'string' },
+        },
+      },
+      location: { type: 'object', additionalProperties: true },
+      lighting: { type: 'object', additionalProperties: true },
+      atmosphere: { type: 'object', additionalProperties: true },
+      anchors: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['zh', 'en'],
+        properties: {
+          zh: { type: 'array', minItems: 4, maxItems: 12, items: { type: 'string' } },
+          en: { type: 'array', minItems: 4, maxItems: 12, items: { type: 'string' } },
+        },
+      },
+      avoid: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['zh', 'en'],
+        properties: {
+          zh: { type: 'string' },
+          en: { type: 'string' },
+        },
+      },
+    },
+  };
+}
+
+function schemaKeyframePrompt(): Record<string, unknown> {
+  const frame: Record<string, unknown> = {
+    type: 'object',
+    additionalProperties: true,
+    required: ['zh', 'en'],
+    properties: {
+      zh: { type: 'object', additionalProperties: true },
+      en: { type: 'object', additionalProperties: true },
+    },
+  };
+
+  const keyframesProps: Record<string, unknown> = {};
+  const keyframesRequired: string[] = [];
+  for (const kf of GENERATED_IMAGE_KEYFRAMES) {
+    keyframesProps[kf] = frame;
+    keyframesRequired.push(kf);
+  }
+
+  return {
+    type: 'object',
+    additionalProperties: true,
+    required: ['camera', 'keyframes', 'avoid'],
+    properties: {
+      camera: { type: 'object', additionalProperties: true },
+      keyframes: {
+        type: 'object',
+        additionalProperties: true,
+        required: keyframesRequired,
+        properties: keyframesProps,
+      },
+      avoid: { type: 'object', additionalProperties: true },
+    },
+  };
+}
+
+function schemaMotionPrompt(): Record<string, unknown> {
+  return {
+    type: 'object',
+    additionalProperties: true,
+    required: ['motion', 'changes', 'constraints'],
+    properties: {
+      motion: { type: 'object', additionalProperties: true },
+      changes: { type: 'object', additionalProperties: true },
+      constraints: { type: 'object', additionalProperties: true },
+    },
+  };
+}
+
+export function responseFormatForFixableOutputType(type: FixableOutputType): ResponseFormat {
+  switch (type) {
+    case 'scene_anchor':
+      return jsonSchemaFormat('scene_anchor', schemaSceneAnchor());
+    case 'keyframe_prompt':
+      return jsonSchemaFormat('keyframe_prompt', schemaKeyframePrompt());
+    case 'motion_prompt':
+      return jsonSchemaFormat('motion_prompt', schemaMotionPrompt());
+    default: {
+      const neverType: never = type;
+      throw new Error(`Unknown fixable output type: ${String(neverType)}`);
+    }
   }
 }
 
@@ -147,7 +258,11 @@ export async function fixStructuredOutput(args: {
     key: systemPromptKey(args.type),
   });
   const fixUserPrompt = buildFormatFixUserPrompt(rawTrimmed);
-  const fixed = await doChat(args.providerConfig, [
+  const fixConfig: ProviderChatConfig = {
+    ...args.providerConfig,
+    responseFormat: responseFormatForFixableOutputType(args.type),
+  };
+  const fixed = await doChat(fixConfig, [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: fixUserPrompt },
   ]);
@@ -161,5 +276,4 @@ export async function fixStructuredOutput(args: {
 
   return { content: fixedCleaned, tokenUsage: merged, fixed: true };
 }
-
 

@@ -137,6 +137,27 @@ export function initProgressBridge(): () => void {
     }),
   );
 
+  // 订阅输出更新事件（用于 DevPanel 流式输出监控）
+  unsubscribers.push(
+    subscribeToAIEvents('call:output', (entry: AICallLogEntry, extra?: unknown) => {
+      const skipProgressBridge = Boolean(
+        (entry.context as { skipProgressBridge?: unknown }).skipProgressBridge,
+      );
+      if (skipProgressBridge) return;
+
+      const taskId = logToTaskMap.get(entry.id);
+      if (!taskId) return;
+
+      const payload = extra as { output?: unknown; append?: unknown } | undefined;
+      const output = typeof payload?.output === 'string' ? payload.output : '';
+      if (!output) return;
+      const append = payload?.append === true;
+
+      if (append) store.appendTaskOutput(taskId, output);
+      else store.updateTaskOutput(taskId, output);
+    }),
+  );
+
   // 订阅取消事件
   unsubscribers.push(
     subscribeToAIEvents('call:cancel', (entry: AICallLogEntry) => {
