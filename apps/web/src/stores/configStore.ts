@@ -138,7 +138,9 @@ function buildConnectionTestResult(
 
   if (config.provider === 'doubao-ark') {
     suggestions.push('豆包/方舟(ARK) Base URL：`https://ark.cn-beijing.volces.com/api/v3`。');
-    suggestions.push('推荐：使用你创建的推理接入点 ID（形如 `ep-...`），可从方舟控制台“自定义推理接入点”列表复制。');
+    suggestions.push(
+      '推荐：使用你创建的推理接入点 ID（形如 `ep-...`），可从方舟控制台“自定义推理接入点”列表复制。',
+    );
     suggestions.push(
       '也可直接使用官方 Model ID（文本示例：`doubao-seed-1-8-251215`、`doubao-seed-1-6-251015`）。',
     );

@@ -16,7 +16,10 @@ type ArkResponsesResponse = { output_text?: string; output?: ArkResponsesOutputI
 
 function normalizeApiKey(apiKey: string): string {
   const trimmed = (apiKey || '').trim();
-  return trimmed.replace(/^Bearer\s+/i, '').trim().replace(/\s+/g, '');
+  return trimmed
+    .replace(/^Bearer\s+/i, '')
+    .trim()
+    .replace(/\s+/g, '');
 }
 
 function normalizeArkModel(model: string): string {

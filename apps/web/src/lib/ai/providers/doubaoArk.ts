@@ -28,7 +28,10 @@ type ArkHttpError = Error & { status?: number; statusText?: string; detail?: str
 
 function normalizeApiKey(apiKey: string): string {
   const trimmed = (apiKey || '').trim();
-  return trimmed.replace(/^Bearer\s+/i, '').trim().replace(/\s+/g, '');
+  return trimmed
+    .replace(/^Bearer\s+/i, '')
+    .trim()
+    .replace(/\s+/g, '');
 }
 
 function normalizeArkModel(model: string): string {
@@ -133,7 +136,9 @@ export class DoubaoArkProvider implements AIProvider {
   ): Promise<AIResponse> {
     const apiKey = normalizeApiKey(config.apiKey);
     if (!apiKey) {
-      throw new Error('Doubao/ARK API Key 为空：请在「AI 设置」中填写正确的 API Key（无需包含 Bearer 前缀）。');
+      throw new Error(
+        'Doubao/ARK API Key 为空：请在「AI 设置」中填写正确的 API Key（无需包含 Bearer 前缀）。',
+      );
     }
     const model = normalizeArkModel(config.model);
     if (!model) {
