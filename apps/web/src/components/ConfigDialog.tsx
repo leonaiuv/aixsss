@@ -694,6 +694,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       return;
     }
 
+    const normalizedApiKey = apiKey.trim();
     const normalizedModel =
       provider === 'doubao-ark' ? normalizeArkModel(model) : (model || '').trim();
 
@@ -702,7 +703,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         name: profileName.trim() || '默认档案',
         config: {
           provider,
-          apiKey,
+          apiKey: normalizedApiKey,
           baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
           model: normalizedModel,
           generationParams,
@@ -714,7 +715,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         name: profileName.trim() || activeProfile?.name || '默认档案',
         config: {
           provider,
-          apiKey,
+          apiKey: normalizedApiKey,
           baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
           model: normalizedModel,
           generationParams,
@@ -785,7 +786,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     setIsTesting(true);
     const success = await testConnection({
       provider,
-      apiKey,
+      apiKey: apiKey.trim(),
       baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
       model: normalizedModel,
       generationParams,
@@ -2121,7 +2122,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-3xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[95vw] max-w-3xl h-[90vh] max-h-[90vh] p-0 gap-0 overflow-hidden grid-rows-[minmax(0,1fr)]">
         <div className="flex h-full min-h-0">
           {/* 左侧标签导航 */}
           <div className="w-44 shrink-0 border-r bg-muted/30 flex flex-col">
@@ -2130,6 +2131,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 <Zap className="h-4 w-4 text-amber-500" />
                 AI 设置
               </DialogTitle>
+              <DialogDescription className="text-xs">
+                配置接入点/API Key、生成参数、用量统计与安全选项。
+              </DialogDescription>
             </DialogHeader>
             <nav className="flex-1 p-2 space-y-1">
               {TABS.map((tab) => (

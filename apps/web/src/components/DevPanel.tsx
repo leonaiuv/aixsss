@@ -70,6 +70,7 @@ export function DevPanel() {
 
   const [activeTab, setActiveTab] = useState('progress');
   const [selectedTask, setSelectedTask] = useState<AITask | null>(null);
+  const [selectedError, setSelectedError] = useState<AICallLogEntry | null>(null);
 
   // 自动滚动到底部
   const _scrollRef = useRef<HTMLDivElement>(null);
@@ -374,7 +375,13 @@ export function DevPanel() {
                       <p className="text-xs mt-1">未检测到异常错误</p>
                     </div>
                   ) : (
-                    errors.map((entry, index) => <ErrorItem key={index} entry={entry} />)
+                    errors.map((entry) => (
+                      <ErrorItem
+                        key={entry.id}
+                        entry={entry}
+                        onSelect={() => setSelectedError(entry)}
+                      />
+                    ))
                   )}
                 </div>
               </ScrollArea>
@@ -729,6 +736,9 @@ export function DevPanel() {
       {selectedTask && (
         <TaskDetailDialog task={selectedTask} onClose={() => setSelectedTask(null)} />
       )}
+      {selectedError && (
+        <ErrorDetailDialog entry={selectedError} onClose={() => setSelectedError(null)} />
+      )}
     </div>
   );
 }
@@ -826,6 +836,17 @@ function TaskItem({
           </p>
         </div>
       )}
+      {liveTask.status === 'running' && outputLength === 0 && (
+        <div className="mt-2 p-2 rounded bg-muted/30 border border-border/50">
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <FileCode className="h-3 w-3" />
+            <span>流式输出：等待中…</span>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground/70 leading-relaxed">
+            若一直为空，说明该调用链路未上报流式片段；可打开任务详情查看最终/原始输出。
+          </p>
+        </div>
+      )}
 
       {liveTask.sceneOrder && (
         <div className="mt-2 inline-flex items-center px-1.5 py-0.5 rounded bg-muted/50 text-[10px] text-muted-foreground border border-border/50">
@@ -895,9 +916,14 @@ function HistoryItem({ task, onClick }: { task: AITask; onClick: () => void }) {
   );
 }
 
-function ErrorItem({ entry }: { entry: AICallLogEntry }) {
+function ErrorItem({ entry, onSelect }: { entry: AICallLogEntry; onSelect: () => void }) {
   return (
-    <div className="p-3 rounded-lg border border-red-200/50 bg-red-50/50 dark:bg-red-950/10 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors">
+    <button
+      type="button"
+      onClick={onSelect}
+      className="w-full text-left p-3 rounded-lg border border-red-200/50 bg-red-50/50 dark:bg-red-950/10 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+      title="点击查看详细调试信息"
+    >
       <div className="flex items-start gap-3">
         <div className="p-1.5 bg-red-100 dark:bg-red-900/30 rounded-md shrink-0">
           <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -912,9 +938,15 @@ function ErrorItem({ entry }: { entry: AICallLogEntry }) {
           <p className="text-xs text-red-600/90 dark:text-red-300 break-words font-mono bg-white/50 dark:bg-black/10 p-1.5 rounded border border-red-100 dark:border-red-900/30">
             {entry.error || '未知错误'}
           </p>
+          <div className="mt-1.5 text-[10px] text-red-600/70 flex items-center justify-between gap-2">
+            <span className="truncate">
+              {entry.config.provider} · {entry.config.model}
+            </span>
+            <span className="shrink-0 underline underline-offset-2">查看详情</span>
+          </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -947,7 +979,10 @@ function StatCard({
 
 function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void }) {
   const { toast } = useToast();
-  const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'output' | 'raw'>('info');
+  const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'output' | 'raw'>(() =>
+    task.status === 'running' ? 'output' : 'info',
+  );
+  const outputRef = useRef<HTMLDivElement>(null);
 
   // 获取实时更新的任务数据
   const liveTask = useAIProgressStore((state) => state.tasks.find((t) => t.id === task.id)) || task;
@@ -979,6 +1014,14 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
   const rawOutput =
     liveTask.currentOutput || liveTask.rawOutput || liveTask.response?.content || '';
   const outputLength = rawOutput.length;
+
+  useEffect(() => {
+    if (activeDetailTab !== 'output') return;
+    if (liveTask.status !== 'running') return;
+    const el = outputRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [activeDetailTab, liveTask.status, rawOutput]);
 
   return (
     <div
@@ -1216,7 +1259,10 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
                 </div>
               </div>
               {rawOutput ? (
-                <div className="p-4 rounded-lg bg-muted/50 border text-xs font-mono whitespace-pre-wrap max-h-[450px] overflow-auto leading-relaxed">
+                <div
+                  ref={outputRef}
+                  className="p-4 rounded-lg bg-muted/50 border text-xs font-mono whitespace-pre-wrap max-h-[450px] overflow-auto leading-relaxed"
+                >
                   {liveTask.response?.content || rawOutput}
                   {liveTask.status === 'running' && (
                     <span className="inline-block w-2 h-4 bg-primary/50 animate-pulse ml-0.5" />
@@ -1226,6 +1272,10 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
                 <div className="p-8 text-center text-muted-foreground/50">
                   <FileCode className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-xs">暂无输出内容</p>
+                  <p className="text-[10px] mt-2 leading-relaxed max-w-[520px] mx-auto">
+                    如果该任务一直没有“流式输出”，通常说明当前调用链路未上报输出片段（例如队列/非
+                    streaming 模式）。任务结束后可在此处查看最终输出，或到「原始输出」查看完整内容。
+                  </p>
                 </div>
               )}
             </div>
@@ -1272,6 +1322,136 @@ function TaskDetailDialog({ task, onClose }: { task: AITask; onClose: () => void
               )}
             </div>
           )}
+        </ScrollArea>
+      </Card>
+    </div>
+  );
+}
+
+function ErrorDetailDialog({ entry, onClose }: { entry: AICallLogEntry; onClose: () => void }) {
+  const { toast } = useToast();
+
+  const handleCopy = async (content: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast({ title: `已复制${label}`, description: `${content.length} 字符` });
+    } catch {
+      toast({ title: '复制失败', variant: 'destructive' });
+    }
+  };
+
+  const messagesText = entry.messages
+    .map((m) => `【${m.role}】\n${m.content}`)
+    .join('\n\n' + '─'.repeat(24) + '\n\n');
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <Card
+        className="w-[900px] max-h-[90vh] overflow-hidden shadow-2xl border-primary/10 animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+          <div className="flex items-center gap-2 min-w-0">
+            <Bug className="h-4 w-4 text-destructive" />
+            <h3 className="font-semibold text-sm truncate">{getTaskTypeLabel(entry.callType)}</h3>
+            <Badge variant="outline" className="font-mono text-[10px] shrink-0">
+              {entry.timestamp}
+            </Badge>
+          </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <ScrollArea className="max-h-[calc(90vh-64px)]">
+          <div className="p-5 space-y-4">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-destructive">错误信息</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  onClick={() => handleCopy(entry.error || '', '错误信息')}
+                  disabled={!entry.error}
+                >
+                  <Copy className="h-3 w-3 mr-1.5" />
+                  复制
+                </Button>
+              </div>
+              <p className="text-xs font-mono break-words whitespace-pre-wrap">
+                {entry.error || '未知错误'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-lg border bg-card/50 p-3">
+                <p className="text-[10px] text-muted-foreground">Provider</p>
+                <p className="text-xs font-mono mt-1 break-words">{entry.config.provider}</p>
+              </div>
+              <div className="rounded-lg border bg-card/50 p-3">
+                <p className="text-[10px] text-muted-foreground">Model</p>
+                <p className="text-xs font-mono mt-1 break-words">{entry.config.model}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-card/30 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-muted-foreground">发送给 AI 的 Messages</p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-[10px]"
+                    onClick={() => handleCopy(messagesText, 'Messages')}
+                  >
+                    <ClipboardCopy className="h-3 w-3 mr-1.5" />
+                    复制
+                  </Button>
+                </div>
+              </div>
+              <pre className="text-[10px] font-mono whitespace-pre-wrap break-words bg-muted/50 border rounded p-3 max-h-[240px] overflow-auto leading-relaxed">
+                {messagesText}
+              </pre>
+            </div>
+
+            <div className="rounded-lg border bg-card/30 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-muted-foreground">拼接后的提示词</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  onClick={() => handleCopy(entry.filledPrompt || '', '提示词')}
+                  disabled={!entry.filledPrompt}
+                >
+                  <ClipboardCopy className="h-3 w-3 mr-1.5" />
+                  复制
+                </Button>
+              </div>
+              {entry.filledPrompt ? (
+                <pre className="text-[10px] font-mono whitespace-pre-wrap break-words bg-muted/50 border rounded p-3 max-h-[240px] overflow-auto leading-relaxed">
+                  {entry.filledPrompt}
+                </pre>
+              ) : (
+                <p className="text-xs text-muted-foreground">无</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCopy(JSON.stringify(entry, null, 2), '完整调试信息')}
+              >
+                <Copy className="h-4 w-4" />
+                一键复制完整调试信息
+              </Button>
+            </div>
+          </div>
         </ScrollArea>
       </Card>
     </div>

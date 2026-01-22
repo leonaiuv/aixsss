@@ -2489,46 +2489,49 @@ ${safeJsonStringify(ep.coreExpression)}
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-2 w-full max-w-[240px]">
-                <select
-                  id="episodeSelect"
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={currentEpisodeId ?? ''}
-                  onChange={(e) => setCurrentEpisode(e.target.value || null)}
+              <div className="flex items-center gap-2 w-full flex-wrap">
+                <div className="flex items-center gap-2 w-full sm:max-w-[320px]">
+                  <select
+                    id="episodeSelect"
+                    className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    value={currentEpisodeId ?? ''}
+                    onChange={(e) => setCurrentEpisode(e.target.value || null)}
+                    disabled={
+                      isRunningWorkflow || isRefining || isBatchBlocked || isBatchRefineRunning
+                    }
+                  >
+                    <option value="">-- 选择集数 --</option>
+                    {episodes.map((ep) => (
+                      <option key={ep.id} value={ep.id}>
+                        第 {ep.order} 集：{ep.title || '(未命名)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGenerateCoreExpressionBatch}
                   disabled={
-                    isRunningWorkflow || isRefining || isBatchBlocked || isBatchRefineRunning
+                    !aiProfileId ||
+                    episodes.length === 0 ||
+                    isRunningWorkflow ||
+                    isRefining ||
+                    isBatchBlocked ||
+                    isBatchRefineRunning
                   }
+                  className="gap-2 w-full sm:w-auto"
+                  title="一键为未生成的 Episode 批量生成核心表达"
                 >
-                  <option value="">-- 选择集数 --</option>
-                  {episodes.map((ep) => (
-                    <option key={ep.id} value={ep.id}>
-                      第 {ep.order} 集：{ep.title || '(未命名)'}
-                    </option>
-                  ))}
-                </select>
+                  {isRunningWorkflow ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Layers className="h-4 w-4" />
+                  )}
+                  批量核心表达
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleGenerateCoreExpressionBatch}
-                disabled={
-                  !aiProfileId ||
-                  episodes.length === 0 ||
-                  isRunningWorkflow ||
-                  isRefining ||
-                  isBatchBlocked ||
-                  isBatchRefineRunning
-                }
-                className="gap-2"
-                title="一键为未生成的 Episode 批量生成核心表达"
-              >
-                {isRunningWorkflow ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Layers className="h-4 w-4" />
-                )}
-                批量核心表达
-              </Button>
             </div>
           </div>
 
