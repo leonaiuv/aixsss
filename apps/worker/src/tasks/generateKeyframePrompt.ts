@@ -6,7 +6,18 @@ import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput, responseFormatForFixableOutputType } from './formatFix.js';
 import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
-import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupsToLegacyShotPrompt } from './actionBeats.js';
+import {
+  generateActionPlanJson,
+  generateKeyframeGroupsJson,
+  keyframeGroupsToLegacyShotPrompt,
+} from './actionBeats.js';
+import {
+  buildCharacterVisualContext,
+  buildCoreExpressionContext,
+  calculateEmotionalPosition,
+  parseCoreExpression,
+  type CharacterVisualData,
+} from './contextHelpers.js';
 
 function buildPrompt(args: {
   style: string;
@@ -14,10 +25,36 @@ function buildPrompt(args: {
   sceneAnchor: string;
   characters: string;
   panelHints: string;
+  // 新增上下文
+  castCharactersVisual?: string;
+  coreExpressionContext?: string;
+  emotionalPosition?: '起' | '承' | '转' | '合';
 }): string {
+  // 构建叙事上下文部分
+  let narrativeSection = '';
+  if (args.coreExpressionContext || args.emotionalPosition) {
+    const parts: string[] = ['## 叙事导演意图'];
+    if (args.emotionalPosition) {
+      parts.push(`当前分镜在故事中的位置: ${args.emotionalPosition}（起承转合）`);
+    }
+    if (args.coreExpressionContext) {
+      parts.push('');
+      parts.push(args.coreExpressionContext);
+    }
+    parts.push('');
+    parts.push('请基于上述叙事意图来设计角色的表情、姿态和画面氛围。');
+    parts.push('');
+    narrativeSection = parts.join('\n');
+  }
+
+  // 角色视觉描述部分
+  const characterSection = args.castCharactersVisual
+    ? `出场角色（包含视觉特征参考，但仅用于理解角色，关键帧中只需点名，外观由定妆照资产保证）:\n${args.castCharactersVisual}`
+    : `出场角色（仅用于点名，不要写长外观描述，角色外观由定妆照资产保证）:\n${args.characters}`;
+
   return `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 9 张「静止」关键帧的"主体差分提示词"JSON：KF0-KF8（按顺序）。
 
-## 输入
+${narrativeSection}## 输入
 当前分镜概要（决定九帧的动作分解）:
 ${args.currentSummary}
 
@@ -27,8 +64,7 @@ ${args.sceneAnchor}
 视觉风格参考:
 ${args.style}
 
-出场角色（仅用于点名，不要写长外观描述，角色外观由定妆照资产保证）:
-${args.characters}
+${characterSection}
 ${args.panelHints}
 
 ## 关键规则（必须遵守）
@@ -137,22 +173,61 @@ export async function generateKeyframePrompt(args: {
   if (!scene) throw new Error('Scene not found');
   if (!scene.sceneDescription?.trim()) throw new Error('Scene anchor missing');
 
+  // 查询 episode 信息（获取 coreExpression）
+  const episode = scene.episodeId
+    ? await prisma.episode.findFirst({
+        where: { id: scene.episodeId },
+        select: {
+          order: true,
+          title: true,
+          coreExpression: true,
+        },
+      })
+    : null;
+
+  // 获取当前集的总分镜数（用于计算情感曲线位置）
+  const totalScenes = scene.episodeId
+    ? await prisma.scene.count({ where: { episodeId: scene.episodeId } })
+    : 1;
+
   const profile = await prisma.aIProfile.findFirst({
     where: { id: aiProfileId, teamId },
-    select: { provider: true, model: true, baseURL: true, apiKeyEncrypted: true, generationParams: true },
+    select: {
+      provider: true,
+      model: true,
+      baseURL: true,
+      apiKeyEncrypted: true,
+      generationParams: true,
+    },
   });
   if (!profile) throw new Error('AI profile not found');
 
   await updateProgress({ pct: 5, message: '准备动作拆解与关键帧生成...' });
 
+  // 查询完整角色信息（包括视觉描述）
   const characterRows = await prisma.character.findMany({
     where: { projectId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, appearance: true, personality: true },
   });
   const characterNameById = new Map(characterRows.map((c) => [c.id, c.name]));
   const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary), {
     characterNameById,
   });
+
+  // 获取出场角色的完整信息
+  const castCharacterIds = scene.castCharacterIds ?? [];
+  const castCharacters = castCharacterIds
+    .map((id) => {
+      const char = characterRows.find((c) => c.id === id);
+      if (!char) return null;
+      return {
+        id: char.id,
+        name: char.name,
+        visualDescription: char.appearance || undefined,
+        personality: char.personality || undefined,
+      } as CharacterVisualData;
+    })
+    .filter((c): c is CharacterVisualData => c !== null);
 
   const style = styleFullPrompt(project);
   const styleMeta = [style, panelHints].filter(Boolean).join('\n\n');
@@ -169,12 +244,23 @@ export async function generateKeyframePrompt(args: {
         })
       : null;
 
+  // 构建核心表达上下文
+  const coreExpression = parseCoreExpression(episode?.coreExpression);
+  const emotionalPosition = calculateEmotionalPosition(scene.order, totalScenes);
+  const coreExpressionContext = buildCoreExpressionContext(coreExpression, emotionalPosition);
+
+  // 构建角色视觉上下文
+  const castCharactersVisual = buildCharacterVisualContext(castCharacters);
+
   const prompt = buildPrompt({
     style,
     currentSummary: scene.summary || '-',
     sceneAnchor: scene.sceneDescription,
     characters: project.protagonist || '-',
     panelHints,
+    castCharactersVisual,
+    coreExpressionContext: coreExpressionContext || undefined,
+    emotionalPosition,
   });
 
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
@@ -198,7 +284,10 @@ export async function generateKeyframePrompt(args: {
     });
     tokenUsage = mergeTokenUsage(tokenUsage, actionPlanRes.tokenUsage);
 
-    await updateProgress({ pct: 55, message: '调用 AI 按 beat 生成三段式关键帧（KeyframeGroups）...' });
+    await updateProgress({
+      pct: 55,
+      message: '调用 AI 按 beat 生成三段式关键帧（KeyframeGroups）...',
+    });
     const keyframeGroupsRes = await generateKeyframeGroupsJson({
       prisma,
       teamId,
@@ -211,7 +300,9 @@ export async function generateKeyframePrompt(args: {
     });
     tokenUsage = mergeTokenUsage(tokenUsage, keyframeGroupsRes.tokenUsage);
 
-    const legacyShotPrompt = keyframeGroupsToLegacyShotPrompt(keyframeGroupsRes.keyframeGroups.groups);
+    const legacyShotPrompt = keyframeGroupsToLegacyShotPrompt(
+      keyframeGroupsRes.keyframeGroups.groups,
+    );
 
     await updateProgress({ pct: 85, message: '写入数据库...' });
     await prisma.scene.update({
