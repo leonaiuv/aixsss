@@ -380,6 +380,9 @@ export function EpisodeWorkflow() {
   const [isRefining, setIsRefining] = useState(false);
   const [refineJobProgress, setRefineJobProgress] = useState<NormalizedJobProgress | null>(null);
   const [generatingImagesSceneId, setGeneratingImagesSceneId] = useState<string | null>(null);
+  const [_generatingImagesProgress, setGeneratingImagesProgress] =
+    useState<NormalizedJobProgress | null>(null);
+  const generatingImagesAbortRef = useRef<AbortController | null>(null);
   const [generatingVideoSceneId, setGeneratingVideoSceneId] = useState<string | null>(null);
   const [storyboardJob, setStoryboardJob] = useState<StoryboardJobState | null>(null);
   const [storyboardJobProgress, setStoryboardJobProgress] = useState<NormalizedJobProgress | null>(
@@ -888,23 +891,162 @@ export function EpisodeWorkflow() {
   };
 
   const handleGenerateKeyframeImages = async (sceneId: string) => {
-    if (!aiProfileId || !currentProject?.id) return;
+    // 1. 前置条件验证：必须有 aiProfileId 和 projectId
+    if (!aiProfileId || !currentProject?.id) {
+      toast({
+        title: '配置缺失',
+        description: '请先配置 AI Profile。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // 2. 检查批量任务冲突
+    if (isGlobalBatchGenerating && batchGeneratingSource !== 'episode_workflow') {
+      toast({
+        title: '批量任务进行中',
+        description: '当前有其他批量操作正在执行，请等待完成后再生成图片。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // 3. 防止重复提交：检查是否已经在生成该场景的图片
+    if (generatingImagesSceneId === sceneId) {
+      toast({
+        title: '请稍候',
+        description: '该分镜的关键帧图片正在生成中。',
+      });
+      return;
+    }
+
+    // 4. 获取当前场景数据并验证前置条件
+    const currentScene = scenes.find((s) => s.id === sceneId);
+    if (!currentScene) {
+      toast({
+        title: '分镜不存在',
+        description: '无法找到指定的分镜数据。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // 5. 检查关键帧提示词是否已生成（这是图片生成的前置条件）
+    if (!currentScene.shotPrompt?.trim()) {
+      toast({
+        title: '前置条件未满足',
+        description:
+          '请先生成关键帧提示词（KF0-KF8），再生成图片。可通过「一键细化」完成所有步骤。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // 6. 创建 AbortController 用于取消支持
+    const abortController = new AbortController();
+    generatingImagesAbortRef.current = abortController;
+
+    // 7. AI 调用日志记录
+    const logId = logAICall('custom', {
+      skillName: 'workflow:generate_keyframe_images',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/{{sceneId}}/generate-images',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/${sceneId}/generate-images`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            sceneId,
+            aiProfileId,
+            sceneOrder: currentScene.order,
+            sceneSummary: currentScene.summary,
+          }),
+        },
+      ],
+      context: {
+        projectId: currentProject.id,
+        sceneId,
+        sceneOrder: currentScene.order,
+        sceneSummary: currentScene.summary,
+        shotPromptLength: currentScene.shotPrompt?.length ?? 0,
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    // 8. 设置加载状态
     setGeneratingImagesSceneId(sceneId);
+    setGeneratingImagesProgress({ pct: 0, message: '准备生成关键帧图片...' });
+
     try {
+      // 9. 先刷新待保存的更改
       await flushApiEpisodeScenePatchQueue().catch(() => {});
+
+      // 10. 发起 API 请求
       const job = await apiWorkflowGenerateKeyframeImages({
         projectId: currentProject.id,
         sceneId,
         aiProfileId,
       });
-      await apiWaitForAIJob(job.id);
-      if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
+
+      // 11. 等待任务完成，带进度回调
+      const finished = await apiWaitForAIJob(job.id, {
+        signal: abortController.signal,
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          setGeneratingImagesProgress(next);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+
+      // 12. 任务完成，更新日志
+      const result = (finished.result ?? null) as unknown;
+      const tokenUsage = normalizeJobTokenUsage(
+        result && typeof result === 'object'
+          ? (result as { tokenUsage?: unknown }).tokenUsage
+          : null,
+      );
+      updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+
+      // 13. 刷新场景数据
+      if (currentEpisode?.id) {
+        loadScenes(currentProject.id, currentEpisode.id);
+      }
+
+      // 14. 成功提示
       toast({ title: '图片生成完成', description: '已生成关键帧图片。' });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      toast({ title: '图片生成失败', description: detail, variant: 'destructive' });
+      // 15. 错误处理：区分取消错误和其他错误
+      if (isAbortError(error)) {
+        updateLogWithCancelled(logId);
+        toast({
+          title: '已取消',
+          description: '关键帧图片生成已取消。',
+        });
+      } else {
+        const detail = error instanceof Error ? error.message : String(error);
+        updateLogWithError(logId, detail);
+        toast({ title: '图片生成失败', description: detail, variant: 'destructive' });
+      }
     } finally {
+      // 16. 清理状态
+      generatingImagesAbortRef.current = null;
       setGeneratingImagesSceneId(null);
+      setGeneratingImagesProgress(null);
+    }
+  };
+
+  // 取消关键帧图片生成
+  const _cancelGeneratingImages = () => {
+    if (generatingImagesAbortRef.current) {
+      generatingImagesAbortRef.current.abort();
+      toast({ title: '正在取消...', description: '正在停止图片生成任务。' });
     }
   };
 
@@ -1349,18 +1491,76 @@ export function EpisodeWorkflow() {
       return;
     }
 
+    // 计算目标分镜数量（用于进度追踪）
+    const targetSceneCount = sceneIds?.length ?? sortedScenes.length;
+    const targetSceneIds = sceneIds ?? sortedScenes.map((s) => s.id);
+
     setRefineAllJobRunning(true);
     setRefineAllFailedScenes([]);
     setRefineAllProgress({
       pct: 0,
       message: '准备批量细化...',
-      totalScenes: null,
+      totalScenes: targetSceneCount,
       currentSceneId: null,
       currentSceneOrder: null,
       completedSceneIds: [],
       failedScenes: [],
     });
+
+    // 创建 AITask 用于在开发者面板显示
+    const logId = logAICall('scene_refine_all', {
+      skillName: 'workflow:refine_all_scenes',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/scenes/refine-all',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/scenes/refine-all`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            aiProfileId,
+            sceneIds: targetSceneIds,
+            totalScenes: targetSceneCount,
+            mode: 'batch_backend',
+          }),
+        },
+      ],
+      context: {
+        systemPromptKeys: [
+          'workflow.scene_anchor.system',
+          'workflow.action_beats.action_plan.system',
+          'workflow.action_beats.keyframe_group.system',
+          'workflow.motion_prompt.system',
+          'workflow.dialogue.system',
+        ],
+        projectId: currentProject.id,
+        batchMode: 'backend',
+        totalScenes: targetSceneCount,
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    // 初始化全局批量状态（开发者面板/统计分析可见）
     startBatchGenerating('episode_workflow');
+    setBatchSelectedScenes(targetSceneIds);
+    updateBatchOperations({
+      isProcessing: true,
+      isPaused: false,
+      cancelRequested: false,
+      progress: 0,
+      currentScene: 0,
+      totalScenes: targetSceneCount,
+      operationType: 'generate',
+      startTime: Date.now(),
+      completedScenes: [],
+      failedScenes: [],
+      currentSceneId: null,
+      statusMessage: '正在启动后端批量细化...',
+    });
 
     try {
       await flushApiEpisodeScenePatchQueue().catch(() => {});
@@ -1373,6 +1573,36 @@ export function EpisodeWorkflow() {
         onProgress: (progress) => {
           const next = normalizeBatchRefineProgress(progress);
           setRefineAllProgress(next);
+
+          // 同步进度到全局 batchOperations（供 DevPanel 显示）
+          const completedCount = next.completedSceneIds.length;
+          const failedCount = next.failedScenes.length;
+          const processedCount = completedCount + failedCount;
+          const totalForCalc = next.totalScenes ?? targetSceneCount;
+          const overallProgress =
+            totalForCalc > 0 ? Math.round((processedCount / totalForCalc) * 100) : 0;
+
+          updateBatchOperations({
+            progress: typeof next.pct === 'number' ? next.pct : overallProgress,
+            currentScene: processedCount,
+            totalScenes: totalForCalc,
+            currentSceneId: next.currentSceneId,
+            completedScenes: next.completedSceneIds,
+            failedScenes: next.failedScenes.map((f) => f.sceneId),
+            statusMessage:
+              next.message ??
+              `正在细化 #${next.currentSceneOrder ?? '?'}（${processedCount + 1}/${totalForCalc}）...`,
+          });
+
+          // 同步更新 AITask 进度
+          if (typeof next.pct === 'number') {
+            updateLogProgress(
+              logId,
+              next.pct,
+              next.message ?? `已完成 ${completedCount}/${totalForCalc} 个分镜`,
+            );
+          }
+
           if (next.failedScenes.length > 0) {
             setRefineAllFailedScenes(next.failedScenes);
           }
@@ -1387,18 +1617,54 @@ export function EpisodeWorkflow() {
         setRefineAllFailedScenes(failedFromResult);
       }
 
+      // 更新最终状态到 batchOperations
+      const finalCompleted =
+        (result?.completedSceneIds as string[] | undefined) ??
+        refineAllProgress?.completedSceneIds ??
+        [];
+      updateBatchOperations({
+        isProcessing: false,
+        progress: 100,
+        currentScene: targetSceneCount,
+        completedScenes: finalCompleted,
+        failedScenes: failedFromResult.map((f) => f.sceneId),
+        currentSceneId: null,
+        statusMessage:
+          failedFromResult.length > 0
+            ? `批量细化完成（${failedFromResult.length} 个失败）`
+            : '批量细化完成',
+      });
+
+      // 完成 AITask
+      const tokenUsage = normalizeJobTokenUsage(
+        result && typeof result === 'object'
+          ? (result as { tokenUsage?: unknown }).tokenUsage
+          : null,
+      );
+      updateLogWithResponse(logId, { content: safeJsonStringify(result), tokenUsage });
+
       if (currentEpisode?.id) loadScenes(currentProject.id, currentEpisode.id);
 
       toast({
         title: failedFromResult.length > 0 ? '全部细化完成（部分失败）' : '全部细化完成',
         description:
           failedFromResult.length > 0
-            ? `失败 ${failedFromResult.length} 个分镜，可点击“重试失败项”继续。`
+            ? `失败 ${failedFromResult.length} 个分镜，可点击"重试失败项"继续。`
             : '已更新项目所有分镜内容。',
         variant: failedFromResult.length > 0 ? 'destructive' : 'default',
       });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
+
+      // 更新失败状态到 batchOperations
+      updateBatchOperations({
+        isProcessing: false,
+        statusMessage: `批量细化失败: ${detail}`,
+      });
+
+      // 更新 AITask 失败状态
+      updateLogWithError(logId, detail);
+
       toast({ title: '全部细化失败', description: detail, variant: 'destructive' });
     } finally {
       setRefineAllJobRunning(false);

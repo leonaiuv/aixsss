@@ -1571,25 +1571,37 @@ export function SceneDetailModal({
                         </Badge>
                       }
                       actions={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onGenerateImages(scene.id)}
-                          disabled={!aiProfileId || isGeneratingImages || isBatchBlocked}
-                          className="gap-2"
-                        >
-                          {isGeneratingImages ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              生成中...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="h-4 w-4" />
-                              一键生成图片
-                            </>
+                        <div className="flex items-center gap-2">
+                          {!scene.shotPrompt?.trim() && (
+                            <span className="text-xs text-muted-foreground">
+                              需先生成关键帧提示词
+                            </span>
                           )}
-                        </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onGenerateImages(scene.id)}
+                            disabled={
+                              !aiProfileId ||
+                              isGeneratingImages ||
+                              isBatchBlocked ||
+                              !scene.shotPrompt?.trim()
+                            }
+                            className="gap-2"
+                          >
+                            {isGeneratingImages ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                生成中...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4" />
+                                一键生成图片
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       }
                     >
                       <div className="grid gap-4 sm:grid-cols-3">

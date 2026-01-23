@@ -17,7 +17,7 @@ export function AgentChatPanel(props: {
   onSend: (text: string) => Promise<void> | void;
 }) {
   const [input, setInput] = useState('');
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const canSend = useMemo(
     () => !props.isRunning && input.trim().length > 0,
@@ -25,10 +25,8 @@ export function AgentChatPanel(props: {
   );
 
   useEffect(() => {
-    // 新消息自动滚到底（best-effort）
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    // 新消息自动滚动到底部
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [props.messages.length]);
 
   const send = async () => {
@@ -39,7 +37,7 @@ export function AgentChatPanel(props: {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="border-b px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -64,8 +62,8 @@ export function AgentChatPanel(props: {
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="space-y-3 p-4">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="space-y-3 p-4">
           {props.messages.length === 0 ? (
             <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
               示例：
@@ -88,9 +86,10 @@ export function AgentChatPanel(props: {
               <div className="text-[11px] text-muted-foreground">
                 {m.role === 'user' ? '你' : m.role === 'assistant' ? 'Agent' : 'System'}
               </div>
-              <div className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{m.content}</div>
+              <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{m.content}</div>
             </div>
           ))}
+          <div ref={bottomRef} />
         </div>
       </ScrollArea>
 

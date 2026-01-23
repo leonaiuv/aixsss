@@ -1016,3 +1016,9 @@ export interface StreamingState {
   progress: number;
   canCancel: boolean;
 }
+
+// ==========================================
+// AgentCanvas V2 类型重导出
+// ==========================================
+
+export * from './canvas';
