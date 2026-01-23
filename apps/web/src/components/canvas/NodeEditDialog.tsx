@@ -314,11 +314,11 @@ function LlmForm({ data, onChange }: FormProps) {
           rows={4}
         />
       </div>
-      {data.result && (
+      {Boolean(data.result) && (
         <div className="space-y-2">
           <Label>执行结果</Label>
           <div className="max-h-32 overflow-auto rounded-lg border bg-muted/50 p-2">
-            <pre className="whitespace-pre-wrap text-xs">{data.result as string}</pre>
+            <pre className="whitespace-pre-wrap text-xs">{String(data.result)}</pre>
           </div>
         </div>
       )}

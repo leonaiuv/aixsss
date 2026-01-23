@@ -13,6 +13,7 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
+  ConnectionLineType,
   type Connection,
   type Edge,
   type Node,
@@ -22,6 +23,7 @@ import {
   type EdgeChange,
   type OnNodesChange,
   type OnEdgesChange,
+  type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -33,8 +35,8 @@ import type {
   AgentCanvasEdgeV2,
   AgentCanvasGraphV2,
   AgentCanvasNodeTypeV2,
-  ProjectContextCache,
 } from '@/types/canvas';
+import type { ProjectContextCache } from '@/types';
 import { NODE_LIBRARY_V2 } from '@/types/canvas';
 
 // 组件导入
@@ -182,8 +184,13 @@ function CanvasContent() {
     let graph: AgentCanvasGraphV2 | null = null;
 
     // 尝试解析 V2 格式
-    if (raw && typeof raw === 'object' && 'version' in raw && raw.version === 2) {
-      graph = raw as AgentCanvasGraphV2;
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      'version' in raw &&
+      (raw as { version: unknown }).version === 2
+    ) {
+      graph = raw as unknown as AgentCanvasGraphV2;
     }
 
     initialize(projectId, graph);
@@ -229,7 +236,7 @@ function CanvasContent() {
       updateProject(projectId, {
         contextCache: {
           ...baseCache,
-          agentCanvas: graph,
+          agentCanvas: graph as unknown as import('@/types').AgentCanvasGraphV1,
         },
       });
 
@@ -442,7 +449,15 @@ function CanvasContent() {
             config,
             userMessage: text,
             graphSummary,
-            nodeLibrary: NODE_LIBRARY_V2,
+            nodeLibrary: NODE_LIBRARY_V2.map((item) => ({
+              type: item.type as string,
+              label: item.label,
+              description: item.description,
+            })) as Array<{
+              type: import('@/types').AgentCanvasNodeType;
+              label: string;
+              description: string;
+            }>,
           });
           setChatMessages((prev) => [
             ...prev,
@@ -504,14 +519,14 @@ function CanvasContent() {
             onDragOver={onDragOver}
             onDrop={onDrop}
             onMoveEnd={onMoveEnd}
-            nodeTypes={nodeTypes}
+            nodeTypes={nodeTypes as unknown as NodeTypes}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             defaultEdgeOptions={{
               type: 'smoothstep',
               animated: false,
             }}
-            connectionLineType="smoothstep"
+            connectionLineType={ConnectionLineType.SmoothStep}
             snapToGrid
             snapGrid={[16, 16]}
           >

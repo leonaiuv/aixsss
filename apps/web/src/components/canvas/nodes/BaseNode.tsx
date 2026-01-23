@@ -255,7 +255,7 @@ export function createNodeComponent(
         type={type}
         data={data as Record<string, unknown>}
         state={node.state}
-        selected={selected}
+        selected={Boolean(selected)}
         progress={node.progress}
         lastError={node.lastError}
         preview={preview}

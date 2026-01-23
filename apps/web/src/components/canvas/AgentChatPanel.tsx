@@ -86,7 +86,9 @@ export function AgentChatPanel(props: {
               <div className="text-[11px] text-muted-foreground">
                 {m.role === 'user' ? '你' : m.role === 'assistant' ? 'Agent' : 'System'}
               </div>
-              <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{m.content}</div>
+              <div className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
+                {m.content}
+              </div>
             </div>
           ))}
           <div ref={bottomRef} />
