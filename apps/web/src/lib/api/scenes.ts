@@ -56,11 +56,15 @@ export async function apiUpdateScene(
     ...(typeof updates.motionPrompt === 'string' ? { motionPrompt: updates.motionPrompt } : {}),
     ...(updates.sceneScriptJson !== undefined ? { sceneScriptJson: updates.sceneScriptJson } : {}),
     ...(updates.soundDesignJson !== undefined ? { soundDesignJson: updates.soundDesignJson } : {}),
-    ...(updates.transitionInJson !== undefined ? { transitionInJson: updates.transitionInJson } : {}),
+    ...(updates.transitionInJson !== undefined
+      ? { transitionInJson: updates.transitionInJson }
+      : {}),
     ...(updates.transitionOutJson !== undefined
       ? { transitionOutJson: updates.transitionOutJson }
       : {}),
-    ...(updates.shotLanguageJson !== undefined ? { shotLanguageJson: updates.shotLanguageJson } : {}),
+    ...(updates.shotLanguageJson !== undefined
+      ? { shotLanguageJson: updates.shotLanguageJson }
+      : {}),
     ...(updates.durationEstimateJson !== undefined
       ? { durationEstimateJson: updates.durationEstimateJson }
       : {}),

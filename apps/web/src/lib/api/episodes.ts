@@ -48,7 +48,9 @@ export async function apiUpdateEpisode(
     ...(typeof updates.summary === 'string' ? { summary: updates.summary } : {}),
     ...(updates.outline !== undefined ? { outline: updates.outline } : {}),
     ...(updates.coreExpression !== undefined ? { coreExpression: updates.coreExpression } : {}),
-    ...(updates.sceneScriptDraft !== undefined ? { sceneScriptDraft: updates.sceneScriptDraft } : {}),
+    ...(updates.sceneScriptDraft !== undefined
+      ? { sceneScriptDraft: updates.sceneScriptDraft }
+      : {}),
     ...(updates.emotionArcJson !== undefined ? { emotionArcJson: updates.emotionArcJson } : {}),
     ...(updates.durationEstimateJson !== undefined
       ? { durationEstimateJson: updates.durationEstimateJson }

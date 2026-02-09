@@ -820,9 +820,7 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
                       <span>情绪弧线节点</span>
                       <Badge variant="outline">{emotionArcPointCount}</Badge>
                     </div>
-                    <p>
-                      后续可在「单集创作 {'>'} 分场脚本」中生成/编辑情绪弧线与角色关系图谱。
-                    </p>
+                    <p>后续可在「单集创作 {'>'} 分场脚本」中生成/编辑情绪弧线与角色关系图谱。</p>
                   </CardContent>
                 </Card>
               </div>

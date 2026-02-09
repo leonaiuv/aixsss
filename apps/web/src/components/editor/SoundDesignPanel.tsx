@@ -10,7 +10,9 @@ function parseSoundDesign(value: unknown): SoundDesign | null {
   const raw = value as Record<string, unknown>;
   const cues = Array.isArray(raw.cues)
     ? raw.cues
-        .map((item) => (item && typeof item === 'object' ? (item as Record<string, unknown>) : null))
+        .map((item) =>
+          item && typeof item === 'object' ? (item as Record<string, unknown>) : null,
+        )
         .filter((item): item is Record<string, unknown> => Boolean(item))
         .map((item) => ({
           type: typeof item.type === 'string' ? item.type : 'sfx',
@@ -37,7 +39,10 @@ export function SoundDesignPanel(props: {
 }) {
   const { scene, onGenerate, isGenerating = false, canGenerate = true } = props;
 
-  const soundDesign = useMemo(() => parseSoundDesign(scene.soundDesignJson), [scene.soundDesignJson]);
+  const soundDesign = useMemo(
+    () => parseSoundDesign(scene.soundDesignJson),
+    [scene.soundDesignJson],
+  );
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-4">
@@ -81,10 +86,15 @@ export function SoundDesignPanel(props: {
           <div className="space-y-2">
             {soundDesign.cues.length > 0 ? (
               soundDesign.cues.map((cue, index) => (
-                <div key={`${cue.type}-${index}`} className="rounded border bg-muted/20 p-2 text-xs">
+                <div
+                  key={`${cue.type}-${index}`}
+                  className="rounded border bg-muted/20 p-2 text-xs"
+                >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <Badge variant="outline">{cue.type}</Badge>
-                    {cue.timing ? <span className="text-muted-foreground">{cue.timing}</span> : null}
+                    {cue.timing ? (
+                      <span className="text-muted-foreground">{cue.timing}</span>
+                    ) : null}
                   </div>
                   <p>{cue.cue}</p>
                 </div>

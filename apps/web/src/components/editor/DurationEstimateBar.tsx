@@ -48,7 +48,9 @@ export function DurationEstimateBar(props: { scene: Scene; targetSeconds?: numbe
         </span>
       </div>
       <Progress value={progress} />
-      {estimate.rationale ? <p className="text-xs text-muted-foreground">{estimate.rationale}</p> : null}
+      {estimate.rationale ? (
+        <p className="text-xs text-muted-foreground">{estimate.rationale}</p>
+      ) : null}
     </div>
   );
 }

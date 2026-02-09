@@ -1,13 +1,6 @@
 import { useMemo } from 'react';
 import type { Character, CharacterRelationshipRecord } from '@/types';
-import {
-  Background,
-  Controls,
-  MiniMap,
-  ReactFlow,
-  type Edge,
-  type Node,
-} from '@xyflow/react';
+import { Background, Controls, MiniMap, ReactFlow, type Edge, type Node } from '@xyflow/react';
 import {
   forceCenter,
   forceLink,
