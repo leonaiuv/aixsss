@@ -26,9 +26,9 @@ export default {
   },
   '**/*.{json,md}': (files) => {
     const filtered = files.filter(
-      (f) => !(f === '.trae' || f.startsWith('.trae/') || f.startsWith('.trae\\')),
+      (f) => !(f === '.trae' || f.startsWith('.trae/') || f.startsWith('.trae\\') || f.startsWith('.qoder/') || f.startsWith('.qoder\\')),
     );
     if (filtered.length === 0) return [];
-    return `prettier --check ${filtered.map((f) => JSON.stringify(f)).join(' ')}`;
+    return `prettier --write ${filtered.map((f) => JSON.stringify(f)).join(' ')}`;
   },
 };
