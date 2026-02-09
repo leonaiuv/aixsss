@@ -14,6 +14,9 @@ export const WORKFLOW_STATE_LABELS: Record<string, string> = {
   ALL_SCENES_COMPLETE: '分镜已全部完成',
   ALL_EPISODES_COMPLETE: '剧集已全部完成',
   EXPORTING: '导出中',
+  SCRIPT_WRITING: '分场脚本中',
+  sound_design_generating: '声音设计生成中',
+  sound_design_confirmed: '声音设计已确认',
 };
 
 export function getWorkflowStateLabel(state: string): string {
