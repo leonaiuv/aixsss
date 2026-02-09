@@ -7,6 +7,27 @@ import { isRecord, styleFullPrompt, toProviderChatConfig } from './common.js';
 import { loadSystemPrompt } from './systemPrompts.js';
 
 function parseSceneList(text: string, limit: number): string[] {
+  // 优先支持结构化返回：["scene1", {"summary":"scene2"}]
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      const fromJson = parsed
+        .map((item) => {
+          if (typeof item === 'string') return item.trim();
+          if (item && typeof item === 'object') {
+            const summary = (item as { summary?: unknown }).summary;
+            if (typeof summary === 'string') return summary.trim();
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .slice(0, limit);
+      if (fromJson.length > 0) return fromJson;
+    }
+  } catch {
+    // fall back to line parser
+  }
+
   return text
     .split('\n')
     .map((l) => l.trim())

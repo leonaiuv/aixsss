@@ -66,6 +66,13 @@ export class EpisodesService {
           summary: input.summary ?? '',
           outline: input.outline as Prisma.InputJsonValue | undefined,
           coreExpression: input.coreExpression as Prisma.InputJsonValue | undefined,
+          ...(typeof input.sceneScriptDraft === 'string' ? { sceneScriptDraft: input.sceneScriptDraft } : {}),
+          ...(input.emotionArcJson !== undefined
+            ? { emotionArcJson: input.emotionArcJson as Prisma.InputJsonValue }
+            : {}),
+          ...(input.durationEstimateJson !== undefined
+            ? { durationEstimateJson: input.durationEstimateJson as Prisma.InputJsonValue }
+            : {}),
           contextCache: input.contextCache as Prisma.InputJsonValue | undefined,
           ...(input.workflowState ? { workflowState: input.workflowState } : {}),
         },
@@ -97,6 +104,15 @@ export class EpisodesService {
         ...(input.outline !== undefined ? { outline: input.outline as Prisma.InputJsonValue } : {}),
         ...(input.coreExpression !== undefined
           ? { coreExpression: input.coreExpression as Prisma.InputJsonValue }
+          : {}),
+        ...(typeof input.sceneScriptDraft === 'string'
+          ? { sceneScriptDraft: input.sceneScriptDraft }
+          : {}),
+        ...(input.emotionArcJson !== undefined
+          ? { emotionArcJson: input.emotionArcJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.durationEstimateJson !== undefined
+          ? { durationEstimateJson: input.durationEstimateJson as Prisma.InputJsonValue }
           : {}),
         ...(input.contextCache !== undefined
           ? { contextCache: input.contextCache as Prisma.InputJsonValue }
@@ -142,4 +158,3 @@ export class EpisodesService {
     return { ok: true };
   }
 }
-

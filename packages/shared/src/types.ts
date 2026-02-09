@@ -25,6 +25,7 @@ export type WorkflowState = (typeof WORKFLOW_STATES)[number];
 export const EPISODE_WORKFLOW_STATES = [
   'IDLE',
   'CORE_EXPRESSION_READY',
+  'SCRIPT_WRITING',
   'SCENE_LIST_EDITING',
   'SCENE_PROCESSING',
   'COMPLETE',
@@ -41,10 +42,82 @@ export const SCENE_STATUSES = [
   'keyframe_generating',
   'keyframe_confirmed',
   'motion_generating',
+  'sound_design_generating',
+  'sound_design_confirmed',
   'completed',
   'needs_update',
 ] as const;
 export type SceneStatus = (typeof SCENE_STATUSES)[number];
+
+export const SOUND_CUE_TYPES = ['sfx', 'bgm', 'ambience', 'foley', 'voice_over', 'silence'] as const;
+export type SoundCueType = (typeof SOUND_CUE_TYPES)[number];
+
+export const SHOT_SIZES = [
+  'ECU',
+  'CU',
+  'MCU',
+  'MS',
+  'MLS',
+  'LS',
+  'ELS',
+  'XLS',
+  'OTS',
+  'POV',
+  'INSERT',
+  'TWO_SHOT',
+  'GROUP',
+] as const;
+export type ShotSize = (typeof SHOT_SIZES)[number];
+
+export const CAMERA_ANGLES = [
+  'eye_level',
+  'low_angle',
+  'high_angle',
+  'birds_eye',
+  'worms_eye',
+  'dutch_angle',
+  'overhead',
+] as const;
+export type CameraAngle = (typeof CAMERA_ANGLES)[number];
+
+export const CAMERA_MOTIONS = [
+  'static',
+  'pan_left',
+  'pan_right',
+  'tilt_up',
+  'tilt_down',
+  'dolly_in',
+  'dolly_out',
+  'truck_left',
+  'truck_right',
+  'crane_up',
+  'crane_down',
+  'zoom_in',
+  'zoom_out',
+  'handheld',
+  'steadicam',
+  'whip_pan',
+  'rack_focus',
+] as const;
+export type CameraMotion = (typeof CAMERA_MOTIONS)[number];
+
+export const TRANSITION_TYPES = [
+  'cut',
+  'dissolve',
+  'fade_in',
+  'fade_out',
+  'fade_to_black',
+  'wipe',
+  'iris',
+  'match_cut',
+  'jump_cut',
+  'smash_cut',
+  'cross_dissolve',
+  'dip_to_black',
+  'L_cut',
+  'J_cut',
+] as const;
+export type TransitionType = (typeof TRANSITION_TYPES)[number];
 
 export type SceneCastCharacterIds = string[];
 

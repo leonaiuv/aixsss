@@ -2,6 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Character, Prisma } from '@prisma/client';
 import type { CreateCharacterInput, UpdateCharacterInput } from '@aixsss/shared';
+import { CharacterRelationshipsService } from '../character-relationships/character-relationships.service.js';
 
 function toIso(date: Date): string {
   return date.toISOString();
@@ -22,7 +23,11 @@ function mapCharacter(character: Character): ApiCharacter {
 
 @Injectable()
 export class CharactersService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(CharacterRelationshipsService)
+    private readonly characterRelationships: CharacterRelationshipsService,
+  ) {}
 
   private async assertProject(teamId: string, projectId: string) {
     const project = await this.prisma.project.findFirst({
@@ -64,6 +69,10 @@ export class CharactersService {
       },
     });
 
+    if (input.relationships !== undefined) {
+      await this.characterRelationships.upsertFromLegacyInput(teamId, projectId, character.id, input.relationships);
+    }
+
     return mapCharacter(character);
   }
 
@@ -98,6 +107,10 @@ export class CharactersService {
       },
     });
 
+    if (input.relationships !== undefined) {
+      await this.characterRelationships.upsertFromLegacyInput(teamId, projectId, characterId, input.relationships);
+    }
+
     return mapCharacter(character);
   }
 
@@ -113,5 +126,4 @@ export class CharactersService {
     return { ok: true };
   }
 }
-
 

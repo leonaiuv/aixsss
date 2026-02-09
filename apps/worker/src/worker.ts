@@ -18,6 +18,11 @@ import { planEpisodes } from './tasks/planEpisodes.js';
 import { generateEpisodeCoreExpression } from './tasks/generateEpisodeCoreExpression.js';
 import { generateEpisodeCoreExpressionBatch } from './tasks/generateEpisodeCoreExpressionBatch.js';
 import { generateEpisodeSceneList } from './tasks/generateEpisodeSceneList.js';
+import { generateSceneScript } from './tasks/generateSceneScript.js';
+import { generateEmotionArc } from './tasks/generateEmotionArc.js';
+import { generateSoundDesign } from './tasks/generateSoundDesign.js';
+import { generateCharacterRelationships } from './tasks/generateCharacterRelationships.js';
+import { estimateDuration } from './tasks/estimateDuration.js';
 import { buildNarrativeCausalChain } from './tasks/buildNarrativeCausalChain.js';
 import {
   backTranslateStoryboardPanels,
@@ -302,6 +307,132 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               options,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_scene_script': {
+            const result = await generateSceneScript({
+              prisma,
+              teamId,
+              projectId,
+              episodeId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_emotion_arc': {
+            const result = await generateEmotionArc({
+              prisma,
+              teamId,
+              projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_sound_design': {
+            const result = await generateSoundDesign({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'generate_character_relationships': {
+            const result = await generateCharacterRelationships({
+              prisma,
+              teamId,
+              projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'estimate_duration': {
+            const result = await estimateDuration({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
               updateProgress,
             });
 

@@ -29,6 +29,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { PanelScriptEditor } from './PanelScriptEditor';
+import { SoundDesignPanel } from './SoundDesignPanel';
+import { DurationEstimateBar } from './DurationEstimateBar';
 import {
   Brain,
   Check,
@@ -52,6 +54,8 @@ import {
   Move3D,
   Eye,
   Palette,
+  Volume2,
+  Timer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -88,11 +92,15 @@ interface SceneDetailModalProps {
   storyboardProgress?: { message?: string | null; pct?: number | null };
   refineProgress?: { message?: string | null; pct?: number | null };
   isBatchBlocked: boolean;
+  isGeneratingSoundDesign?: boolean;
+  isEstimatingDuration?: boolean;
   aiProfileId?: string | null;
   onUpdateScene: (sceneId: string, updates: Partial<Scene>) => void;
   onRefineScene: (sceneId: string) => void;
   onGenerateImages: (sceneId: string) => void;
   onGenerateVideo: (sceneId: string) => void;
+  onGenerateSoundDesign?: (sceneId: string) => void;
+  onEstimateDuration?: (sceneId: string) => void;
   onGenerateStoryboardSceneBible: (sceneId: string) => void;
   onGenerateStoryboardPlan: (sceneId: string, cameraMode?: 'A' | 'B') => void;
   onGenerateStoryboardGroup: (sceneId: string, groupId: string, cameraMode?: 'A' | 'B') => void;
@@ -447,11 +455,15 @@ export function SceneDetailModal({
   storyboardProgress,
   refineProgress,
   isBatchBlocked,
+  isGeneratingSoundDesign = false,
+  isEstimatingDuration = false,
   aiProfileId,
   onUpdateScene,
   onRefineScene,
   onGenerateImages,
   onGenerateVideo,
+  onGenerateSoundDesign,
+  onEstimateDuration,
   onGenerateStoryboardSceneBible,
   onGenerateStoryboardPlan,
   onGenerateStoryboardGroup,
@@ -469,7 +481,9 @@ export function SceneDetailModal({
   sceneAnchorCopyText,
   getSceneStatusLabel,
 }: SceneDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<'prompts' | 'script' | 'dialogue'>('prompts');
+  const [activeTab, setActiveTab] = useState<'prompts' | 'script' | 'dialogue' | 'sound'>(
+    'prompts',
+  );
   const { toast } = useToast();
   const sceneId = scene?.id;
 
@@ -897,6 +911,19 @@ export function SceneDetailModal({
               title="台词"
             >
               <MessageSquare className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('sound')}
+              className={cn(
+                'flex flex-col items-center justify-center w-10 h-10 rounded-lg transition-all',
+                activeTab === 'sound'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+              title="声音与时长"
+            >
+              <Volume2 className="h-5 w-5" />
             </button>
           </div>
 
@@ -1846,6 +1873,53 @@ export function SceneDetailModal({
                       </p>
                     </div>
                   )}
+                </div>
+              </ScrollArea>
+            )}
+
+            {activeTab === 'sound' && (
+              <ScrollArea className="h-full">
+                <div className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Volume2 className="h-5 w-5 text-muted-foreground" />
+                      <h3 className="font-medium">声音与时长</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        Sound / Duration
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {onGenerateSoundDesign ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onGenerateSoundDesign(scene.id)}
+                          disabled={isGeneratingSoundDesign || !aiProfileId || isBatchBlocked}
+                        >
+                          {isGeneratingSoundDesign ? '生成中...' : '生成声音'}
+                        </Button>
+                      ) : null}
+                      {onEstimateDuration ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onEstimateDuration(scene.id)}
+                          disabled={isEstimatingDuration || !aiProfileId || isBatchBlocked}
+                          className="gap-2"
+                        >
+                          <Timer className="h-4 w-4" />
+                          {isEstimatingDuration ? '估算中...' : '估算时长'}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <SoundDesignPanel scene={scene} />
+                    <DurationEstimateBar scene={scene} />
+                  </div>
                 </div>
               </ScrollArea>
             )}

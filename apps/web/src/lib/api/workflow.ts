@@ -99,6 +99,39 @@ export async function apiWorkflowGenerateEpisodeSceneList(input: {
   );
 }
 
+export async function apiWorkflowGenerateSceneScript(input: {
+  projectId: string;
+  episodeId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/episodes/${encodeURIComponent(
+      input.episodeId,
+    )}/scene-script`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
+export async function apiWorkflowGenerateEmotionArc(input: {
+  projectId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/emotion-arc`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
+export async function apiWorkflowGenerateCharacterRelationships(input: {
+  projectId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/character-relationships/generate`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
 export async function apiWorkflowGenerateSceneList(input: {
   projectId: string;
   aiProfileId: string;
@@ -266,6 +299,32 @@ export async function apiWorkflowGenerateDialogue(input: {
     `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
       input.sceneId,
     )}/dialogue`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
+export async function apiWorkflowGenerateSoundDesign(input: {
+  projectId: string;
+  sceneId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
+      input.sceneId,
+    )}/sound-design`,
+    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+  );
+}
+
+export async function apiWorkflowEstimateDuration(input: {
+  projectId: string;
+  sceneId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
+      input.sceneId,
+    )}/duration-estimate`,
     { method: 'POST', body: { aiProfileId: input.aiProfileId } },
   );
 }

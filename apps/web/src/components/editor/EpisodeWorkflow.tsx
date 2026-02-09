@@ -6,6 +6,8 @@ import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useEpisodeStore } from '@/stores/episodeStore';
 import { useEpisodeScenesStore } from '@/stores/episodeScenesStore';
 import { useAIProgressStore } from '@/stores/aiProgressStore';
+import { useCharacterRelationshipStore } from '@/stores/characterRelationshipStore';
+import { useEmotionArcStore } from '@/stores/emotionArcStore';
 import {
   apiListEpisodeScenes,
   apiReorderEpisodeScenes,
@@ -22,6 +24,9 @@ import {
   apiWorkflowTranslateStoryboardPanels,
   apiWorkflowRefineAllScenes,
   apiWorkflowRefineSceneAll,
+  apiWorkflowGenerateSceneScript,
+  apiWorkflowGenerateSoundDesign,
+  apiWorkflowEstimateDuration,
 } from '@/lib/api/workflow';
 import { flushApiEpisodeScenePatchQueue } from '@/lib/api/episodeScenePatchQueue';
 import { getWorkflowStateLabel } from '@/lib/workflowLabels';
@@ -45,9 +50,11 @@ import {
   migrateOldStyleToConfig,
   type ArtifactStatus,
   type DialogueLine,
+  type EmotionArcPoint,
   type Episode,
   type Project,
   type Scene,
+  type SceneScriptBlock,
 } from '@/types';
 import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
 import { useToast } from '@/hooks/use-toast';
@@ -90,6 +97,11 @@ import { StatisticsPanel } from './StatisticsPanel';
 import { NarrativeCausalChainReadable } from './NarrativeCausalChainReadable';
 import { NarrativeCausalChainVersionDialog } from './NarrativeCausalChainVersionDialog';
 import { WorkflowWorkbench } from './WorkflowWorkbench';
+import { CharacterRelationshipGraph } from './CharacterRelationshipGraph';
+import { EmotionArcChart } from './EmotionArcChart';
+import { SceneScriptEditor } from './SceneScriptEditor';
+import { SoundDesignPanel } from './SoundDesignPanel';
+import { DurationEstimateBar } from './DurationEstimateBar';
 
 import { SceneDetailModal } from './SceneDetailModal';
 import {
@@ -116,6 +128,7 @@ import {
   Network,
   Clapperboard,
   LayoutGrid,
+  Volume2,
 } from 'lucide-react';
 
 type WorkflowStep = 'workbench' | 'global' | 'causal' | 'plan' | 'episode' | 'export';
@@ -234,6 +247,7 @@ function isAbortError(error: unknown): boolean {
 function getEpisodeStateLabel(state: Episode['workflowState']): string {
   const labels: Record<string, string> = {
     IDLE: '未开始',
+    SCRIPT_WRITING: '分场脚本中',
     CORE_EXPRESSION_READY: '核心表达已就绪',
     SCENE_LIST_EDITING: '分镜列表可编辑',
     SCENE_PROCESSING: '分镜细化中',
@@ -250,6 +264,8 @@ function getSceneStatusLabel(status: Scene['status']): string {
     keyframe_generating: '生成关键帧中',
     keyframe_confirmed: '关键帧已就绪',
     motion_generating: '生成运动/台词中',
+    sound_design_generating: '生成声音设计中',
+    sound_design_confirmed: '声音设计已就绪',
     completed: '已完成',
     needs_update: '需更新',
   };
@@ -286,6 +302,14 @@ function getSceneStatusStyle(status: Scene['status']): {
     motion_generating: {
       className: 'border-amber-300 bg-amber-50 text-amber-800',
       dotClass: 'bg-amber-600',
+    },
+    sound_design_generating: {
+      className: 'border-cyan-200 bg-cyan-50 text-cyan-700',
+      dotClass: 'bg-cyan-500',
+    },
+    sound_design_confirmed: {
+      className: 'border-teal-200 bg-teal-50 text-teal-700',
+      dotClass: 'bg-teal-500',
     },
     completed: {
       className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
@@ -357,10 +381,27 @@ export function EpisodeWorkflow() {
     deleteScene,
     setScenes,
   } = useEpisodeScenesStore();
+  const {
+    relationships: characterRelationships,
+    isGenerating: isGeneratingRelationships,
+    loadRelationships,
+    generateRelationships,
+  } = useCharacterRelationshipStore();
+  const {
+    emotionArc,
+    isGenerating: isGeneratingEmotionArc,
+    loadFromProject: loadEmotionArcFromProject,
+    generateEmotionArc,
+  } = useEmotionArcStore();
 
   const [activeStep, setActiveStep] = useState<WorkflowStep>('workbench');
   const [targetEpisodeCount, setTargetEpisodeCount] = useState<number | ''>('');
   const [sceneCountHint, setSceneCountHint] = useState<number | ''>('');
+  const [isGeneratingSceneScript, setIsGeneratingSceneScript] = useState(false);
+  const [isGeneratingSoundSceneId, setIsGeneratingSoundSceneId] = useState<string | null>(null);
+  const [isEstimatingDurationSceneId, setIsEstimatingDurationSceneId] = useState<string | null>(
+    null,
+  );
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
 
   const [coreExpressionDraft, setCoreExpressionDraft] = useState('');
@@ -517,7 +558,16 @@ export function EpisodeWorkflow() {
     loadEpisodes(currentProject.id);
     loadCharacters(currentProject.id);
     loadWorldViewElements(currentProject.id);
-  }, [currentProject?.id, loadEpisodes, loadCharacters, loadWorldViewElements]);
+    void loadRelationships(currentProject.id);
+    loadEmotionArcFromProject(currentProject);
+  }, [
+    currentProject,
+    loadEpisodes,
+    loadCharacters,
+    loadWorldViewElements,
+    loadRelationships,
+    loadEmotionArcFromProject,
+  ]);
 
   useEffect(() => {
     if (!currentProject?.id) return;
@@ -716,6 +766,104 @@ export function EpisodeWorkflow() {
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       toast({ title: '分镜生成失败', description: detail, variant: 'destructive' });
+    }
+  };
+
+  const handleGenerateSceneScript = async () => {
+    if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
+    setIsGeneratingSceneScript(true);
+    try {
+      toast({ title: '生成分场脚本', description: '已入队，正在等待 AI 完成...' });
+      const job = await apiWorkflowGenerateSceneScript({
+        projectId: currentProject.id,
+        episodeId: currentEpisode.id,
+        aiProfileId,
+      });
+      await apiWaitForAIJob(job.id, {
+        onProgress: () => undefined,
+      });
+      loadEpisodes(currentProject.id);
+      toast({ title: '分场脚本已生成', description: `第 ${currentEpisode.order} 集脚本已更新。` });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '分场脚本生成失败', description: detail, variant: 'destructive' });
+    } finally {
+      setIsGeneratingSceneScript(false);
+    }
+  };
+
+  const handleSaveSceneScriptDraft = async (next: SceneScriptBlock[]) => {
+    if (!currentProject?.id || !currentEpisode?.id) return;
+    try {
+      await updateEpisode(currentProject.id, currentEpisode.id, { sceneScriptDraft: next });
+      toast({ title: '已保存', description: '分场脚本草稿已更新。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '保存失败', description: detail, variant: 'destructive' });
+    }
+  };
+
+  const handleGenerateEmotionArc = async () => {
+    if (!aiProfileId || !currentProject?.id) return;
+    try {
+      toast({ title: '生成情绪弧线', description: '已入队，正在等待 AI 完成...' });
+      await generateEmotionArc({ projectId: currentProject.id, aiProfileId });
+      toast({ title: '情绪弧线已生成', description: '已更新项目级情绪弧线。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '情绪弧线生成失败', description: detail, variant: 'destructive' });
+    }
+  };
+
+  const handleGenerateCharacterRelationships = async () => {
+    if (!aiProfileId || !currentProject?.id) return;
+    try {
+      toast({ title: '生成角色关系图谱', description: '已入队，正在等待 AI 完成...' });
+      await generateRelationships({ projectId: currentProject.id, aiProfileId });
+      toast({ title: '角色关系图谱已生成', description: '关系网络已更新。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '关系图谱生成失败', description: detail, variant: 'destructive' });
+    }
+  };
+
+  const handleGenerateSoundDesign = async (sceneId: string) => {
+    if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
+    setIsGeneratingSoundSceneId(sceneId);
+    try {
+      const job = await apiWorkflowGenerateSoundDesign({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+      });
+      await apiWaitForAIJob(job.id, { onProgress: () => undefined });
+      loadScenes(currentProject.id, currentEpisode.id);
+      toast({ title: '声音设计完成', description: '已写回当前分镜。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '声音设计失败', description: detail, variant: 'destructive' });
+    } finally {
+      setIsGeneratingSoundSceneId(null);
+    }
+  };
+
+  const handleEstimateDuration = async (sceneId: string) => {
+    if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
+    setIsEstimatingDurationSceneId(sceneId);
+    try {
+      const job = await apiWorkflowEstimateDuration({
+        projectId: currentProject.id,
+        sceneId,
+        aiProfileId,
+      });
+      await apiWaitForAIJob(job.id, { onProgress: () => undefined });
+      loadScenes(currentProject.id, currentEpisode.id);
+      toast({ title: '时长估算完成', description: '已写回当前分镜。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '时长估算失败', description: detail, variant: 'destructive' });
+    } finally {
+      setIsEstimatingDurationSceneId(null);
     }
   };
 
@@ -2830,10 +2978,12 @@ ${safeJsonStringify(ep.coreExpression)}
           </div>
         ) : (
           <Tabs defaultValue="core" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="core">1. 核心表达</TabsTrigger>
-              <TabsTrigger value="scenes">2. 分镜列表</TabsTrigger>
-              <TabsTrigger value="refine">3. 分镜细化</TabsTrigger>
+              <TabsTrigger value="script">2. 分场脚本</TabsTrigger>
+              <TabsTrigger value="scenes">3. 分镜列表</TabsTrigger>
+              <TabsTrigger value="refine">4. 分镜细化</TabsTrigger>
+              <TabsTrigger value="sound">5. 声音与时长</TabsTrigger>
             </TabsList>
 
             <TabsContent value="core" className="space-y-4 focus-visible:outline-none">
@@ -2884,6 +3034,88 @@ ${safeJsonStringify(ep.coreExpression)}
                     </div>
                   )}
                 </div>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="script" className="space-y-4 focus-visible:outline-none">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card className="p-6 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-primary" />
+                        分场脚本 (Scene Script)
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        从核心表达扩写为可编辑分场脚本，作为分镜列表前置层。
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleGenerateSceneScript}
+                      disabled={!aiProfileId || isGeneratingSceneScript}
+                      className="gap-2"
+                    >
+                      {isGeneratingSceneScript ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      AI 生成
+                    </Button>
+                  </div>
+                  <SceneScriptEditor
+                    value={(currentEpisode?.sceneScriptDraft as SceneScriptBlock[] | null) ?? []}
+                    onSave={handleSaveSceneScriptDraft}
+                    disabled={!currentEpisode}
+                  />
+                </Card>
+
+                <Card className="p-6 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-primary" />
+                        情绪弧线 (Emotion Arc)
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        生成项目级情绪弧，辅助节奏与冲突强度把控。
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={handleGenerateEmotionArc}
+                      disabled={!aiProfileId || isGeneratingEmotionArc}
+                    >
+                      {isGeneratingEmotionArc ? '生成中...' : 'AI 生成'}
+                    </Button>
+                  </div>
+                  <EmotionArcChart points={emotionArc as EmotionArcPoint[]} />
+                </Card>
+              </div>
+
+              <Card className="p-6 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Network className="w-5 h-5 text-primary" />
+                      角色关系图谱 (Character Relationships)
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      关系表为主存，图谱用于辅助检查角色冲突与协作关系。
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleGenerateCharacterRelationships}
+                    disabled={!aiProfileId || isGeneratingRelationships}
+                  >
+                    {isGeneratingRelationships ? '生成中...' : 'AI 生成'}
+                  </Button>
+                </div>
+                <CharacterRelationshipGraph
+                  characters={projectCharacters}
+                  relationships={characterRelationships}
+                />
               </Card>
             </TabsContent>
 
@@ -3170,6 +3402,67 @@ ${safeJsonStringify(ep.coreExpression)}
                       ))
                   )}
                 </div>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="sound" className="space-y-4 focus-visible:outline-none">
+              <Card className="p-6 space-y-4">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Volume2 className="w-5 h-5 text-primary" />
+                    声音与时长 (Sound & Duration)
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    对单个分镜执行声音设计与时长估算，可与细化流程并行补齐。
+                  </p>
+                </div>
+                {scenes.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                    暂无分镜，请先完成分镜列表生成。
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {scenes
+                      .slice()
+                      .sort((a, b) => a.order - b.order)
+                      .map((scene) => (
+                        <div key={scene.id} className="rounded-lg border p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">#{scene.order}</Badge>
+                              <span className="text-sm">{scene.summary}</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleGenerateSoundDesign(scene.id)}
+                                disabled={!aiProfileId || isGeneratingSoundSceneId === scene.id}
+                              >
+                                {isGeneratingSoundSceneId === scene.id
+                                  ? '声音生成中...'
+                                  : '生成声音'}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEstimateDuration(scene.id)}
+                                disabled={!aiProfileId || isEstimatingDurationSceneId === scene.id}
+                              >
+                                {isEstimatingDurationSceneId === scene.id
+                                  ? '估算中...'
+                                  : '估算时长'}
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid gap-3 lg:grid-cols-2">
+                            <SoundDesignPanel scene={scene} />
+                            <DurationEstimateBar scene={scene} />
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </Card>
             </TabsContent>
           </Tabs>
@@ -3554,7 +3847,10 @@ ${safeJsonStringify(ep.coreExpression)}
               }}
               onRunPlanEpisodes={handlePlanEpisodes}
               onRunGenerateCoreExpression={handleGenerateCoreExpression}
+              onRunGenerateSceneScript={handleGenerateSceneScript}
               onRunGenerateSceneList={handleGenerateSceneList}
+              onRunGenerateEmotionArc={handleGenerateEmotionArc}
+              onRunGenerateCharacterRelationships={handleGenerateCharacterRelationships}
               onRunBatchRefineAll={() => startBatchRefine(recommendedBatchRefineIds)}
               onSetProjectArtifactStatus={handleSetProjectArtifactStatus}
               onSetEpisodeArtifactStatus={handleSetEpisodeArtifactStatus}
@@ -3895,6 +4191,8 @@ ${safeJsonStringify(ep.coreExpression)}
         storyboardProgress={storyboardJobProgress ?? undefined}
         refineProgress={refineJobProgress ?? undefined}
         isBatchBlocked={isBatchBlocked}
+        isGeneratingSoundDesign={isGeneratingSoundSceneId === refineScene?.id}
+        isEstimatingDuration={isEstimatingDurationSceneId === refineScene?.id}
         aiProfileId={aiProfileId}
         onUpdateScene={(sceneId, updates) => {
           if (!currentEpisode?.id) return;
@@ -3903,6 +4201,8 @@ ${safeJsonStringify(ep.coreExpression)}
         onRefineScene={handleRefineSceneAll}
         onGenerateImages={handleGenerateKeyframeImages}
         onGenerateVideo={handleGenerateSceneVideo}
+        onGenerateSoundDesign={handleGenerateSoundDesign}
+        onEstimateDuration={handleEstimateDuration}
         onGenerateStoryboardSceneBible={handleGenerateStoryboardSceneBible}
         onGenerateStoryboardPlan={handleGenerateStoryboardPlan}
         onGenerateStoryboardGroup={handleGenerateStoryboardGroup}

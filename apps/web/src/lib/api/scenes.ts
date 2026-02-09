@@ -21,6 +21,12 @@ export async function apiCreateScene(
     actionDescription: input.actionDescription ?? '',
     shotPrompt: input.shotPrompt ?? '',
     motionPrompt: input.motionPrompt ?? '',
+    sceneScriptJson: input.sceneScriptJson ?? undefined,
+    soundDesignJson: input.soundDesignJson ?? undefined,
+    transitionInJson: input.transitionInJson ?? undefined,
+    transitionOutJson: input.transitionOutJson ?? undefined,
+    shotLanguageJson: input.shotLanguageJson ?? undefined,
+    durationEstimateJson: input.durationEstimateJson ?? undefined,
     dialogues: input.dialogues ?? undefined,
     contextSummary: input.contextSummary ?? undefined,
     status: input.status ?? undefined,
@@ -48,6 +54,16 @@ export async function apiUpdateScene(
       : {}),
     ...(typeof updates.shotPrompt === 'string' ? { shotPrompt: updates.shotPrompt } : {}),
     ...(typeof updates.motionPrompt === 'string' ? { motionPrompt: updates.motionPrompt } : {}),
+    ...(updates.sceneScriptJson !== undefined ? { sceneScriptJson: updates.sceneScriptJson } : {}),
+    ...(updates.soundDesignJson !== undefined ? { soundDesignJson: updates.soundDesignJson } : {}),
+    ...(updates.transitionInJson !== undefined ? { transitionInJson: updates.transitionInJson } : {}),
+    ...(updates.transitionOutJson !== undefined
+      ? { transitionOutJson: updates.transitionOutJson }
+      : {}),
+    ...(updates.shotLanguageJson !== undefined ? { shotLanguageJson: updates.shotLanguageJson } : {}),
+    ...(updates.durationEstimateJson !== undefined
+      ? { durationEstimateJson: updates.durationEstimateJson }
+      : {}),
     ...(updates.dialogues !== undefined ? { dialogues: updates.dialogues } : {}),
     ...(updates.contextSummary !== undefined ? { contextSummary: updates.contextSummary } : {}),
     ...(typeof updates.status === 'string' ? { status: updates.status } : {}),

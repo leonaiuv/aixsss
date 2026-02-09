@@ -297,6 +297,11 @@ describe('progressBridge', () => {
         { type: 'scene_description' as const, title: '生成场景锚点' },
         { type: 'keyframe_prompt' as const, title: '生成关键帧提示词（KF0-KF8）' },
         { type: 'motion_prompt' as const, title: '生成时空/运动提示词' },
+        { type: 'scene_script' as const, title: '生成分场脚本' },
+        { type: 'emotion_arc' as const, title: '生成情绪弧线' },
+        { type: 'sound_design' as const, title: '生成声音设计' },
+        { type: 'character_relationships' as const, title: '生成角色关系图谱' },
+        { type: 'duration_estimate' as const, title: '估算分镜时长' },
         { type: 'custom' as const, title: '自定义AI调用' },
       ];
 

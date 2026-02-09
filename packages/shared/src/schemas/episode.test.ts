@@ -67,5 +67,28 @@ describe('Episode schemas', () => {
       }),
     ).toThrow();
   });
-});
 
+  it('accepts optional emotionArcPoints in CoreExpression', () => {
+    const parsed = CoreExpressionSchema.parse({
+      theme: '主题',
+      emotionalArc: ['起', '承', '转', '合'],
+      coreConflict: '冲突',
+      payoff: [],
+      visualMotifs: [],
+      endingBeat: '结尾',
+      nextHook: null,
+      emotionArcPoints: [
+        {
+          episodeOrder: 1,
+          sceneOrder: 2,
+          tension: 6,
+          emotionalValence: -1,
+          beatName: '转折',
+        },
+      ],
+    });
+
+    expect(parsed.emotionArcPoints).toHaveLength(1);
+    expect(parsed.emotionArcPoints?.[0]?.tension).toBe(6);
+  });
+});

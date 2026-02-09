@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useCharacterStore } from '@/stores/characterStore';
+import { useCharacterRelationshipStore } from '@/stores/characterRelationshipStore';
 import { useConfigStore } from '@/stores/configStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useStoryboardStore } from '@/stores/storyboardStore';
@@ -82,6 +83,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { CharacterRelationshipGraph } from './CharacterRelationshipGraph';
 import {
   User,
   Plus,
@@ -231,12 +233,21 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
   const { confirm, ConfirmDialog } = useConfirm();
   const { characters, addCharacter, updateCharacter, deleteCharacter, loadCharacters } =
     useCharacterStore();
+  const {
+    relationships: characterRelationships,
+    loadRelationships,
+    generateRelationships,
+    isGenerating: isGeneratingRelationships,
+  } = useCharacterRelationshipStore();
   const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
 
   // 加载角色数据
   useEffect(() => {
     loadCharacters(projectId);
   }, [projectId, loadCharacters]);
+  useEffect(() => {
+    void loadRelationships(projectId);
+  }, [projectId, loadRelationships]);
   // 加载世界观要素（用于角色生成上下文）
   useEffect(() => {
     loadWorldViewElements(projectId);
@@ -802,6 +813,24 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
     });
     if (!ok) return;
     deleteCharacter(projectId, characterId);
+  };
+
+  const handleGenerateRelationshipGraph = async () => {
+    if (!config?.aiProfileId) {
+      toast({
+        title: '缺少 AI Profile',
+        description: '请先在 API 配置中选择可用的 AI Profile。',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      await generateRelationships({ projectId, aiProfileId: config.aiProfileId });
+      toast({ title: '关系图谱已更新', description: '已同步最新角色关系数据。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '关系图谱生成失败', description: detail, variant: 'destructive' });
+    }
   };
 
   // 复制提示词到剪贴板
@@ -2715,6 +2744,40 @@ export function CharacterManager({ projectId }: CharacterManagerProps) {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+
+      <div className="rounded-lg border bg-card p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-primary" />
+              角色关系图谱
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              支持新表 `CharacterRelationship` 与 legacy 字段双写过渡。
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleGenerateRelationshipGraph()}
+            disabled={isGeneratingRelationships || projectCharacters.length < 2}
+          >
+            {isGeneratingRelationships ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                生成中
+              </>
+            ) : (
+              'AI 生成图谱'
+            )}
+          </Button>
+        </div>
+        <CharacterRelationshipGraph
+          characters={projectCharacters}
+          relationships={characterRelationships}
+          height={280}
+        />
       </div>
 
       {/* 角色列表 */}

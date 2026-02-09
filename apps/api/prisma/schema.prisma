@@ -34,6 +34,7 @@ enum ProjectWorkflowState {
 enum EpisodeWorkflowState {
   IDLE
   CORE_EXPRESSION_READY
+  SCRIPT_WRITING
   SCENE_LIST_EDITING
   SCENE_PROCESSING
   COMPLETE
@@ -46,6 +47,8 @@ enum SceneStatus {
   keyframe_generating
   keyframe_confirmed
   motion_generating
+  sound_design_generating
+  sound_design_confirmed
   completed
   needs_update
 }
@@ -134,6 +137,7 @@ model Project {
   episodes Episode[]
   scenes Scene[]
   characters Character[]
+  characterRelationships CharacterRelationship[]
   worldViewElements WorldViewElement[]
   jobs   AIJob[]
 
@@ -181,6 +185,9 @@ model Episode {
   summary        String              @default("")
   outline        Json?
   coreExpression Json?
+  sceneScriptDraft String            @default("")
+  emotionArcJson Json?
+  durationEstimateJson Json?
   contextCache   Json?
   workflowState  EpisodeWorkflowState @default(IDLE)
   createdAt      DateTime            @default(now())
@@ -214,6 +221,12 @@ model Scene {
   storyboardSceneBibleJson Json?
   storyboardPlanJson Json?
   storyboardGroupsJson Json?
+  sceneScriptJson  Json?
+  soundDesignJson  Json?
+  transitionInJson Json?
+  transitionOutJson Json?
+  shotLanguageJson Json?
+  durationEstimateJson Json?
   generatedImages  Json?
   generatedVideos  Json?
   dialogues        Json?
@@ -254,6 +267,25 @@ model Character {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, updatedAt(sort: Desc)])
+}
+
+model CharacterRelationship {
+  id              String   @id @default(cuid())
+  projectId       String
+  fromCharacterId String
+  toCharacterId   String
+  type            String
+  label           String   @default("")
+  description     String   @default("")
+  intensity       Int      @default(5)
+  arc             Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, fromCharacterId, toCharacterId])
+  @@index([projectId])
 }
 
 model WorldViewElement {

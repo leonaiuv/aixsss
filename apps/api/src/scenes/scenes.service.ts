@@ -121,6 +121,12 @@ export class ScenesService {
         storyboardSceneBibleJson: input.storyboardSceneBibleJson as Prisma.InputJsonValue,
         storyboardPlanJson: input.storyboardPlanJson as Prisma.InputJsonValue,
         storyboardGroupsJson: input.storyboardGroupsJson as Prisma.InputJsonValue,
+        sceneScriptJson: input.sceneScriptJson as Prisma.InputJsonValue,
+        soundDesignJson: input.soundDesignJson as Prisma.InputJsonValue,
+        transitionInJson: input.transitionInJson as Prisma.InputJsonValue,
+        transitionOutJson: input.transitionOutJson as Prisma.InputJsonValue,
+        shotLanguageJson: input.shotLanguageJson as Prisma.InputJsonValue,
+        durationEstimateJson: input.durationEstimateJson as Prisma.InputJsonValue,
         dialogues: input.dialogues ?? undefined,
         contextSummary: input.contextSummary ?? undefined,
         status: (input.status as SceneStatus) ?? undefined,
@@ -149,6 +155,12 @@ export class ScenesService {
         storyboardSceneBibleJson: input.storyboardSceneBibleJson as Prisma.InputJsonValue,
         storyboardPlanJson: input.storyboardPlanJson as Prisma.InputJsonValue,
         storyboardGroupsJson: input.storyboardGroupsJson as Prisma.InputJsonValue,
+        sceneScriptJson: input.sceneScriptJson as Prisma.InputJsonValue,
+        soundDesignJson: input.soundDesignJson as Prisma.InputJsonValue,
+        transitionInJson: input.transitionInJson as Prisma.InputJsonValue,
+        transitionOutJson: input.transitionOutJson as Prisma.InputJsonValue,
+        shotLanguageJson: input.shotLanguageJson as Prisma.InputJsonValue,
+        durationEstimateJson: input.durationEstimateJson as Prisma.InputJsonValue,
         dialogues: input.dialogues ?? undefined,
         contextSummary: input.contextSummary ?? undefined,
         status: (input.status as SceneStatus) ?? undefined,
@@ -190,6 +202,24 @@ export class ScenesService {
           : {}),
         ...(input.storyboardGroupsJson !== undefined
           ? { storyboardGroupsJson: input.storyboardGroupsJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.sceneScriptJson !== undefined
+          ? { sceneScriptJson: input.sceneScriptJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.soundDesignJson !== undefined
+          ? { soundDesignJson: input.soundDesignJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.transitionInJson !== undefined
+          ? { transitionInJson: input.transitionInJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.transitionOutJson !== undefined
+          ? { transitionOutJson: input.transitionOutJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.shotLanguageJson !== undefined
+          ? { shotLanguageJson: input.shotLanguageJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.durationEstimateJson !== undefined
+          ? { durationEstimateJson: input.durationEstimateJson as Prisma.InputJsonValue }
           : {}),
         ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),
         ...(input.contextSummary !== undefined
@@ -240,6 +270,24 @@ export class ScenesService {
           : {}),
         ...(input.storyboardGroupsJson !== undefined
           ? { storyboardGroupsJson: input.storyboardGroupsJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.sceneScriptJson !== undefined
+          ? { sceneScriptJson: input.sceneScriptJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.soundDesignJson !== undefined
+          ? { soundDesignJson: input.soundDesignJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.transitionInJson !== undefined
+          ? { transitionInJson: input.transitionInJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.transitionOutJson !== undefined
+          ? { transitionOutJson: input.transitionOutJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.shotLanguageJson !== undefined
+          ? { shotLanguageJson: input.shotLanguageJson as Prisma.InputJsonValue }
+          : {}),
+        ...(input.durationEstimateJson !== undefined
+          ? { durationEstimateJson: input.durationEstimateJson as Prisma.InputJsonValue }
           : {}),
         ...(input.dialogues !== undefined ? { dialogues: input.dialogues as Prisma.InputJsonValue } : {}),
         ...(input.contextSummary !== undefined

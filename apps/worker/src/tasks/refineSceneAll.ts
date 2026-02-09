@@ -8,6 +8,8 @@ import { styleFullPrompt, toProviderChatConfig, type TokenUsage, mergeTokenUsage
 import { formatPanelScriptHints, getExistingPanelScript, type PanelScriptV1 } from './panelScriptHints.js';
 import { generateActionPlanJson, generateKeyframeGroupsJson, keyframeGroupsToLegacyShotPrompt } from './actionBeats.js';
 import { loadSystemPrompt } from './systemPrompts.js';
+import { generateSoundDesign } from './generateSoundDesign.js';
+import { estimateDuration } from './estimateDuration.js';
 
 function isPrismaNotFoundError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2025';
@@ -259,6 +261,20 @@ async function doChat(config: {
   return chatWithProvider(config.providerConfig, config.messages);
 }
 
+export type RefineSceneAllOptions = {
+  includeSoundDesign?: boolean;
+  includeDurationEstimate?: boolean;
+};
+
+export function resolveRefineSceneAllOptions(
+  options: RefineSceneAllOptions | undefined,
+): Required<RefineSceneAllOptions> {
+  return {
+    includeSoundDesign: options?.includeSoundDesign !== false,
+    includeDurationEstimate: options?.includeDurationEstimate !== false,
+  };
+}
+
 export async function refineSceneAll(args: {
   prisma: PrismaClient;
   teamId: string;
@@ -267,8 +283,10 @@ export async function refineSceneAll(args: {
   aiProfileId: string;
   apiKeySecret: string;
   updateProgress: (progress: JobProgress) => Promise<void>;
+  options?: RefineSceneAllOptions;
 }) {
   const { prisma, teamId, projectId, sceneId, aiProfileId, apiKeySecret, updateProgress } = args;
+  const options = resolveRefineSceneAllOptions(args.options);
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, teamId, deletedAt: null },
@@ -643,6 +661,12 @@ export async function refineSceneAll(args: {
       panelScript: nextPanelScript as unknown as Record<string, unknown>,
     };
 
+    const postDialogueStatus = options.includeSoundDesign
+      ? 'sound_design_generating'
+      : options.includeDurationEstimate
+        ? 'sound_design_confirmed'
+        : 'completed';
+
     await safeUpdateScene({
       prisma,
       projectId,
@@ -650,8 +674,59 @@ export async function refineSceneAll(args: {
       data: {
         dialogues: dialogues as unknown as Prisma.InputJsonValue,
         contextSummary: nextContextSummary as unknown as Prisma.InputJsonValue,
-        status: 'completed',
+        status: postDialogueStatus,
       },
+    });
+  } catch (err) {
+    if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
+    throw err;
+  }
+
+  // 5) Sound design (default on)
+  let soundDesignResult: Awaited<ReturnType<typeof generateSoundDesign>> | null = null;
+  if (options.includeSoundDesign) {
+    await updateProgress({ pct: 92, message: '生成声音设计...' });
+    soundDesignResult = await generateSoundDesign({
+      prisma,
+      teamId,
+      projectId,
+      sceneId,
+      aiProfileId,
+      apiKeySecret,
+      updateProgress: async (progress) => {
+        const pct = isRecord(progress) && typeof progress.pct === 'number' ? progress.pct : 0;
+        const message = isRecord(progress) && typeof progress.message === 'string' ? progress.message : '声音设计中...';
+        const mappedPct = 92 + Math.floor(Math.max(0, Math.min(100, pct)) * 0.04);
+        await updateProgress({ pct: mappedPct, message });
+      },
+    });
+  }
+
+  // 6) Duration estimate (default on)
+  let durationResult: Awaited<ReturnType<typeof estimateDuration>> | null = null;
+  if (options.includeDurationEstimate) {
+    await updateProgress({ pct: 97, message: '估算镜头时长...' });
+    durationResult = await estimateDuration({
+      prisma,
+      teamId,
+      projectId,
+      sceneId,
+      updateProgress: async (progress) => {
+        const pct = isRecord(progress) && typeof progress.pct === 'number' ? progress.pct : 0;
+        const message = isRecord(progress) && typeof progress.message === 'string' ? progress.message : '时长估算中...';
+        const mappedPct = 97 + Math.floor(Math.max(0, Math.min(100, pct)) * 0.02);
+        await updateProgress({ pct: mappedPct, message });
+      },
+    });
+  }
+
+  // mark scene final status
+  try {
+    await safeUpdateScene({
+      prisma,
+      projectId,
+      sceneId,
+      data: { status: 'completed' },
     });
   } catch (err) {
     if (isPrismaNotFoundError(err)) throw new UnrecoverableError('Scene not found');
@@ -689,6 +764,8 @@ export async function refineSceneAll(args: {
     shotPrompt: keyframeContent,
     motionPrompt: motionFixed.content,
     dialogueCount: dialogues.length,
+    soundDesign: soundDesignResult?.soundDesign ?? null,
+    durationEstimate: durationResult?.durationEstimate ?? null,
     tokenUsage: tokens ?? null,
   };
 }

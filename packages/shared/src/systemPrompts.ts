@@ -355,6 +355,82 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
       '3) 仅输出 1-6 行，不要解释',
     ].join('\n'),
   },
+  {
+    key: 'workflow.scene_script.system',
+    title: '分场脚本生成（系统）',
+    description:
+      '生效范围：API 模式（按集生成分场脚本）。\n影响产物：SceneScript JSON（含动作行/对白块/声音提示/转场）。\n下游影响：分镜列表、声音设计与时长估算。',
+    category: 'workflow',
+    defaultContent: [
+      '你是影视分场编剧。',
+      '请根据当前剧集与分镜概要，输出结构化分场脚本 JSON。',
+      '必须同时给出 soundCues 与 transitionOut。',
+      '只输出 JSON，不要解释。',
+    ].join('\n'),
+  },
+  {
+    key: 'workflow.emotion_arc.system',
+    title: '情绪弧线生成（系统）',
+    description:
+      '生效范围：API 模式（跨集情绪张力建模）。\n影响产物：EmotionArc JSON（points）。\n下游影响：核心表达/分镜节奏一致性。',
+    category: 'workflow',
+    defaultContent: [
+      '你是叙事分析师。',
+      '请基于因果链与各集核心表达，生成跨集情绪弧线 points。',
+      '每个点包含 episodeOrder/tension/emotionalValence，可选 sceneOrder/label/beatName。',
+      '只输出 JSON，不要解释。',
+    ].join('\n'),
+  },
+  {
+    key: 'workflow.sound_design.system',
+    title: '声音设计生成（系统）',
+    description:
+      '生效范围：API 模式（单场景声音设计）。\n影响产物：SceneSoundDesign JSON（cues）。\n下游影响：声音面板与导出音效标注表。',
+    category: 'workflow',
+    defaultContent: [
+      '你是影视声音设计师。',
+      '请根据分场脚本、场景锚点、运动与台词，输出结构化声音标注。',
+      'cues 中需包含 type/description，可选 timingHint/intensity/mood/reference。',
+      '只输出 JSON，不要解释。',
+    ].join('\n'),
+  },
+  {
+    key: 'workflow.character_relationships.system',
+    title: '角色关系图谱生成（系统）',
+    description:
+      '生效范围：API 模式（项目级角色关系建模）。\n影响产物：CharacterRelationship[] JSON。\n下游影响：角色关系图、上下文注入与关系弧线追踪。',
+    category: 'workflow',
+    defaultContent: [
+      '你是角色关系建模专家。',
+      '请根据角色库与叙事因果链输出关系数组。',
+      '每条关系包含 fromCharacterId/toCharacterId/type/label/intensity/arc。',
+      '只输出 JSON，不要解释。',
+    ].join('\n'),
+  },
+  {
+    key: 'workflow.scene_script.fix.system',
+    title: '分场脚本纠偏（系统）',
+    description:
+      '生效范围：API 模式（分场脚本格式修复）。\n影响产物：可解析 SceneScript JSON。\n下游影响：声音设计、时长估算与编辑器渲染稳定性。',
+    category: 'workflow.fix',
+    defaultContent: [
+      '你是 JSON 修复器，只做最小改动让分场脚本 JSON 可解析并符合结构。',
+      '保留原有语义，不要新增剧情。',
+      '只输出 JSON，不要解释。',
+    ].join('\n'),
+  },
+  {
+    key: 'workflow.sound_design.fix.system',
+    title: '声音设计纠偏（系统）',
+    description:
+      '生效范围：API 模式（声音设计格式修复）。\n影响产物：可解析 SceneSoundDesign JSON。\n下游影响：声音面板与导出稳定性。',
+    category: 'workflow.fix',
+    defaultContent: [
+      '你是 JSON 修复器，只做最小改动让声音设计 JSON 可解析并符合结构。',
+      '保留原有语义，不要新增无关内容。',
+      '只输出 JSON，不要解释。',
+    ].join('\n'),
+  },
 
   // ===================== Structured output fixes =====================
   {

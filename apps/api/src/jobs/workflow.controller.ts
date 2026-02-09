@@ -104,6 +104,33 @@ export class WorkflowController {
     });
   }
 
+  @Post('projects/:projectId/episodes/:episodeId/scene-script')
+  generateEpisodeSceneScript(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('episodeId') episodeId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueGenerateSceneScript(user.teamId, projectId, episodeId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/emotion-arc')
+  generateEmotionArc(@CurrentUser() user: AuthUser, @Param('projectId') projectId: string, @Body() body: unknown) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueGenerateEmotionArc(user.teamId, projectId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/character-relationships/generate')
+  generateCharacterRelationships(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueGenerateCharacterRelationships(user.teamId, projectId, input.aiProfileId);
+  }
+
   @Post('projects/:projectId/scene-list')
   generateSceneList(
     @CurrentUser() user: AuthUser,
@@ -238,6 +265,28 @@ export class WorkflowController {
   ) {
     const input = parseOrBadRequest(WorkflowBodySchema, body);
     return this.jobs.enqueueGenerateDialogue(user.teamId, projectId, sceneId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/scenes/:sceneId/sound-design')
+  generateSoundDesign(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('sceneId') sceneId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueGenerateSoundDesign(user.teamId, projectId, sceneId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/scenes/:sceneId/duration-estimate')
+  estimateDuration(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('sceneId') sceneId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueEstimateDuration(user.teamId, projectId, sceneId, input.aiProfileId);
   }
 
   @Post('projects/:projectId/scenes/:sceneId/refine-all')

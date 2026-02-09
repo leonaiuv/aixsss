@@ -227,7 +227,10 @@ export function WorkflowWorkbench(props: {
   onGoToScene?: (episodeId: string, sceneId: string) => void;
   onRunPlanEpisodes: () => void;
   onRunGenerateCoreExpression: () => void;
+  onRunGenerateSceneScript?: () => void;
   onRunGenerateSceneList: () => void;
+  onRunGenerateEmotionArc?: () => void;
+  onRunGenerateCharacterRelationships?: () => void;
   onRunBatchRefineAll: () => void;
   onSetProjectArtifactStatus: (artifact: 'bible' | 'seasonArc', status: ArtifactStatus) => void;
   onSetEpisodeArtifactStatus: (
@@ -529,6 +532,43 @@ export function WorkflowWorkbench(props: {
                     </div>
                   );
                 })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">专业工作流快捷操作</CardTitle>
+              <CardDescription>
+                快速触发分场脚本、情绪弧线与角色关系图谱的生成流程。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 md:grid-cols-3">
+                <Button
+                  variant="outline"
+                  onClick={props.onRunGenerateSceneScript}
+                  disabled={!props.onRunGenerateSceneScript}
+                  className="justify-between"
+                >
+                  分场脚本 <ArrowRight className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={props.onRunGenerateEmotionArc}
+                  disabled={!props.onRunGenerateEmotionArc}
+                  className="justify-between"
+                >
+                  情绪弧线 <ArrowRight className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={props.onRunGenerateCharacterRelationships}
+                  disabled={!props.onRunGenerateCharacterRelationships}
+                  className="justify-between"
+                >
+                  角色关系图谱 <ArrowRight className="w-4 h-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>

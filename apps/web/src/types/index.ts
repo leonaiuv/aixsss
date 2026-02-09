@@ -332,6 +332,8 @@ export type SceneStatus =
   | 'keyframe_generating'
   | 'keyframe_confirmed'
   | 'motion_generating'
+  | 'sound_design_generating'
+  | 'sound_design_confirmed'
   | 'completed'
   | 'needs_update';
 
@@ -369,6 +371,7 @@ export interface GeneratedVideo {
 // 单集工作流状态
 export type EpisodeWorkflowState =
   | 'IDLE'
+  | 'SCRIPT_WRITING'
   | 'CORE_EXPRESSION_READY'
   | 'SCENE_LIST_EDITING'
   | 'SCENE_PROCESSING'
@@ -435,6 +438,8 @@ export interface ProjectContextCache {
    */
   narrativeCausalChain?: unknown;
   narrativeCausalChainUpdatedAt?: string;
+  emotionArc?: EmotionArcPoint[];
+  emotionArcUpdatedAt?: string;
 
   /**
    * 工作流 V2：产物视角（可选）
@@ -582,6 +587,55 @@ export interface SceneRefinementManualOverrides {
   shotPrompt?: string;
 }
 
+export interface SceneScriptBlock {
+  beat: string;
+  objective?: string;
+  conflict?: string;
+  turn?: string;
+  notes?: string;
+}
+
+export interface EmotionArcPoint {
+  beat: string;
+  value: number;
+  note?: string;
+}
+
+export interface ShotLanguage {
+  shotSize?: string;
+  cameraAngle?: string;
+  cameraMotion?: string;
+  composition?: string;
+}
+
+export interface TransitionDef {
+  type: string;
+  durationMs?: number;
+  note?: string;
+}
+
+export interface SoundCue {
+  type: string;
+  cue: string;
+  timing?: string;
+  intensity?: number;
+  note?: string;
+}
+
+export interface SoundDesign {
+  ambience?: string;
+  musicTheme?: string;
+  cues: SoundCue[];
+  mixNotes?: string;
+}
+
+export interface DurationEstimate {
+  totalSeconds: number;
+  shotSeconds?: number[];
+  confidence?: number;
+  rationale?: string;
+}
+
 // 分镜实体
 export interface Scene {
   id: string;
@@ -604,6 +658,12 @@ export interface Scene {
   storyboardSceneBibleJson?: unknown;
   storyboardPlanJson?: unknown;
   storyboardGroupsJson?: unknown;
+  sceneScriptJson?: SceneScriptBlock[] | null;
+  soundDesignJson?: SoundDesign | null;
+  transitionInJson?: TransitionDef | null;
+  transitionOutJson?: TransitionDef | null;
+  shotLanguageJson?: ShotLanguage | null;
+  durationEstimateJson?: DurationEstimate | null;
   /** 时空/运动提示词 - 基于关键帧差分的“变化描述”，用于图生视频(I2V)模型（建议中英双语） */
   motionPrompt: string;
   /** 关键帧生成图片 */
@@ -626,6 +686,9 @@ export interface Episode {
   summary: string;
   outline: unknown | null;
   coreExpression: unknown | null;
+  sceneScriptDraft?: SceneScriptBlock[] | null;
+  emotionArcJson?: EmotionArcPoint[] | null;
+  durationEstimateJson?: DurationEstimate | null;
   contextCache: EpisodeContextCache | null;
   workflowState: EpisodeWorkflowState;
   createdAt: string;
@@ -881,6 +944,20 @@ export interface CharacterRelationship {
   targetCharacterId: string;
   relationshipType: string;
   description: string;
+}
+
+export interface CharacterRelationshipRecord {
+  id: string;
+  projectId: string;
+  fromCharacterId: string;
+  toCharacterId: string;
+  type: string;
+  label: string;
+  description: string;
+  intensity: number;
+  arc: unknown;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // 角色出场记录

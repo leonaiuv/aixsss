@@ -19,8 +19,13 @@ export type AICallType =
   | 'narrative_causal_chain' // 叙事因果链生成
   | 'episode_core_expression' // 单集核心表达生成
   | 'episode_core_expression_batch' // 单集核心表达批量生成
+  | 'scene_script' // 分场脚本生成
+  | 'emotion_arc' // 情绪弧线生成
   | 'episode_scene_list' // 单集分镜列表生成
   | 'scene_refine_all' // 一键细化（后端工作流）
+  | 'sound_design' // 声音设计生成
+  | 'character_relationships' // 角色关系图谱生成
+  | 'duration_estimate' // 时长估算
   | 'storyboard_scene_bible' // Storyboard 81：SceneBible（压缩档）
   | 'storyboard_plan' // Storyboard 81：9组大纲（Plan）
   | 'storyboard_group' // Storyboard 81：单组（9格）
@@ -203,8 +208,13 @@ function formatLogOutput(entry: AICallLogEntry): void {
     narrative_causal_chain: '🧩 叙事因果链生成',
     episode_core_expression: '🧠 单集核心表达生成',
     episode_core_expression_batch: '🧠 单集核心表达批量生成',
+    scene_script: '📝 分场脚本生成',
+    emotion_arc: '📈 情绪弧线生成',
     episode_scene_list: '🗂️ 单集分镜列表生成',
     scene_refine_all: '✨ 一键细化',
+    sound_design: '🔊 声音设计生成',
+    character_relationships: '🕸️ 角色关系图谱生成',
+    duration_estimate: '⏱️ 时长估算',
     storyboard_scene_bible: '🧾 Storyboard：SceneBible',
     storyboard_plan: '🧩 Storyboard：Plan（9组大纲）',
     storyboard_group: '🧱 Storyboard：Group（单组 9 格）',

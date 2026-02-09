@@ -17,6 +17,8 @@ vi.mock('@/stores/characterStore', () => ({ useCharacterStore: vi.fn() }));
 vi.mock('@/stores/worldViewStore', () => ({ useWorldViewStore: vi.fn() }));
 vi.mock('@/stores/episodeStore', () => ({ useEpisodeStore: vi.fn() }));
 vi.mock('@/stores/episodeScenesStore', () => ({ useEpisodeScenesStore: vi.fn() }));
+vi.mock('@/stores/characterRelationshipStore', () => ({ useCharacterRelationshipStore: vi.fn() }));
+vi.mock('@/stores/emotionArcStore', () => ({ useEmotionArcStore: vi.fn() }));
 
 import { useProjectStore } from '@/stores/projectStore';
 import { useConfigStore } from '@/stores/configStore';
@@ -24,6 +26,8 @@ import { useCharacterStore } from '@/stores/characterStore';
 import { useWorldViewStore } from '@/stores/worldViewStore';
 import { useEpisodeStore } from '@/stores/episodeStore';
 import { useEpisodeScenesStore } from '@/stores/episodeScenesStore';
+import { useCharacterRelationshipStore } from '@/stores/characterRelationshipStore';
+import { useEmotionArcStore } from '@/stores/emotionArcStore';
 
 const mockUseProjectStore = vi.mocked(useProjectStore);
 const mockUseConfigStore = vi.mocked(useConfigStore);
@@ -31,6 +35,8 @@ const mockUseCharacterStore = vi.mocked(useCharacterStore);
 const mockUseWorldViewStore = vi.mocked(useWorldViewStore);
 const mockUseEpisodeStore = vi.mocked(useEpisodeStore);
 const mockUseEpisodeScenesStore = vi.mocked(useEpisodeScenesStore);
+const mockUseCharacterRelationshipStore = vi.mocked(useCharacterRelationshipStore);
+const mockUseEmotionArcStore = vi.mocked(useEmotionArcStore);
 
 describe('EpisodeWorkflow', () => {
   beforeEach(() => {
@@ -81,6 +87,7 @@ describe('EpisodeWorkflow', () => {
       planEpisodes: vi.fn(),
       buildNarrativeCausalChain: vi.fn(),
       generateCoreExpression: vi.fn(),
+      generateCoreExpressionBatch: vi.fn(),
       generateSceneList: vi.fn(),
       createEpisode: vi.fn(),
       deleteEpisode: vi.fn(),
@@ -95,6 +102,30 @@ describe('EpisodeWorkflow', () => {
       deleteScene: vi.fn(),
       setScenes: vi.fn(),
     } as ReturnType<typeof useEpisodeScenesStore>);
+
+    mockUseCharacterRelationshipStore.mockReturnValue({
+      relationships: [],
+      isLoading: false,
+      isGenerating: false,
+      lastJobId: null,
+      error: null,
+      loadRelationships: vi.fn(),
+      createRelationship: vi.fn(),
+      updateRelationship: vi.fn(),
+      deleteRelationship: vi.fn(),
+      generateRelationships: vi.fn(),
+    } as ReturnType<typeof useCharacterRelationshipStore>);
+
+    mockUseEmotionArcStore.mockReturnValue({
+      emotionArc: [],
+      isLoading: false,
+      isGenerating: false,
+      lastJobId: null,
+      error: null,
+      loadFromProject: vi.fn(),
+      syncFromApi: vi.fn(),
+      generateEmotionArc: vi.fn(),
+    } as ReturnType<typeof useEmotionArcStore>);
   });
 
   it('应渲染左侧步骤导航', () => {
@@ -112,6 +143,46 @@ describe('EpisodeWorkflow', () => {
 
     await userEvent.click(screen.getByText('剧集规划'));
     expect(screen.getByText('剧集规划中心')).toBeInTheDocument();
+  });
+
+  it('单集创作应展示 5 个工作流标签', async () => {
+    mockUseEpisodeStore.mockReturnValue({
+      episodes: [
+        {
+          id: 'ep_1',
+          order: 1,
+          title: '第一集',
+          workflowState: 'SCENE_LIST_EDITING',
+          coreExpression: { theme: 'test' },
+        },
+      ],
+      currentEpisodeId: 'ep_1',
+      isLoading: false,
+      isRunningWorkflow: false,
+      lastJobId: null,
+      lastJobProgress: null,
+      error: null,
+      loadEpisodes: vi.fn(),
+      setCurrentEpisode: vi.fn(),
+      updateEpisode: vi.fn(),
+      planEpisodes: vi.fn(),
+      buildNarrativeCausalChain: vi.fn(),
+      generateCoreExpression: vi.fn(),
+      generateCoreExpressionBatch: vi.fn(),
+      generateSceneList: vi.fn(),
+      createEpisode: vi.fn(),
+      deleteEpisode: vi.fn(),
+    } as ReturnType<typeof useEpisodeStore>);
+
+    render(<EpisodeWorkflow />);
+
+    await userEvent.click(screen.getByText('单集创作'));
+
+    expect(screen.getByRole('tab', { name: '1. 核心表达' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '2. 分场脚本' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '3. 分镜列表' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '4. 分镜细化' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '5. 声音与时长' })).toBeInTheDocument();
   });
 
   it('场景锚点应支持复制 ZH/EN（仅复制纯提示词）', async () => {
@@ -143,6 +214,7 @@ describe('EpisodeWorkflow', () => {
       planEpisodes: vi.fn(),
       buildNarrativeCausalChain: vi.fn(),
       generateCoreExpression: vi.fn(),
+      generateCoreExpressionBatch: vi.fn(),
       generateSceneList: vi.fn(),
       createEpisode: vi.fn(),
       deleteEpisode: vi.fn(),
@@ -180,7 +252,7 @@ describe('EpisodeWorkflow', () => {
     render(<EpisodeWorkflow />);
 
     await userEvent.click(screen.getByText('单集创作'));
-    await userEvent.click(screen.getByRole('tab', { name: '2. 分镜列表' }));
+    await userEvent.click(screen.getByRole('tab', { name: '3. 分镜列表' }));
     await userEvent.click(screen.getByRole('button', { name: '详情' }));
 
     expect(await screen.findByText('分镜 #1')).toBeInTheDocument();

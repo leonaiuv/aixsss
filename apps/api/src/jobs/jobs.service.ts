@@ -346,6 +346,163 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueGenerateSceneScript(teamId: string, projectId: string, episodeId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireEpisode(projectId, episodeId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        episodeId,
+        aiProfileId,
+        type: 'generate_scene_script',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_scene_script',
+      { teamId, projectId, episodeId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueGenerateEmotionArc(teamId: string, projectId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        aiProfileId,
+        type: 'generate_emotion_arc',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_emotion_arc',
+      { teamId, projectId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueGenerateSoundDesign(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'generate_sound_design',
+        status: 'queued',
+      },
+    });
+
+    try {
+      await this.prisma.scene.update({ where: { id: sceneId }, data: { status: 'sound_design_generating' } });
+    } catch {
+      // ignore
+    }
+
+    await this.queue.add(
+      'generate_sound_design',
+      { teamId, projectId, sceneId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueGenerateCharacterRelationships(teamId: string, projectId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        aiProfileId,
+        type: 'generate_character_relationships',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'generate_character_relationships',
+      { teamId, projectId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueEstimateDuration(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireScene(projectId, sceneId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        type: 'estimate_duration',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'estimate_duration',
+      { teamId, projectId, sceneId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async enqueueGenerateSceneList(teamId: string, projectId: string, aiProfileId: string) {
     await this.requireProject(teamId, projectId);
     await this.requireAIProfile(teamId, aiProfileId);

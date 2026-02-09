@@ -12,6 +12,7 @@ import { HealthController } from './health/health.controller.js';
 import { JobsModule } from './jobs/jobs.module.js';
 import { EpisodesModule } from './episodes/episodes.module.js';
 import { SystemPromptsModule } from './system-prompts/system-prompts.module.js';
+import { CharacterRelationshipsModule } from './character-relationships/character-relationships.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { SystemPromptsModule } from './system-prompts/system-prompts.module.js';
     EpisodesModule,
     ScenesModule,
     CharactersModule,
+    CharacterRelationshipsModule,
     WorldViewModule,
     AIProfilesModule,
     JobsModule,
@@ -33,4 +35,3 @@ import { SystemPromptsModule } from './system-prompts/system-prompts.module.js';
   controllers: [HealthController],
 })
 export class AppModule {}
-

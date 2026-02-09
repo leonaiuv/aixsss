@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EPISODE_WORKFLOW_STATES } from '../types.js';
+import { EmotionArcPointSchema } from './emotionArc.js';
 
 export const EpisodeWorkflowStateSchema = z.enum(EPISODE_WORKFLOW_STATES);
 
@@ -16,6 +17,9 @@ export const CreateEpisodeInputSchema = z.object({
   outline: z.unknown().optional(),
   coreExpression: z.unknown().optional(),
   contextCache: z.unknown().optional(),
+  sceneScriptDraft: z.string().min(0).max(200000).optional(),
+  emotionArcJson: z.unknown().optional(),
+  durationEstimateJson: z.unknown().optional(),
   workflowState: EpisodeWorkflowStateSchema.optional(),
 });
 
@@ -73,7 +77,22 @@ export const CoreExpressionSchema = z.object({
   visualMotifs: z.array(z.string().min(1).max(200)).default([]),
   endingBeat: z.string().min(1).max(2000),
   nextHook: z.string().min(0).max(2000).optional().nullable(),
+  emotionArcPoints: z.array(EmotionArcPointSchema).optional(),
 });
 
 export type CoreExpression = z.infer<typeof CoreExpressionSchema>;
 
+export const EpisodeScriptSchema = z.object({
+  title: z.string().min(0).max(200).default(''),
+  draft: z.string().min(0).max(200000).default(''),
+  scenes: z.array(
+    z.object({
+      order: z.number().int().min(1),
+      sceneHeading: z.string().min(1),
+      summary: z.string().min(0).max(2000).default(''),
+    }),
+  ).default([]),
+  generatedAt: z.string().optional(),
+});
+
+export type EpisodeScript = z.infer<typeof EpisodeScriptSchema>;

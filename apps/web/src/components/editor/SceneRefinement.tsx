@@ -71,6 +71,7 @@ import {
   type SceneStep,
 } from '@/types';
 import { TemplateGallery } from './TemplateGallery';
+import { DurationEstimateBar } from './DurationEstimateBar';
 import { useConfirm } from '@/hooks/use-confirm';
 import {
   useKeyboardShortcut,
@@ -2409,6 +2410,8 @@ export function SceneRefinement() {
                   </div>
                 );
               })()}
+
+              <DurationEstimateBar scene={currentScene} />
             </div>
 
             <p className="text-xs text-muted-foreground mt-3">

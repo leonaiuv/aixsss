@@ -751,6 +751,18 @@ ${project.artStyleConfig.fullPrompt}
 
     markdown += `**主角:** ${project.protagonist}\n\n`;
     markdown += `**剧情简介:**\n${project.summary}\n\n`;
+    if (Array.isArray(project.contextCache?.emotionArc) && project.contextCache.emotionArc.length) {
+      markdown += `**情绪弧线:**\n`;
+      project.contextCache.emotionArc.forEach((point, idx) => {
+        const beat = (point as { beat?: unknown }).beat;
+        const value = (point as { value?: unknown }).value;
+        const note = (point as { note?: unknown }).note;
+        markdown += `- ${idx + 1}. ${typeof beat === 'string' ? beat : '未命名节点'}: ${
+          typeof value === 'number' ? value : '-'
+        }${typeof note === 'string' && note ? `（${note}）` : ''}\n`;
+      });
+      markdown += `\n`;
+    }
 
     // 角色信息
     if (projectCharacters.length > 0) {
@@ -783,6 +795,15 @@ ${char.portraitPrompts.general}
           markdown += `**场景锚点（Scene Anchor）:**\n${scene.sceneDescription}\n\n`;
         }
 
+        if (scene.sceneScriptJson) {
+          markdown += `**分场脚本片段:**
+\`\`\`json
+${JSON.stringify(scene.sceneScriptJson, null, 2)}
+\`\`\`
+
+`;
+        }
+
         if (scene.shotPrompt) {
           markdown += `**关键帧提示词（KF0-KF8）:**
 \`\`\`
@@ -796,6 +817,24 @@ ${scene.shotPrompt}
           markdown += `**时空/运动提示词:**
 \`\`\`
 ${scene.motionPrompt}
+\`\`\`
+
+`;
+        }
+
+        if (scene.soundDesignJson) {
+          markdown += `**声音设计:**
+\`\`\`json
+${JSON.stringify(scene.soundDesignJson, null, 2)}
+\`\`\`
+
+`;
+        }
+
+        if (scene.durationEstimateJson) {
+          markdown += `**时长估算:**
+\`\`\`json
+${JSON.stringify(scene.durationEstimateJson, null, 2)}
 \`\`\`
 
 `;

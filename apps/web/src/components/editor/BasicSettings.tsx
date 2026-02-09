@@ -153,6 +153,9 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
   const minProtagonistLength = props.minProtagonistLength ?? 20;
   const maxSummaryLength = 300;
   const maxProtagonistLength = 150;
+  const emotionArcPointCount = Array.isArray(currentProject?.contextCache?.emotionArc)
+    ? currentProject.contextCache.emotionArc.length
+    : 0;
 
   const canProceed =
     formData.summary.length >= minSummaryLength &&
@@ -803,6 +806,23 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
                         此处的所有描述将被提取为"项目上下文"，贯穿整个创作流程，请务必准确。
                       </p>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-muted/60 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                      <History className="w-4 h-4 text-primary" /> 专业工作流状态
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between">
+                      <span>情绪弧线节点</span>
+                      <Badge variant="outline">{emotionArcPointCount}</Badge>
+                    </div>
+                    <p>
+                      后续可在「单集创作 {'>'} 分场脚本」中生成/编辑情绪弧线与角色关系图谱。
+                    </p>
                   </CardContent>
                 </Card>
               </div>

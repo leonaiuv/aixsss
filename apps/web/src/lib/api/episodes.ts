@@ -25,6 +25,9 @@ export async function apiCreateEpisode(
     summary: input.summary ?? '',
     outline: input.outline ?? undefined,
     coreExpression: input.coreExpression ?? undefined,
+    sceneScriptDraft: input.sceneScriptDraft ?? undefined,
+    emotionArcJson: input.emotionArcJson ?? undefined,
+    durationEstimateJson: input.durationEstimateJson ?? undefined,
     contextCache: input.contextCache ?? undefined,
     workflowState: input.workflowState ?? undefined,
   };
@@ -45,6 +48,11 @@ export async function apiUpdateEpisode(
     ...(typeof updates.summary === 'string' ? { summary: updates.summary } : {}),
     ...(updates.outline !== undefined ? { outline: updates.outline } : {}),
     ...(updates.coreExpression !== undefined ? { coreExpression: updates.coreExpression } : {}),
+    ...(updates.sceneScriptDraft !== undefined ? { sceneScriptDraft: updates.sceneScriptDraft } : {}),
+    ...(updates.emotionArcJson !== undefined ? { emotionArcJson: updates.emotionArcJson } : {}),
+    ...(updates.durationEstimateJson !== undefined
+      ? { durationEstimateJson: updates.durationEstimateJson }
+      : {}),
     ...(updates.contextCache !== undefined ? { contextCache: updates.contextCache } : {}),
     ...(typeof updates.workflowState === 'string' ? { workflowState: updates.workflowState } : {}),
   };
