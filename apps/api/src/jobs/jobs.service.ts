@@ -472,6 +472,74 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueExpandStoryCharacters(
+    teamId: string,
+    projectId: string,
+    aiProfileId: string,
+    options?: { maxNewCharacters?: number },
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const maxNewCharacters = options?.maxNewCharacters;
+    if (maxNewCharacters !== undefined && (maxNewCharacters < 1 || maxNewCharacters > 20)) {
+      throw new BadRequestException('maxNewCharacters out of range');
+    }
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        aiProfileId,
+        type: 'expand_story_characters',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'expand_story_characters',
+      { teamId, projectId, aiProfileId, jobId: jobRow.id, maxNewCharacters },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
+  async enqueueRunWorkflowSupervisor(teamId: string, projectId: string, aiProfileId: string) {
+    await this.requireProject(teamId, projectId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        aiProfileId,
+        type: 'run_workflow_supervisor',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'run_workflow_supervisor',
+      { teamId, projectId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async enqueueEstimateDuration(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
     await this.requireProject(teamId, projectId);
     await this.requireScene(projectId, sceneId);

@@ -29,6 +29,10 @@ const NarrativeCausalChainBodySchema = WorkflowBodySchema.extend({
   force: z.boolean().optional(),
 });
 
+const ExpandStoryCharactersBodySchema = WorkflowBodySchema.extend({
+  maxNewCharacters: z.number().int().min(1).max(20).optional(),
+});
+
 const RefineAllScenesBodySchema = WorkflowBodySchema.extend({
   sceneIds: z.array(z.string().min(1)).optional(),
 });
@@ -129,6 +133,28 @@ export class WorkflowController {
   ) {
     const input = parseOrBadRequest(WorkflowBodySchema, body);
     return this.jobs.enqueueGenerateCharacterRelationships(user.teamId, projectId, input.aiProfileId);
+  }
+
+  @Post('projects/:projectId/characters/expand')
+  expandStoryCharacters(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(ExpandStoryCharactersBodySchema, body);
+    return this.jobs.enqueueExpandStoryCharacters(user.teamId, projectId, input.aiProfileId, {
+      maxNewCharacters: input.maxNewCharacters,
+    });
+  }
+
+  @Post('projects/:projectId/supervisor/run')
+  runWorkflowSupervisor(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueRunWorkflowSupervisor(user.teamId, projectId, input.aiProfileId);
   }
 
   @Post('projects/:projectId/scene-list')

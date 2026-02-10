@@ -229,6 +229,7 @@ export function WorkflowWorkbench(props: {
   onRunGenerateCoreExpression: () => void;
   onRunGenerateSceneScript?: () => void;
   onRunGenerateSceneList: () => void;
+  onRunWorkflowSupervisor?: () => void;
   onRunGenerateEmotionArc?: () => void;
   onRunGenerateCharacterRelationships?: () => void;
   onRunBatchRefineAll: () => void;
@@ -544,7 +545,15 @@ export function WorkflowWorkbench(props: {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-2 md:grid-cols-3">
+              <div className="grid gap-2 md:grid-cols-4">
+                <Button
+                  variant="default"
+                  onClick={props.onRunWorkflowSupervisor}
+                  disabled={!props.onRunWorkflowSupervisor}
+                  className="justify-between"
+                >
+                  一键运行 Agent 流程 <ArrowRight className="w-4 h-4" />
+                </Button>
                 <Button
                   variant="outline"
                   onClick={props.onRunGenerateSceneScript}

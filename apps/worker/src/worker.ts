@@ -24,6 +24,8 @@ import { generateSoundDesign } from './tasks/generateSoundDesign.js';
 import { generateCharacterRelationships } from './tasks/generateCharacterRelationships.js';
 import { estimateDuration } from './tasks/estimateDuration.js';
 import { buildNarrativeCausalChain } from './tasks/buildNarrativeCausalChain.js';
+import { expandStoryCharacters } from './tasks/expandStoryCharacters.js';
+import { runWorkflowSupervisor } from './tasks/runWorkflowSupervisor.js';
 import {
   backTranslateStoryboardPanels,
   generateStoryboardGroup,
@@ -196,7 +198,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
@@ -225,7 +227,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
@@ -251,7 +253,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
@@ -284,7 +286,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
@@ -420,6 +422,59 @@ async function main() {
                   status: 'succeeded',
                   finishedAt: new Date(),
                   result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'expand_story_characters': {
+            const maxNewCharacters =
+              typeof data.maxNewCharacters === 'number' ? data.maxNewCharacters : undefined;
+            const result = await expandStoryCharacters({
+              prisma,
+              teamId,
+              projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              maxNewCharacters,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'run_workflow_supervisor': {
+            const result = await runWorkflowSupervisor({
+              prisma,
+              teamId,
+              projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });

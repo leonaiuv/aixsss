@@ -301,6 +301,7 @@ describe('progressBridge', () => {
         { type: 'emotion_arc' as const, title: '生成情绪弧线' },
         { type: 'sound_design' as const, title: '生成声音设计' },
         { type: 'character_relationships' as const, title: '生成角色关系图谱' },
+        { type: 'character_expansion' as const, title: '扩充角色体系' },
         { type: 'duration_estimate' as const, title: '估算分镜时长' },
         { type: 'custom' as const, title: '自定义AI调用' },
       ];

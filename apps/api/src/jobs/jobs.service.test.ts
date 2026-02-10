@@ -96,5 +96,31 @@ describe('JobsService new workflow enqueue', () => {
       expect.any(Object),
     );
   });
-});
 
+  it('enqueueExpandStoryCharacters should add expand_story_characters job', async () => {
+    await service.enqueueExpandStoryCharacters('t1', 'p1', 'a1', { maxNewCharacters: 9 });
+    expect(queue.add).toHaveBeenCalledWith(
+      'expand_story_characters',
+      expect.objectContaining({
+        teamId: 't1',
+        projectId: 'p1',
+        aiProfileId: 'a1',
+        maxNewCharacters: 9,
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('enqueueRunWorkflowSupervisor should add run_workflow_supervisor job', async () => {
+    await service.enqueueRunWorkflowSupervisor('t1', 'p1', 'a1');
+    expect(queue.add).toHaveBeenCalledWith(
+      'run_workflow_supervisor',
+      expect.objectContaining({
+        teamId: 't1',
+        projectId: 'p1',
+        aiProfileId: 'a1',
+      }),
+      expect.any(Object),
+    );
+  });
+});

@@ -25,6 +25,7 @@ export type AICallType =
   | 'scene_refine_all' // 一键细化（后端工作流）
   | 'sound_design' // 声音设计生成
   | 'character_relationships' // 角色关系图谱生成
+  | 'character_expansion' // 角色体系扩充
   | 'duration_estimate' // 时长估算
   | 'storyboard_scene_bible' // Storyboard 81：SceneBible（压缩档）
   | 'storyboard_plan' // Storyboard 81：9组大纲（Plan）
@@ -214,6 +215,7 @@ function formatLogOutput(entry: AICallLogEntry): void {
     scene_refine_all: '✨ 一键细化',
     sound_design: '🔊 声音设计生成',
     character_relationships: '🕸️ 角色关系图谱生成',
+    character_expansion: '🧬 角色体系扩充',
     duration_estimate: '⏱️ 时长估算',
     storyboard_scene_bible: '🧾 Storyboard：SceneBible',
     storyboard_plan: '🧩 Storyboard：Plan（9组大纲）',

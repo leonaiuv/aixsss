@@ -3,6 +3,14 @@ import type { JobProgress } from 'bullmq';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
+import { runJsonToolLoop } from '../agents/runtime/jsonToolLoop.js';
+import {
+  getAgentMaxSteps,
+  getAgentStepTimeoutMs,
+  getAgentTotalTimeoutMs,
+  isAgentFallbackToLegacyEnabled,
+  isAgentNarrativePhase34Enabled,
+} from '../agents/runtime/featureFlags.js';
 import { randomUUID } from 'node:crypto';
 import { mergeTokenUsage, toProviderChatConfig, styleFullPrompt, isRecord } from './common.js';
 import { loadSystemPrompt } from './systemPrompts.js';
@@ -406,6 +414,25 @@ function previewLLMOutput(text: string, maxChars = 5000): string {
   const head = raw.slice(0, headLen);
   const tail = raw.slice(-tailLen);
   return `${head}\n\n...TRUNCATED...\n\n${tail}`.trim();
+}
+
+function summarizeAgentSteps(trace: unknown): Array<{ index: number; kind: string; summary: string }> {
+  if (!isRecord(trace) || !Array.isArray(trace.steps)) return [];
+  return trace.steps
+    .map((item) => (isRecord(item) ? item : null))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .map((item, idx) => {
+      const kind = typeof item.kind === 'string' ? item.kind : 'unknown';
+      const toolName =
+        isRecord(item.toolCall) && typeof item.toolCall.name === 'string'
+          ? item.toolCall.name
+          : null;
+      return {
+        index: typeof item.index === 'number' ? item.index : idx + 1,
+        kind,
+        summary: toolName ? `${kind}:${toolName}` : kind,
+      };
+    });
 }
 
 // ===================== 阶段1：核心冲突引擎 =====================
@@ -834,6 +861,68 @@ export async function buildNarrativeCausalChain(args: {
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
   const providerConfig = toProviderChatConfig(profile);
   providerConfig.apiKey = apiKey;
+
+  let executionMode: 'agent' | 'legacy' = 'legacy';
+  let fallbackUsed = false;
+  let agentTrace: unknown = null;
+  let stepSummaries: Array<{ index: number; kind: string; summary: string }> = [];
+
+  if (targetPhase >= 3 && isAgentNarrativePhase34Enabled()) {
+    await updateProgress({ pct: 10, message: `阶段${targetPhase} Agent 规划中...` });
+    const systemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.narrative_causal_chain.phase3_4.agent.system',
+    });
+
+    const loop = await runJsonToolLoop<{ proceed: true }>({
+      initialMessages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            `目标阶段: ${targetPhase}`,
+            `force: ${args.force === true ? 'true' : 'false'}`,
+            '请先判断是否需要读取上下文，再输出 final {"proceed": true}。',
+          ].join('\n'),
+        },
+      ],
+      callModel: async (messages, meta) => {
+        await updateProgress({
+          pct: Math.min(18, 10 + meta.stepIndex * 2),
+          message: `阶段${targetPhase} Agent 步骤 ${meta.stepIndex}...`,
+        });
+        return await chatWithProvider(providerConfig, messages);
+      },
+      tools: {
+        read_phase_context: {
+          description: '读取阶段执行所需上下文摘要',
+          execute: async () => ({
+            targetPhase,
+            completedPhase,
+            hasExistingChain: Boolean(existingChain),
+            summary: project.summary,
+            style: styleFullPrompt(project),
+          }),
+        },
+      },
+      maxSteps: getAgentMaxSteps(),
+      stepTimeoutMs: getAgentStepTimeoutMs(),
+      totalTimeoutMs: getAgentTotalTimeoutMs(),
+      parseFinal: (value) => {
+        const parsed = isRecord(value) && value.proceed === true;
+        if (!parsed) throw new Error('Agent final must be {"proceed": true}');
+        return { proceed: true };
+      },
+      fallbackEnabled: isAgentFallbackToLegacyEnabled(),
+      fallback: async () => ({ final: { proceed: true }, reason: 'agent_failed_use_legacy' }),
+    });
+
+    executionMode = loop.executionMode;
+    fallbackUsed = loop.fallbackUsed;
+    agentTrace = loop.trace;
+    stepSummaries = summarizeAgentSteps(loop.trace);
+  }
 
   let tokenUsage = { prompt: 0, completion: 0, total: 0 };
   let extractedJson: string | null = null;
@@ -1600,5 +1689,9 @@ export async function buildNarrativeCausalChain(args: {
     fixed,
     lastParseError,
     tokenUsage,
+    executionMode,
+    fallbackUsed,
+    agentTrace,
+    stepSummaries,
   };
 }

@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useCustomStyleStore } from '@/stores/customStyleStore';
+import { useWorldViewStore } from '@/stores/worldViewStore';
+import { useCharacterStore } from '@/stores/characterStore';
+import { useConfigStore } from '@/stores/configStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -63,6 +66,11 @@ import {
 import { WorldViewBuilder } from './WorldViewBuilder';
 import { CharacterManager } from './CharacterManager';
 import { useToast } from '@/hooks/use-toast';
+import { AIFactory } from '@/lib/ai/factory';
+import {
+  buildGlobalSettingsGenerationPrompt,
+  parseGeneratedGlobalSettingsPayload,
+} from '@/lib/ai/globalSettingsGeneration';
 import {
   useKeyboardShortcut,
   GLOBAL_SHORTCUTS,
@@ -88,6 +96,19 @@ export type BasicSettingsProps = {
 export function BasicSettings(props: BasicSettingsProps = {}) {
   const { currentProject, updateProject } = useProjectStore();
   const { toast } = useToast();
+  const { config } = useConfigStore();
+  const {
+    elements,
+    loadElements,
+    addElement,
+    updateElement,
+  } = useWorldViewStore();
+  const {
+    characters,
+    loadCharacters,
+    addCharacter,
+    updateCharacter,
+  } = useCharacterStore();
   const {
     customStyles,
     loadCustomStyles,
@@ -130,6 +151,9 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
   });
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [styleToDelete, setStyleToDelete] = useState<string | null>(null);
+  const [globalGenerateOpen, setGlobalGenerateOpen] = useState(false);
+  const [globalInspiration, setGlobalInspiration] = useState('');
+  const [isGlobalGenerating, setIsGlobalGenerating] = useState(false);
 
   // 加载自定义画风
   useEffect(() => {
@@ -149,10 +173,24 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.id]);
 
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    loadElements(currentProject.id);
+    loadCharacters(currentProject.id);
+  }, [currentProject?.id, loadCharacters, loadElements]);
+
   const minSummaryLength = props.minSummaryLength ?? 50;
   const minProtagonistLength = props.minProtagonistLength ?? 20;
   const maxSummaryLength = 300;
   const maxProtagonistLength = 150;
+  const projectWorldViewElements = useMemo(
+    () => elements.filter((item) => item.projectId === currentProject?.id),
+    [currentProject?.id, elements],
+  );
+  const projectCharacters = useMemo(
+    () => characters.filter((item) => item.projectId === currentProject?.id),
+    [characters, currentProject?.id],
+  );
   const emotionArcPointCount = Array.isArray(currentProject?.contextCache?.emotionArc)
     ? currentProject.contextCache.emotionArc.length
     : 0;
@@ -230,6 +268,151 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
     } else {
       // 触发进入下一步的事件（旧版编辑器）
       window.dispatchEvent(new CustomEvent('workflow:next-step'));
+    }
+  };
+
+  const handleGenerateAllGlobalSettings = async () => {
+    if (!currentProject) return;
+    if (!config) {
+      toast({
+        title: '请先配置 AI',
+        description: '当前未检测到可用 AI 配置，无法执行一键生成。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const inspiration = globalInspiration.trim();
+    if (inspiration.length < 8) {
+      toast({
+        title: '灵感内容过短',
+        description: '请至少输入 8 个字，方便 AI 生成完整设定。',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGlobalGenerating(true);
+    try {
+      const client = AIFactory.createClient(config);
+      const prompt = buildGlobalSettingsGenerationPrompt({
+        inspiration,
+        currentSummary: formData.summary,
+        currentProtagonist: formData.protagonist,
+        currentStyleFullPrompt: styleConfig.fullPrompt,
+      });
+
+      const response = await client.chat([{ role: 'user', content: prompt }]);
+      const parsed = parseGeneratedGlobalSettingsPayload(response.content);
+      if (!parsed.ok) {
+        throw new Error(parsed.details ? `${parsed.reason}\n${parsed.details}` : parsed.reason);
+      }
+
+      const generated = parsed.value;
+      const nextStyleConfig: ArtStyleConfig = {
+        ...generated.artStyle,
+        presetId: 'custom',
+      };
+
+      setFormData({
+        summary: generated.summary,
+        protagonist: generated.protagonist,
+      });
+      setStyleConfig(nextStyleConfig);
+
+      updateProject(currentProject.id, {
+        summary: generated.summary,
+        protagonist: generated.protagonist,
+        style: nextStyleConfig.presetId,
+        artStyleConfig: nextStyleConfig,
+      });
+
+      const worldViewKey = (type: string, title: string) =>
+        `${type}::${title.trim().toLowerCase()}`;
+      const existingWorldViewMap = new Map(
+        projectWorldViewElements.map((item) => [worldViewKey(item.type, item.title), item] as const),
+      );
+
+      let worldViewAdded = 0;
+      let worldViewUpdated = 0;
+      for (const item of generated.worldViewElements) {
+        const key = worldViewKey(item.type, item.title);
+        const existing = existingWorldViewMap.get(key);
+        if (existing) {
+          updateElement(currentProject.id, existing.id, {
+            type: item.type,
+            title: item.title,
+            content: item.content,
+          });
+          worldViewUpdated += 1;
+        } else {
+          addElement(currentProject.id, {
+            projectId: currentProject.id,
+            type: item.type,
+            title: item.title,
+            content: item.content,
+            order: projectWorldViewElements.length + worldViewAdded + 1,
+          });
+          worldViewAdded += 1;
+        }
+      }
+
+      const characterKey = (name: string) => name.trim().toLowerCase();
+      const existingCharacterMap = new Map(
+        projectCharacters.map((item) => [characterKey(item.name), item] as const),
+      );
+
+      let characterAdded = 0;
+      let characterUpdated = 0;
+      for (const item of generated.characters) {
+        const key = characterKey(item.name);
+        const existing = existingCharacterMap.get(key);
+        if (existing) {
+          updateCharacter(currentProject.id, existing.id, {
+            name: item.name,
+            briefDescription: item.briefDescription,
+            appearance: item.appearance,
+            personality: item.personality,
+            background: item.background,
+            ...(item.primaryColor ? { primaryColor: item.primaryColor } : {}),
+            ...(item.secondaryColor ? { secondaryColor: item.secondaryColor } : {}),
+          });
+          characterUpdated += 1;
+        } else {
+          addCharacter(currentProject.id, {
+            projectId: currentProject.id,
+            name: item.name,
+            briefDescription: item.briefDescription,
+            appearance: item.appearance,
+            personality: item.personality,
+            background: item.background,
+            relationships: [],
+            appearances: [],
+            ...(item.primaryColor ? { primaryColor: item.primaryColor } : {}),
+            ...(item.secondaryColor ? { secondaryColor: item.secondaryColor } : {}),
+          });
+          characterAdded += 1;
+        }
+      }
+
+      setLastSavedAt(
+        new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      );
+      setGlobalGenerateOpen(false);
+      setGlobalInspiration('');
+      toast({
+        title: '已生成并保存全局设定',
+        description: `基础设定已更新；世界观新增 ${worldViewAdded} 条、更新 ${worldViewUpdated} 条；角色新增 ${characterAdded} 个、更新 ${characterUpdated} 个。`,
+      });
+    } catch (error) {
+      console.error('一键生成全局设定失败:', error);
+      toast({
+        title: '生成失败',
+        description: error instanceof Error ? error.message : '请稍后重试',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGlobalGenerating(false);
     }
   };
 
@@ -398,6 +581,17 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
         </div>
         <div className="flex flex-col items-end gap-3">
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="default"
+              className="gap-2"
+              onClick={() => setGlobalGenerateOpen(true)}
+              disabled={isGlobalGenerating}
+            >
+              <Sparkles className="w-4 h-4" />
+              一键生成全局设定
+            </Button>
+
             {/* Status Indicator */}
             <div
               className={cn(
@@ -836,6 +1030,44 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
           <CharacterManager projectId={currentProject.id} />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={globalGenerateOpen} onOpenChange={setGlobalGenerateOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>一键生成全局设定</DialogTitle>
+            <DialogDescription>
+              输入你的灵感关键词或故事片段，AI 会自动生成基础信息、世界观要素和角色卡，并直接保存。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <Label htmlFor="global-inspiration">灵感输入</Label>
+            <Textarea
+              id="global-inspiration"
+              value={globalInspiration}
+              onChange={(event) => setGlobalInspiration(event.target.value)}
+              placeholder="例如：赛博都市、记忆篡改、失踪的姐姐、地下抵抗组织..."
+              className="min-h-[180px]"
+            />
+            <p className="text-xs text-muted-foreground">
+              生成策略：按“标题/姓名”智能合并已有内容，未命中时新增，不会自动删除现有设定。
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setGlobalGenerateOpen(false)}
+              disabled={isGlobalGenerating}
+            >
+              取消
+            </Button>
+            <Button onClick={handleGenerateAllGlobalSettings} disabled={isGlobalGenerating}>
+              {isGlobalGenerating ? '生成中...' : '开始生成并保存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 自定义画风创建/编辑对话框 */}
       <Dialog open={showCustomStyleDialog} onOpenChange={setShowCustomStyleDialog}>

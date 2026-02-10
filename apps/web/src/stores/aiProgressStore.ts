@@ -701,6 +701,7 @@ export function getTaskTypeLabel(type: AICallType): string {
     emotion_arc: '情绪弧线生成',
     sound_design: '声音设计生成',
     character_relationships: '角色关系图谱生成',
+    character_expansion: '角色体系扩充',
     duration_estimate: '时长估算',
     scene_refine_all: '一键细化',
     storyboard_scene_bible: 'Storyboard：SceneBible',

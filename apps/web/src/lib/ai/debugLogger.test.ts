@@ -97,6 +97,7 @@ describe('debugLogger', () => {
         'scene_refine_all',
         'sound_design',
         'character_relationships',
+        'character_expansion',
         'duration_estimate',
         'character_basic_info',
         'character_portrait',

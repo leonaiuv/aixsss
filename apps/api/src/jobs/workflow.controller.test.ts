@@ -8,6 +8,8 @@ describe('WorkflowController new routes', () => {
     enqueueGenerateSoundDesign: vi.fn().mockResolvedValue({ id: 'job3' }),
     enqueueGenerateCharacterRelationships: vi.fn().mockResolvedValue({ id: 'job4' }),
     enqueueEstimateDuration: vi.fn().mockResolvedValue({ id: 'job5' }),
+    enqueueExpandStoryCharacters: vi.fn().mockResolvedValue({ id: 'job6' }),
+    enqueueRunWorkflowSupervisor: vi.fn().mockResolvedValue({ id: 'job7' }),
   };
   const controller = new WorkflowController(jobs as never);
   const user = { teamId: 't1' } as { teamId: string };
@@ -37,5 +39,26 @@ describe('WorkflowController new routes', () => {
     await controller.estimateDuration(user as never, 'p1', 's1', { aiProfileId: 'a1' });
     expect(jobs.enqueueEstimateDuration).toHaveBeenCalledWith('t1', 'p1', 's1', 'a1');
   });
-});
 
+  it('expandStoryCharacters should validate maxNewCharacters and enqueue', async () => {
+    await controller.expandStoryCharacters(user as never, 'p1', {
+      aiProfileId: 'a1',
+      maxNewCharacters: 6,
+    });
+    expect(jobs.enqueueExpandStoryCharacters).toHaveBeenCalledWith('t1', 'p1', 'a1', {
+      maxNewCharacters: 6,
+    });
+
+    expect(() =>
+      controller.expandStoryCharacters(user as never, 'p1', {
+        aiProfileId: 'a1',
+        maxNewCharacters: 0,
+      }),
+    ).toThrow();
+  });
+
+  it('runWorkflowSupervisor should enqueue project scoped supervisor job', async () => {
+    await controller.runWorkflowSupervisor(user as never, 'p1', { aiProfileId: 'a1' });
+    expect(jobs.enqueueRunWorkflowSupervisor).toHaveBeenCalledWith('t1', 'p1', 'a1');
+  });
+});

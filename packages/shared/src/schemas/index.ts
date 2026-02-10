@@ -8,6 +8,7 @@ export * from './shotDictionary.js';
 export * from './transition.js';
 export * from './soundDesign.js';
 export * from './durationEstimate.js';
+export * from './agentTrace.js';
 export * from './narrativeCausalChain.js';
 export * from './auth.js';
 export * from './aiProfile.js';

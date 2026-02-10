@@ -440,6 +440,32 @@ export interface ProjectContextCache {
   narrativeCausalChainUpdatedAt?: string;
   emotionArc?: EmotionArcPoint[];
   emotionArcUpdatedAt?: string;
+  characterExpansion?: {
+    runId: string;
+    generatedAt: string;
+    source: 'narrative_causal_chain';
+    maxNewCharacters?: number;
+    candidates: Array<{
+      tempId: string;
+      name: string;
+      aliases?: string[];
+      roleType?: string;
+      briefDescription?: string;
+      appearance?: string;
+      personality?: string;
+      background?: string;
+      confidence?: number;
+      evidence?: string[];
+    }>;
+    stats?: {
+      total?: number;
+      existingSkipped?: number;
+      duplicatesResolved?: number;
+      lowConfidenceSkipped?: number;
+      finalCount?: number;
+    };
+  };
+  characterExpansionUpdatedAt?: string;
 
   /**
    * 工作流 V2：产物视角（可选）

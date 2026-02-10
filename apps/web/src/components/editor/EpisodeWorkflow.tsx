@@ -25,6 +25,8 @@ import {
   apiWorkflowRefineAllScenes,
   apiWorkflowRefineSceneAll,
   apiWorkflowGenerateSceneScript,
+  apiWorkflowExpandStoryCharacters,
+  apiWorkflowRunSupervisor,
   apiWorkflowGenerateSoundDesign,
   apiWorkflowEstimateDuration,
 } from '@/lib/api/workflow';
@@ -166,9 +168,46 @@ type BatchRefineProgress = NormalizedJobProgress & {
   failedScenes: BatchFailedScene[];
 };
 
+type WorkflowJobResultLike = {
+  tokenUsage?: unknown;
+  extractedJson?: unknown;
+  raw?: unknown;
+  executionMode?: unknown;
+  fallbackUsed?: unknown;
+  stepSummaries?: unknown;
+};
+
 type StoryboardJobState =
   | { sceneId: string; type: 'scene_bible' | 'plan' | 'translate' | 'back_translate' }
   | { sceneId: string; type: 'group'; groupId: string };
+
+type CharacterExpansionCandidate = {
+  tempId: string;
+  name: string;
+  aliases: string[];
+  roleType: string;
+  briefDescription: string;
+  appearance: string;
+  personality: string;
+  background: string;
+  confidence: number;
+  evidence: string[];
+};
+
+type CharacterExpansionSnapshot = {
+  runId: string;
+  generatedAt: string;
+  source: 'narrative_causal_chain';
+  maxNewCharacters?: number;
+  candidates: CharacterExpansionCandidate[];
+  stats?: {
+    total?: number;
+    existingSkipped?: number;
+    duplicatesResolved?: number;
+    lowConfidenceSkipped?: number;
+    finalCount?: number;
+  };
+};
 
 interface JobProgressLike {
   pct?: unknown;
@@ -242,6 +281,72 @@ function isAbortError(error: unknown): boolean {
     return true;
   }
   return false;
+}
+
+function safeText(value: unknown, maxLen = 1500): string {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return trimmed.slice(0, maxLen);
+}
+
+function normalizeNameKey(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function normalizeCharacterExpansion(value: unknown): CharacterExpansionSnapshot | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const runId = safeText(raw.runId, 120);
+  const generatedAt = safeText(raw.generatedAt, 120);
+  const source = raw.source === 'narrative_causal_chain' ? 'narrative_causal_chain' : null;
+  const candidates = Array.isArray(raw.candidates)
+    ? raw.candidates
+        .map((item) => {
+          if (!item || typeof item !== 'object') return null;
+          const candidate = item as Record<string, unknown>;
+          const tempId = safeText(candidate.tempId, 120);
+          const name = safeText(candidate.name, 80);
+          if (!tempId || !name) return null;
+          return {
+            tempId,
+            name,
+            aliases: Array.isArray(candidate.aliases)
+              ? candidate.aliases
+                  .filter((alias): alias is string => typeof alias === 'string')
+                  .map((alias) => alias.trim())
+                  .filter(Boolean)
+              : [],
+            roleType: safeText(candidate.roleType, 40) || 'supporting',
+            briefDescription: safeText(candidate.briefDescription, 1500),
+            appearance: safeText(candidate.appearance, 1500),
+            personality: safeText(candidate.personality, 1500),
+            background: safeText(candidate.background, 1500),
+            confidence:
+              typeof candidate.confidence === 'number'
+                ? Math.max(0, Math.min(1, candidate.confidence))
+                : 0.75,
+            evidence: Array.isArray(candidate.evidence)
+              ? candidate.evidence
+                  .filter((e): e is string => typeof e === 'string')
+                  .map((e) => e.trim())
+                  .filter(Boolean)
+              : [],
+          } satisfies CharacterExpansionCandidate;
+        })
+        .filter((candidate): candidate is CharacterExpansionCandidate => candidate !== null)
+    : [];
+
+  if (!runId || !generatedAt || !source) return null;
+  return {
+    runId,
+    generatedAt,
+    source,
+    maxNewCharacters:
+      typeof raw.maxNewCharacters === 'number' ? raw.maxNewCharacters : undefined,
+    candidates,
+    stats: raw.stats && typeof raw.stats === 'object' ? (raw.stats as CharacterExpansionSnapshot['stats']) : undefined,
+  };
 }
 
 function getEpisodeStateLabel(state: Episode['workflowState']): string {
@@ -350,7 +455,7 @@ export function EpisodeWorkflow() {
   const setBatchSelectedScenes = useAIProgressStore((s) => s.setBatchSelectedScenes);
   const addBatchCompletedScene = useAIProgressStore((s) => s.addBatchCompletedScene);
   const addBatchFailedScene = useAIProgressStore((s) => s.addBatchFailedScene);
-  const { characters, loadCharacters } = useCharacterStore();
+  const { characters, loadCharacters, addCharacter } = useCharacterStore();
   const { elements: worldViewElements, loadElements: loadWorldViewElements } = useWorldViewStore();
 
   const {
@@ -391,6 +496,7 @@ export function EpisodeWorkflow() {
     emotionArc,
     isGenerating: isGeneratingEmotionArc,
     loadFromProject: loadEmotionArcFromProject,
+    syncFromApi: syncEmotionArcFromApi,
     generateEmotionArc,
   } = useEmotionArcStore();
 
@@ -398,6 +504,9 @@ export function EpisodeWorkflow() {
   const [targetEpisodeCount, setTargetEpisodeCount] = useState<number | ''>('');
   const [sceneCountHint, setSceneCountHint] = useState<number | ''>('');
   const [isGeneratingSceneScript, setIsGeneratingSceneScript] = useState(false);
+  const [isExpandingCharacters, setIsExpandingCharacters] = useState(false);
+  const [isRunningWorkflowSupervisor, setIsRunningWorkflowSupervisor] = useState(false);
+  const [selectedExpansionCandidates, setSelectedExpansionCandidates] = useState<string[]>([]);
   const [isGeneratingSoundSceneId, setIsGeneratingSoundSceneId] = useState<string | null>(null);
   const [isEstimatingDurationSceneId, setIsEstimatingDurationSceneId] = useState<string | null>(
     null,
@@ -477,6 +586,10 @@ export function EpisodeWorkflow() {
     if (!currentProject?.id) return [];
     return characters.filter((c) => c.projectId === currentProject.id);
   }, [characters, currentProject?.id]);
+  const characterExpansion = useMemo(
+    () => normalizeCharacterExpansion(currentProject?.contextCache?.characterExpansion),
+    [currentProject?.contextCache?.characterExpansion],
+  );
   const aiProfileId = config?.aiProfileId ?? null;
   const sortedScenes = useMemo(() => {
     return scenes.slice().sort((a, b) => a.order - b.order);
@@ -513,6 +626,14 @@ export function EpisodeWorkflow() {
   const setBatchSelectNone = () => {
     setBatchRefineSelectedIds([]);
   };
+
+  useEffect(() => {
+    if (!characterExpansion) {
+      setSelectedExpansionCandidates([]);
+      return;
+    }
+    setSelectedExpansionCandidates(characterExpansion.candidates.map((candidate) => candidate.tempId));
+  }, [characterExpansion?.runId]);
 
   const toggleBatchSelect = (sceneId: string, checked: boolean) => {
     setBatchRefineSelectedIds((prev) => {
@@ -825,6 +946,219 @@ export function EpisodeWorkflow() {
       const detail = error instanceof Error ? error.message : String(error);
       toast({ title: '关系图谱生成失败', description: detail, variant: 'destructive' });
     }
+  };
+
+  const handleExpandStoryCharacters = async () => {
+    if (!isApiMode()) {
+      toast({ title: '当前模式不支持', description: '角色体系扩充仅在 API 模式可用。' });
+      return;
+    }
+    if (!aiProfileId || !currentProject?.id) return;
+    setIsExpandingCharacters(true);
+
+    const logId = logAICall('character_expansion', {
+      skillName: 'workflow:expand_story_characters',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/characters/expand',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/characters/expand`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            aiProfileId,
+            maxNewCharacters: 8,
+          }),
+        },
+      ],
+      context: {
+        projectId: currentProject.id,
+        systemPromptKeys: ['workflow.character_expansion.system'],
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    try {
+      toast({ title: '丰满角色体系', description: '已入队，正在等待 AI 生成候选角色...' });
+      const job = await apiWorkflowExpandStoryCharacters({
+        projectId: currentProject.id,
+        aiProfileId,
+        maxNewCharacters: 8,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+
+      const result = (finished.result ?? null) as WorkflowJobResultLike | null;
+      const tokenUsage = normalizeJobTokenUsage(result?.tokenUsage);
+      const content =
+        typeof result?.extractedJson === 'string'
+          ? result.extractedJson
+          : typeof result?.raw === 'string'
+            ? result.raw
+            : safeJsonStringify(result);
+      updateLogWithResponse(logId, { content, tokenUsage });
+
+      useProjectStore.getState().loadProject(currentProject.id);
+      toast({ title: '角色候选已生成', description: '请在下方勾选并导入角色库。' });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      updateLogWithError(logId, detail);
+      toast({ title: '角色扩充失败', description: detail, variant: 'destructive' });
+    } finally {
+      setIsExpandingCharacters(false);
+    }
+  };
+
+  const handleRunWorkflowSupervisor = async () => {
+    if (!isApiMode()) {
+      toast({ title: '当前模式不支持', description: 'Supervisor 仅在 API 模式可用。' });
+      return;
+    }
+    if (!aiProfileId || !currentProject?.id) return;
+    setIsRunningWorkflowSupervisor(true);
+
+    const logId = logAICall('custom', {
+      skillName: 'workflow:run_workflow_supervisor',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/supervisor/run',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/supervisor/run`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            aiProfileId,
+          }),
+        },
+      ],
+      context: {
+        projectId: currentProject.id,
+        systemPromptKeys: ['workflow.supervisor.agent.system'],
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    try {
+      toast({ title: '启动 Agent 流程', description: '已入队，正在按步骤自动执行...' });
+      const job = await apiWorkflowRunSupervisor({
+        projectId: currentProject.id,
+        aiProfileId,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+
+      const result = (finished.result ?? null) as WorkflowJobResultLike | null;
+      const content = safeJsonStringify(result);
+      updateLogWithResponse(logId, { content });
+
+      const executionMode =
+        result?.executionMode === 'agent' || result?.executionMode === 'legacy'
+          ? result.executionMode
+          : 'legacy';
+      const fallbackUsed = result?.fallbackUsed === true;
+
+      await useProjectStore.getState().loadProject(currentProject.id);
+      await loadEpisodes(currentProject.id);
+      await loadRelationships(currentProject.id);
+      await syncEmotionArcFromApi(currentProject.id);
+      if (currentEpisode?.id) {
+        await loadScenes(currentProject.id, currentEpisode.id);
+      }
+
+      toast({
+        title: 'Agent 流程完成',
+        description: `执行模式：${executionMode}${fallbackUsed ? '（含自动降级）' : ''}`,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      updateLogWithError(logId, detail);
+      toast({ title: 'Agent 流程失败', description: detail, variant: 'destructive' });
+    } finally {
+      setIsRunningWorkflowSupervisor(false);
+    }
+  };
+
+  const toggleExpansionCandidate = (tempId: string, checked: boolean) => {
+    setSelectedExpansionCandidates((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(tempId);
+      else next.delete(tempId);
+      return Array.from(next);
+    });
+  };
+
+  const handleImportExpandedCharacters = () => {
+    if (!currentProject?.id || !characterExpansion) return;
+
+    const selected = characterExpansion.candidates.filter((candidate) =>
+      selectedExpansionCandidates.includes(candidate.tempId),
+    );
+    if (selected.length === 0) {
+      toast({ title: '未选择角色', description: '请先勾选要导入的候选角色。' });
+      return;
+    }
+
+    const existingNameKeys = new Set(projectCharacters.map((character) => normalizeNameKey(character.name)));
+    let imported = 0;
+    let skipped = 0;
+
+    for (const candidate of selected) {
+      const key = normalizeNameKey(candidate.name);
+      if (!key || existingNameKeys.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      existingNameKeys.add(key);
+      addCharacter(currentProject.id, {
+        projectId: currentProject.id,
+        name: candidate.name,
+        briefDescription: candidate.briefDescription || undefined,
+        avatar: undefined,
+        appearance: candidate.appearance || '',
+        personality: candidate.personality || '',
+        background: candidate.background || '',
+        portraitPrompts: undefined,
+        customStyle: undefined,
+        relationships: [],
+        appearances: [],
+        themeColor: undefined,
+        primaryColor: undefined,
+        secondaryColor: undefined,
+      });
+      imported += 1;
+    }
+
+    if (imported > 0) {
+      loadCharacters(currentProject.id);
+    }
+
+    toast({
+      title: '角色导入完成',
+      description:
+        skipped > 0
+          ? `导入 ${imported} 个角色，跳过 ${skipped} 个重复项。`
+          : `导入 ${imported} 个角色。`,
+    });
   };
 
   const handleGenerateSoundDesign = async (sceneId: string) => {
@@ -2528,6 +2862,25 @@ ${safeJsonStringify(ep.coreExpression)}
                   </Button>
                 </div>
                 <Button
+                  variant="outline"
+                  onClick={handleExpandStoryCharacters}
+                  disabled={
+                    !isApiMode() ||
+                    !aiProfileId ||
+                    !currentProject?.id ||
+                    !narrative ||
+                    isExpandingCharacters
+                  }
+                  className="w-full gap-2 h-9 text-xs"
+                >
+                  {isExpandingCharacters ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                  丰满角色体系
+                </Button>
+                <Button
                   variant="default"
                   onClick={() => setActiveStep('plan')}
                   disabled={completedPhase < 1}
@@ -2560,6 +2913,119 @@ ${safeJsonStringify(ep.coreExpression)}
             </div>
           </div>
         </Card>
+
+        {characterExpansion && (
+          <Card className="border shadow-sm">
+            <div className="p-6 space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight">角色扩充候选</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    基于叙事因果链与现有设定生成的候选角色，可勾选后导入角色库。
+                  </p>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  生成时间：{new Date(characterExpansion.generatedAt).toLocaleString('zh-CN')}
+                </div>
+              </div>
+
+              {characterExpansion.candidates.length === 0 ? (
+                <div className="rounded-md border border-dashed bg-muted/10 p-4 text-sm text-muted-foreground">
+                  本次未识别到可新增角色（可能都与现有角色重复）。可先继续完善因果链后再重试。
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3">
+                    {characterExpansion.candidates.map((candidate) => {
+                      const checked = selectedExpansionCandidates.includes(candidate.tempId);
+                      return (
+                        <div
+                          key={candidate.tempId}
+                          className={cn(
+                            'rounded-lg border p-3 transition-colors',
+                            checked ? 'border-primary/50 bg-primary/5' : 'border-border',
+                          )}
+                        >
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(next) => {
+                                toggleExpansionCandidate(candidate.tempId, next === true);
+                              }}
+                              className="mt-0.5"
+                            />
+                            <div className="space-y-1 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-sm">{candidate.name}</span>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {candidate.roleType || 'supporting'}
+                                </Badge>
+                                <Badge variant="secondary" className="text-[10px]">
+                                  置信度 {Math.round(candidate.confidence * 100)}%
+                                </Badge>
+                              </div>
+                              {candidate.briefDescription && (
+                                <p className="text-sm text-muted-foreground">
+                                  {candidate.briefDescription}
+                                </p>
+                              )}
+                              {candidate.evidence.length > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                  证据：{candidate.evidence.slice(0, 2).join('；')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs text-muted-foreground">
+                      候选 {characterExpansion.candidates.length} 个，已选{' '}
+                      {selectedExpansionCandidates.length} 个
+                      {characterExpansion.stats ? (
+                        <>
+                          {' '}
+                          · 去重 {characterExpansion.stats.duplicatesResolved ?? 0} · 跳过已有{' '}
+                          {characterExpansion.stats.existingSkipped ?? 0}
+                        </>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedExpansionCandidates(
+                            characterExpansion.candidates.map((candidate) => candidate.tempId),
+                          );
+                        }}
+                      >
+                        全选
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedExpansionCandidates([])}
+                      >
+                        清空
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleImportExpandedCharacters}
+                        disabled={selectedExpansionCandidates.length === 0}
+                      >
+                        导入选中角色
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </Card>
+        )}
 
         {narrative ? (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -3849,6 +4315,9 @@ ${safeJsonStringify(ep.coreExpression)}
               onRunGenerateCoreExpression={handleGenerateCoreExpression}
               onRunGenerateSceneScript={handleGenerateSceneScript}
               onRunGenerateSceneList={handleGenerateSceneList}
+              onRunWorkflowSupervisor={
+                isRunningWorkflowSupervisor ? undefined : handleRunWorkflowSupervisor
+              }
               onRunGenerateEmotionArc={handleGenerateEmotionArc}
               onRunGenerateCharacterRelationships={handleGenerateCharacterRelationships}
               onRunBatchRefineAll={() => startBatchRefine(recommendedBatchRefineIds)}

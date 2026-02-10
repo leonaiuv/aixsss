@@ -68,6 +68,7 @@ describe('EpisodeWorkflow', () => {
     mockUseCharacterStore.mockReturnValue({
       characters: [],
       loadCharacters: vi.fn(),
+      addCharacter: vi.fn(),
     } as ReturnType<typeof useCharacterStore>);
     mockUseWorldViewStore.mockReturnValue({
       elements: [],
@@ -143,6 +144,13 @@ describe('EpisodeWorkflow', () => {
 
     await userEvent.click(screen.getByText('剧集规划'));
     expect(screen.getByText('剧集规划中心')).toBeInTheDocument();
+  });
+
+  it('因果链面板应展示“丰满角色体系”按钮', async () => {
+    render(<EpisodeWorkflow />);
+
+    await userEvent.click(screen.getByText('因果链'));
+    expect(screen.getByRole('button', { name: '丰满角色体系' })).toBeInTheDocument();
   });
 
   it('单集创作应展示 5 个工作流标签', async () => {

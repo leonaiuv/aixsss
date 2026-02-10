@@ -1,11 +1,19 @@
 import { apiRequest } from './http';
 
+export type ApiAIJobResult = {
+  executionMode?: 'agent' | 'legacy';
+  fallbackUsed?: boolean;
+  agentTrace?: unknown;
+  stepSummaries?: unknown;
+  [key: string]: unknown;
+};
+
 export type ApiAIJob = {
   id: string;
   type: string;
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
   error: string | null;
-  result: unknown;
+  result: ApiAIJobResult | null;
   progress: unknown | null;
   createdAt: string;
   startedAt: string | null;

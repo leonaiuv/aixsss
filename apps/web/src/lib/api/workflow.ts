@@ -132,6 +132,38 @@ export async function apiWorkflowGenerateCharacterRelationships(input: {
   );
 }
 
+export async function apiWorkflowExpandStoryCharacters(input: {
+  projectId: string;
+  aiProfileId: string;
+  maxNewCharacters?: number;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/characters/expand`,
+    {
+      method: 'POST',
+      body: {
+        aiProfileId: input.aiProfileId,
+        ...(typeof input.maxNewCharacters === 'number'
+          ? { maxNewCharacters: input.maxNewCharacters }
+          : {}),
+      },
+    },
+  );
+}
+
+export async function apiWorkflowRunSupervisor(input: {
+  projectId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/supervisor/run`,
+    {
+      method: 'POST',
+      body: { aiProfileId: input.aiProfileId },
+    },
+  );
+}
+
 export async function apiWorkflowGenerateSceneList(input: {
   projectId: string;
   aiProfileId: string;
