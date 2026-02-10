@@ -97,18 +97,8 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
   const { currentProject, updateProject } = useProjectStore();
   const { toast } = useToast();
   const { config } = useConfigStore();
-  const {
-    elements,
-    loadElements,
-    addElement,
-    updateElement,
-  } = useWorldViewStore();
-  const {
-    characters,
-    loadCharacters,
-    addCharacter,
-    updateCharacter,
-  } = useCharacterStore();
+  const { elements, loadElements, addElement, updateElement } = useWorldViewStore();
+  const { characters, loadCharacters, addCharacter, updateCharacter } = useCharacterStore();
   const {
     customStyles,
     loadCustomStyles,
@@ -330,7 +320,9 @@ export function BasicSettings(props: BasicSettingsProps = {}) {
       const worldViewKey = (type: string, title: string) =>
         `${type}::${title.trim().toLowerCase()}`;
       const existingWorldViewMap = new Map(
-        projectWorldViewElements.map((item) => [worldViewKey(item.type, item.title), item] as const),
+        projectWorldViewElements.map(
+          (item) => [worldViewKey(item.type, item.title), item] as const,
+        ),
       );
 
       let worldViewAdded = 0;

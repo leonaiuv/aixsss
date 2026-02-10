@@ -12,7 +12,14 @@ function normalizeHexColor(value: unknown): string | undefined {
   return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
 }
 
-const WorldViewTypeSchema = z.enum(['era', 'geography', 'society', 'technology', 'magic', 'custom']);
+const WorldViewTypeSchema = z.enum([
+  'era',
+  'geography',
+  'society',
+  'technology',
+  'magic',
+  'custom',
+]);
 
 const GeneratedArtStyleSchema = z.object({
   baseStyle: z.string().min(1).max(500),

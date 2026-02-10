@@ -342,10 +342,12 @@ function normalizeCharacterExpansion(value: unknown): CharacterExpansionSnapshot
     runId,
     generatedAt,
     source,
-    maxNewCharacters:
-      typeof raw.maxNewCharacters === 'number' ? raw.maxNewCharacters : undefined,
+    maxNewCharacters: typeof raw.maxNewCharacters === 'number' ? raw.maxNewCharacters : undefined,
     candidates,
-    stats: raw.stats && typeof raw.stats === 'object' ? (raw.stats as CharacterExpansionSnapshot['stats']) : undefined,
+    stats:
+      raw.stats && typeof raw.stats === 'object'
+        ? (raw.stats as CharacterExpansionSnapshot['stats'])
+        : undefined,
   };
 }
 
@@ -632,8 +634,10 @@ export function EpisodeWorkflow() {
       setSelectedExpansionCandidates([]);
       return;
     }
-    setSelectedExpansionCandidates(characterExpansion.candidates.map((candidate) => candidate.tempId));
-  }, [characterExpansion?.runId]);
+    setSelectedExpansionCandidates(
+      characterExpansion.candidates.map((candidate) => candidate.tempId),
+    );
+  }, [characterExpansion, characterExpansion?.runId]);
 
   const toggleBatchSelect = (sceneId: string, checked: boolean) => {
     setBatchRefineSelectedIds((prev) => {
@@ -1118,7 +1122,9 @@ export function EpisodeWorkflow() {
       return;
     }
 
-    const existingNameKeys = new Set(projectCharacters.map((character) => normalizeNameKey(character.name)));
+    const existingNameKeys = new Set(
+      projectCharacters.map((character) => normalizeNameKey(character.name)),
+    );
     let imported = 0;
     let skipped = 0;
 

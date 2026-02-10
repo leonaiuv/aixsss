@@ -151,10 +151,7 @@ export async function apiWorkflowExpandStoryCharacters(input: {
   );
 }
 
-export async function apiWorkflowRunSupervisor(input: {
-  projectId: string;
-  aiProfileId: string;
-}) {
+export async function apiWorkflowRunSupervisor(input: { projectId: string; aiProfileId: string }) {
   return apiRequest<ApiAIJob>(
     `/workflow/projects/${encodeURIComponent(input.projectId)}/supervisor/run`,
     {
