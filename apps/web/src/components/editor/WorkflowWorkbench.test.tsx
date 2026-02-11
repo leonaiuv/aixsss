@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import {
-  WorkflowWorkbench,
-  type WorkflowAgentRunSummary,
-} from './WorkflowWorkbench';
+import { WorkflowWorkbench, type WorkflowAgentRunSummary } from './WorkflowWorkbench';
 
 function createBaseProps() {
   return {
@@ -54,12 +51,7 @@ describe('WorkflowWorkbench agent status panel', () => {
       ],
     };
 
-    render(
-      <WorkflowWorkbench
-        {...createBaseProps()}
-        agentRunSummary={summary}
-      />,
-    );
+    render(<WorkflowWorkbench {...createBaseProps()} agentRunSummary={summary} />);
 
     expect(screen.getByText('Agent 执行状态')).toBeInTheDocument();
     expect(screen.getByText('执行模式：Legacy')).toBeInTheDocument();
@@ -71,12 +63,7 @@ describe('WorkflowWorkbench agent status panel', () => {
   });
 
   it('shows running indicator when supervisor is executing', () => {
-    render(
-      <WorkflowWorkbench
-        {...createBaseProps()}
-        isRunningWorkflowSupervisor
-      />,
-    );
+    render(<WorkflowWorkbench {...createBaseProps()} isRunningWorkflowSupervisor />);
 
     expect(screen.getByText('Agent 执行状态')).toBeInTheDocument();
     expect(screen.getByText('运行中')).toBeInTheDocument();

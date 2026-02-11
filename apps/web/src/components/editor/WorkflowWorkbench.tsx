@@ -625,15 +625,15 @@ export function WorkflowWorkbench(props: {
                   <>
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <Badge variant="outline">
-                        执行模式：{props.agentRunSummary.executionMode === 'agent' ? 'Agent' : 'Legacy'}
+                        执行模式：
+                        {props.agentRunSummary.executionMode === 'agent' ? 'Agent' : 'Legacy'}
                       </Badge>
-                      <Badge
-                        variant={props.agentRunSummary.fallbackUsed ? 'secondary' : 'outline'}
-                      >
+                      <Badge variant={props.agentRunSummary.fallbackUsed ? 'secondary' : 'outline'}>
                         自动降级：{props.agentRunSummary.fallbackUsed ? '是' : '否'}
                       </Badge>
                       <span className="text-muted-foreground">
-                        完成时间：{new Date(props.agentRunSummary.finishedAt).toLocaleString('zh-CN')}
+                        完成时间：
+                        {new Date(props.agentRunSummary.finishedAt).toLocaleString('zh-CN')}
                       </span>
                     </div>
 
@@ -687,9 +687,7 @@ export function WorkflowWorkbench(props: {
                     </div>
                   </>
                 ) : (
-                  <div className="text-xs text-muted-foreground">
-                    尚无最近一次 Agent 执行记录。
-                  </div>
+                  <div className="text-xs text-muted-foreground">尚无最近一次 Agent 执行记录。</div>
                 )}
               </CardContent>
             </Card>

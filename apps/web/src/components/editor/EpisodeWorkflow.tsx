@@ -370,9 +370,7 @@ function normalizeSupervisorStepSummaries(value: unknown): WorkflowAgentStepSumm
     if (!status || !step) continue;
     const executionModeRaw = raw.executionMode;
     const executionMode =
-      executionModeRaw === 'agent' || executionModeRaw === 'legacy'
-        ? executionModeRaw
-        : undefined;
+      executionModeRaw === 'agent' || executionModeRaw === 'legacy' ? executionModeRaw : undefined;
     out.push({
       step,
       status,
@@ -556,8 +554,9 @@ export function EpisodeWorkflow() {
   const [isGeneratingSceneScript, setIsGeneratingSceneScript] = useState(false);
   const [isExpandingCharacters, setIsExpandingCharacters] = useState(false);
   const [isRunningWorkflowSupervisor, setIsRunningWorkflowSupervisor] = useState(false);
-  const [supervisorRunSummary, setSupervisorRunSummary] =
-    useState<WorkflowAgentRunSummary | null>(null);
+  const [supervisorRunSummary, setSupervisorRunSummary] = useState<WorkflowAgentRunSummary | null>(
+    null,
+  );
   const [selectedExpansionCandidates, setSelectedExpansionCandidates] = useState<string[]>([]);
   const [isGeneratingSoundSceneId, setIsGeneratingSoundSceneId] = useState<string | null>(null);
   const [isEstimatingDurationSceneId, setIsEstimatingDurationSceneId] = useState<string | null>(
