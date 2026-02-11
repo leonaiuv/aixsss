@@ -198,7 +198,8 @@ describe('runEpisodeCreationAgent', () => {
       prisma.aIJob.findMany as unknown as ReturnType<typeof vi.fn>
     ).mockResolvedValue([{ id: 'job_scene_1', status: 'succeeded' }, { id: 'job_scene_2', status: 'succeeded' }]);
 
-    const progressSpy = vi.fn(async () => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const progressSpy = vi.fn(async (_p: any) => {});
     const res = await runEpisodeCreationAgent({
       prisma: prisma as never,
       teamId: 't1',
