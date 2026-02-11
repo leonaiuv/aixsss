@@ -36,7 +36,7 @@ async function flushAsyncEffects() {
   await Promise.resolve();
 }
 
-describe('configStore (api mode) - image api key', () => {
+describe('configStore (api mode) - image/video api key', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.defineProperty(globalThis, 'localStorage', {
@@ -65,6 +65,7 @@ describe('configStore (api mode) - image api key', () => {
         },
         pricing: null,
         hasImageApiKey: true,
+        hasVideoApiKey: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -75,6 +76,33 @@ describe('configStore (api mode) - image api key', () => {
 
     const profile = useConfigStore.getState().profiles[0];
     expect(profile?.hasImageApiKey).toBe(true);
+  });
+
+  it('loadConfig 应保留服务端 hasVideoApiKey 标记', async () => {
+    mockApiListAIProfiles.mockResolvedValue([
+      {
+        id: 'p1',
+        name: 'Gemini',
+        provider: 'gemini',
+        model: 'gemini-1.5-pro',
+        baseURL: 'https://generativelanguage.googleapis.com',
+        generationParams: {
+          videoProvider: 'doubao-ark',
+          videoModel: 'doubao-seedance-1-5-pro-251215',
+        },
+        pricing: null,
+        hasImageApiKey: false,
+        hasVideoApiKey: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    useConfigStore.getState().loadConfig();
+    await flushAsyncEffects();
+
+    const profile = useConfigStore.getState().profiles[0];
+    expect(profile?.hasVideoApiKey).toBe(true);
   });
 
   it('testConnection 在 API 模式应透传 imageApiKey 到 ai-profile 更新', async () => {
@@ -91,6 +119,7 @@ describe('configStore (api mode) - image api key', () => {
         },
         pricing: null,
         hasImageApiKey: false,
+        hasVideoApiKey: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -107,6 +136,7 @@ describe('configStore (api mode) - image api key', () => {
       },
       pricing: null,
       hasImageApiKey: true,
+      hasVideoApiKey: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -137,6 +167,75 @@ describe('configStore (api mode) - image api key', () => {
       expect.objectContaining({
         apiKey: 'text-key',
         imageApiKey: 'image-key',
+      }),
+    );
+  });
+
+  it('testConnection 在 API 模式应透传 videoApiKey 到 ai-profile 更新', async () => {
+    mockApiListAIProfiles.mockResolvedValue([
+      {
+        id: 'p1',
+        name: 'DeepSeek (text)',
+        provider: 'deepseek',
+        model: 'deepseek-chat',
+        baseURL: 'https://api.deepseek.com',
+        generationParams: {
+          videoProvider: 'doubao-ark',
+          videoModel: 'doubao-seedance-1-5-pro-251215',
+          videoBaseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+        },
+        pricing: null,
+        hasImageApiKey: false,
+        hasVideoApiKey: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+    mockApiUpdateAIProfile.mockResolvedValue({
+      id: 'p1',
+      name: 'DeepSeek (text)',
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      baseURL: 'https://api.deepseek.com',
+      generationParams: {
+        videoProvider: 'doubao-ark',
+        videoModel: 'doubao-seedance-1-5-pro-251215',
+        videoBaseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+      },
+      pricing: null,
+      hasImageApiKey: false,
+      hasVideoApiKey: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    mockApiLlmChat.mockResolvedValue({ content: 'pong' });
+
+    useConfigStore.getState().loadConfig();
+    await flushAsyncEffects();
+
+    const ok = await useConfigStore.getState().testConnection({
+      provider: 'deepseek',
+      apiKey: 'text-key',
+      videoApiKey: 'video-key',
+      baseURL: 'https://api.deepseek.com',
+      model: 'deepseek-chat',
+      generationParams: {
+        temperature: 0.7,
+        topP: 0.9,
+        maxTokens: 2048,
+        videoProvider: 'doubao-ark',
+        videoModel: 'doubao-seedance-1-5-pro-251215',
+        videoBaseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+      },
+      aiProfileId: 'p1',
+    });
+
+    expect(ok).toBe(true);
+    expect(mockApiUpdateAIProfile).toHaveBeenCalledWith(
+      'p1',
+      expect.objectContaining({
+        apiKey: 'text-key',
+        videoApiKey: 'video-key',
       }),
     );
   });

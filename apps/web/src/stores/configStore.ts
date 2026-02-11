@@ -50,6 +50,7 @@ function getDefaultProfileConfig(): UserConfig {
     provider: 'deepseek',
     apiKey: '',
     imageApiKey: '',
+    videoApiKey: '',
     model: 'deepseek-chat',
   };
 }
@@ -213,6 +214,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               provider: p.provider,
               apiKey: '', // 不在浏览器保存
               imageApiKey: '', // 不在浏览器保存
+              videoApiKey: '', // 不在浏览器保存
               baseURL: p.baseURL ?? undefined,
               model: p.model,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -220,6 +222,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               aiProfileId: p.id,
             },
             hasImageApiKey: Boolean(p.hasImageApiKey),
+            hasVideoApiKey: Boolean(p.hasVideoApiKey),
             createdAt: p.createdAt,
             updatedAt: p.updatedAt,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -372,6 +375,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       const generationParams = config.generationParams as any;
       const apiKey = config.apiKey?.trim();
       const imageApiKey = config.imageApiKey?.trim();
+      const videoApiKey = config.videoApiKey?.trim();
 
       try {
         let aiProfileId = config.aiProfileId || existingServerId;
@@ -386,11 +390,18 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             ...(generationParams !== undefined ? { generationParams } : {}),
             ...(apiKey ? { apiKey } : {}),
             ...(imageApiKey ? { imageApiKey } : {}),
+            ...(videoApiKey ? { videoApiKey } : {}),
           };
           const updated = await apiUpdateAIProfile(aiProfileId, payload);
           set((state) => ({
             profiles: state.profiles.map((p) =>
-              p.id === aiProfileId ? { ...p, hasImageApiKey: Boolean(updated.hasImageApiKey) } : p,
+              p.id === aiProfileId
+                ? {
+                    ...p,
+                    hasImageApiKey: Boolean(updated.hasImageApiKey),
+                    hasVideoApiKey: Boolean(updated.hasVideoApiKey),
+                  }
+                : p,
             ),
           }));
         } else {
@@ -400,6 +411,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             provider,
             apiKey,
             ...(imageApiKey ? { imageApiKey } : {}),
+            ...(videoApiKey ? { videoApiKey } : {}),
             baseURL: provider === 'kimi' ? undefined : baseURL || undefined,
             model,
             generationParams,
@@ -419,6 +431,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
                   provider: created.provider,
                   apiKey: '',
                   imageApiKey: '',
+                  videoApiKey: '',
                   baseURL: created.baseURL ?? undefined,
                   model: created.model,
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -426,6 +439,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
                   aiProfileId: created.id,
                 },
                 hasImageApiKey: Boolean(created.hasImageApiKey),
+                hasVideoApiKey: Boolean(created.hasVideoApiKey),
                 createdAt: created.createdAt,
                 updatedAt: created.updatedAt,
               },

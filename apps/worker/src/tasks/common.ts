@@ -53,18 +53,33 @@ function extractGenerationParams(raw: JsonValue | null): GenerationParams | unde
 export type ModelOverrides = {
   imageModel?: string;
   videoModel?: string;
-  imageProvider?: 'nanobananapro-dmxapi';
+  imageProvider?: 'nanobananapro-dmxapi' | 'openai-compatible' | 'doubao-ark';
   imageBaseURL?: string;
+  videoProvider?: 'doubao-ark';
+  videoBaseURL?: string;
 };
 
 export function extractModelOverrides(raw: JsonValue | null): ModelOverrides | undefined {
   if (!raw || !isRecord(raw)) return undefined;
+  const imageProviderRaw = raw.imageProvider;
+  const imageProvider =
+    imageProviderRaw === 'nanobananapro-dmxapi' ||
+    imageProviderRaw === 'openai-compatible' ||
+    imageProviderRaw === 'doubao-ark'
+      ? imageProviderRaw
+      : undefined;
+  const videoProviderRaw = raw.videoProvider;
+  const videoProvider = videoProviderRaw === 'doubao-ark' ? videoProviderRaw : undefined;
   return {
     ...(typeof raw.imageModel === 'string' && raw.imageModel.trim() ? { imageModel: raw.imageModel.trim() } : {}),
     ...(typeof raw.videoModel === 'string' && raw.videoModel.trim() ? { videoModel: raw.videoModel.trim() } : {}),
-    ...(raw.imageProvider === 'nanobananapro-dmxapi' ? { imageProvider: 'nanobananapro-dmxapi' } : {}),
+    ...(imageProvider ? { imageProvider } : {}),
     ...(typeof raw.imageBaseURL === 'string' && raw.imageBaseURL.trim()
       ? { imageBaseURL: raw.imageBaseURL.trim() }
+      : {}),
+    ...(videoProvider ? { videoProvider } : {}),
+    ...(typeof raw.videoBaseURL === 'string' && raw.videoBaseURL.trim()
+      ? { videoBaseURL: raw.videoBaseURL.trim() }
       : {}),
   };
 }
@@ -128,17 +143,37 @@ export function toProviderImageConfig(profile: {
   generationParams?: JsonValue | null;
 }): ProviderImageConfig {
   const overrides = extractModelOverrides(profile.generationParams ?? null);
-  const imageModel =
-    overrides?.imageModel ??
-    (profile.provider === 'doubao_ark' ? 'doubao-seedream-4-5-251128' : profile.model);
+
   if (overrides?.imageProvider === 'nanobananapro-dmxapi') {
     return {
       kind: 'nanobanana_dmxapi',
       apiKey: '',
       baseURL: overrides.imageBaseURL ?? 'https://www.dmxapi.cn',
-      model: imageModel || 'gemini-3-pro-image-preview',
+      model: overrides.imageModel || 'gemini-3-pro-image-preview',
     };
   }
+
+  if (overrides?.imageProvider === 'doubao-ark') {
+    return {
+      kind: 'doubao_ark',
+      apiKey: '',
+      baseURL: overrides.imageBaseURL ?? 'https://ark.cn-beijing.volces.com/api/v3',
+      model: overrides.imageModel || 'doubao-seedream-4-5-251128',
+    };
+  }
+
+  if (overrides?.imageProvider === 'openai-compatible') {
+    return {
+      kind: 'openai_compatible',
+      apiKey: '',
+      baseURL: overrides.imageBaseURL ?? 'https://api.openai.com',
+      model: overrides.imageModel || 'gpt-image-1',
+    };
+  }
+
+  const imageModel =
+    overrides?.imageModel ??
+    (profile.provider === 'doubao_ark' ? 'doubao-seedream-4-5-251128' : profile.model);
 
   if (profile.provider === 'gemini') {
     return {

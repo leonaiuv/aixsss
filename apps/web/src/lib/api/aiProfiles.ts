@@ -17,6 +17,7 @@ export type ApiAIProfile = {
   generationParams: unknown | null;
   pricing: ApiAIPricing;
   hasImageApiKey?: boolean;
+  hasVideoApiKey?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -31,6 +32,7 @@ export async function apiCreateAIProfile(input: {
   provider: ApiAIProfile['provider'];
   apiKey: string;
   imageApiKey?: string;
+  videoApiKey?: string;
   baseURL?: string;
   model: string;
   generationParams?: unknown;
@@ -46,6 +48,7 @@ export async function apiUpdateAIProfile(
     provider: ApiAIProfile['provider'];
     apiKey: string;
     imageApiKey: string | null;
+    videoApiKey: string | null;
     baseURL: string;
     model: string;
     generationParams: unknown | null;

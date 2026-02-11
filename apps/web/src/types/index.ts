@@ -740,6 +740,10 @@ export interface UserConfig {
    * 可选：图片专用 API Key（用于 NanoBanana 等图片链路）
    */
   imageApiKey?: string;
+  /**
+   * 可选：视频专用 API Key（当视频供应商不跟随文本时使用）
+   */
+  videoApiKey?: string;
   baseURL?: string;
   model: string;
   generationParams?: AIGenerationParams;
@@ -794,6 +798,10 @@ export interface ConfigProfile {
    * 后端模式：服务端是否已保存图片专用 API Key
    */
   hasImageApiKey?: boolean;
+  /**
+   * 后端模式：服务端是否已保存视频专用 API Key
+   */
+  hasVideoApiKey?: boolean;
   createdAt: string;
   updatedAt: string;
   lastTest?: ConnectionTestResult;
@@ -1059,12 +1067,16 @@ export interface AIGenerationParams {
   imageModel?: string;
   /**
    * 可选：图片供应商覆盖（用于关键帧图片生成）
-   * - nanobananapro-dmxapi: 走 DMXAPI 的 Gemini 图片端点
+   * - nanobananapro-dmxapi: 走 DMXAPI 的 NanoBanana 图片端点（独立 Key/BaseURL）
+   * - openai-compatible: 走 OpenAI 兼容图片端点（独立 Key/BaseURL）
+   * - doubao-ark: 走 豆包/方舟(ARK) 图片端点（独立 Key/BaseURL）
    */
-  imageProvider?: 'nanobananapro-dmxapi';
+  imageProvider?: 'nanobananapro-dmxapi' | 'openai-compatible' | 'doubao-ark';
   /**
    * 可选：图片供应商专用 Base URL
    * - NanoBanana/DMXAPI 默认：https://www.dmxapi.cn
+   * - OpenAI 兼容默认：https://api.openai.com
+   * - Doubao/ARK 默认：https://ark.cn-beijing.volces.com/api/v3
    */
   imageBaseURL?: string;
   /**
@@ -1072,6 +1084,16 @@ export interface AIGenerationParams {
    * - Doubao/ARK 示例：doubao-seedance-1-5-pro-251215
    */
   videoModel?: string;
+  /**
+   * 可选：视频供应商覆盖（用于视频生成）
+   * - doubao-ark: 走 豆包/方舟(ARK) 视频端点（独立 Key/BaseURL）
+   */
+  videoProvider?: 'doubao-ark';
+  /**
+   * 可选：视频供应商专用 Base URL
+   * - Doubao/ARK 默认：https://ark.cn-beijing.volces.com/api/v3
+   */
+  videoBaseURL?: string;
 }
 
 // 搜索过滤器

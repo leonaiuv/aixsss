@@ -263,6 +263,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const [provider, setProvider] = useState<ProviderType>('deepseek');
   const [apiKey, setApiKey] = useState('');
   const [imageApiKey, setImageApiKey] = useState('');
+  const [videoApiKey, setVideoApiKey] = useState('');
   const [baseURL, setBaseURL] = useState('');
   const [model, setModel] = useState('');
   const [profileName, setProfileName] = useState('默认档案');
@@ -283,6 +284,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const [presetId, setPresetId] = useState<string>('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [showImageApiKey, setShowImageApiKey] = useState(false);
+  const [showVideoApiKey, setShowVideoApiKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [generationParams, setGenerationParams] =
     useState<AIGenerationParams>(DEFAULT_GENERATION_PARAMS);
@@ -446,6 +448,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setProvider(profile.config.provider);
       setApiKey(profile.config.apiKey);
       setImageApiKey(profile.config.imageApiKey || '');
+      setVideoApiKey(profile.config.videoApiKey || '');
       setBaseURL(profile.config.baseURL || '');
       setModel(profile.config.model);
       setGenerationParams(
@@ -468,6 +471,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setProvider('deepseek');
       setApiKey('');
       setImageApiKey('');
+      setVideoApiKey('');
       setBaseURL('');
       setModel('deepseek-chat');
       setGenerationParams(normalizeGenerationParams(undefined, 'deepseek', 'deepseek-chat'));
@@ -539,6 +543,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     profileName?: string;
     apiKey?: string;
     imageApiKey?: string;
+    videoApiKey?: string;
     model?: string;
     baseURL?: string;
     pricing?: string;
@@ -547,6 +552,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       profileName?: string;
       apiKey?: string;
       imageApiKey?: string;
+      videoApiKey?: string;
       model?: string;
       baseURL?: string;
       pricing?: string;
@@ -560,21 +566,39 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       (typeof activeProfileId === 'string' && activeProfileId.startsWith('draft_'));
     if (requiresApiKey && !apiKey.trim()) errors.apiKey = 'API Key 不能为空';
 
-    const useNanoBananaImageProvider =
-      provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi';
+    const imageProviderOverride = generationParams.imageProvider;
+    const useSeparateImageApiKey =
+      imageProviderOverride === 'nanobananapro-dmxapi' ||
+      (imageProviderOverride && imageProviderOverride !== provider);
     const requiresImageApiKey =
-      useNanoBananaImageProvider &&
+      useSeparateImageApiKey &&
       (!apiMode ||
         !activeProfileId ||
         (typeof activeProfileId === 'string' && activeProfileId.startsWith('draft_')) ||
         !activeProfile?.hasImageApiKey);
     if (requiresImageApiKey && !imageApiKey.trim()) {
-      errors.imageApiKey = 'NanoBanana 图片 API Key 不能为空';
+      errors.imageApiKey = '图片 API Key 不能为空';
+    }
+
+    const videoProviderOverride = generationParams.videoProvider;
+    const useSeparateVideoApiKey = Boolean(
+      videoProviderOverride && videoProviderOverride !== provider,
+    );
+    const requiresVideoApiKey =
+      useSeparateVideoApiKey &&
+      (!apiMode ||
+        !activeProfileId ||
+        (typeof activeProfileId === 'string' && activeProfileId.startsWith('draft_')) ||
+        !activeProfile?.hasVideoApiKey);
+    if (requiresVideoApiKey && !videoApiKey.trim()) {
+      errors.videoApiKey = '视频 API Key 不能为空';
     }
 
     if (!model.trim()) {
       errors.model =
-        provider === 'doubao-ark' ? '推理接入点 ID / Model ID 不能为空' : '模型名称不能为空';
+        provider === 'doubao-ark'
+          ? '文本模型（推理接入点 ID / Model ID）不能为空'
+          : '文本模型不能为空';
     }
 
     if (provider !== 'kimi') {
@@ -610,6 +634,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const hasConfigValidationErrors = Boolean(
     validationErrors.apiKey ||
     validationErrors.imageApiKey ||
+    validationErrors.videoApiKey ||
     validationErrors.model ||
     validationErrors.baseURL,
   );
@@ -657,6 +682,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       provider,
       apiKey: '',
       imageApiKey: '',
+      videoApiKey: '',
       model: defaults?.model || model || 'deepseek-chat',
       baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(defaults?.baseURL || baseURL),
       generationParams,
@@ -674,6 +700,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       provider,
       apiKey,
       imageApiKey,
+      videoApiKey,
       model,
       baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
       generationParams,
@@ -721,8 +748,15 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
     const normalizedApiKey = apiKey.trim();
     const normalizedImageApiKey = imageApiKey.trim();
-    const useNanoBananaImageProvider =
-      provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi';
+    const imageProviderOverride = generationParams.imageProvider;
+    const useSeparateImageApiKey =
+      imageProviderOverride === 'nanobananapro-dmxapi' ||
+      (imageProviderOverride && imageProviderOverride !== provider);
+    const normalizedVideoApiKey = videoApiKey.trim();
+    const videoProviderOverride = generationParams.videoProvider;
+    const useSeparateVideoApiKey = Boolean(
+      videoProviderOverride && videoProviderOverride !== provider,
+    );
     const normalizedModel =
       provider === 'doubao-ark' ? normalizeArkModel(model) : (model || '').trim();
 
@@ -732,7 +766,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         config: {
           provider,
           apiKey: normalizedApiKey,
-          imageApiKey: useNanoBananaImageProvider ? normalizedImageApiKey : '',
+          imageApiKey: useSeparateImageApiKey ? normalizedImageApiKey : '',
+          videoApiKey: useSeparateVideoApiKey ? normalizedVideoApiKey : '',
           baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
           model: normalizedModel,
           generationParams,
@@ -745,7 +780,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         config: {
           provider,
           apiKey: normalizedApiKey,
-          imageApiKey: useNanoBananaImageProvider ? normalizedImageApiKey : '',
+          imageApiKey: useSeparateImageApiKey ? normalizedImageApiKey : '',
+          videoApiKey: useSeparateVideoApiKey ? normalizedVideoApiKey : '',
           baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
           model: normalizedModel,
           generationParams,
@@ -782,15 +818,22 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
     const normalizedModel =
       provider === 'doubao-ark' ? normalizeArkModel(model) : (model || '').trim();
-    const useNanoBananaImageProvider =
-      provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi';
+    const imageProviderOverride = generationParams.imageProvider;
+    const useSeparateImageApiKey =
+      imageProviderOverride === 'nanobananapro-dmxapi' ||
+      (imageProviderOverride && imageProviderOverride !== provider);
+    const normalizedVideoApiKey = videoApiKey.trim();
+    const videoProviderOverride = generationParams.videoProvider;
+    const useSeparateVideoApiKey = Boolean(
+      videoProviderOverride && videoProviderOverride !== provider,
+    );
     if (!normalizedModel) {
       toast({
-        title: '请填写模型/接入点',
+        title: '请填写文本模型',
         description:
           provider === 'doubao-ark'
             ? '请填写推理接入点 ID（ep-...）或 Model ID。'
-            : '请填写模型名称。',
+            : '请填写文本模型名称。',
         variant: 'destructive',
       });
       return;
@@ -819,7 +862,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     const success = await testConnection({
       provider,
       apiKey: apiKey.trim(),
-      imageApiKey: useNanoBananaImageProvider ? imageApiKey.trim() : '',
+      imageApiKey: useSeparateImageApiKey ? imageApiKey.trim() : '',
+      videoApiKey: useSeparateVideoApiKey ? normalizedVideoApiKey : '',
       baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
       model: normalizedModel,
       generationParams,
@@ -1408,7 +1452,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         </div>
 
         <div className="space-y-2">
-          <Label>快速预设</Label>
+          <Label>文本模型预设</Label>
           <Select
             value={presetId}
             onValueChange={(v) => {
@@ -1418,7 +1462,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
             }}
           >
             <SelectTrigger disabled={isLocked}>
-              <SelectValue placeholder="选择模型预设" />
+              <SelectValue placeholder="选择文本模型预设" />
             </SelectTrigger>
             <SelectContent>
               {PROVIDER_PRESETS[provider].map((p) => (
@@ -1431,11 +1475,11 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         </div>
       </div>
 
-      {/* API Key */}
+      {/* 文本 API Key */}
       <div className="space-y-2">
         <Label htmlFor="apiKey" className="flex items-center gap-2">
           <Key className="h-3.5 w-3.5" />
-          API Key
+          文本 API Key
         </Label>
         <div className="relative">
           <Input
@@ -1467,52 +1511,6 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         )}
       </div>
 
-      {/* NanoBanana 图片专用 Key（双密钥） */}
-      {provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi' ? (
-        <div className="space-y-2">
-          <Label htmlFor="imageApiKey" className="flex items-center gap-2">
-            <Key className="h-3.5 w-3.5" />
-            图片 API Key（NanoBanana）
-          </Label>
-          <div className="relative">
-            <Input
-              id="imageApiKey"
-              type={showImageApiKey ? 'text' : 'password'}
-              placeholder={
-                apiMode &&
-                activeProfileId &&
-                !activeProfileId.startsWith('draft_') &&
-                activeProfile?.hasImageApiKey
-                  ? '留空表示保持不变'
-                  : '请输入 NanoBanana 图片 API Key'
-              }
-              value={imageApiKey}
-              onChange={(e) => setImageApiKey(e.target.value)}
-              className="pr-10"
-              disabled={isLocked}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0 h-full px-3"
-              onClick={() => setShowImageApiKey(!showImageApiKey)}
-              disabled={isLocked}
-            >
-              {showImageApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </Button>
-          </div>
-          {apiMode && activeProfile?.hasImageApiKey ? (
-            <p className="text-xs text-muted-foreground">
-              当前档案已保存图片专用 Key。留空将保持不变。
-            </p>
-          ) : null}
-          {validationErrors.imageApiKey && (
-            <p className="text-sm text-destructive">{validationErrors.imageApiKey}</p>
-          )}
-        </div>
-      ) : null}
-
       {/* Base URL */}
       {provider !== 'kimi' && (
         <div className="space-y-2">
@@ -1536,159 +1534,317 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         </div>
       )}
 
-      {/* 模型名称 */}
-      <div className="space-y-2">
-        <Label htmlFor="model">
-          {provider === 'doubao-ark' ? '推理接入点 ID / Model ID' : '模型名称'}
-        </Label>
-        <Input
-          id="model"
-          placeholder={
-            provider === 'deepseek'
-              ? 'deepseek-chat'
-              : provider === 'doubao-ark'
-                ? 'ep-xxxxxxxxxxxxxxxxxxxx'
-                : 'gpt-3.5-turbo'
-          }
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          disabled={isLocked}
-        />
-        {provider === 'doubao-ark' ? (
+      {/* 模型配置：文本/图片/视频 */}
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">模型配置</p>
           <p className="text-xs text-muted-foreground">
-            推荐使用你创建的推理接入点 ID（形如 <code>ep-...</code>）。也可使用官方 Model ID（如{' '}
-            <code>doubao-seed-1-8-251215</code>）。支持直接粘贴“接入点名称/ID”，系统会自动提取{' '}
-            <code>ep-...</code>。
+            文本模型必填；图片/视频模型可按能力链路单独覆盖，留空时使用默认策略。
           </p>
-        ) : null}
-        {validationErrors.model && (
-          <p className="text-sm text-destructive">{validationErrors.model}</p>
-        )}
-      </div>
-
-      {/* 多能力模型（可选） */}
-      {provider === 'openai-compatible' || provider === 'doubao-ark' || provider === 'gemini' ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="space-y-2">
+            <Label htmlFor="model">文本模型（必填）</Label>
+            <Input
+              id="model"
+              placeholder={
+                provider === 'deepseek'
+                  ? 'deepseek-chat'
+                  : provider === 'doubao-ark'
+                    ? 'ep-xxxxxxxxxxxxxxxxxxxx'
+                    : provider === 'gemini'
+                      ? 'gemini-1.5-pro'
+                      : 'gpt-4o-mini'
+              }
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={isLocked}
+            />
+            {provider === 'doubao-ark' ? (
+              <p className="text-xs text-muted-foreground">
+                推荐使用你创建的推理接入点 ID（形如 <code>ep-...</code>）。也可使用官方 Model ID（如{' '}
+                <code>doubao-seed-1-8-251215</code>）。支持直接粘贴“接入点名称/ID”，系统会自动提取{' '}
+                <code>ep-...</code>。
+              </p>
+            ) : null}
+            {validationErrors.model && (
+              <p className="text-sm text-destructive">{validationErrors.model}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="imageProvider">图片供应商</Label>
+            <Select
+              value={
+                generationParams.imageProvider === 'nanobananapro-dmxapi' ||
+                generationParams.imageProvider === 'openai-compatible' ||
+                generationParams.imageProvider === 'doubao-ark'
+                  ? generationParams.imageProvider
+                  : 'default'
+              }
+              onValueChange={(value) =>
+                setGenerationParams((prev) => {
+                  if (value === 'default') {
+                    return {
+                      ...prev,
+                      imageProvider: undefined,
+                      imageBaseURL: undefined,
+                    };
+                  }
+                  const defaultBaseURL =
+                    value === 'nanobananapro-dmxapi'
+                      ? 'https://www.dmxapi.cn'
+                      : value === 'doubao-ark'
+                        ? 'https://ark.cn-beijing.volces.com/api/v3'
+                        : value === 'openai-compatible'
+                          ? 'https://api.openai.com'
+                          : undefined;
+                  return {
+                    ...prev,
+                    imageProvider: value as AIGenerationParams['imageProvider'],
+                    imageBaseURL: prev.imageBaseURL || defaultBaseURL,
+                  };
+                })
+              }
+            >
+              <SelectTrigger disabled={isLocked}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">跟随文本（默认）</SelectItem>
+                <SelectItem value="openai-compatible">OpenAI 兼容</SelectItem>
+                <SelectItem value="doubao-ark">豆包 / 方舟(ARK)</SelectItem>
+                <SelectItem value="nanobananapro-dmxapi">NanoBanana（DMXAPI）</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Label htmlFor="imageModel">图片模型（可选）</Label>
             <Input
               id="imageModel"
               value={generationParams.imageModel ?? ''}
               onChange={(e) =>
                 setGenerationParams((prev) => {
-                  const raw = e.target.value;
-                  const trimmed = raw.trim();
+                  const trimmed = e.target.value.trim();
                   if (!trimmed) return { ...prev, imageModel: undefined };
+                  const imageProvider =
+                    prev.imageProvider === 'doubao-ark' ||
+                    (prev.imageProvider === undefined && provider === 'doubao-ark')
+                      ? 'doubao-ark'
+                      : prev.imageProvider;
                   const normalized =
-                    provider === 'doubao-ark' ? normalizeArkModel(trimmed) : trimmed;
+                    imageProvider === 'doubao-ark' ? normalizeArkModel(trimmed) : trimmed;
                   return { ...prev, imageModel: normalized || undefined };
                 })
               }
               disabled={isLocked}
               placeholder={
-                provider === 'doubao-ark'
+                generationParams.imageProvider === 'doubao-ark' ||
+                (generationParams.imageProvider === undefined && provider === 'doubao-ark')
                   ? 'ep-...（图片接入点）'
-                  : provider === 'gemini'
+                  : generationParams.imageProvider === 'nanobananapro-dmxapi'
                     ? 'gemini-3-pro-image-preview'
                     : 'gpt-image-1'
               }
             />
             <p className="text-xs text-muted-foreground">
-              用于关键帧图片生成；
-              {provider === 'doubao-ark'
-                ? '豆包可填写图片推理接入点 ID（ep-...）或 Model ID。留空则使用默认（Seedream 4.5）。'
-                : provider === 'gemini'
-                  ? 'Gemini 可填写图片模型（如 gemini-3-pro-image-preview）。'
-                  : '留空则沿用当前模型。'}
+              图片链路可独立配置供应商与模型；留空模型时通常会沿用该供应商的默认模型。
             </p>
 
-            {provider === 'gemini' ? (
-              <div className="space-y-2 pt-2">
-                <Label>图片供应商覆盖（可选）</Label>
-                <Select
-                  value={generationParams.imageProvider ?? 'default'}
-                  onValueChange={(value) =>
-                    setGenerationParams((prev) => {
-                      if (value === 'default') {
+            {generationParams.imageProvider === 'nanobananapro-dmxapi' ||
+            generationParams.imageProvider === 'openai-compatible' ||
+            generationParams.imageProvider === 'doubao-ark' ? (
+              <div className="space-y-2 pt-1">
+                {generationParams.imageProvider === 'nanobananapro-dmxapi' ||
+                generationParams.imageProvider !== provider ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="imageApiKey" className="flex items-center gap-2">
+                      <Key className="h-3.5 w-3.5" />
+                      图片 API Key
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="imageApiKey"
+                        type={showImageApiKey ? 'text' : 'password'}
+                        placeholder={
+                          apiMode &&
+                          activeProfileId &&
+                          !activeProfileId.startsWith('draft_') &&
+                          activeProfile?.hasImageApiKey
+                            ? '留空表示保持不变'
+                            : generationParams.imageProvider === 'nanobananapro-dmxapi'
+                              ? '请输入 DMXAPI 图片 API Key'
+                              : '请输入图片 API Key'
+                        }
+                        value={imageApiKey}
+                        onChange={(e) => setImageApiKey(e.target.value)}
+                        className="pr-10"
+                        disabled={isLocked}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowImageApiKey(!showImageApiKey)}
+                        disabled={isLocked}
+                      >
+                        {showImageApiKey ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    {apiMode && activeProfile?.hasImageApiKey ? (
+                      <p className="text-xs text-muted-foreground">
+                        当前档案已保存图片专用 Key。留空将保持不变。
+                      </p>
+                    ) : null}
+                    {validationErrors.imageApiKey && (
+                      <p className="text-sm text-destructive">{validationErrors.imageApiKey}</p>
+                    )}
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <Label htmlFor="imageBaseURL">图片 Base URL（可选）</Label>
+                  <Input
+                    id="imageBaseURL"
+                    value={generationParams.imageBaseURL ?? ''}
+                    onChange={(e) =>
+                      setGenerationParams((prev) => {
+                        const trimmed = e.target.value.trim();
                         return {
                           ...prev,
-                          imageProvider: undefined,
-                          imageBaseURL: undefined,
+                          imageBaseURL: trimmed || undefined,
                         };
-                      }
-                      return {
-                        ...prev,
-                        imageProvider: 'nanobananapro-dmxapi',
-                        imageBaseURL: prev.imageBaseURL || 'https://www.dmxapi.cn',
-                      };
-                    })
-                  }
-                >
-                  <SelectTrigger disabled={isLocked}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">默认（跟随 Gemini）</SelectItem>
-                    <SelectItem value="nanobananapro-dmxapi">NanoBanana（DMXAPI）</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  选择 NanoBanana 后，关键帧图片会走独立 DMXAPI 实现，不复用其它厂商图片接口。
-                </p>
+                      })
+                    }
+                    disabled={isLocked}
+                    placeholder={
+                      generationParams.imageProvider === 'nanobananapro-dmxapi'
+                        ? 'https://www.dmxapi.cn'
+                        : generationParams.imageProvider === 'doubao-ark'
+                          ? 'https://ark.cn-beijing.volces.com/api/v3'
+                          : 'https://api.openai.com'
+                    }
+                  />
+                </div>
               </div>
             ) : null}
           </div>
 
-          {provider === 'doubao-ark' ? (
-            <div className="space-y-2">
-              <Label htmlFor="videoModel">视频模型（可选）</Label>
-              <Input
-                id="videoModel"
-                value={generationParams.videoModel ?? ''}
-                onChange={(e) =>
-                  setGenerationParams((prev) => {
-                    const raw = e.target.value;
-                    const trimmed = raw.trim();
-                    if (!trimmed) return { ...prev, videoModel: undefined };
-                    const normalized = normalizeArkModel(trimmed);
-                    return { ...prev, videoModel: normalized || undefined };
-                  })
-                }
-                disabled={isLocked}
-                placeholder="ep-...（视频接入点）"
-              />
-              <p className="text-xs text-muted-foreground">
-                用于视频生成；建议填写视频推理接入点 ID（ep-...）或 Model
-                ID。留空则使用默认（Seedance 1.5 Pro）。
-              </p>
-            </div>
-          ) : provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi' ? (
-            <div className="space-y-2">
-              <Label htmlFor="imageBaseURL">图片 Base URL（可选）</Label>
-              <Input
-                id="imageBaseURL"
-                value={generationParams.imageBaseURL ?? ''}
-                onChange={(e) =>
-                  setGenerationParams((prev) => {
-                    const trimmed = e.target.value.trim();
-                    return {
-                      ...prev,
-                      imageBaseURL: trimmed || undefined,
-                    };
-                  })
-                }
-                disabled={isLocked}
-                placeholder="https://www.dmxapi.cn"
-              />
-              <p className="text-xs text-muted-foreground">
-                仅对图片生成生效；留空默认使用 <code>https://www.dmxapi.cn</code>。
-              </p>
-            </div>
-          ) : (
-            <div />
-          )}
+          <div className="space-y-2">
+            <Label>视频供应商</Label>
+            <Select
+              value={generationParams.videoProvider === 'doubao-ark' ? 'doubao-ark' : 'default'}
+              onValueChange={(value) =>
+                setGenerationParams((prev) => {
+                  if (value === 'default') {
+                    return { ...prev, videoProvider: undefined, videoBaseURL: undefined };
+                  }
+                  return {
+                    ...prev,
+                    videoProvider: 'doubao-ark',
+                    videoBaseURL: prev.videoBaseURL || 'https://ark.cn-beijing.volces.com/api/v3',
+                  };
+                })
+              }
+            >
+              <SelectTrigger disabled={isLocked}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">跟随文本（默认）</SelectItem>
+                <SelectItem value="doubao-ark">豆包 / 方舟(ARK)</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Label htmlFor="videoModel">视频模型（可选）</Label>
+            <Input
+              id="videoModel"
+              value={generationParams.videoModel ?? ''}
+              onChange={(e) =>
+                setGenerationParams((prev) => {
+                  const trimmed = e.target.value.trim();
+                  if (!trimmed) return { ...prev, videoModel: undefined };
+                  const videoProvider =
+                    prev.videoProvider === 'doubao-ark' ||
+                    (prev.videoProvider === undefined && provider === 'doubao-ark')
+                      ? 'doubao-ark'
+                      : prev.videoProvider;
+                  const normalized =
+                    videoProvider === 'doubao-ark' ? normalizeArkModel(trimmed) : trimmed;
+                  return { ...prev, videoModel: normalized || undefined };
+                })
+              }
+              disabled={isLocked}
+              placeholder={
+                generationParams.videoProvider === 'doubao-ark' || provider === 'doubao-ark'
+                  ? 'ep-...（视频接入点）'
+                  : '填入视频模型 ID'
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              视频链路目前主要用于 ARK 视频生成；如文本供应商非 ARK，请在此选择 ARK 并填写视频 API
+              Key。
+            </p>
+
+            {/* 视频 API Key / Base URL（当视频供应商不跟随文本时） */}
+            {generationParams.videoProvider === 'doubao-ark' && provider !== 'doubao-ark' ? (
+              <div className="space-y-2 pt-1">
+                <Label htmlFor="videoApiKey" className="flex items-center gap-2">
+                  <Key className="h-3.5 w-3.5" />
+                  视频 API Key
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="videoApiKey"
+                    type={showVideoApiKey ? 'text' : 'password'}
+                    placeholder="请输入视频 API Key"
+                    value={videoApiKey}
+                    onChange={(e) => setVideoApiKey(e.target.value)}
+                    className="pr-10"
+                    disabled={isLocked}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3"
+                    onClick={() => setShowVideoApiKey(!showVideoApiKey)}
+                    disabled={isLocked}
+                  >
+                    {showVideoApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {validationErrors.videoApiKey && (
+                  <p className="text-sm text-destructive">{validationErrors.videoApiKey}</p>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="videoBaseURL">视频 Base URL（可选）</Label>
+                  <Input
+                    id="videoBaseURL"
+                    value={generationParams.videoBaseURL ?? ''}
+                    onChange={(e) =>
+                      setGenerationParams((prev) => {
+                        const trimmed = e.target.value.trim();
+                        return {
+                          ...prev,
+                          videoBaseURL: trimmed || undefined,
+                        };
+                      })
+                    }
+                    disabled={isLocked}
+                    placeholder="https://ark.cn-beijing.volces.com/api/v3"
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
-      ) : null}
+      </div>
 
       {/* 测试连接 */}
       <div className="flex items-center gap-3">

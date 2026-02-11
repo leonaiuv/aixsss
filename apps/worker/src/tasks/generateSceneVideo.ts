@@ -220,19 +220,50 @@ export async function generateSceneVideo(args: {
 
   const profile = await prisma.aIProfile.findFirst({
     where: { id: aiProfileId, teamId },
-    select: { provider: true, model: true, baseURL: true, apiKeyEncrypted: true, generationParams: true },
+    select: {
+      provider: true,
+      model: true,
+      baseURL: true,
+      apiKeyEncrypted: true,
+      // 允许视频链路独立于文本 provider/key
+      videoApiKeyEncrypted: true,
+      generationParams: true,
+    },
   });
   if (!profile) throw new Error('AI profile not found');
-  if (String(profile.provider) !== 'doubao_ark') {
+  const overrides = extractModelOverrides(profile.generationParams ?? null);
+  const videoProviderOverride = overrides?.videoProvider;
+  const textProviderUi =
+    profile.provider === 'openai_compatible'
+      ? 'openai-compatible'
+      : profile.provider === 'doubao_ark'
+        ? 'doubao-ark'
+        : profile.provider;
+  const needsSeparateVideoKey = Boolean(
+    videoProviderOverride && videoProviderOverride !== textProviderUi,
+  );
+  const effectiveVideoProvider =
+    videoProviderOverride === 'doubao-ark' ? 'doubao_ark' : String(profile.provider);
+  if (effectiveVideoProvider !== 'doubao_ark') {
     throw new Error('当前仅支持使用「豆包/方舟(ARK)」配置生成视频。请在 AI 设置中选择豆包/ARK。');
   }
 
-  const apiKey = normalizeApiKey(decryptApiKey(profile.apiKeyEncrypted, apiKeySecret));
-  if (!apiKey) throw new Error('Doubao/ARK API Key 为空：请在 AI 设置中填写正确的 API Key（无需包含 Bearer 前缀）。');
-  const overrides = extractModelOverrides(profile.generationParams ?? null);
+  const textApiKey = normalizeApiKey(decryptApiKey(profile.apiKeyEncrypted, apiKeySecret));
+  const videoApiKey = profile.videoApiKeyEncrypted
+    ? normalizeApiKey(decryptApiKey(profile.videoApiKeyEncrypted, apiKeySecret))
+    : '';
+  if (needsSeparateVideoKey && !videoApiKey) {
+    throw new Error('视频 API Key 未配置：请在 AI 设置中填写视频 API Key。');
+  }
+  const apiKey = needsSeparateVideoKey ? videoApiKey : textApiKey;
+  if (!apiKey)
+    throw new Error('Doubao/ARK API Key 为空：请在 AI 设置中填写正确的 API Key（无需包含 Bearer 前缀）。');
   const videoModel =
     normalizeArkModel(overrides?.videoModel ?? '') || 'doubao-seedance-1-5-pro-251215';
-  const baseURL = profile.baseURL ?? 'https://ark.cn-beijing.volces.com/api/v3';
+  const baseURL =
+    overrides?.videoBaseURL ??
+    (String(profile.provider) === 'doubao_ark' ? profile.baseURL ?? undefined : undefined) ??
+    'https://ark.cn-beijing.volces.com/api/v3';
 
   const style = styleFullPrompt(project);
   const prompt = [style ? `Style: ${style}` : null, scene.sceneDescription?.trim() ? `Scene: ${scene.sceneDescription.trim()}` : null, `Motion: ${scene.motionPrompt.trim()}`]
@@ -276,7 +307,7 @@ export async function generateSceneVideo(args: {
         {
           url,
           prompt,
-          provider: profile.provider,
+          provider: effectiveVideoProvider,
           model: videoModel,
           createdAt: new Date().toISOString(),
           metadata: { taskId: created.taskId, task },

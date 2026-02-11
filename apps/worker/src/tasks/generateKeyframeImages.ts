@@ -3,7 +3,7 @@ import type { JobProgress } from 'bullmq';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { generateImagesWithProvider } from '../providers/index.js';
 import type { ImageResult } from '../providers/types.js';
-import { styleFullPrompt, toProviderImageConfig } from './common.js';
+import { extractModelOverrides, styleFullPrompt, toProviderImageConfig } from './common.js';
 import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
 
 type KeyframeLocaleBlock = {
@@ -147,8 +147,21 @@ export async function generateKeyframeImages(args: {
     ? decryptApiKey(profile.imageApiKeyEncrypted, apiKeySecret)
     : '';
   const providerConfig = toProviderImageConfig(profile);
-  providerConfig.apiKey =
-    providerConfig.kind === 'nanobanana_dmxapi' ? imageApiKey.trim() || textApiKey : textApiKey;
+  const overrides = extractModelOverrides(profile.generationParams ?? null);
+  const imageProviderOverride = overrides?.imageProvider;
+  const textProviderUi =
+    profile.provider === 'openai_compatible'
+      ? 'openai-compatible'
+      : profile.provider === 'doubao_ark'
+        ? 'doubao-ark'
+        : profile.provider;
+  const needsSeparateImageKey =
+    imageProviderOverride === 'nanobananapro-dmxapi' ||
+    (typeof imageProviderOverride === 'string' && imageProviderOverride !== textProviderUi);
+  if (needsSeparateImageKey && !imageApiKey.trim()) {
+    throw new Error('图片 API Key 未配置：请在 AI 设置中填写图片 API Key。');
+  }
+  providerConfig.apiKey = needsSeparateImageKey ? imageApiKey.trim() : textApiKey;
 
   const keyframes: KeyframeKey[] = (() => {
     const json = tryParseJson(scene.shotPrompt);

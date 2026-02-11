@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "CharacterRelationship_projectId_fromCharacterId_toCharacterId_k" RENAME TO "CharacterRelationship_projectId_fromCharacterId_toCharacter_key";

@@ -94,6 +94,7 @@ export class AIProfilesService {
       generationParams: p.generationParams ?? null,
       pricing: p.pricing ?? null,
       hasImageApiKey: Boolean(p.imageApiKeyEncrypted),
+      hasVideoApiKey: Boolean(p.videoApiKeyEncrypted),
       createdAt: toIso(p.createdAt),
       updatedAt: toIso(p.updatedAt),
     }));
@@ -107,6 +108,11 @@ export class AIProfilesService {
     if (typeof input.imageApiKey === 'string' && !imageApiKey) {
       throw new BadRequestException('图片 API Key 不能为空（请不要包含 Bearer 前缀或多余空格）。');
     }
+    const videoApiKey =
+      typeof input.videoApiKey === 'string' ? normalizeApiKey(input.videoApiKey) : '';
+    if (typeof input.videoApiKey === 'string' && !videoApiKey) {
+      throw new BadRequestException('视频 API Key 不能为空（请不要包含 Bearer 前缀或多余空格）。');
+    }
     const model = normalizeModel(input.model, input.provider);
     if (!model) throw new BadRequestException('模型/接入点不能为空。');
     const profile = await this.prisma.aIProfile.create({
@@ -119,6 +125,7 @@ export class AIProfilesService {
         baseURL: input.baseURL,
         apiKeyEncrypted: this.crypto.encrypt(apiKey),
         ...(imageApiKey ? { imageApiKeyEncrypted: this.crypto.encrypt(imageApiKey) } : {}),
+        ...(videoApiKey ? { videoApiKeyEncrypted: this.crypto.encrypt(videoApiKey) } : {}),
         generationParams: (normalizeGenerationParams(input.provider, input.generationParams) ??
           undefined) as Prisma.InputJsonValue | undefined,
         pricing: input.pricing ? (input.pricing as Prisma.InputJsonValue) : undefined,
@@ -134,6 +141,7 @@ export class AIProfilesService {
       generationParams: profile.generationParams ?? null,
       pricing: profile.pricing ?? null,
       hasImageApiKey: Boolean(profile.imageApiKeyEncrypted),
+      hasVideoApiKey: Boolean(profile.videoApiKeyEncrypted),
       createdAt: toIso(profile.createdAt),
       updatedAt: toIso(profile.updatedAt),
     };
@@ -147,7 +155,9 @@ export class AIProfilesService {
     if (!existing) throw new NotFoundException('AI profile not found');
 
     const effectiveProvider: ProviderType = input.provider ?? fromDbProvider(existing.provider);
-    const nextProvider: DbProviderType | undefined = input.provider ? toDbProvider(input.provider) : undefined;
+    const nextProvider: DbProviderType | undefined = input.provider
+      ? toDbProvider(input.provider)
+      : undefined;
 
     const profile = await this.prisma.aIProfile.update({
       where: { id: profileId },
@@ -191,6 +201,17 @@ export class AIProfilesService {
               return { imageApiKeyEncrypted: this.crypto.encrypt(imageApiKey) };
             })()
           : {}),
+        ...(input.videoApiKey !== undefined
+          ? (() => {
+              if (input.videoApiKey === null) return { videoApiKeyEncrypted: null };
+              const videoApiKey = normalizeApiKey(input.videoApiKey);
+              if (!videoApiKey)
+                throw new BadRequestException(
+                  '视频 API Key 不能为空（请不要包含 Bearer 前缀或多余空格）。',
+                );
+              return { videoApiKeyEncrypted: this.crypto.encrypt(videoApiKey) };
+            })()
+          : {}),
       },
     });
 
@@ -203,6 +224,7 @@ export class AIProfilesService {
       generationParams: profile.generationParams ?? null,
       pricing: profile.pricing ?? null,
       hasImageApiKey: Boolean(profile.imageApiKeyEncrypted),
+      hasVideoApiKey: Boolean(profile.videoApiKeyEncrypted),
       createdAt: toIso(profile.createdAt),
       updatedAt: toIso(profile.updatedAt),
     };

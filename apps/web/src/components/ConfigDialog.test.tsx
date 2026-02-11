@@ -12,21 +12,21 @@ const mockSetActiveProfile = vi.fn();
 const mockCreateProfile = vi.fn(() => 'profile_2');
 const mockUpdateProfile = vi.fn();
 const mockDeleteProfile = vi.fn();
-const mockConfig = {
-  provider: 'deepseek' as const,
-  apiKey: 'test-api-key',
-  model: 'deepseek-chat',
+let mockConfig: {
+  provider: 'deepseek';
+  apiKey: string;
+  imageApiKey?: string;
+  videoApiKey?: string;
+  model: string;
+  generationParams?: Record<string, unknown>;
 };
-
-const mockProfiles = [
-  {
-    id: 'profile_1',
-    name: '默认档案',
-    config: mockConfig,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+let mockProfiles: Array<{
+  id: string;
+  name: string;
+  config: typeof mockConfig;
+  createdAt: string;
+  updatedAt: string;
+}>;
 
 vi.mock('@/stores/configStore', () => ({
   useConfigStore: () => ({
@@ -72,6 +72,20 @@ beforeEach(() => {
     writable: true,
   });
   KeyManager.reset();
+  mockConfig = {
+    provider: 'deepseek',
+    apiKey: 'test-api-key',
+    model: 'deepseek-chat',
+  };
+  mockProfiles = [
+    {
+      id: 'profile_1',
+      name: '默认档案',
+      config: mockConfig,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ];
 });
 
 const openSecurityTab = () => {
@@ -87,13 +101,161 @@ describe('ConfigDialog 基础功能', () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
     expect(screen.getByText('AI 设置')).toBeInTheDocument();
-    expect(screen.getByLabelText(/API Key/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/文本 API Key/i)).toBeInTheDocument();
   });
 
   it('应显示保存按钮', () => {
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
     expect(screen.getByRole('button', { name: /保存配置/i })).toBeInTheDocument();
+  });
+
+  it('连接配置应显示文本/图片/视频模型输入', () => {
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    openConnectionTab();
+    expect(screen.getByLabelText(/文本模型/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/图片模型/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/视频模型/i)).toBeInTheDocument();
+  });
+
+  it('连接配置应显示图片/视频供应商选择（不再只跟随文本供应商）', () => {
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    openConnectionTab();
+    expect(screen.getByText(/图片供应商/i)).toBeInTheDocument();
+    expect(screen.getByText(/视频供应商/i)).toBeInTheDocument();
+  });
+
+  it('当图片供应商为 NanoBanana(DMXAPI) 时应显示图片 API Key（与文本供应商无关）', () => {
+    mockConfig = {
+      provider: 'deepseek',
+      apiKey: 'text-key',
+      model: 'deepseek-chat',
+      generationParams: {
+        temperature: 0.7,
+        topP: 0.9,
+        maxTokens: 2048,
+        imageProvider: 'nanobananapro-dmxapi',
+        imageBaseURL: 'https://www.dmxapi.cn',
+        imageModel: 'gemini-3-pro-image-preview',
+      },
+    };
+    mockProfiles[0].config = mockConfig;
+
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    openConnectionTab();
+    expect(screen.getByLabelText(/图片 API Key/i)).toBeInTheDocument();
+  });
+
+  it('图片供应商不跟随文本时：保存应持久化 imageProvider/imageApiKey', async () => {
+    mockConfig = {
+      provider: 'deepseek',
+      apiKey: 'text-key',
+      imageApiKey: 'img-key',
+      model: 'deepseek-chat',
+      generationParams: {
+        temperature: 0.7,
+        topP: 0.9,
+        maxTokens: 2048,
+        imageProvider: 'openai-compatible',
+        imageBaseURL: 'https://api.openai.com',
+        imageModel: 'gpt-image-1',
+      },
+    };
+    mockProfiles[0].config = mockConfig;
+
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    openConnectionTab();
+    fireEvent.click(screen.getByRole('button', { name: /保存配置/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateProfile).toHaveBeenCalledWith(
+        'profile_1',
+        expect.objectContaining({
+          config: expect.objectContaining({
+            imageApiKey: 'img-key',
+            generationParams: expect.objectContaining({
+              imageProvider: 'openai-compatible',
+              imageModel: 'gpt-image-1',
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  it('视频供应商不跟随文本时：保存应持久化 videoProvider/videoApiKey', async () => {
+    mockConfig = {
+      provider: 'deepseek',
+      apiKey: 'text-key',
+      videoApiKey: 'ark-key',
+      model: 'deepseek-chat',
+      generationParams: {
+        temperature: 0.7,
+        topP: 0.9,
+        maxTokens: 2048,
+        videoProvider: 'doubao-ark',
+        videoBaseURL: 'https://ark.cn-beijing.volces.com/api/v3',
+        videoModel: 'doubao-seedance-1-5-pro-251215',
+      },
+    };
+    mockProfiles[0].config = mockConfig;
+
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    openConnectionTab();
+    fireEvent.click(screen.getByRole('button', { name: /保存配置/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateProfile).toHaveBeenCalledWith(
+        'profile_1',
+        expect.objectContaining({
+          config: expect.objectContaining({
+            videoApiKey: 'ark-key',
+            generationParams: expect.objectContaining({
+              videoProvider: 'doubao-ark',
+              videoModel: 'doubao-seedance-1-5-pro-251215',
+            }),
+          }),
+        }),
+      );
+    });
+  });
+
+  it('保存时应同时持久化文本/图片/视频模型', async () => {
+    render(<ConfigDialog open={true} onOpenChange={() => {}} />);
+
+    openConnectionTab();
+
+    fireEvent.change(screen.getByLabelText(/文本模型/i), {
+      target: { value: 'deepseek-reasoner' },
+    });
+    fireEvent.change(screen.getByLabelText(/图片模型/i), {
+      target: { value: 'gpt-image-1' },
+    });
+    fireEvent.change(screen.getByLabelText(/视频模型/i), {
+      target: { value: 'veo-3' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /保存配置/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateProfile).toHaveBeenCalledWith(
+        'profile_1',
+        expect.objectContaining({
+          config: expect.objectContaining({
+            model: 'deepseek-reasoner',
+            generationParams: expect.objectContaining({
+              imageModel: 'gpt-image-1',
+              videoModel: 'veo-3',
+            }),
+          }),
+        }),
+      );
+    });
   });
 });
 
@@ -289,8 +451,8 @@ describe('ConfigDialog 解锁流程', () => {
 
     render(<ConfigDialog open={true} onOpenChange={() => {}} />);
 
-    expect(screen.getByLabelText(/API Key/i)).toBeDisabled();
-    expect(screen.getByLabelText(/模型名称/i)).toBeDisabled();
+    expect(screen.getByLabelText(/文本 API Key/i)).toBeDisabled();
+    expect(screen.getByLabelText(/文本模型/i)).toBeDisabled();
     expect(screen.getByRole('button', { name: /测试连接/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /保存配置/i })).toBeDisabled();
 
@@ -336,8 +498,8 @@ describe('ConfigDialog 解锁流程', () => {
 
     openConnectionTab();
     await waitFor(() => {
-      expect(screen.getByLabelText(/API Key/i)).not.toBeDisabled();
-      expect(screen.getByLabelText(/模型名称/i)).not.toBeDisabled();
+      expect(screen.getByLabelText(/文本 API Key/i)).not.toBeDisabled();
+      expect(screen.getByLabelText(/文本模型/i)).not.toBeDisabled();
       expect(screen.getByRole('button', { name: /测试连接/i })).not.toBeDisabled();
       expect(screen.getByRole('button', { name: /保存配置/i })).not.toBeDisabled();
     });
