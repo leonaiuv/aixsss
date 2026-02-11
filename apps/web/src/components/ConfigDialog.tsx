@@ -609,9 +609,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const validationErrors = getValidationErrors();
   const hasConfigValidationErrors = Boolean(
     validationErrors.apiKey ||
-      validationErrors.imageApiKey ||
-      validationErrors.model ||
-      validationErrors.baseURL,
+    validationErrors.imageApiKey ||
+    validationErrors.model ||
+    validationErrors.baseURL,
   );
   const hasProfileValidationErrors = Boolean(
     validationErrors.profileName || validationErrors.pricing,

@@ -483,12 +483,14 @@ function mergeSceneChildTaskMap(
       chunk:
         typeof task.chunk === 'number' && Number.isFinite(task.chunk)
           ? task.chunk
-          : prev?.chunk ?? fallbackChunk,
+          : (prev?.chunk ?? fallbackChunk),
     });
   }
 }
 
-function sortSceneChildTasks(tasks: WorkflowSceneChildTaskSummary[]): WorkflowSceneChildTaskSummary[] {
+function sortSceneChildTasks(
+  tasks: WorkflowSceneChildTaskSummary[],
+): WorkflowSceneChildTaskSummary[] {
   return tasks.slice().sort((a, b) => {
     if (a.order !== b.order) return a.order - b.order;
     return a.jobId.localeCompare(b.jobId);
@@ -4060,12 +4062,20 @@ ${safeJsonStringify(ep.coreExpression)}
                       <div className="flex flex-wrap items-center gap-2 text-xs">
                         <Badge variant="outline">总计 {displayedSceneChildTaskStats.total}</Badge>
                         <Badge variant="outline">排队 {displayedSceneChildTaskStats.queued}</Badge>
-                        <Badge variant="outline">执行中 {displayedSceneChildTaskStats.running}</Badge>
-                        <Badge variant="outline">成功 {displayedSceneChildTaskStats.succeeded}</Badge>
+                        <Badge variant="outline">
+                          执行中 {displayedSceneChildTaskStats.running}
+                        </Badge>
+                        <Badge variant="outline">
+                          成功 {displayedSceneChildTaskStats.succeeded}
+                        </Badge>
                         <Badge variant="outline">失败 {displayedSceneChildTaskStats.failed}</Badge>
-                        <Badge variant="outline">取消 {displayedSceneChildTaskStats.cancelled}</Badge>
+                        <Badge variant="outline">
+                          取消 {displayedSceneChildTaskStats.cancelled}
+                        </Badge>
                         {displayedSceneChildTaskStats.unknown > 0 ? (
-                          <Badge variant="outline">未知 {displayedSceneChildTaskStats.unknown}</Badge>
+                          <Badge variant="outline">
+                            未知 {displayedSceneChildTaskStats.unknown}
+                          </Badge>
                         ) : null}
                       </div>
                       <div className="space-y-2 max-h-48 overflow-auto pr-1">
