@@ -181,4 +181,100 @@ describe('expandStoryCharacters', () => {
     expect(result.stats.lowConfidenceSkipped).toBe(1);
     expect(result.stats.finalCount).toBe(1);
   });
+
+  it('should merge with previous pending candidates instead of overwriting', async () => {
+    type TaskArgs = Parameters<typeof expandStoryCharacters>[0];
+
+    (chatWithProvider as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      content: JSON.stringify({
+        candidates: [
+          {
+            name: '新角色A',
+            roleType: 'supporting',
+            briefDescription: '新增',
+            confidence: 0.9,
+            evidence: ['phase3'],
+          },
+          {
+            name: '旧候选',
+            roleType: 'supporting',
+            briefDescription: '与历史候选重名',
+            confidence: 0.88,
+            evidence: ['phase4'],
+          },
+        ],
+      }),
+      tokenUsage: { prompt: 1, completion: 1, total: 2 },
+    });
+
+    const prisma = {
+      project: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'p1',
+          summary: 'summary',
+          protagonist: 'p',
+          style: 'anime',
+          artStyleConfig: null,
+          contextCache: {
+            narrativeCausalChain: { completedPhase: 3 },
+            characterExpansion: {
+              runId: 'run_prev',
+              generatedAt: '2026-02-10T00:00:00.000Z',
+              source: 'narrative_causal_chain',
+              candidates: [
+                {
+                  tempId: 'cand_prev',
+                  name: '旧候选',
+                  aliases: [],
+                  roleType: 'supporting',
+                  briefDescription: '来自上一次',
+                  appearance: '',
+                  personality: '',
+                  background: '',
+                  confidence: 0.8,
+                  evidence: ['prev'],
+                },
+              ],
+            },
+          },
+        }),
+        update: vi.fn().mockResolvedValue({ id: 'p1' }),
+      },
+      character: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      worldViewElement: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      aIProfile: {
+        findFirst: vi.fn().mockResolvedValue({
+          provider: 'openai_compatible',
+          model: 'test',
+          baseURL: null,
+          apiKeyEncrypted: 'x',
+          generationParams: null,
+        }),
+      },
+      systemPrompt: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+    };
+
+    await expandStoryCharacters({
+      prisma: prisma as unknown as TaskArgs['prisma'],
+      teamId: 't1',
+      projectId: 'p1',
+      aiProfileId: 'a1',
+      apiKeySecret: 'secret',
+      maxNewCharacters: 8,
+      updateProgress: async () => {},
+    });
+
+    const updateArg = (prisma.project.update as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      .data.contextCache as Record<string, unknown>;
+    const expansion = updateArg.characterExpansion as {
+      candidates: Array<{ name: string }>;
+    };
+    expect(expansion.candidates.map((c) => c.name)).toEqual(['旧候选', '新角色A']);
+  });
 });

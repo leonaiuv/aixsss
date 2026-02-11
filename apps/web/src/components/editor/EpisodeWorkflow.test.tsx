@@ -37,10 +37,14 @@ const mockUseEpisodeStore = vi.mocked(useEpisodeStore);
 const mockUseEpisodeScenesStore = vi.mocked(useEpisodeScenesStore);
 const mockUseCharacterRelationshipStore = vi.mocked(useCharacterRelationshipStore);
 const mockUseEmotionArcStore = vi.mocked(useEmotionArcStore);
+let updateProjectMock: ReturnType<typeof vi.fn>;
+let addCharacterMock: ReturnType<typeof vi.fn>;
 
 describe('EpisodeWorkflow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    updateProjectMock = vi.fn();
+    addCharacterMock = vi.fn();
 
     const projectState = {
       currentProject: {
@@ -54,6 +58,7 @@ describe('EpisodeWorkflow', () => {
         createdAt: '2025-01-01T00:00:00.000Z',
         updatedAt: '2025-01-01T00:00:00.000Z',
       },
+      updateProject: updateProjectMock,
     };
 
     mockUseProjectStore.mockImplementation(((
@@ -68,7 +73,7 @@ describe('EpisodeWorkflow', () => {
     mockUseCharacterStore.mockReturnValue({
       characters: [],
       loadCharacters: vi.fn(),
-      addCharacter: vi.fn(),
+      addCharacter: addCharacterMock,
     } as ReturnType<typeof useCharacterStore>);
     mockUseWorldViewStore.mockReturnValue({
       elements: [],
@@ -277,5 +282,72 @@ describe('EpisodeWorkflow', () => {
       2,
       'test scene anchor english\n\n1) anchor A; 2) anchor B\n\nno people, no text',
     );
+  });
+
+  it('导入角色后应从候选缓存移除已处理项，避免重复导入', async () => {
+    const projectState = {
+      currentProject: {
+        id: 'proj_1',
+        title: '测试项目',
+        summary: 'x'.repeat(120),
+        style: 'anime',
+        protagonist: '主角设定',
+        workflowState: 'EPISODE_PLAN_EDITING',
+        currentSceneOrder: 0,
+        contextCache: {
+          characterExpansion: {
+            runId: 'run_1',
+            generatedAt: '2026-02-11T00:00:00.000Z',
+            source: 'narrative_causal_chain',
+            candidates: [
+              {
+                tempId: 'cand_1',
+                name: '角色甲',
+                aliases: [],
+                roleType: 'supporting',
+                briefDescription: '候选甲',
+                appearance: '',
+                personality: '',
+                background: '',
+                confidence: 0.9,
+                evidence: [],
+              },
+              {
+                tempId: 'cand_2',
+                name: '角色乙',
+                aliases: [],
+                roleType: 'supporting',
+                briefDescription: '候选乙',
+                appearance: '',
+                personality: '',
+                background: '',
+                confidence: 0.88,
+                evidence: [],
+              },
+            ],
+          },
+        },
+        createdAt: '2025-01-01T00:00:00.000Z',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      },
+      updateProject: updateProjectMock,
+    };
+
+    mockUseProjectStore.mockImplementation(((
+      selector?: (state: typeof projectState) => unknown,
+    ) => {
+      return typeof selector === 'function' ? selector(projectState) : projectState;
+    }) as unknown as typeof useProjectStore);
+
+    render(<EpisodeWorkflow />);
+    await userEvent.click(screen.getByText('因果链'));
+    await userEvent.click(screen.getByRole('button', { name: '导入选中角色' }));
+
+    expect(addCharacterMock).toHaveBeenCalledTimes(2);
+    expect(updateProjectMock).toHaveBeenCalledTimes(1);
+    const payload = updateProjectMock.mock.calls[0]?.[1] as {
+      contextCache?: { characterExpansion?: { candidates?: unknown[] } };
+    };
+    expect(payload.contextCache?.characterExpansion?.candidates ?? []).toHaveLength(0);
   });
 });

@@ -1216,6 +1216,30 @@ export function EpisodeWorkflow() {
       loadCharacters(currentProject.id);
     }
 
+    const handledTempIds = new Set(selected.map((candidate) => candidate.tempId));
+    const remainingCandidates = characterExpansion.candidates.filter(
+      (candidate) => !handledTempIds.has(candidate.tempId),
+    );
+    const baseCache =
+      currentProject.contextCache && typeof currentProject.contextCache === 'object'
+        ? (currentProject.contextCache as Record<string, unknown>)
+        : {};
+
+    updateProject(currentProject.id, {
+      contextCache: {
+        ...baseCache,
+        characterExpansion: {
+          ...characterExpansion,
+          candidates: remainingCandidates,
+          stats: {
+            ...(characterExpansion.stats ?? {}),
+            finalCount: remainingCandidates.length,
+          },
+        },
+        characterExpansionUpdatedAt: new Date().toISOString(),
+      },
+    });
+
     toast({
       title: '角色导入完成',
       description:

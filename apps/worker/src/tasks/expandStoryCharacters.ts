@@ -297,6 +297,63 @@ function normalizeCandidates(
   };
 }
 
+function normalizePersistedCandidates(value: unknown): NormalizedCandidate[] {
+  if (!Array.isArray(value)) return [];
+  const out: NormalizedCandidate[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const name = cleanText(item.name, 80);
+    const nameKey = normalizeNameKey(name);
+    if (!nameKey) continue;
+    const confidenceRaw = typeof item.confidence === 'number' ? item.confidence : 0.75;
+    out.push({
+      tempId: cleanText(item.tempId, 120) || `cand_${randomUUID()}`,
+      name,
+      aliases: normalizeStringArray(item.aliases, 80, 6),
+      roleType: cleanText(item.roleType, 40) || 'supporting',
+      briefDescription: cleanText(item.briefDescription, 1500) || '待补充',
+      appearance: cleanText(item.appearance, 1500),
+      personality: cleanText(item.personality, 1500),
+      background: cleanText(item.background, 1500),
+      confidence: Math.max(0, Math.min(1, confidenceRaw)),
+      evidence: normalizeStringArray(item.evidence, 300, 6),
+    });
+  }
+  return out;
+}
+
+function mergePendingCandidates(
+  previous: NormalizedCandidate[],
+  current: NormalizedCandidate[],
+  existingNames: Set<string>,
+) {
+  const merged: NormalizedCandidate[] = [];
+  const seen = new Set<string>();
+  let carriedOver = 0;
+  let duplicatesAcrossRuns = 0;
+
+  for (const candidate of previous) {
+    const nameKey = normalizeNameKey(candidate.name);
+    if (!nameKey || existingNames.has(nameKey) || seen.has(nameKey)) continue;
+    seen.add(nameKey);
+    merged.push(candidate);
+    carriedOver += 1;
+  }
+
+  for (const candidate of current) {
+    const nameKey = normalizeNameKey(candidate.name);
+    if (!nameKey || existingNames.has(nameKey)) continue;
+    if (seen.has(nameKey)) {
+      duplicatesAcrossRuns += 1;
+      continue;
+    }
+    seen.add(nameKey);
+    merged.push(candidate);
+  }
+
+  return { merged, carriedOver, duplicatesAcrossRuns };
+}
+
 async function loadExpansionContext(args: {
   prisma: PrismaClient;
   teamId: string;
@@ -613,6 +670,14 @@ export async function expandStoryCharacters(args: {
     existingNames,
     maxNewCharacters,
   );
+  const previousCandidates = isRecord(context.baseCache.characterExpansion)
+    ? normalizePersistedCandidates(context.baseCache.characterExpansion.candidates)
+    : [];
+  const { merged, carriedOver, duplicatesAcrossRuns } = mergePendingCandidates(
+    previousCandidates,
+    normalized,
+    existingNames,
+  );
 
   await updateProgress({ pct: 80, message: '写入候选角色缓存...' });
   const generatedAt = new Date().toISOString();
@@ -621,8 +686,13 @@ export async function expandStoryCharacters(args: {
     generatedAt,
     source: 'narrative_causal_chain',
     maxNewCharacters,
-    candidates: normalized,
-    stats,
+    candidates: merged,
+    stats: {
+      ...stats,
+      duplicatesResolved: stats.duplicatesResolved + duplicatesAcrossRuns,
+      carriedOver,
+      finalCount: merged.length,
+    },
   };
 
   const nextContextCache: Record<string, unknown> = {
@@ -640,8 +710,8 @@ export async function expandStoryCharacters(args: {
 
   return {
     projectId,
-    candidateCount: normalized.length,
-    stats,
+    candidateCount: merged.length,
+    stats: characterExpansion.stats,
     extractedJson: generation.extractedJson,
     tokenUsage: generation.tokenUsage ?? null,
     executionMode: generation.executionMode,
