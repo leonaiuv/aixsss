@@ -196,6 +196,7 @@ describe('EpisodeWorkflow', () => {
     expect(screen.getByRole('tab', { name: '3. 分镜列表' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '4. 分镜细化' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '5. 声音与时长' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'AI代理一键生成5步' })).toBeInTheDocument();
   });
 
   it('场景锚点应支持复制 ZH/EN（仅复制纯提示词）', async () => {

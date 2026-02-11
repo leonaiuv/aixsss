@@ -26,6 +26,10 @@ export function isAgentSupervisorEnabled(): boolean {
   return envBool('AI_AGENT_SUPERVISOR_ENABLED', false);
 }
 
+export function isAgentEpisodeCreationEnabled(): boolean {
+  return envBool('AI_AGENT_EPISODE_CREATION_ENABLED', true);
+}
+
 export function isAgentFallbackToLegacyEnabled(): boolean {
   return envBool('AI_AGENT_FALLBACK_TO_LEGACY', true);
 }

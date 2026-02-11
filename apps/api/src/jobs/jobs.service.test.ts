@@ -161,6 +161,36 @@ describe('JobsService new workflow enqueue', () => {
     );
   });
 
+  it('enqueueRunEpisodeCreationAgent should add run_episode_creation_agent job', async () => {
+    await service.enqueueRunEpisodeCreationAgent('t1', 'p1', 'e1', 'a1');
+    expect(queue.add).toHaveBeenCalledWith(
+      'run_episode_creation_agent',
+      expect.objectContaining({
+        teamId: 't1',
+        projectId: 'p1',
+        episodeId: 'e1',
+        aiProfileId: 'a1',
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('enqueueRunEpisodeCreationAgent should reject when another episode agent job is active', async () => {
+    (prisma.aIJob.findFirst as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: 'job_existing',
+      status: 'running',
+    });
+
+    await expect(
+      service.enqueueRunEpisodeCreationAgent('t1', 'p1', 'e1', 'a1'),
+    ).rejects.toThrow(/already running/i);
+    expect(queue.add).not.toHaveBeenCalledWith(
+      'run_episode_creation_agent',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
   it('enqueueRunWorkflowSupervisor should reject when another supervisor job is active', async () => {
     (prisma.aIJob.findFirst as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: 'job_existing',

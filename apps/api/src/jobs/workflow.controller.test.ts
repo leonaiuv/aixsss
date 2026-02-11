@@ -11,6 +11,7 @@ describe('WorkflowController new routes', () => {
     enqueueEstimateDuration: vi.fn().mockResolvedValue({ id: 'job5' }),
     enqueueExpandStoryCharacters: vi.fn().mockResolvedValue({ id: 'job6' }),
     enqueueRunWorkflowSupervisor: vi.fn().mockResolvedValue({ id: 'job7' }),
+    enqueueRunEpisodeCreationAgent: vi.fn().mockResolvedValue({ id: 'job8' }),
   };
   const controller = new WorkflowController(jobs as never);
   const user = { teamId: 't1' } as { teamId: string };
@@ -72,5 +73,10 @@ describe('WorkflowController new routes', () => {
   it('runWorkflowSupervisor should enqueue project scoped supervisor job', async () => {
     await controller.runWorkflowSupervisor(user as never, 'p1', { aiProfileId: 'a1' });
     expect(jobs.enqueueRunWorkflowSupervisor).toHaveBeenCalledWith('t1', 'p1', 'a1');
+  });
+
+  it('runEpisodeCreationAgent should enqueue episode scoped agent job', async () => {
+    await controller.runEpisodeCreationAgent(user as never, 'p1', 'e1', { aiProfileId: 'a1' });
+    expect(jobs.enqueueRunEpisodeCreationAgent).toHaveBeenCalledWith('t1', 'p1', 'e1', 'a1');
   });
 });

@@ -31,5 +31,6 @@ describe('systemPrompts', () => {
     expect(keys.has('workflow.sound_design.fix.system')).toBe(true);
     expect(keys.has('workflow.narrative_causal_chain.phase3_4.agent.system')).toBe(true);
     expect(keys.has('workflow.supervisor.agent.system')).toBe(true);
+    expect(keys.has('workflow.episode_creation.agent.system')).toBe(true);
   });
 });

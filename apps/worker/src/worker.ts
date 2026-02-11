@@ -26,6 +26,7 @@ import { estimateDuration } from './tasks/estimateDuration.js';
 import { buildNarrativeCausalChain } from './tasks/buildNarrativeCausalChain.js';
 import { expandStoryCharacters } from './tasks/expandStoryCharacters.js';
 import { runWorkflowSupervisor } from './tasks/runWorkflowSupervisor.js';
+import { runEpisodeCreationAgent } from './tasks/runEpisodeCreationAgent.js';
 import {
   backTranslateStoryboardPanels,
   generateStoryboardGroup,
@@ -462,6 +463,33 @@ async function main() {
               prisma,
               teamId,
               projectId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              currentJobId: jobId,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'run_episode_creation_agent': {
+            const result = await runEpisodeCreationAgent({
+              prisma,
+              teamId,
+              projectId,
+              episodeId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               currentJobId: jobId,

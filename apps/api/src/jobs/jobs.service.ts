@@ -553,6 +553,69 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
+  async enqueueRunEpisodeCreationAgent(
+    teamId: string,
+    projectId: string,
+    episodeId: string,
+    aiProfileId: string,
+  ) {
+    await this.requireProject(teamId, projectId);
+    await this.requireEpisode(projectId, episodeId);
+    await this.requireAIProfile(teamId, aiProfileId);
+
+    const conflict = await this.prisma.aIJob.findFirst({
+      where: {
+        teamId,
+        projectId,
+        episodeId,
+        status: { in: ['queued', 'running'] },
+        type: {
+          in: [
+            'run_episode_creation_agent',
+            'generate_episode_core_expression',
+            'generate_scene_script',
+            'generate_episode_scene_list',
+            'refine_scene_all',
+            'refine_scene_all_batch',
+            'generate_sound_design',
+            'estimate_duration',
+          ],
+        },
+      },
+      select: { id: true, type: true },
+    });
+    if (conflict) {
+      throw new BadRequestException(
+        `Episode creation is already running with another job (${conflict.type}:${conflict.id})`,
+      );
+    }
+
+    const jobRow = await this.prisma.aIJob.create({
+      data: {
+        teamId,
+        projectId,
+        episodeId,
+        aiProfileId,
+        type: 'run_episode_creation_agent',
+        status: 'queued',
+      },
+    });
+
+    await this.queue.add(
+      'run_episode_creation_agent',
+      { teamId, projectId, episodeId, aiProfileId, jobId: jobRow.id },
+      {
+        jobId: jobRow.id,
+        attempts: 2,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: { count: 500 },
+        removeOnFail: { count: 500 },
+      },
+    );
+
+    return mapJob(jobRow);
+  }
+
   async enqueueEstimateDuration(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
     await this.requireProject(teamId, projectId);
     await this.requireScene(projectId, sceneId);

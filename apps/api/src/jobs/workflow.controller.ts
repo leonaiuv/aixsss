@@ -157,6 +157,17 @@ export class WorkflowController {
     return this.jobs.enqueueRunWorkflowSupervisor(user.teamId, projectId, input.aiProfileId);
   }
 
+  @Post('projects/:projectId/episodes/:episodeId/agent-run')
+  runEpisodeCreationAgent(
+    @CurrentUser() user: AuthUser,
+    @Param('projectId') projectId: string,
+    @Param('episodeId') episodeId: string,
+    @Body() body: unknown,
+  ) {
+    const input = parseOrBadRequest(WorkflowBodySchema, body);
+    return this.jobs.enqueueRunEpisodeCreationAgent(user.teamId, projectId, episodeId, input.aiProfileId);
+  }
+
   @Post('projects/:projectId/scene-list')
   generateSceneList(
     @CurrentUser() user: AuthUser,

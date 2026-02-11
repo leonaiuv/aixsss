@@ -1,0 +1,480 @@
+import type { Prisma, PrismaClient } from '@prisma/client';
+import type { JobProgress } from 'bullmq';
+import { chatWithProvider } from '../providers/index.js';
+import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
+import { runJsonToolLoop } from '../agents/runtime/jsonToolLoop.js';
+import {
+  getAgentMaxSteps,
+  getAgentStepTimeoutMs,
+  getAgentTotalTimeoutMs,
+  isAgentEpisodeCreationEnabled,
+  isAgentFallbackToLegacyEnabled,
+} from '../agents/runtime/featureFlags.js';
+import { toProviderChatConfig } from './common.js';
+import { loadSystemPrompt } from './systemPrompts.js';
+import { generateEpisodeCoreExpression } from './generateEpisodeCoreExpression.js';
+import { generateSceneScript } from './generateSceneScript.js';
+import { generateEpisodeSceneList } from './generateEpisodeSceneList.js';
+import { refineSceneAll } from './refineSceneAll.js';
+import { generateSoundDesign } from './generateSoundDesign.js';
+import { estimateDuration } from './estimateDuration.js';
+
+type EpisodeCreationStep =
+  | 'core_expression'
+  | 'scene_script'
+  | 'scene_list'
+  | 'scene_refinement'
+  | 'sound_and_duration';
+
+type StepSummary = {
+  step: EpisodeCreationStep;
+  status: 'succeeded' | 'failed' | 'skipped';
+  message: string;
+  executionMode?: 'agent' | 'legacy';
+  fallbackUsed?: boolean;
+};
+
+type SceneSnapshot = {
+  id: string;
+  order: number;
+  status: string;
+  soundDesignJson: Prisma.JsonValue | null;
+  durationEstimateJson: Prisma.JsonValue | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function summarizeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const compact = message.replace(/\s+/g, ' ').trim();
+  return compact.length > 220 ? `${compact.slice(0, 220)}...` : compact;
+}
+
+function hasSceneScriptDraft(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return false;
+}
+
+function mapChildProgressPct(childPct: unknown, base: number, span: number): number {
+  const pct = typeof childPct === 'number' ? childPct : 0;
+  const normalized = Math.max(0, Math.min(100, pct));
+  return Math.max(0, Math.min(99, Math.round(base + (normalized / 100) * span)));
+}
+
+async function loadEpisode(prisma: PrismaClient, projectId: string, episodeId: string) {
+  return await prisma.episode.findFirst({
+    where: { id: episodeId, projectId },
+    select: {
+      id: true,
+      order: true,
+      title: true,
+      summary: true,
+      coreExpression: true,
+      sceneScriptDraft: true,
+    },
+  });
+}
+
+async function loadEpisodeScenes(prisma: PrismaClient, episodeId: string): Promise<SceneSnapshot[]> {
+  return await prisma.scene.findMany({
+    where: { episodeId },
+    orderBy: { order: 'asc' },
+    select: {
+      id: true,
+      order: true,
+      status: true,
+      soundDesignJson: true,
+      durationEstimateJson: true,
+    },
+  });
+}
+
+function summarizeAgentSteps(trace: unknown): Array<{ index: number; kind: string; summary: string }> {
+  if (!isRecord(trace) || !Array.isArray(trace.steps)) return [];
+  return trace.steps
+    .map((item) => (isRecord(item) ? item : null))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .map((item, idx) => {
+      const kind = typeof item.kind === 'string' ? item.kind : 'unknown';
+      const toolName =
+        isRecord(item.toolCall) && typeof item.toolCall.name === 'string'
+          ? item.toolCall.name
+          : null;
+      return {
+        index: typeof item.index === 'number' ? item.index : idx + 1,
+        kind,
+        summary: toolName ? `${kind}:${toolName}` : kind,
+      };
+    });
+}
+
+export async function runEpisodeCreationAgent(args: {
+  prisma: PrismaClient;
+  teamId: string;
+  projectId: string;
+  episodeId: string;
+  aiProfileId: string;
+  apiKeySecret: string;
+  currentJobId?: string;
+  updateProgress: (progress: JobProgress) => Promise<void>;
+}) {
+  const { prisma, teamId, projectId, episodeId, aiProfileId, apiKeySecret, currentJobId, updateProgress } = args;
+
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, teamId, deletedAt: null },
+    select: { id: true, summary: true },
+  });
+  if (!project) throw new Error('Project not found');
+
+  const episode = await loadEpisode(prisma, projectId, episodeId);
+  if (!episode) throw new Error('Episode not found');
+
+  const runningConflict = await prisma.aIJob.findFirst({
+    where: {
+      teamId,
+      projectId,
+      episodeId,
+      type: 'run_episode_creation_agent',
+      status: 'running',
+      ...(currentJobId ? { id: { not: currentJobId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (runningConflict) {
+    throw new Error(`Episode creation agent is already running for this episode (${runningConflict.id})`);
+  }
+
+  await updateProgress({ pct: 2, message: '单集创作 Agent：准备任务...' });
+
+  let executionMode: 'agent' | 'legacy' = 'legacy';
+  let fallbackUsed = false;
+  let agentTrace: unknown = null;
+  const stepSummaries: StepSummary[] = [];
+
+  if (isAgentEpisodeCreationEnabled()) {
+    const profile = await prisma.aIProfile.findFirst({
+      where: { id: aiProfileId, teamId },
+      select: { provider: true, model: true, baseURL: true, apiKeyEncrypted: true, generationParams: true },
+    });
+    if (!profile) throw new Error('AI profile not found');
+
+    const providerConfig = toProviderChatConfig(profile);
+    providerConfig.apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
+    const systemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.episode_creation.agent.system',
+    });
+
+    await updateProgress({ pct: 5, message: '单集创作 Agent 规划中...' });
+    const loop = await runJsonToolLoop<{ proceed: true }>({
+      initialMessages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            '目标：按顺序完成单集创作五个阶段。',
+            `projectId=${projectId}`,
+            `episodeId=${episodeId}`,
+            '请先读取上下文，再输出 final {"proceed": true}。',
+          ].join('\n'),
+        },
+      ],
+      callModel: async (messages, meta) => {
+        await updateProgress({
+          pct: Math.min(12, 6 + meta.stepIndex * 2),
+          message: `单集创作 Agent 执行步骤 ${meta.stepIndex}...`,
+        });
+        return await chatWithProvider(providerConfig, messages);
+      },
+      tools: {
+        read_episode_context: {
+          description: '读取当前剧集上下文状态',
+          execute: async () => {
+            const ep = await loadEpisode(prisma, projectId, episodeId);
+            const scenes = await loadEpisodeScenes(prisma, episodeId);
+            return {
+              episodeId,
+              hasCoreExpression: Boolean(ep?.coreExpression),
+              hasSceneScriptDraft: hasSceneScriptDraft(ep?.sceneScriptDraft),
+              sceneCount: scenes.length,
+              completedSceneCount: scenes.filter((s) => s.status === 'completed').length,
+              soundReadyCount: scenes.filter((s) => s.soundDesignJson !== null).length,
+              durationReadyCount: scenes.filter((s) => s.durationEstimateJson !== null).length,
+            };
+          },
+        },
+      },
+      maxSteps: getAgentMaxSteps(),
+      stepTimeoutMs: getAgentStepTimeoutMs(),
+      totalTimeoutMs: getAgentTotalTimeoutMs(),
+      parseFinal: (value) => {
+        const ok = isRecord(value) && value.proceed === true;
+        if (!ok) throw new Error('Episode creation final must be {"proceed": true}');
+        return { proceed: true };
+      },
+      fallbackEnabled: isAgentFallbackToLegacyEnabled(),
+      fallback: async () => ({ final: { proceed: true }, reason: 'episode_creation_agent_failed_use_legacy' }),
+    });
+
+    executionMode = loop.executionMode;
+    fallbackUsed = loop.fallbackUsed;
+    agentTrace = loop.trace;
+  }
+
+  const runStep = async (params: {
+    step: EpisodeCreationStep;
+    title: string;
+    basePct: number;
+    spanPct: number;
+    run: (stepUpdateProgress: (progress: JobProgress) => Promise<void>) => Promise<{
+      skipped?: boolean;
+      message?: string;
+      childResult?: unknown;
+    }>;
+  }) => {
+    await updateProgress({ pct: params.basePct, message: `单集创作 Agent：${params.title}` });
+    try {
+      const result = await params.run(async (progress) => {
+        if (!isRecord(progress)) return;
+        await updateProgress({
+          ...progress,
+          pct: mapChildProgressPct(progress.pct, params.basePct, params.spanPct),
+          message:
+            typeof progress.message === 'string'
+              ? `${params.title}：${progress.message}`
+              : params.title,
+        });
+      });
+      const child = result.childResult;
+      const childExecutionMode =
+        isRecord(child) && (child.executionMode === 'agent' || child.executionMode === 'legacy')
+          ? child.executionMode
+          : undefined;
+      const childFallbackUsed = isRecord(child) && child.fallbackUsed === true;
+      stepSummaries.push({
+        step: params.step,
+        status: result.skipped ? 'skipped' : 'succeeded',
+        message: result.message ?? (result.skipped ? '已存在，跳过' : 'ok'),
+        executionMode: childExecutionMode,
+        fallbackUsed: childFallbackUsed,
+      });
+      return result;
+    } catch (error) {
+      const detail = summarizeError(error);
+      stepSummaries.push({
+        step: params.step,
+        status: 'failed',
+        message: detail,
+      });
+      throw new Error(`episode creation step failed [${params.step}]: ${detail}`);
+    }
+  };
+
+  await runStep({
+    step: 'core_expression',
+    title: '核心表达',
+    basePct: 12,
+    spanPct: 16,
+    run: async (stepUpdateProgress) => {
+      const ep = await loadEpisode(prisma, projectId, episodeId);
+      if (!ep) throw new Error('Episode not found');
+      if (ep.coreExpression) return { skipped: true, message: '核心表达已存在' };
+      const result = await generateEpisodeCoreExpression({
+        prisma,
+        teamId,
+        projectId,
+        episodeId,
+        aiProfileId,
+        apiKeySecret,
+        updateProgress: stepUpdateProgress,
+      });
+      return { childResult: result, message: '核心表达已生成' };
+    },
+  });
+
+  await runStep({
+    step: 'scene_script',
+    title: '分场脚本',
+    basePct: 28,
+    spanPct: 16,
+    run: async (stepUpdateProgress) => {
+      const ep = await loadEpisode(prisma, projectId, episodeId);
+      if (!ep) throw new Error('Episode not found');
+      if (hasSceneScriptDraft(ep.sceneScriptDraft)) {
+        return { skipped: true, message: '分场脚本已存在' };
+      }
+      const result = await generateSceneScript({
+        prisma,
+        teamId,
+        projectId,
+        episodeId,
+        aiProfileId,
+        apiKeySecret,
+        updateProgress: stepUpdateProgress,
+      });
+      return { childResult: result, message: '分场脚本已生成' };
+    },
+  });
+
+  await runStep({
+    step: 'scene_list',
+    title: '分镜列表',
+    basePct: 44,
+    spanPct: 16,
+    run: async (stepUpdateProgress) => {
+      const scenes = await loadEpisodeScenes(prisma, episodeId);
+      if (scenes.length > 0) {
+        return { skipped: true, message: '分镜列表已存在' };
+      }
+      const result = await generateEpisodeSceneList({
+        prisma,
+        teamId,
+        projectId,
+        episodeId,
+        aiProfileId,
+        apiKeySecret,
+        updateProgress: stepUpdateProgress,
+      });
+      return { childResult: result, message: '分镜列表已生成' };
+    },
+  });
+
+  await runStep({
+    step: 'scene_refinement',
+    title: '分镜细化',
+    basePct: 60,
+    spanPct: 20,
+    run: async (stepUpdateProgress) => {
+      const scenes = await loadEpisodeScenes(prisma, episodeId);
+      if (scenes.length === 0) {
+        throw new Error('scene list is empty, cannot refine');
+      }
+      const pending = scenes.filter((scene) => scene.status !== 'completed');
+      if (pending.length === 0) {
+        return { skipped: true, message: '分镜已全部细化完成' };
+      }
+
+      for (let i = 0; i < pending.length; i += 1) {
+        const scene = pending[i];
+        const base = (i / pending.length) * 100;
+        const span = 100 / pending.length;
+        await stepUpdateProgress({
+          pct: Math.min(99, Math.round(base)),
+          message: `细化分镜 #${scene.order}（${i + 1}/${pending.length}）`,
+        });
+        await refineSceneAll({
+          prisma,
+          teamId,
+          projectId,
+          sceneId: scene.id,
+          aiProfileId,
+          apiKeySecret,
+          options: {
+            includeSoundDesign: false,
+            includeDurationEstimate: false,
+          },
+          updateProgress: async (progress) => {
+            const baseProgress = isRecord(progress) ? progress : {};
+            await stepUpdateProgress({
+              ...baseProgress,
+              pct: mapChildProgressPct(isRecord(progress) ? progress.pct : null, base, span),
+            });
+          },
+        });
+      }
+      return { message: `已细化 ${pending.length} 个分镜` };
+    },
+  });
+
+  await runStep({
+    step: 'sound_and_duration',
+    title: '声音与时长',
+    basePct: 80,
+    spanPct: 18,
+    run: async (stepUpdateProgress) => {
+      const scenes = await loadEpisodeScenes(prisma, episodeId);
+      if (scenes.length === 0) {
+        throw new Error('scene list is empty, cannot generate sound and duration');
+      }
+      const work = scenes
+        .map((scene) => ({
+          scene,
+          needSound: scene.soundDesignJson === null,
+          needDuration: scene.durationEstimateJson === null,
+        }))
+        .filter((item) => item.needSound || item.needDuration);
+
+      if (work.length === 0) {
+        return { skipped: true, message: '声音与时长已全部就绪' };
+      }
+
+      const totalUnits = work.reduce(
+        (sum, item) => sum + (item.needSound ? 1 : 0) + (item.needDuration ? 1 : 0),
+        0,
+      );
+      let unitIndex = 0;
+
+      const unitProgress = async (
+        label: string,
+        run: (update: (progress: JobProgress) => Promise<void>) => Promise<void>,
+      ) => {
+        const unitBase = (unitIndex / totalUnits) * 100;
+        const unitSpan = 100 / totalUnits;
+        unitIndex += 1;
+        await stepUpdateProgress({ pct: Math.round(unitBase), message: label });
+        await run(async (progress) => {
+          const baseProgress = isRecord(progress) ? progress : {};
+          await stepUpdateProgress({
+            ...baseProgress,
+            pct: mapChildProgressPct(isRecord(progress) ? progress.pct : null, unitBase, unitSpan),
+          });
+        });
+      };
+
+      for (const item of work) {
+        if (item.needSound) {
+          await unitProgress(`声音设计 #${item.scene.order}`, async (childProgress) => {
+            await generateSoundDesign({
+              prisma,
+              teamId,
+              projectId,
+              sceneId: item.scene.id,
+              aiProfileId,
+              apiKeySecret,
+              updateProgress: childProgress,
+            });
+          });
+        }
+        if (item.needDuration) {
+          await unitProgress(`时长估算 #${item.scene.order}`, async (childProgress) => {
+            await estimateDuration({
+              prisma,
+              teamId,
+              projectId,
+              sceneId: item.scene.id,
+              updateProgress: childProgress,
+            });
+          });
+        }
+      }
+
+      return { message: `已补齐 ${work.length} 个分镜的声音/时长` };
+    },
+  });
+
+  await updateProgress({ pct: 100, message: '单集创作 Agent 完成' });
+
+  return {
+    projectId,
+    episodeId,
+    executionMode,
+    fallbackUsed,
+    agentTrace,
+    stepSummaries,
+    agentSteps: summarizeAgentSteps(agentTrace),
+  };
+}

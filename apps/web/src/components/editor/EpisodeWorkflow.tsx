@@ -27,6 +27,7 @@ import {
   apiWorkflowGenerateSceneScript,
   apiWorkflowExpandStoryCharacters,
   apiWorkflowRunSupervisor,
+  apiWorkflowRunEpisodeCreationAgent,
   apiWorkflowGenerateSoundDesign,
   apiWorkflowEstimateDuration,
 } from '@/lib/api/workflow';
@@ -145,6 +146,14 @@ const CAUSAL_CHAIN_PHASES = [
   { phase: 3, name: '节拍流程', desc: '三/四幕结构的节拍设计' },
   { phase: 4, name: '叙事线交织', desc: '明暗线 + 自洽校验' },
 ] as const;
+
+const EPISODE_AGENT_STEP_LABELS: Record<string, string> = {
+  core_expression: '核心表达',
+  scene_script: '分场脚本',
+  scene_list: '分镜列表',
+  scene_refinement: '分镜细化',
+  sound_and_duration: '声音与时长',
+};
 
 function getStyleFullPrompt(project: Project | null): string {
   if (!project) return '';
@@ -557,6 +566,9 @@ export function EpisodeWorkflow() {
   const [supervisorRunSummary, setSupervisorRunSummary] = useState<WorkflowAgentRunSummary | null>(
     null,
   );
+  const [isRunningEpisodeCreationAgent, setIsRunningEpisodeCreationAgent] = useState(false);
+  const [episodeCreationRunSummary, setEpisodeCreationRunSummary] =
+    useState<WorkflowAgentRunSummary | null>(null);
   const [selectedExpansionCandidates, setSelectedExpansionCandidates] = useState<string[]>([]);
   const [isGeneratingSoundSceneId, setIsGeneratingSoundSceneId] = useState<string | null>(null);
   const [isEstimatingDurationSceneId, setIsEstimatingDurationSceneId] = useState<string | null>(
@@ -1157,6 +1169,92 @@ export function EpisodeWorkflow() {
       toast({ title: 'Agent 流程失败', description: detail, variant: 'destructive' });
     } finally {
       setIsRunningWorkflowSupervisor(false);
+    }
+  };
+
+  const handleRunEpisodeCreationAgent = async () => {
+    if (!isApiMode()) {
+      toast({ title: '当前模式不支持', description: '单集创作 Agent 仅在 API 模式可用。' });
+      return;
+    }
+    if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
+    setIsRunningEpisodeCreationAgent(true);
+
+    const logId = logAICall('custom', {
+      skillName: 'workflow:run_episode_creation_agent',
+      promptTemplate: 'POST /workflow/projects/{{projectId}}/episodes/{{episodeId}}/agent-run',
+      filledPrompt: `POST /workflow/projects/${currentProject.id}/episodes/${currentEpisode.id}/agent-run`,
+      messages: [
+        {
+          role: 'user',
+          content: safeJsonStringify({
+            projectId: currentProject.id,
+            episodeId: currentEpisode.id,
+            aiProfileId,
+          }),
+        },
+      ],
+      context: {
+        projectId: currentProject.id,
+        episodeId: currentEpisode.id,
+        systemPromptKeys: ['workflow.episode_creation.agent.system'],
+      },
+      config: {
+        provider: config?.provider ?? 'api',
+        model: config?.model ?? 'workflow',
+        maxTokens: config?.generationParams?.maxTokens,
+        profileId: config?.aiProfileId ?? aiProfileId,
+      },
+    });
+
+    try {
+      toast({ title: '启动单集创作 Agent', description: '已入队，正在分步骤生成并落库...' });
+      const job = await apiWorkflowRunEpisodeCreationAgent({
+        projectId: currentProject.id,
+        episodeId: currentEpisode.id,
+        aiProfileId,
+      });
+      const finished = await apiWaitForAIJob(job.id, {
+        onProgress: (progress) => {
+          const next = normalizeJobProgress(progress);
+          if (typeof next.pct === 'number') {
+            updateLogProgress(logId, next.pct, next.message ?? undefined);
+          }
+        },
+      });
+
+      const result = (finished.result ?? null) as WorkflowJobResultLike | null;
+      updateLogWithResponse(logId, { content: safeJsonStringify(result) });
+
+      const executionMode =
+        result?.executionMode === 'agent' || result?.executionMode === 'legacy'
+          ? result.executionMode
+          : 'legacy';
+      const fallbackUsed = result?.fallbackUsed === true;
+      const normalizedSummary =
+        normalizeSupervisorRunSummary(result) ??
+        ({
+          executionMode,
+          fallbackUsed,
+          stepSummaries: [],
+          finishedAt: new Date().toISOString(),
+        } satisfies WorkflowAgentRunSummary);
+      setEpisodeCreationRunSummary(normalizedSummary);
+
+      await useProjectStore.getState().loadProject(currentProject.id);
+      await loadEpisodes(currentProject.id);
+      await loadScenes(currentProject.id, currentEpisode.id);
+
+      toast({
+        title: '单集创作 Agent 完成',
+        description: `执行模式：${executionMode}${fallbackUsed ? '（含自动降级）' : ''}`,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      updateLogWithError(logId, detail);
+      toast({ title: '单集创作 Agent 失败', description: detail, variant: 'destructive' });
+    } finally {
+      setIsRunningEpisodeCreationAgent(false);
     }
   };
 
@@ -3257,7 +3355,9 @@ ${safeJsonStringify(ep.coreExpression)}
                 />
                 <span className="text-sm text-muted-foreground whitespace-nowrap">集</span>
               </div>
-              <p className="text-xs text-muted-foreground">支持 1-100 集；留空则由 AI 根据故事体量自动推算。</p>
+              <p className="text-xs text-muted-foreground">
+                支持 1-100 集；留空则由 AI 根据故事体量自动推算。
+              </p>
             </div>
 
             <Button
@@ -3508,6 +3608,28 @@ ${safeJsonStringify(ep.coreExpression)}
                   )}
                   批量核心表达
                 </Button>
+                <Button
+                  size="sm"
+                  onClick={handleRunEpisodeCreationAgent}
+                  disabled={
+                    !aiProfileId ||
+                    !currentEpisode?.id ||
+                    isRunningEpisodeCreationAgent ||
+                    isRunningWorkflow ||
+                    isRefining ||
+                    isBatchBlocked ||
+                    isBatchRefineRunning
+                  }
+                  className="gap-2 w-full sm:w-auto"
+                  title="按核心表达→分场脚本→分镜列表→分镜细化→声音与时长顺序逐步生成"
+                >
+                  {isRunningEpisodeCreationAgent ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  AI代理一键生成5步
+                </Button>
               </div>
             </div>
           </div>
@@ -3540,7 +3662,75 @@ ${safeJsonStringify(ep.coreExpression)}
             </p>
           </div>
         ) : (
-          <Tabs defaultValue="core" className="w-full">
+          <>
+            {(isRunningEpisodeCreationAgent || episodeCreationRunSummary) && (
+              <Card className="p-4 border-primary/20 bg-primary/5">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      单集创作 Agent 状态
+                    </h3>
+                    {isRunningEpisodeCreationAgent ? (
+                      <Badge variant="secondary">运行中</Badge>
+                    ) : (
+                      <Badge variant="outline">已完成</Badge>
+                    )}
+                  </div>
+                  {episodeCreationRunSummary ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>
+                        执行模式：
+                        {episodeCreationRunSummary.executionMode === 'agent' ? 'Agent' : 'Legacy'}
+                      </span>
+                      <span>自动降级：{episodeCreationRunSummary.fallbackUsed ? '是' : '否'}</span>
+                      <span>
+                        完成时间：
+                        {new Date(episodeCreationRunSummary.finishedAt).toLocaleString('zh-CN')}
+                      </span>
+                    </div>
+                  ) : null}
+                  {episodeCreationRunSummary?.stepSummaries?.length ? (
+                    <div className="space-y-2">
+                      {episodeCreationRunSummary.stepSummaries.map((step, idx) => (
+                        <div
+                          key={`${step.step}_${idx}`}
+                          className="flex items-center justify-between rounded-md border bg-background px-3 py-2"
+                        >
+                          <div className="text-sm">
+                            {EPISODE_AGENT_STEP_LABELS[step.step] ?? step.step}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            {step.executionMode ? (
+                              <Badge variant="outline">
+                                {step.executionMode === 'agent' ? 'agent' : 'legacy'}
+                              </Badge>
+                            ) : null}
+                            {step.fallbackUsed ? <Badge variant="secondary">fallback</Badge> : null}
+                            <Badge
+                              variant={
+                                step.status === 'succeeded'
+                                  ? 'default'
+                                  : step.status === 'skipped'
+                                    ? 'secondary'
+                                    : 'destructive'
+                              }
+                            >
+                              {step.status === 'succeeded'
+                                ? '成功'
+                                : step.status === 'skipped'
+                                  ? '跳过'
+                                  : '失败'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </Card>
+            )}
+            <Tabs defaultValue="core" className="w-full">
             <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="core">1. 核心表达</TabsTrigger>
               <TabsTrigger value="script">2. 分场脚本</TabsTrigger>
@@ -4028,7 +4218,8 @@ ${safeJsonStringify(ep.coreExpression)}
                 )}
               </Card>
             </TabsContent>
-          </Tabs>
+            </Tabs>
+          </>
         )}
       </div>
     );

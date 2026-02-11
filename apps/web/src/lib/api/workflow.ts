@@ -161,6 +161,22 @@ export async function apiWorkflowRunSupervisor(input: { projectId: string; aiPro
   );
 }
 
+export async function apiWorkflowRunEpisodeCreationAgent(input: {
+  projectId: string;
+  episodeId: string;
+  aiProfileId: string;
+}) {
+  return apiRequest<ApiAIJob>(
+    `/workflow/projects/${encodeURIComponent(input.projectId)}/episodes/${encodeURIComponent(
+      input.episodeId,
+    )}/agent-run`,
+    {
+      method: 'POST',
+      body: { aiProfileId: input.aiProfileId },
+    },
+  );
+}
+
 export async function apiWorkflowGenerateSceneList(input: {
   projectId: string;
   aiProfileId: string;
