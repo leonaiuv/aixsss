@@ -41,6 +41,7 @@ function buildUserPrompt(args: {
   return [
     '请根据角色信息和叙事因果链生成角色关系数组 JSON。',
     '要求：每条关系包含 fromCharacterId/toCharacterId/type/label/intensity/arc。',
+    'fromCharacterId/toCharacterId 必须优先使用角色ID（若无法确定，可使用角色名，系统会尝试映射）。',
     '',
     `项目梗概：${args.projectSummary || '-'}`,
     '叙事因果链(JSON)：',
@@ -51,6 +52,23 @@ function buildUserPrompt(args: {
       .map((c) => `- ${c.id} | ${c.name} | ${c.briefDescription || '-'}`)
       .join('\n'),
   ].join('\n');
+}
+
+function normalizeCharacterRefKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function resolveCharacterId(
+  rawRef: string,
+  validCharacterIds: Set<string>,
+  characterNameToId: Map<string, string>,
+): string | null {
+  const ref = rawRef.trim();
+  if (!ref) return null;
+  if (validCharacterIds.has(ref)) return ref;
+  const key = normalizeCharacterRefKey(ref);
+  if (!key) return null;
+  return characterNameToId.get(key) ?? null;
 }
 
 function buildLegacyRelationships(fromId: string, rels: GeneratedRelationship[]) {
@@ -130,12 +148,42 @@ export async function generateCharacterRelationships(args: {
 
   const { parsed, extractedJson } = parseRelationships(res.content);
   const validCharacterIds = new Set(characters.map((c) => c.id));
-  const normalized = parsed.filter(
-    (rel) =>
-      rel.fromCharacterId !== rel.toCharacterId &&
-      validCharacterIds.has(rel.fromCharacterId) &&
-      validCharacterIds.has(rel.toCharacterId),
-  );
+  const characterNameToId = new Map<string, string>();
+  for (const character of characters) {
+    const key = normalizeCharacterRefKey(character.name);
+    if (!key || characterNameToId.has(key)) continue;
+    characterNameToId.set(key, character.id);
+  }
+
+  const dedup = new Set<string>();
+  const normalized: GeneratedRelationship[] = [];
+  for (const rel of parsed) {
+    const fromCharacterId = resolveCharacterId(
+      rel.fromCharacterId,
+      validCharacterIds,
+      characterNameToId,
+    );
+    const toCharacterId = resolveCharacterId(
+      rel.toCharacterId,
+      validCharacterIds,
+      characterNameToId,
+    );
+    if (!fromCharacterId || !toCharacterId || fromCharacterId === toCharacterId) continue;
+    const key = `${fromCharacterId}->${toCharacterId}`;
+    if (dedup.has(key)) continue;
+    dedup.add(key);
+    normalized.push({
+      ...rel,
+      fromCharacterId,
+      toCharacterId,
+    });
+  }
+
+  if (normalized.length === 0) {
+    throw new Error(
+      'No valid character relationships generated. Check character IDs/names mapping in model output.',
+    );
+  }
 
   await updateProgress({ pct: 80, message: '写入关系图谱并同步 legacy 字段...' });
 

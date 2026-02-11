@@ -79,15 +79,30 @@ export async function runWorkflowSupervisor(args: {
   projectId: string;
   aiProfileId: string;
   apiKeySecret: string;
+  currentJobId?: string;
   updateProgress: (progress: JobProgress) => Promise<void>;
 }) {
-  const { prisma, teamId, projectId, aiProfileId, apiKeySecret, updateProgress } = args;
+  const { prisma, teamId, projectId, aiProfileId, apiKeySecret, currentJobId, updateProgress } = args;
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, teamId, deletedAt: null },
     select: { id: true, summary: true, style: true, artStyleConfig: true, contextCache: true },
   });
   if (!project) throw new Error('Project not found');
+
+  const runningConflict = await prisma.aIJob.findFirst({
+    where: {
+      teamId,
+      projectId,
+      type: 'run_workflow_supervisor',
+      status: 'running',
+      ...(currentJobId ? { id: { not: currentJobId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (runningConflict) {
+    throw new Error(`Workflow supervisor is already running for this project (${runningConflict.id})`);
+  }
 
   await updateProgress({ pct: 2, message: 'Supervisor：准备运行步骤...' });
 

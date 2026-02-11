@@ -98,7 +98,11 @@ import { SceneSortable } from './SceneSortable';
 import { StatisticsPanel } from './StatisticsPanel';
 import { NarrativeCausalChainReadable } from './NarrativeCausalChainReadable';
 import { NarrativeCausalChainVersionDialog } from './NarrativeCausalChainVersionDialog';
-import { WorkflowWorkbench } from './WorkflowWorkbench';
+import {
+  WorkflowWorkbench,
+  type WorkflowAgentRunSummary,
+  type WorkflowAgentStepSummary,
+} from './WorkflowWorkbench';
 import { CharacterRelationshipGraph } from './CharacterRelationshipGraph';
 import { EmotionArcChart } from './EmotionArcChart';
 import { SceneScriptEditor } from './SceneScriptEditor';
@@ -351,6 +355,50 @@ function normalizeCharacterExpansion(value: unknown): CharacterExpansionSnapshot
   };
 }
 
+function normalizeSupervisorStepSummaries(value: unknown): WorkflowAgentStepSummary[] {
+  if (!Array.isArray(value)) return [];
+  const out: WorkflowAgentStepSummary[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as Record<string, unknown>;
+    const statusRaw = raw.status;
+    const status =
+      statusRaw === 'succeeded' || statusRaw === 'failed' || statusRaw === 'skipped'
+        ? statusRaw
+        : null;
+    const step = typeof raw.step === 'string' ? raw.step : '';
+    if (!status || !step) continue;
+    const executionModeRaw = raw.executionMode;
+    const executionMode =
+      executionModeRaw === 'agent' || executionModeRaw === 'legacy'
+        ? executionModeRaw
+        : undefined;
+    out.push({
+      step,
+      status,
+      message: safeText(raw.message, 400) || '-',
+      ...(executionMode ? { executionMode } : {}),
+      fallbackUsed: raw.fallbackUsed === true,
+    });
+  }
+  return out;
+}
+
+function normalizeSupervisorRunSummary(value: unknown): WorkflowAgentRunSummary | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const executionModeRaw = raw.executionMode;
+  const executionMode =
+    executionModeRaw === 'agent' || executionModeRaw === 'legacy' ? executionModeRaw : null;
+  if (!executionMode) return null;
+  return {
+    executionMode,
+    fallbackUsed: raw.fallbackUsed === true,
+    stepSummaries: normalizeSupervisorStepSummaries(raw.stepSummaries),
+    finishedAt: new Date().toISOString(),
+  };
+}
+
 function getEpisodeStateLabel(state: Episode['workflowState']): string {
   const labels: Record<string, string> = {
     IDLE: '未开始',
@@ -508,6 +556,8 @@ export function EpisodeWorkflow() {
   const [isGeneratingSceneScript, setIsGeneratingSceneScript] = useState(false);
   const [isExpandingCharacters, setIsExpandingCharacters] = useState(false);
   const [isRunningWorkflowSupervisor, setIsRunningWorkflowSupervisor] = useState(false);
+  const [supervisorRunSummary, setSupervisorRunSummary] =
+    useState<WorkflowAgentRunSummary | null>(null);
   const [selectedExpansionCandidates, setSelectedExpansionCandidates] = useState<string[]>([]);
   const [isGeneratingSoundSceneId, setIsGeneratingSoundSceneId] = useState<string | null>(null);
   const [isEstimatingDurationSceneId, setIsEstimatingDurationSceneId] = useState<string | null>(
@@ -1080,6 +1130,15 @@ export function EpisodeWorkflow() {
           ? result.executionMode
           : 'legacy';
       const fallbackUsed = result?.fallbackUsed === true;
+      const normalizedSummary =
+        normalizeSupervisorRunSummary(result) ??
+        ({
+          executionMode,
+          fallbackUsed,
+          stepSummaries: [],
+          finishedAt: new Date().toISOString(),
+        } satisfies WorkflowAgentRunSummary);
+      setSupervisorRunSummary(normalizedSummary);
 
       await useProjectStore.getState().loadProject(currentProject.id);
       await loadEpisodes(currentProject.id);
@@ -4321,6 +4380,8 @@ ${safeJsonStringify(ep.coreExpression)}
               onRunGenerateCoreExpression={handleGenerateCoreExpression}
               onRunGenerateSceneScript={handleGenerateSceneScript}
               onRunGenerateSceneList={handleGenerateSceneList}
+              isRunningWorkflowSupervisor={isRunningWorkflowSupervisor}
+              agentRunSummary={supervisorRunSummary}
               onRunWorkflowSupervisor={
                 isRunningWorkflowSupervisor ? undefined : handleRunWorkflowSupervisor
               }

@@ -37,6 +37,7 @@ describe('JobsService new workflow enqueue', () => {
       findFirst: vi.fn().mockResolvedValue({ id: 'a1' }),
     },
     aIJob: {
+      findFirst: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockImplementation(async ({ data }: { data: { type: string } }) => createJobRow(data.type)),
     },
   };
@@ -121,6 +122,22 @@ describe('JobsService new workflow enqueue', () => {
         aiProfileId: 'a1',
       }),
       expect.any(Object),
+    );
+  });
+
+  it('enqueueRunWorkflowSupervisor should reject when another supervisor job is active', async () => {
+    (prisma.aIJob.findFirst as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: 'job_existing',
+      status: 'running',
+    });
+
+    await expect(
+      service.enqueueRunWorkflowSupervisor('t1', 'p1', 'a1'),
+    ).rejects.toThrow(/already running/i);
+    expect(queue.add).not.toHaveBeenCalledWith(
+      'run_workflow_supervisor',
+      expect.anything(),
+      expect.anything(),
     );
   });
 });

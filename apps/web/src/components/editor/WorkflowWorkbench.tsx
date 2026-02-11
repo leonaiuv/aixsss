@@ -42,6 +42,29 @@ import { cn } from '@/lib/utils';
 
 type StepId = 'workbench' | 'global' | 'causal' | 'plan' | 'episode' | 'export';
 
+export type WorkflowAgentStepSummary = {
+  step: string;
+  status: 'succeeded' | 'failed' | 'skipped';
+  message: string;
+  executionMode?: 'agent' | 'legacy';
+  fallbackUsed?: boolean;
+};
+
+export type WorkflowAgentRunSummary = {
+  executionMode: 'agent' | 'legacy';
+  fallbackUsed: boolean;
+  stepSummaries: WorkflowAgentStepSummary[];
+  finishedAt: string;
+};
+
+const AGENT_STEP_LABELS: Record<string, string> = {
+  character_expansion: '角色体系扩充',
+  narrative_phase3: '叙事因果链 Phase3',
+  narrative_phase4: '叙事因果链 Phase4',
+  character_relationships: '角色关系图谱',
+  emotion_arc: '情绪弧线',
+};
+
 // --- Utility Components ---
 
 function StatusBadge({ status, onClick }: { status: ArtifactStatus; onClick?: () => void }) {
@@ -230,6 +253,8 @@ export function WorkflowWorkbench(props: {
   onRunGenerateSceneScript?: () => void;
   onRunGenerateSceneList: () => void;
   onRunWorkflowSupervisor?: () => void;
+  isRunningWorkflowSupervisor?: boolean;
+  agentRunSummary?: WorkflowAgentRunSummary | null;
   onRunGenerateEmotionArc?: () => void;
   onRunGenerateCharacterRelationships?: () => void;
   onRunBatchRefineAll: () => void;
@@ -581,6 +606,94 @@ export function WorkflowWorkbench(props: {
               </div>
             </CardContent>
           </Card>
+
+          {(props.isRunningWorkflowSupervisor || props.agentRunSummary) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Agent 执行状态</CardTitle>
+                  {props.isRunningWorkflowSupervisor ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      运行中
+                    </span>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {props.agentRunSummary ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <Badge variant="outline">
+                        执行模式：{props.agentRunSummary.executionMode === 'agent' ? 'Agent' : 'Legacy'}
+                      </Badge>
+                      <Badge
+                        variant={props.agentRunSummary.fallbackUsed ? 'secondary' : 'outline'}
+                      >
+                        自动降级：{props.agentRunSummary.fallbackUsed ? '是' : '否'}
+                      </Badge>
+                      <span className="text-muted-foreground">
+                        完成时间：{new Date(props.agentRunSummary.finishedAt).toLocaleString('zh-CN')}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {props.agentRunSummary.stepSummaries.map((step, idx) => {
+                        const label = AGENT_STEP_LABELS[step.step] ?? step.step;
+                        return (
+                          <div
+                            key={`${step.step}-${idx}`}
+                            className={cn(
+                              'rounded-md border p-2.5 text-xs',
+                              step.status === 'failed'
+                                ? 'border-red-200 bg-red-50/40'
+                                : step.status === 'skipped'
+                                  ? 'border-amber-200 bg-amber-50/40'
+                                  : 'border-emerald-200 bg-emerald-50/40',
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="inline-flex items-center gap-1.5 font-medium">
+                                {step.status === 'succeeded' && (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                )}
+                                {step.status === 'failed' && (
+                                  <XCircle className="w-3.5 h-3.5 text-red-600" />
+                                )}
+                                {step.status === 'skipped' && (
+                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                                )}
+                                {label}
+                              </div>
+                              <div className="inline-flex items-center gap-1.5">
+                                {step.executionMode ? (
+                                  <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                    {step.executionMode === 'agent' ? 'Agent' : 'Legacy'}
+                                  </Badge>
+                                ) : null}
+                                {step.fallbackUsed ? (
+                                  <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                                    fallback
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </div>
+                            {step.message ? (
+                              <p className="mt-1 text-muted-foreground">{step.message}</p>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    尚无最近一次 Agent 执行记录。
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Quality Issues */}
           <Card>

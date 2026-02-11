@@ -515,6 +515,19 @@ export class JobsService {
     await this.requireProject(teamId, projectId);
     await this.requireAIProfile(teamId, aiProfileId);
 
+    const existing = await this.prisma.aIJob.findFirst({
+      where: {
+        teamId,
+        projectId,
+        type: 'run_workflow_supervisor',
+        status: { in: ['queued', 'running'] },
+      },
+      select: { id: true, status: true },
+    });
+    if (existing) {
+      throw new BadRequestException('Workflow supervisor is already running for this project');
+    }
+
     const jobRow = await this.prisma.aIJob.create({
       data: {
         teamId,

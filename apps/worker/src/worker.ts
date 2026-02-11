@@ -464,6 +464,7 @@ async function main() {
               projectId,
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              currentJobId: jobId,
               updateProgress,
             });
 

@@ -74,6 +74,9 @@ function createPrismaMock(completedPhase: number) {
         generationParams: null,
       }),
     },
+    aIJob: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
   };
 }
 
@@ -185,5 +188,27 @@ describe('runWorkflowSupervisor', () => {
 
     expect(generateCharacterRelationships).not.toHaveBeenCalled();
     expect(generateEmotionArc).not.toHaveBeenCalled();
+  });
+
+  it('should reject when another supervisor job is already running on same project', async () => {
+    const prisma = createPrismaMock(2);
+    (prisma.aIJob.findFirst as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: 'job_other',
+    });
+
+    await expect(
+      runWorkflowSupervisor({
+        prisma: prisma as never,
+        teamId: 't1',
+        projectId: 'p1',
+        aiProfileId: 'a1',
+        apiKeySecret: 'secret',
+        currentJobId: 'job_current',
+        updateProgress: async () => {},
+      }),
+    ).rejects.toThrow(/already running/i);
+
+    expect(expandStoryCharacters).not.toHaveBeenCalled();
+    expect(buildNarrativeCausalChain).not.toHaveBeenCalled();
   });
 });
