@@ -11,7 +11,7 @@ const WorkflowBodySchema = z.object({
 });
 
 const EpisodePlanBodySchema = WorkflowBodySchema.extend({
-  targetEpisodeCount: z.number().int().min(1).max(24).optional(),
+  targetEpisodeCount: z.number().int().min(1).max(100).optional(),
 });
 
 const EpisodeSceneListBodySchema = WorkflowBodySchema.extend({

@@ -224,6 +224,8 @@ export const useEpisodeStore = create<EpisodeStore>((set, get) => ({
         systemPromptKeys: [
           'workflow.plan_episodes.system',
           'workflow.plan_episodes.json_fix.system',
+          'workflow.plan_episodes.chunk.system',
+          'workflow.plan_episodes.chunk_fix.system',
         ],
       },
       config: {

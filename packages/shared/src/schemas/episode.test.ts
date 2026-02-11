@@ -54,6 +54,45 @@ describe('Episode schemas', () => {
     ).toThrow();
   });
 
+  it('accepts EpisodePlan up to 100 episodes', () => {
+    const episodes = Array.from({ length: 100 }, (_, idx) => ({
+      order: idx + 1,
+      title: `第${idx + 1}集`,
+      logline: `第${idx + 1}集推进`,
+      mainCharacters: ['A'],
+      beats: ['推进'],
+      sceneScope: `场景${idx + 1}`,
+      cliffhanger: null,
+    }));
+
+    const parsed = EpisodePlanSchema.parse({
+      episodeCount: 100,
+      reasoningBrief: '长篇规划',
+      episodes,
+    });
+    expect(parsed.episodeCount).toBe(100);
+    expect(parsed.episodes).toHaveLength(100);
+  });
+
+  it('rejects EpisodePlan beyond 100 episodes', () => {
+    const episodes = Array.from({ length: 101 }, (_, idx) => ({
+      order: idx + 1,
+      title: `第${idx + 1}集`,
+      logline: `第${idx + 1}集推进`,
+      mainCharacters: ['A'],
+      beats: ['推进'],
+      sceneScope: `场景${idx + 1}`,
+      cliffhanger: null,
+    }));
+
+    expect(() =>
+      EpisodePlanSchema.parse({
+        episodeCount: 101,
+        episodes,
+      }),
+    ).toThrow();
+  });
+
   it('rejects CoreExpression with invalid emotionalArc length', () => {
     expect(() =>
       CoreExpressionSchema.parse({

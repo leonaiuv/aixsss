@@ -3,6 +3,7 @@ import { WorkflowController } from './workflow.controller.js';
 
 describe('WorkflowController new routes', () => {
   const jobs = {
+    enqueuePlanEpisodes: vi.fn().mockResolvedValue({ id: 'job0' }),
     enqueueGenerateSceneScript: vi.fn().mockResolvedValue({ id: 'job1' }),
     enqueueGenerateEmotionArc: vi.fn().mockResolvedValue({ id: 'job2' }),
     enqueueGenerateSoundDesign: vi.fn().mockResolvedValue({ id: 'job3' }),
@@ -13,6 +14,17 @@ describe('WorkflowController new routes', () => {
   };
   const controller = new WorkflowController(jobs as never);
   const user = { teamId: 't1' } as { teamId: string };
+
+  it('planEpisodes should validate targetEpisodeCount up to 100 and enqueue', async () => {
+    await controller.planEpisodes(user as never, 'p1', { aiProfileId: 'a1', targetEpisodeCount: 100 });
+    expect(jobs.enqueuePlanEpisodes).toHaveBeenCalledWith('t1', 'p1', 'a1', {
+      targetEpisodeCount: 100,
+    });
+
+    expect(() =>
+      controller.planEpisodes(user as never, 'p1', { aiProfileId: 'a1', targetEpisodeCount: 101 }),
+    ).toThrow();
+  });
 
   it('generateEpisodeSceneScript should validate body and enqueue', async () => {
     await controller.generateEpisodeSceneScript(user as never, 'p1', 'e1', { aiProfileId: 'a1' });

@@ -3237,18 +3237,27 @@ ${safeJsonStringify(ep.coreExpression)}
                   id="targetEpisodeCount"
                   type="number"
                   min={1}
-                  max={24}
+                  max={100}
                   value={targetEpisodeCount}
                   onChange={(e) => {
                     const v = e.target.value;
-                    setTargetEpisodeCount(v ? Number(v) : '');
+                    if (!v) {
+                      setTargetEpisodeCount('');
+                      return;
+                    }
+                    const n = Number(v);
+                    if (!Number.isFinite(n)) {
+                      setTargetEpisodeCount('');
+                      return;
+                    }
+                    setTargetEpisodeCount(Math.max(1, Math.min(100, Math.round(n))));
                   }}
                   placeholder="自动推荐集数"
                   className="bg-background"
                 />
                 <span className="text-sm text-muted-foreground whitespace-nowrap">集</span>
               </div>
-              <p className="text-xs text-muted-foreground">留空则由 AI 根据故事体量自动推算。</p>
+              <p className="text-xs text-muted-foreground">支持 1-100 集；留空则由 AI 根据故事体量自动推算。</p>
             </div>
 
             <Button

@@ -98,6 +98,42 @@ describe('JobsService new workflow enqueue', () => {
     );
   });
 
+  it('enqueuePlanEpisodes should accept targetEpisodeCount=100', async () => {
+    (prisma.project.findFirst as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ id: 'p1' })
+      .mockResolvedValueOnce({
+        id: 'p1',
+        summary: 'x'.repeat(120),
+        style: 'anime',
+        artStyleConfig: null,
+      });
+    await service.enqueuePlanEpisodes('t1', 'p1', 'a1', { targetEpisodeCount: 100 });
+    expect(queue.add).toHaveBeenCalledWith(
+      'plan_episodes',
+      expect.objectContaining({
+        teamId: 't1',
+        projectId: 'p1',
+        aiProfileId: 'a1',
+        options: { targetEpisodeCount: 100 },
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('enqueuePlanEpisodes should reject when targetEpisodeCount > 100', async () => {
+    (prisma.project.findFirst as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ id: 'p1' })
+      .mockResolvedValueOnce({
+        id: 'p1',
+        summary: 'x'.repeat(120),
+        style: 'anime',
+        artStyleConfig: null,
+      });
+    await expect(
+      service.enqueuePlanEpisodes('t1', 'p1', 'a1', { targetEpisodeCount: 101 }),
+    ).rejects.toThrow(/out of range/i);
+  });
+
   it('enqueueExpandStoryCharacters should add expand_story_characters job', async () => {
     await service.enqueueExpandStoryCharacters('t1', 'p1', 'a1', { maxNewCharacters: 9 });
     expect(queue.add).toHaveBeenCalledWith(

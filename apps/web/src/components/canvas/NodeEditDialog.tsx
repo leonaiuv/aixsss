@@ -201,11 +201,15 @@ function EpisodePlanForm({ data, onChange }: FormProps) {
         <Input
           type="number"
           min={1}
-          max={24}
+          max={100}
           value={(data.targetEpisodeCount as number) ?? 1}
-          onChange={(e) => onChange({ ...data, targetEpisodeCount: parseInt(e.target.value) || 1 })}
+          onChange={(e) => {
+            const parsed = parseInt(e.target.value, 10);
+            const next = Number.isFinite(parsed) ? Math.max(1, Math.min(100, parsed)) : 1;
+            onChange({ ...data, targetEpisodeCount: next });
+          }}
         />
-        <p className="text-xs text-muted-foreground">建议 1-24 集</p>
+        <p className="text-xs text-muted-foreground">建议 1-100 集</p>
       </div>
     </div>
   );

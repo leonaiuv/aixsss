@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import type { JobProgress } from 'bullmq';
+import { z } from 'zod';
 import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
@@ -7,6 +8,9 @@ import { isRecord, mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from
 import { EpisodePlanSchema, type EpisodePlan } from '@aixsss/shared';
 import { parseJsonFromText } from './aiJson.js';
 import { loadSystemPrompt } from './systemPrompts.js';
+
+const MAX_EPISODE_COUNT = 100;
+const CHUNK_MODE_THRESHOLD = 12;
 
 function jsonSchemaFormat(name: string, schema: Record<string, unknown>) {
   return {
@@ -22,24 +26,61 @@ function jsonSchemaFormat(name: string, schema: Record<string, unknown>) {
 function schemaEpisodePlan(targetEpisodeCount?: number): Record<string, unknown> {
   const count = typeof targetEpisodeCount === 'number' ? targetEpisodeCount : undefined;
   const maybeConst = count ? { const: count } : {};
-  const minMax = count ? { minItems: count, maxItems: count } : { minItems: 1, maxItems: 24 };
+  const minMax = count ? { minItems: count, maxItems: count } : { minItems: 1, maxItems: MAX_EPISODE_COUNT };
 
   return {
     type: 'object',
     additionalProperties: false,
     required: ['episodeCount', 'episodes'],
     properties: {
-      episodeCount: { type: 'integer', minimum: 1, maximum: 24, ...maybeConst },
+      episodeCount: { type: 'integer', minimum: 1, maximum: MAX_EPISODE_COUNT, ...maybeConst },
       reasoningBrief: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       episodes: {
         type: 'array',
         ...minMax,
         items: {
           type: 'object',
+            additionalProperties: false,
+            required: ['order', 'title', 'logline', 'mainCharacters', 'beats', 'sceneScope', 'cliffhanger'],
+            properties: {
+              order: { type: 'integer', minimum: 1, maximum: MAX_EPISODE_COUNT },
+              title: { type: 'string' },
+              logline: { type: 'string' },
+              mainCharacters: { type: 'array', items: { type: 'string' } },
+            beats: { type: 'array', items: { type: 'string' } },
+            sceneScope: { type: 'string' },
+            cliffhanger: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+          },
+        },
+      },
+    },
+  };
+}
+
+function schemaEpisodePlanBatch(
+  startOrder: number,
+  batchCount: number,
+  maxEpisodeCount: number,
+): Record<string, unknown> {
+  const endOrder = startOrder + batchCount - 1;
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: ['batchStartOrder', 'batchCount', 'episodes'],
+    properties: {
+      batchStartOrder: { type: 'integer', const: startOrder },
+      batchCount: { type: 'integer', const: batchCount },
+      reasoningBrief: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      episodes: {
+        type: 'array',
+        minItems: batchCount,
+        maxItems: batchCount,
+        items: {
+          type: 'object',
           additionalProperties: false,
           required: ['order', 'title', 'logline', 'mainCharacters', 'beats', 'sceneScope', 'cliffhanger'],
           properties: {
-            order: { type: 'integer', minimum: 1, maximum: 24 },
+            order: { type: 'integer', minimum: startOrder, maximum: Math.min(endOrder, maxEpisodeCount) },
             title: { type: 'string' },
             logline: { type: 'string' },
             mainCharacters: { type: 'array', items: { type: 'string' } },
@@ -71,6 +112,52 @@ function stableJsonFixConfig(base: ReturnType<typeof toProviderChatConfig>): Ret
 function parseEpisodePlan(raw: string): { parsed: EpisodePlan; extractedJson: string } {
   const { json, extractedJson } = parseJsonFromText(raw, { expectedKind: 'object' });
   return { parsed: EpisodePlanSchema.parse(json), extractedJson };
+}
+
+const EpisodeBatchItemSchema = z.object({
+  order: z.number().int().min(1).max(MAX_EPISODE_COUNT),
+  title: z.string().min(1).max(200),
+  logline: z.string().min(1).max(2000),
+  mainCharacters: z.array(z.string().min(1).max(200)).default([]),
+  beats: z.array(z.string().min(1).max(500)).default([]),
+  sceneScope: z.string().min(1).max(2000),
+  cliffhanger: z.string().min(0).max(2000).optional().nullable(),
+});
+
+const EpisodePlanBatchSchema = z
+  .object({
+    batchStartOrder: z.number().int().min(1),
+    batchCount: z.number().int().min(1).max(20),
+    reasoningBrief: z.string().min(0).max(2000).optional().nullable(),
+    episodes: z.array(EpisodeBatchItemSchema).min(1).max(20),
+  })
+  .superRefine((val, ctx) => {
+    if (val.batchCount !== val.episodes.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['batchCount'],
+        message: 'batchCount must equal episodes.length',
+      });
+    }
+    const expectedOrders = Array.from({ length: val.batchCount }, (_, idx) => val.batchStartOrder + idx);
+    const actualOrders = val.episodes.map((episode) => episode.order);
+    for (let i = 0; i < expectedOrders.length; i += 1) {
+      if (actualOrders[i] !== expectedOrders[i]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['episodes'],
+          message: 'episodes.order must be continuous from batchStartOrder..batchStartOrder+batchCount-1',
+        });
+        break;
+      }
+    }
+  });
+
+type EpisodePlanBatch = z.infer<typeof EpisodePlanBatchSchema>;
+
+function parseEpisodePlanBatch(raw: string): { parsed: EpisodePlanBatch; extractedJson: string } {
+  const { json, extractedJson } = parseJsonFromText(raw, { expectedKind: 'object' });
+  return { parsed: EpisodePlanBatchSchema.parse(json), extractedJson };
 }
 
 type EpisodeDedupeIssue = {
@@ -361,6 +448,69 @@ function buildUserPrompt(args: {
     .join('\n');
 }
 
+function resolvePlanChunkSize(targetEpisodeCount: number): number {
+  if (targetEpisodeCount <= 16) return 8;
+  if (targetEpisodeCount <= 60) return 10;
+  return 12;
+}
+
+function formatPlannedEpisodesBrief(episodes: EpisodePlan['episodes']): string {
+  if (episodes.length === 0) return '-';
+  return episodes
+    .slice(0, 80)
+    .map((episode) => {
+      const title = episode.title.length > 60 ? `${episode.title.slice(0, 60)}…` : episode.title;
+      const logline = episode.logline.length > 100 ? `${episode.logline.slice(0, 100)}…` : episode.logline;
+      return `- 第${episode.order}集《${title}》：${logline}`;
+    })
+    .join('\n');
+}
+
+function buildBatchUserPrompt(args: {
+  storySynopsis: string;
+  artStyle: string;
+  worldView: string;
+  characters: string;
+  narrativeCausalChain?: string;
+  targetEpisodeCount: number;
+  batchStartOrder: number;
+  batchCount: number;
+  plannedEpisodes: EpisodePlan['episodes'];
+}): string {
+  const batchEndOrder = args.batchStartOrder + args.batchCount - 1;
+  return [
+    `总目标集数：${args.targetEpisodeCount}`,
+    `本轮仅生成第 ${args.batchStartOrder}-${batchEndOrder} 集，共 ${args.batchCount} 集。`,
+    '必须只输出当前批次的 JSON，不要输出全量剧集。',
+    '约束：',
+    '- batchStartOrder 必须等于当前起始集',
+    '- batchCount 必须等于当前批次数',
+    '- episodes.order 必须连续且仅覆盖当前区间',
+    '- 已规划剧集不可重写，不可改 order',
+    '',
+    '已规划剧集摘要（只读）：',
+    formatPlannedEpisodesBrief(args.plannedEpisodes),
+    '',
+    '全局设定：',
+    '- 故事梗概：',
+    args.storySynopsis || '-',
+    '',
+    '- 画风（完整提示词）：',
+    args.artStyle || '-',
+    '',
+    '- 世界观要素：',
+    args.worldView || '-',
+    '',
+    '- 角色库：',
+    args.characters || '-',
+    '',
+    '- 叙事因果链：',
+    args.narrativeCausalChain ?? '-',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
 function buildJsonFixUserPrompt(raw: string): string {
   return ['原始输出：', '<<<', raw?.trim() ?? '', '>>>'].join('\n');
 }
@@ -421,28 +571,20 @@ export async function planEpisodes(args: {
   });
 
   await updateProgress({ pct: 5, message: '准备提示词...' });
-
-  const systemPrompt = await loadSystemPrompt({
-    prisma,
-    teamId,
-    key: 'workflow.plan_episodes.system',
-  });
-
-  const userPrompt = buildUserPrompt({
-    storySynopsis: project.summary,
-    artStyle: styleFullPrompt(project),
-    worldView: formatWorldView(worldViewElements),
-    characters: formatCharacters(characters),
-    narrativeCausalChain: formatNarrativeCausalChain(project.contextCache),
-    targetEpisodeCount: args.options?.targetEpisodeCount,
-  });
-
   const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
   const baseConfig = toProviderChatConfig(profile);
   baseConfig.apiKey = apiKey;
+  const targetCount = Math.max(
+    1,
+    Math.min(MAX_EPISODE_COUNT, Math.floor(args.options?.targetEpisodeCount ?? 12)),
+  );
+  const storySynopsis = project.summary;
+  const artStyle = styleFullPrompt(project);
+  const worldView = formatWorldView(worldViewElements);
+  const charactersText = formatCharacters(characters);
+  const narrativeCausalChain = formatNarrativeCausalChain(project.contextCache);
 
   // Episode Plan 输出可能很长：为避免被 maxTokens 截断导致 JSON 未闭合，设置“不会低于模型默认值”的最低输出上限。
-  const targetCount = args.options?.targetEpisodeCount ?? 12;
   let providerConfig = baseConfig;
 
   if (profile.provider === 'deepseek') {
@@ -455,10 +597,181 @@ export async function planEpisodes(args: {
     providerConfig = withMinimumMaxTokens(baseConfig, desired);
   }
 
+  if (targetCount > CHUNK_MODE_THRESHOLD) {
+    const chunkSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.plan_episodes.chunk.system',
+    });
+    const chunkFixSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.plan_episodes.chunk_fix.system',
+    });
+
+    const chunkSize = resolvePlanChunkSize(targetCount);
+    const chunkCount = Math.ceil(targetCount / chunkSize);
+    const plannedEpisodes: EpisodePlan['episodes'] = [];
+    let reasoningBrief: string | null = null;
+    let tokenUsage: ReturnType<typeof mergeTokenUsage> = undefined;
+    let fixed = false;
+
+    for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+      const batchStartOrder = chunkIndex * chunkSize + 1;
+      const batchCount = Math.min(chunkSize, targetCount - chunkIndex * chunkSize);
+      const batchUserPrompt = buildBatchUserPrompt({
+        storySynopsis,
+        artStyle,
+        worldView,
+        characters: charactersText,
+        narrativeCausalChain,
+        targetEpisodeCount: targetCount,
+        batchStartOrder,
+        batchCount,
+        plannedEpisodes,
+      });
+      const chunkConfig = {
+        ...providerConfig,
+        responseFormat: jsonSchemaFormat(
+          'episode_plan_batch',
+          schemaEpisodePlanBatch(batchStartOrder, batchCount, targetCount),
+        ),
+      };
+
+      const startPct = 15 + Math.floor((chunkIndex / Math.max(1, chunkCount)) * 60);
+      await updateProgress({
+        pct: startPct,
+        message: `生成剧集规划分批 ${chunkIndex + 1}/${chunkCount}（第${batchStartOrder}集起）...`,
+      });
+
+      const messages: ChatMessage[] = [
+        { role: 'system', content: chunkSystemPrompt },
+        { role: 'user', content: batchUserPrompt },
+      ];
+      const res = await chatWithProvider(chunkConfig, messages);
+      if (!res.content?.trim()) {
+        throw new Error(
+          `AI 返回空内容（chunk ${chunkIndex + 1}/${chunkCount}）。请检查模型/供应商可用性。`,
+        );
+      }
+      tokenUsage = mergeTokenUsage(tokenUsage, res.tokenUsage);
+
+      let parsedChunk: EpisodePlanBatch | null = null;
+      let chunkExtractedJson: string | null = null;
+      try {
+        ({ parsed: parsedChunk, extractedJson: chunkExtractedJson } = parseEpisodePlanBatch(res.content));
+      } catch (err) {
+        let lastErr: unknown = err;
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          await updateProgress({
+            pct: Math.min(90, startPct + attempt),
+            message: `修复分批 JSON（chunk ${chunkIndex + 1}/${chunkCount}，第${attempt}/2次）...`,
+          });
+          const fixedRes = await chatWithProvider(stableJsonFixConfig(chunkConfig), [
+            { role: 'system', content: chunkFixSystemPrompt },
+            { role: 'user', content: buildJsonFixUserPrompt(res.content) },
+          ]);
+          tokenUsage = mergeTokenUsage(tokenUsage, fixedRes.tokenUsage);
+          if (!fixedRes.content?.trim()) {
+            lastErr = new Error(`分批 JSON 修复失败（chunk ${chunkIndex + 1} 返回空内容）`);
+            continue;
+          }
+          try {
+            ({ parsed: parsedChunk, extractedJson: chunkExtractedJson } = parseEpisodePlanBatch(
+              fixedRes.content,
+            ));
+            fixed = true;
+            break;
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        if (!parsedChunk) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+      }
+
+      if (!parsedChunk || !chunkExtractedJson) {
+        throw new Error(`剧集规划分批解析失败（chunk ${chunkIndex + 1}/${chunkCount}）`);
+      }
+      if (parsedChunk.batchStartOrder !== batchStartOrder || parsedChunk.batchCount !== batchCount) {
+        throw new Error(
+          `剧集规划分批校验失败（chunk ${chunkIndex + 1}/${chunkCount}）：batch metadata mismatch`,
+        );
+      }
+
+      if (!reasoningBrief && typeof parsedChunk.reasoningBrief === 'string' && parsedChunk.reasoningBrief.trim()) {
+        reasoningBrief = parsedChunk.reasoningBrief.trim();
+      }
+      plannedEpisodes.push(...(parsedChunk.episodes as EpisodePlan['episodes']));
+    }
+
+    const finalPlan = EpisodePlanSchema.parse({
+      episodeCount: targetCount,
+      reasoningBrief,
+      episodes: plannedEpisodes,
+    });
+
+    await updateProgress({ pct: 85, message: '写入数据库...' });
+    const finalByOrder = new Map(finalPlan.episodes.map((episode) => [episode.order, episode] as const));
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      for (let order = 1; order <= targetCount; order += 1) {
+        const episode = finalByOrder.get(order);
+        if (!episode) continue;
+        await tx.episode.upsert({
+          where: { projectId_order: { projectId, order } },
+          update: {
+            title: episode.title,
+            summary: episode.logline,
+            outline: episode,
+            workflowState: 'IDLE',
+          },
+          create: {
+            projectId,
+            order,
+            title: episode.title,
+            summary: episode.logline,
+            outline: episode,
+            workflowState: 'IDLE',
+          },
+        });
+      }
+      await tx.episode.deleteMany({ where: { projectId, order: { gt: targetCount } } });
+      await tx.project.update({ where: { id: projectId }, data: { workflowState: 'EPISODE_PLAN_EDITING' } });
+    });
+
+    await updateProgress({ pct: 100, message: '完成' });
+    const extractedJson = JSON.stringify(finalPlan);
+    return {
+      episodeCount: finalPlan.episodeCount,
+      episodes: finalPlan.episodes,
+      parsed: finalPlan,
+      raw: extractedJson,
+      extractedJson,
+      fixed,
+      tokenUsage: tokenUsage ?? null,
+      planningMode: 'agent_chunk_loop' as const,
+      chunkCount,
+    };
+  }
+
+  const systemPrompt = await loadSystemPrompt({
+    prisma,
+    teamId,
+    key: 'workflow.plan_episodes.system',
+  });
+
+  const userPrompt = buildUserPrompt({
+    storySynopsis,
+    artStyle,
+    worldView,
+    characters: charactersText,
+    narrativeCausalChain,
+    targetEpisodeCount: targetCount,
+  });
+
   // 强制结构化输出：用 JSON Schema 约束模型返回的 JSON（减少语法错误/字段漂移）
   providerConfig = {
     ...providerConfig,
-    responseFormat: jsonSchemaFormat('episode_plan', schemaEpisodePlan(args.options?.targetEpisodeCount)),
+    responseFormat: jsonSchemaFormat('episode_plan', schemaEpisodePlan(targetCount)),
   };
 
   await updateProgress({ pct: 25, message: '调用 AI 生成剧集规划...' });

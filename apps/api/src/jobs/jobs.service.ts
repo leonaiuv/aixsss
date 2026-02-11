@@ -109,7 +109,7 @@ export class JobsService {
     await this.assertProjectPlannable(teamId, projectId);
 
     const targetEpisodeCount = options?.targetEpisodeCount;
-    if (targetEpisodeCount !== undefined && (targetEpisodeCount < 1 || targetEpisodeCount > 24)) {
+    if (targetEpisodeCount !== undefined && (targetEpisodeCount < 1 || targetEpisodeCount > 100)) {
       throw new BadRequestException('targetEpisodeCount out of range');
     }
 

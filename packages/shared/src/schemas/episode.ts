@@ -41,9 +41,9 @@ const EpisodePlanEpisodeSchema = z.object({
 
 export const EpisodePlanSchema = z
   .object({
-    episodeCount: z.number().int().min(1).max(24),
+    episodeCount: z.number().int().min(1).max(100),
     reasoningBrief: z.string().min(0).max(2000).optional().nullable(),
-    episodes: z.array(EpisodePlanEpisodeSchema).min(1).max(24),
+    episodes: z.array(EpisodePlanEpisodeSchema).min(1).max(100),
   })
   .superRefine((val, ctx) => {
     if (val.episodeCount !== val.episodes.length) {

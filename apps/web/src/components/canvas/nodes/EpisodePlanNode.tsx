@@ -19,7 +19,7 @@ type EpisodePlanNodeData = {
 function normalizeInt(value: unknown, fallback: number) {
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n)) return fallback;
-  return Math.max(1, Math.min(24, Math.round(n)));
+  return Math.max(1, Math.min(100, Math.round(n)));
 }
 
 function createNodeId(prefix: string) {
@@ -160,7 +160,7 @@ export function EpisodePlanNode({ id, data }: NodeProps<EpisodePlanFlowNode>) {
             <Input
               type="number"
               min={1}
-              max={24}
+              max={100}
               value={targetEpisodeCount}
               onChange={(e) => setTargetEpisodeCount(normalizeInt(e.target.value, 8))}
               className="h-8 w-20"
