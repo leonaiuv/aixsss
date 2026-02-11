@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Worker } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import type { JobProgress } from 'bullmq';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { EnvSchema } from './config/env.js';
@@ -54,6 +54,7 @@ async function main() {
 
   const prisma = new PrismaClient();
   const connection = parseRedisUrl(env.REDIS_URL);
+  const dispatchQueue = new Queue(env.AI_QUEUE_NAME, { connection });
 
   const worker = new Worker(
     env.AI_QUEUE_NAME,
@@ -485,6 +486,10 @@ async function main() {
             return result;
           }
           case 'run_episode_creation_agent': {
+            const currentChunkIndex =
+              typeof data.chunkIndex === 'number' && Number.isFinite(data.chunkIndex) && data.chunkIndex > 0
+                ? Math.floor(data.chunkIndex)
+                : 1;
             const result = await runEpisodeCreationAgent({
               prisma,
               teamId,
@@ -493,6 +498,135 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               currentJobId: jobId,
+              chunkIndex: currentChunkIndex,
+              enqueueContinuation: async () => {
+                const existing = await prisma.aIJob.findFirst({
+                  where: {
+                    teamId,
+                    projectId,
+                    episodeId,
+                    type: 'run_episode_creation_agent',
+                    status: { in: ['queued', 'running'] },
+                    id: { not: jobId },
+                  },
+                  select: { id: true },
+                });
+                if (existing?.id) return existing.id;
+
+                const next = await prisma.aIJob.create({
+                  data: {
+                    teamId,
+                    projectId,
+                    episodeId,
+                    aiProfileId,
+                    type: 'run_episode_creation_agent',
+                    status: 'queued',
+                  },
+                });
+
+                await dispatchQueue.add(
+                  'run_episode_creation_agent',
+                  {
+                    teamId,
+                    projectId,
+                    episodeId,
+                    aiProfileId,
+                    jobId: next.id,
+                    parentJobId: jobId,
+                    chunkIndex: currentChunkIndex + 1,
+                  },
+                  {
+                    jobId: next.id,
+                    attempts: 2,
+                    backoff: { type: 'exponential', delay: 1000 },
+                    removeOnComplete: { count: 500 },
+                    removeOnFail: { count: 500 },
+                  },
+                );
+                return next.id;
+              },
+              enqueueSceneTask: async ({ sceneId: targetSceneId, order }) => {
+                const existing = await prisma.aIJob.findFirst({
+                  where: {
+                    teamId,
+                    projectId,
+                    episodeId,
+                    sceneId: targetSceneId,
+                    type: 'run_episode_creation_scene_task',
+                    status: { in: ['queued', 'running'] },
+                  },
+                  select: { id: true },
+                });
+                if (existing?.id) return { jobId: existing.id };
+
+                const child = await prisma.aIJob.create({
+                  data: {
+                    teamId,
+                    projectId,
+                    episodeId,
+                    sceneId: targetSceneId,
+                    aiProfileId,
+                    type: 'run_episode_creation_scene_task',
+                    status: 'queued',
+                  },
+                });
+                await dispatchQueue.add(
+                  'run_episode_creation_scene_task',
+                  {
+                    teamId,
+                    projectId,
+                    episodeId,
+                    sceneId: targetSceneId,
+                    aiProfileId,
+                    jobId: child.id,
+                    parentJobId: jobId,
+                    chunkIndex: currentChunkIndex,
+                    sceneOrder: order,
+                  },
+                  {
+                    jobId: child.id,
+                    attempts: 2,
+                    backoff: { type: 'exponential', delay: 1000 },
+                    removeOnComplete: { count: 500 },
+                    removeOnFail: { count: 500 },
+                  },
+                );
+                return { jobId: child.id };
+              },
+              sceneChunkSize:
+                typeof data.sceneChunkSize === 'number' ? data.sceneChunkSize : undefined,
+              sceneConcurrency:
+                typeof data.sceneConcurrency === 'number' ? data.sceneConcurrency : undefined,
+              updateProgress,
+            });
+
+            const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
+            if (latest?.status !== 'cancelled') {
+              await prisma.aIJob.update({
+                where: { id: jobId },
+                data: {
+                  status: 'succeeded',
+                  finishedAt: new Date(),
+                  result: result as unknown as Prisma.InputJsonValue,
+                  error: null,
+                },
+              });
+            }
+
+            return result;
+          }
+          case 'run_episode_creation_scene_task': {
+            const result = await refineSceneAll({
+              prisma,
+              teamId,
+              projectId,
+              sceneId,
+              aiProfileId,
+              apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
+              options: {
+                includeSoundDesign: true,
+                includeDurationEstimate: true,
+              },
               updateProgress,
             });
 
@@ -956,6 +1090,7 @@ async function main() {
   const shutdown = async () => {
     console.log('[worker] shutting down...');
     await worker.close();
+    await dispatchQueue.close();
     await prisma.$disconnect();
   };
 

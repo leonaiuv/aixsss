@@ -48,12 +48,24 @@ export type WorkflowAgentStepSummary = {
   message: string;
   executionMode?: 'agent' | 'legacy';
   fallbackUsed?: boolean;
+  chunk?: number;
+  sourceJobId?: string;
+};
+
+export type WorkflowSceneChildTaskSummary = {
+  sceneId: string;
+  order: number;
+  jobId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'unknown';
+  error?: string;
+  chunk?: number;
 };
 
 export type WorkflowAgentRunSummary = {
   executionMode: 'agent' | 'legacy';
   fallbackUsed: boolean;
   stepSummaries: WorkflowAgentStepSummary[];
+  sceneChildTasks?: WorkflowSceneChildTaskSummary[];
   finishedAt: string;
 };
 

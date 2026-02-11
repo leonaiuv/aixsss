@@ -8,9 +8,68 @@ import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig, type TokenUsage
 import { parseJsonFromText } from './aiJson.js';
 import { loadSystemPrompt } from './systemPrompts.js';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeSceneOrder(rawOrder: unknown, fallbackOrder: number): number {
+  if (typeof rawOrder === 'number' && Number.isInteger(rawOrder) && rawOrder >= 1) return rawOrder;
+  if (typeof rawOrder === 'string') {
+    const trimmed = rawOrder.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const parsed = Number.parseInt(trimmed, 10);
+      if (Number.isInteger(parsed) && parsed >= 1) return parsed;
+    }
+  }
+  return fallbackOrder;
+}
+
+function normalizeEpisodeScriptJson(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+
+  type NormalizedScene = {
+    order: number;
+    sceneHeading: string;
+    summary: string;
+  } & Record<string, unknown>;
+
+  const normalized: Record<string, unknown> = { ...value };
+  if (typeof normalized.title !== 'string') normalized.title = '';
+  if (typeof normalized.draft !== 'string') normalized.draft = '';
+
+  const rawScenes = Array.isArray(value.scenes) ? value.scenes : [];
+  normalized.scenes = rawScenes
+    .map((scene, index) => {
+      if (!isRecord(scene)) return null;
+      const fallbackOrder = index + 1;
+      const order = normalizeSceneOrder(scene.order, fallbackOrder);
+      const summary = typeof scene.summary === 'string' ? scene.summary : '';
+      const sceneHeading =
+        typeof scene.sceneHeading === 'string' && scene.sceneHeading.trim().length > 0
+          ? scene.sceneHeading
+          : typeof scene.heading === 'string' && scene.heading.trim().length > 0
+            ? scene.heading
+            : summary.trim().length > 0
+              ? summary
+              : `SCENE ${order}`;
+
+      const next: NormalizedScene = {
+        ...scene,
+        order,
+        sceneHeading,
+        summary,
+      };
+      return next;
+    })
+    .filter((scene): scene is NormalizedScene => scene !== null);
+
+  return normalized;
+}
+
 function parseEpisodeScript(raw: string): { parsed: EpisodeScript; extractedJson: string } {
   const { json, extractedJson } = parseJsonFromText(raw, { expectedKind: 'object' });
-  return { parsed: EpisodeScriptSchema.parse(json), extractedJson };
+  const normalized = normalizeEpisodeScriptJson(json);
+  return { parsed: EpisodeScriptSchema.parse(normalized), extractedJson };
 }
 
 function buildUserPrompt(args: {

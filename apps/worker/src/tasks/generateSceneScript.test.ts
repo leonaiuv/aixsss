@@ -152,4 +152,72 @@ describe('generateSceneScript', () => {
     expect(result.sceneCount).toBe(1);
     expect((chatWithProvider as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
   });
+
+  it('should normalize missing scene order/heading without triggering fix model call', async () => {
+    type TaskArgs = Parameters<typeof generateSceneScript>[0];
+
+    (chatWithProvider as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      content: JSON.stringify({
+        title: '第1集',
+        draft: 'INT. CAFE - NIGHT\n两人沉默对坐。',
+        scenes: [
+          { sceneHeading: 'INT. CAFE - NIGHT', summary: '两人沉默对坐' },
+          { summary: '主角打破沉默' },
+        ],
+      }),
+      tokenUsage: { prompt: 1, completion: 1, total: 2 },
+    });
+
+    const prisma = {
+      project: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'p1',
+          summary: '故事梗概',
+          style: 'anime',
+          artStyleConfig: null,
+          contextCache: {},
+        }),
+      },
+      episode: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'e1',
+          order: 1,
+          title: '第1集',
+          summary: '本集概要',
+          outline: null,
+          coreExpression: { theme: '成长' },
+        }),
+        update: vi.fn().mockResolvedValue({ id: 'e1' }),
+      },
+      scene: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      aIProfile: {
+        findFirst: vi.fn().mockResolvedValue({
+          provider: 'openai_compatible',
+          model: 'test',
+          baseURL: null,
+          apiKeyEncrypted: 'x',
+          generationParams: null,
+        }),
+      },
+    };
+
+    const result = await generateSceneScript({
+      prisma: prisma as unknown as TaskArgs['prisma'],
+      teamId: 't1',
+      projectId: 'p1',
+      episodeId: 'e1',
+      aiProfileId: 'a1',
+      apiKeySecret: 'secret',
+      updateProgress: async () => {},
+    });
+
+    expect((chatWithProvider as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+    expect(result.sceneScript.scenes).toHaveLength(2);
+    expect(result.sceneScript.scenes[0]?.order).toBe(1);
+    expect(result.sceneScript.scenes[1]?.order).toBe(2);
+    expect(result.sceneScript.scenes[1]?.sceneHeading).toBeTruthy();
+  });
 });

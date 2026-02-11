@@ -32,6 +32,17 @@ type StepSummary = {
   message: string;
   executionMode?: 'agent' | 'legacy';
   fallbackUsed?: boolean;
+  chunk?: number;
+  sourceJobId?: string;
+};
+
+type SceneChildTaskSummary = {
+  sceneId: string;
+  order: number;
+  jobId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'unknown';
+  error?: string;
+  chunk?: number;
 };
 
 type SceneSnapshot = {
@@ -41,6 +52,11 @@ type SceneSnapshot = {
   soundDesignJson: Prisma.JsonValue | null;
   durationEstimateJson: Prisma.JsonValue | null;
 };
+
+const DEFAULT_SCENE_CHUNK_SIZE = 2;
+const DEFAULT_SCENE_CONCURRENCY = 2;
+const SCENE_CHILD_WAIT_TIMEOUT_MS = 20 * 60_000;
+const SCENE_CHILD_POLL_INTERVAL_MS = 800;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -62,6 +78,36 @@ function mapChildProgressPct(childPct: unknown, base: number, span: number): num
   const pct = typeof childPct === 'number' ? childPct : 0;
   const normalized = Math.max(0, Math.min(100, pct));
   return Math.max(0, Math.min(99, Math.round(base + (normalized / 100) * span)));
+}
+
+function clampPositiveInt(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallback;
+  return Math.max(1, Math.floor(value));
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runWithConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  run: (item: T, index: number) => Promise<void>,
+) {
+  if (items.length === 0) return;
+  const workerCount = Math.max(1, Math.min(items.length, concurrency));
+  let cursor = 0;
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = cursor;
+        cursor += 1;
+        if (index >= items.length) break;
+        await run(items[index], index);
+      }
+    }),
+  );
 }
 
 async function loadEpisode(prisma: PrismaClient, projectId: string, episodeId: string) {
@@ -119,9 +165,31 @@ export async function runEpisodeCreationAgent(args: {
   aiProfileId: string;
   apiKeySecret: string;
   currentJobId?: string;
+  chunkIndex?: number;
+  enqueueContinuation?: () => Promise<string>;
+  enqueueSceneTask?: (scene: { sceneId: string; order: number }) => Promise<{ jobId: string }>;
+  sceneChunkSize?: number;
+  sceneConcurrency?: number;
   updateProgress: (progress: JobProgress) => Promise<void>;
 }) {
-  const { prisma, teamId, projectId, episodeId, aiProfileId, apiKeySecret, currentJobId, updateProgress } = args;
+  const {
+    prisma,
+    teamId,
+    projectId,
+    episodeId,
+    aiProfileId,
+    apiKeySecret,
+    currentJobId,
+    chunkIndex,
+    enqueueContinuation,
+    enqueueSceneTask,
+    sceneChunkSize,
+    sceneConcurrency,
+    updateProgress,
+  } = args;
+  const refinementChunkSize = clampPositiveInt(sceneChunkSize, DEFAULT_SCENE_CHUNK_SIZE);
+  const refinementConcurrency = clampPositiveInt(sceneConcurrency, DEFAULT_SCENE_CONCURRENCY);
+  const currentChunk = clampPositiveInt(chunkIndex, 1);
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, teamId, deletedAt: null },
@@ -153,6 +221,8 @@ export async function runEpisodeCreationAgent(args: {
   let fallbackUsed = false;
   let agentTrace: unknown = null;
   const stepSummaries: StepSummary[] = [];
+  const sceneChildTasks: SceneChildTaskSummary[] = [];
+  let continuationJobId: string | null = null;
 
   if (isAgentEpisodeCreationEnabled()) {
     const profile = await prisma.aIProfile.findFirst({
@@ -261,6 +331,8 @@ export async function runEpisodeCreationAgent(args: {
         message: result.message ?? (result.skipped ? '已存在，跳过' : 'ok'),
         executionMode: childExecutionMode,
         fallbackUsed: childFallbackUsed,
+        chunk: currentChunk,
+        ...(currentJobId ? { sourceJobId: currentJobId } : {}),
       });
       return result;
     } catch (error) {
@@ -269,6 +341,8 @@ export async function runEpisodeCreationAgent(args: {
         step: params.step,
         status: 'failed',
         message: detail,
+        chunk: currentChunk,
+        ...(currentJobId ? { sourceJobId: currentJobId } : {}),
       });
       throw new Error(`episode creation step failed [${params.step}]: ${detail}`);
     }
@@ -357,36 +431,112 @@ export async function runEpisodeCreationAgent(args: {
       if (pending.length === 0) {
         return { skipped: true, message: '分镜已全部细化完成' };
       }
-
-      for (let i = 0; i < pending.length; i += 1) {
-        const scene = pending[i];
-        const base = (i / pending.length) * 100;
-        const span = 100 / pending.length;
-        await stepUpdateProgress({
-          pct: Math.min(99, Math.round(base)),
-          message: `细化分镜 #${scene.order}（${i + 1}/${pending.length}）`,
+      const slice = pending.slice(0, refinementChunkSize);
+      if (enqueueSceneTask) {
+        const childJobs: Array<{ sceneId: string; jobId: string; order: number }> = [];
+        await runWithConcurrency(slice, refinementConcurrency, async (scene, idx) => {
+          await stepUpdateProgress({
+            pct: Math.min(35, Math.round((idx / Math.max(1, slice.length)) * 30)),
+            message: `派发分镜子任务 #${scene.order}（${idx + 1}/${slice.length}）`,
+          });
+          const child = await enqueueSceneTask({ sceneId: scene.id, order: scene.order });
+          childJobs.push({ sceneId: scene.id, jobId: child.jobId, order: scene.order });
+          sceneChildTasks.push({
+            sceneId: scene.id,
+            order: scene.order,
+            jobId: child.jobId,
+            status: 'queued',
+            chunk: currentChunk,
+          });
         });
-        await refineSceneAll({
-          prisma,
-          teamId,
-          projectId,
-          sceneId: scene.id,
-          aiProfileId,
-          apiKeySecret,
-          options: {
-            includeSoundDesign: false,
-            includeDurationEstimate: false,
-          },
-          updateProgress: async (progress) => {
-            const baseProgress = isRecord(progress) ? progress : {};
-            await stepUpdateProgress({
-              ...baseProgress,
-              pct: mapChildProgressPct(isRecord(progress) ? progress.pct : null, base, span),
-            });
-          },
+
+        const deadline = Date.now() + SCENE_CHILD_WAIT_TIMEOUT_MS;
+        while (true) {
+          const rows = await prisma.aIJob.findMany({
+            where: { id: { in: childJobs.map((x) => x.jobId) } },
+            select: { id: true, status: true, error: true },
+          });
+          const rowMap = new Map(rows.map((row) => [row.id, row] as const));
+          for (const task of sceneChildTasks) {
+            const row = rowMap.get(task.jobId);
+            if (!row) continue;
+            if (
+              row.status === 'queued' ||
+              row.status === 'running' ||
+              row.status === 'succeeded' ||
+              row.status === 'failed' ||
+              row.status === 'cancelled'
+            ) {
+              task.status = row.status;
+            } else {
+              task.status = 'unknown';
+            }
+            if (typeof row.error === 'string' && row.error.trim().length > 0) {
+              task.error = row.error;
+            }
+          }
+          const failed = childJobs.find((child) => {
+            const row = rowMap.get(child.jobId);
+            return row?.status === 'failed' || row?.status === 'cancelled';
+          });
+          if (failed) {
+            const row = rowMap.get(failed.jobId);
+            const reason = row?.error ?? row?.status ?? 'unknown';
+            throw new Error(`scene child task failed (#${failed.order}, job=${failed.jobId}): ${reason}`);
+          }
+
+          const succeeded = childJobs.filter(
+            (child) => rowMap.get(child.jobId)?.status === 'succeeded',
+          ).length;
+          await stepUpdateProgress({
+            pct: Math.min(99, 35 + Math.round((succeeded / Math.max(1, childJobs.length)) * 65)),
+            message: `等待分镜子任务完成（${succeeded}/${childJobs.length}）`,
+          });
+          if (succeeded >= childJobs.length) break;
+          if (Date.now() > deadline) {
+            throw new Error(`scene child tasks timeout (${succeeded}/${childJobs.length})`);
+          }
+          await sleep(SCENE_CHILD_POLL_INTERVAL_MS);
+        }
+      } else {
+        await runWithConcurrency(slice, refinementConcurrency, async (scene, idx) => {
+          const base = (idx / Math.max(1, slice.length)) * 100;
+          const span = 100 / Math.max(1, slice.length);
+          await stepUpdateProgress({
+            pct: Math.min(99, Math.round(base)),
+            message: `细化分镜 #${scene.order}（${idx + 1}/${slice.length}）`,
+          });
+          await refineSceneAll({
+            prisma,
+            teamId,
+            projectId,
+            sceneId: scene.id,
+            aiProfileId,
+            apiKeySecret,
+            options: {
+              includeSoundDesign: true,
+              includeDurationEstimate: true,
+            },
+            updateProgress: async (progress) => {
+              const baseProgress = isRecord(progress) ? progress : {};
+              await stepUpdateProgress({
+                ...baseProgress,
+                pct: mapChildProgressPct(isRecord(progress) ? progress.pct : null, base, span),
+              });
+            },
+          });
         });
       }
-      return { message: `已细化 ${pending.length} 个分镜` };
+
+      const refreshed = await loadEpisodeScenes(prisma, episodeId);
+      const remaining = refreshed.filter((scene) => scene.status !== 'completed').length;
+      if (remaining > 0 && !continuationJobId && enqueueContinuation) {
+        continuationJobId = await enqueueContinuation();
+        return {
+          message: `已完成 ${slice.length}/${pending.length} 个分镜细化，剩余 ${remaining} 个分镜，已自动续跑`,
+        };
+      }
+      return { message: `已细化 ${slice.length} 个分镜` };
     },
   });
 
@@ -396,6 +546,15 @@ export async function runEpisodeCreationAgent(args: {
     basePct: 80,
     spanPct: 18,
     run: async (stepUpdateProgress) => {
+      if (enqueueSceneTask) {
+        if (continuationJobId) {
+          return { skipped: true, message: '已创建续跑任务，声音与时长由后续分镜子任务自动处理' };
+        }
+        return { skipped: true, message: '声音与时长已由分镜子任务处理' };
+      }
+      if (continuationJobId) {
+        return { skipped: true, message: '已创建续跑任务，声音与时长将在后续分片中自动生成' };
+      }
       const scenes = await loadEpisodeScenes(prisma, episodeId);
       if (scenes.length === 0) {
         throw new Error('scene list is empty, cannot generate sound and duration');
@@ -411,8 +570,9 @@ export async function runEpisodeCreationAgent(args: {
       if (work.length === 0) {
         return { skipped: true, message: '声音与时长已全部就绪' };
       }
+      const slice = work.slice(0, refinementChunkSize);
 
-      const totalUnits = work.reduce(
+      const totalUnits = slice.reduce(
         (sum, item) => sum + (item.needSound ? 1 : 0) + (item.needDuration ? 1 : 0),
         0,
       );
@@ -435,7 +595,7 @@ export async function runEpisodeCreationAgent(args: {
         });
       };
 
-      for (const item of work) {
+      for (const item of slice) {
         if (item.needSound) {
           await unitProgress(`声音设计 #${item.scene.order}`, async (childProgress) => {
             await generateSoundDesign({
@@ -462,19 +622,32 @@ export async function runEpisodeCreationAgent(args: {
         }
       }
 
-      return { message: `已补齐 ${work.length} 个分镜的声音/时长` };
+      const remaining = work.length - slice.length;
+      if (remaining > 0 && !continuationJobId && enqueueContinuation) {
+        continuationJobId = await enqueueContinuation();
+        return { message: `已补齐 ${slice.length} 个分镜的声音/时长，剩余 ${remaining} 个分镜，已自动续跑` };
+      }
+
+      return { message: `已补齐 ${slice.length} 个分镜的声音/时长` };
     },
   });
 
-  await updateProgress({ pct: 100, message: '单集创作 Agent 完成' });
+  await updateProgress({
+    pct: 100,
+    message: continuationJobId ? '单集创作 Agent 本轮完成，已自动续跑下一任务' : '单集创作 Agent 完成',
+  });
 
   return {
     projectId,
     episodeId,
+    chunk: currentChunk,
     executionMode,
     fallbackUsed,
     agentTrace,
     stepSummaries,
+    sceneChildTasks,
     agentSteps: summarizeAgentSteps(agentTrace),
+    continued: Boolean(continuationJobId),
+    nextJobId: continuationJobId,
   };
 }

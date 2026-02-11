@@ -33,4 +33,14 @@ describe('systemPrompts', () => {
     expect(keys.has('workflow.supervisor.agent.system')).toBe(true);
     expect(keys.has('workflow.episode_creation.agent.system')).toBe(true);
   });
+
+  it('defines explicit required fields for scene script output', () => {
+    const sceneScriptPrompt = SYSTEM_PROMPT_DEFINITION_BY_KEY['workflow.scene_script.system'];
+    const sceneScriptFixPrompt = SYSTEM_PROMPT_DEFINITION_BY_KEY['workflow.scene_script.fix.system'];
+    expect(sceneScriptPrompt.defaultContent.includes('order')).toBe(true);
+    expect(sceneScriptPrompt.defaultContent.includes('sceneHeading')).toBe(true);
+    expect(sceneScriptPrompt.defaultContent.includes('summary')).toBe(true);
+    expect(sceneScriptFixPrompt.defaultContent.includes('order')).toBe(true);
+    expect(sceneScriptFixPrompt.defaultContent.includes('sceneHeading')).toBe(true);
+  });
 });

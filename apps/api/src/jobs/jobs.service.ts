@@ -34,6 +34,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+const EPISODE_CREATION_STALE_LOCK_MS = 15 * 60_000;
+
 @Injectable()
 export class JobsService {
   constructor(
@@ -41,6 +43,35 @@ export class JobsService {
     @Inject(AI_QUEUE) private readonly queue: Queue,
     @Inject(AI_QUEUE_EVENTS) private readonly queueEvents: QueueEvents,
   ) {}
+
+  private async tryReleaseStaleEpisodeCreationLock(conflict: {
+    id: string;
+    startedAt: Date | null;
+  }): Promise<boolean> {
+    const startedAt = conflict.startedAt;
+    if (!startedAt) return false;
+    const ageMs = Date.now() - startedAt.getTime();
+    if (!Number.isFinite(ageMs) || ageMs < EPISODE_CREATION_STALE_LOCK_MS) return false;
+
+    let queueJobExists = false;
+    try {
+      const queueJob = await this.queue.getJob(conflict.id);
+      queueJobExists = Boolean(queueJob);
+    } catch {
+      queueJobExists = false;
+    }
+    if (queueJobExists) return false;
+
+    await this.prisma.aIJob.update({
+      where: { id: conflict.id },
+      data: {
+        status: 'cancelled',
+        finishedAt: new Date(),
+        error: 'episode_creation_stale_lock_auto_released',
+      },
+    });
+    return true;
+  }
 
   private async requireProject(teamId: string, projectId: string): Promise<void> {
     const project = await this.prisma.project.findFirst({
@@ -519,13 +550,23 @@ export class JobsService {
       where: {
         teamId,
         projectId,
-        type: 'run_workflow_supervisor',
         status: { in: ['queued', 'running'] },
+        type: {
+          in: [
+            'run_workflow_supervisor',
+            'expand_story_characters',
+            'build_narrative_causal_chain',
+            'generate_character_relationships',
+            'generate_emotion_arc',
+          ],
+        },
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, type: true },
     });
     if (existing) {
-      throw new BadRequestException('Workflow supervisor is already running for this project');
+      throw new BadRequestException(
+        `Workflow supervisor is already running for this project (${existing.type}:${existing.id})`,
+      );
     }
 
     const jobRow = await this.prisma.aIJob.create({
@@ -563,27 +604,40 @@ export class JobsService {
     await this.requireEpisode(projectId, episodeId);
     await this.requireAIProfile(teamId, aiProfileId);
 
-    const conflict = await this.prisma.aIJob.findFirst({
-      where: {
-        teamId,
-        projectId,
-        episodeId,
-        status: { in: ['queued', 'running'] },
-        type: {
-          in: [
-            'run_episode_creation_agent',
-            'generate_episode_core_expression',
-            'generate_scene_script',
-            'generate_episode_scene_list',
-            'refine_scene_all',
-            'refine_scene_all_batch',
-            'generate_sound_design',
-            'estimate_duration',
-          ],
+    const findConflict = () =>
+      this.prisma.aIJob.findFirst({
+        where: {
+          teamId,
+          projectId,
+          episodeId,
+          status: { in: ['queued', 'running'] },
+          type: {
+            in: [
+              'run_episode_creation_agent',
+              'generate_episode_core_expression',
+              'generate_scene_script',
+              'generate_episode_scene_list',
+              'refine_scene_all',
+              'refine_scene_all_batch',
+              'run_episode_creation_scene_task',
+              'generate_sound_design',
+              'estimate_duration',
+            ],
+          },
         },
-      },
-      select: { id: true, type: true },
-    });
+        select: { id: true, type: true, status: true, startedAt: true },
+      });
+
+    let conflict = await findConflict();
+    if (conflict?.type === 'run_episode_creation_agent' && conflict.status === 'running') {
+      const released = await this.tryReleaseStaleEpisodeCreationLock({
+        id: conflict.id,
+        startedAt: conflict.startedAt,
+      });
+      if (released) {
+        conflict = await findConflict();
+      }
+    }
     if (conflict) {
       throw new BadRequestException(
         `Episode creation is already running with another job (${conflict.type}:${conflict.id})`,
@@ -1335,20 +1389,47 @@ export class JobsService {
       throw new BadRequestException('Job already finished');
     }
 
-    // best-effort: remove from queue
-    try {
-      await this.queue.remove(jobId);
-    } catch {
-      // ignore
+    const cascadingIds = new Set<string>([jobId]);
+    if (
+      (job.type === 'run_episode_creation_agent' || job.type === 'run_episode_creation_scene_task') &&
+      job.projectId &&
+      job.episodeId
+    ) {
+      const siblings = await this.prisma.aIJob.findMany({
+        where: {
+          teamId,
+          projectId: job.projectId,
+          episodeId: job.episodeId,
+          type: { in: ['run_episode_creation_agent', 'run_episode_creation_scene_task'] },
+          status: { in: ['queued', 'running'] },
+          id: { not: jobId },
+        },
+        select: { id: true },
+      });
+      for (const sibling of siblings) cascadingIds.add(sibling.id);
     }
 
-    const updated = await this.prisma.aIJob.update({
-      where: { id: jobId },
+    const targetIds = Array.from(cascadingIds);
+    await Promise.all(
+      targetIds.map(async (id) => {
+        try {
+          await this.queue.remove(id);
+        } catch {
+          // ignore
+        }
+      }),
+    );
+
+    const finishedAt = new Date();
+    await this.prisma.aIJob.updateMany({
+      where: { id: { in: targetIds } },
       data: {
         status: 'cancelled',
-        finishedAt: new Date(),
+        finishedAt,
       },
     });
+    const updated = await this.prisma.aIJob.findFirst({ where: { id: jobId, teamId } });
+    if (!updated) throw new NotFoundException('Job not found');
 
     return mapJob(updated);
   }

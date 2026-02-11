@@ -5,6 +5,7 @@ export type ApiAIJobResult = {
   fallbackUsed?: boolean;
   agentTrace?: unknown;
   stepSummaries?: unknown;
+  sceneChildTasks?: unknown;
   [key: string]: unknown;
 };
 
@@ -69,6 +70,12 @@ export async function apiGetAIJob(jobId: string, options?: { signal?: AbortSigna
   });
 }
 
+export async function apiCancelAIJob(jobId: string) {
+  return apiRequest<{ ok: true }>(`/ai-jobs/${encodeURIComponent(jobId)}/cancel`, {
+    method: 'POST',
+  });
+}
+
 export async function apiWaitForAIJob(
   jobId: string,
   options?: {
@@ -87,7 +94,7 @@ export async function apiWaitForAIJob(
 
   throwIfAborted(signal);
 
-  const deadline = Date.now() + timeoutMs;
+  let deadline = Date.now() + timeoutMs;
   let lastStatus: ApiAIJob['status'] | null = null;
   let lastProgressFingerprint: string | null = null;
 
@@ -96,18 +103,25 @@ export async function apiWaitForAIJob(
       throwIfAborted(signal);
 
       const job = await apiGetAIJob(jobId, { signal });
-      lastStatus = job.status;
+      const nextStatus = job.status;
+      const nextProgressFingerprint = (() => {
+        try {
+          return JSON.stringify(job.progress ?? null);
+        } catch {
+          return String(job.progress ?? null);
+        }
+      })();
+
+      const statusChanged = nextStatus !== lastStatus;
+      const progressChanged = nextProgressFingerprint !== lastProgressFingerprint;
+      if (statusChanged || progressChanged) {
+        deadline = Date.now() + timeoutMs;
+      }
+      lastStatus = nextStatus;
+      lastProgressFingerprint = nextProgressFingerprint;
 
       if (onProgress) {
-        const fp = (() => {
-          try {
-            return JSON.stringify(job.progress ?? null);
-          } catch {
-            return String(job.progress ?? null);
-          }
-        })();
-        if (fp !== lastProgressFingerprint) {
-          lastProgressFingerprint = fp;
+        if (progressChanged) {
           try {
             onProgress(job.progress, job);
           } catch {

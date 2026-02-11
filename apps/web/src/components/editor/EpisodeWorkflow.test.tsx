@@ -3,12 +3,41 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EpisodeWorkflow } from './EpisodeWorkflow';
 
+const toastMock = vi.fn();
+
 vi.mock('./BasicSettings', () => ({
   BasicSettings: () => <div data-testid="basic-settings">BasicSettings</div>,
 }));
 
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastMock }),
+}));
+
+vi.mock('@/lib/runtime/mode', () => ({
+  isApiMode: () => true,
+}));
+
+vi.mock('@/lib/api/workflow', () => ({
+  apiWorkflowGenerateKeyframeImages: vi.fn(),
+  apiWorkflowGenerateSceneVideo: vi.fn(),
+  apiWorkflowGenerateStoryboardGroup: vi.fn(),
+  apiWorkflowGenerateStoryboardPlan: vi.fn(),
+  apiWorkflowGenerateStoryboardSceneBible: vi.fn(),
+  apiWorkflowBackTranslateStoryboardPanels: vi.fn(),
+  apiWorkflowTranslateStoryboardPanels: vi.fn(),
+  apiWorkflowRefineAllScenes: vi.fn(),
+  apiWorkflowRefineSceneAll: vi.fn(),
+  apiWorkflowGenerateSceneScript: vi.fn(),
+  apiWorkflowExpandStoryCharacters: vi.fn(),
+  apiWorkflowRunSupervisor: vi.fn(),
+  apiWorkflowRunEpisodeCreationAgent: vi.fn(),
+  apiWorkflowGenerateSoundDesign: vi.fn(),
+  apiWorkflowEstimateDuration: vi.fn(),
+}));
+
+vi.mock('@/lib/api/aiJobs', () => ({
+  apiWaitForAIJob: vi.fn(),
+  apiCancelAIJob: vi.fn(),
 }));
 
 vi.mock('@/stores/projectStore', () => ({ useProjectStore: vi.fn() }));
@@ -28,6 +57,10 @@ import { useEpisodeStore } from '@/stores/episodeStore';
 import { useEpisodeScenesStore } from '@/stores/episodeScenesStore';
 import { useCharacterRelationshipStore } from '@/stores/characterRelationshipStore';
 import { useEmotionArcStore } from '@/stores/emotionArcStore';
+import {
+  apiWorkflowRunEpisodeCreationAgent,
+} from '@/lib/api/workflow';
+import { apiCancelAIJob, apiWaitForAIJob } from '@/lib/api/aiJobs';
 
 const mockUseProjectStore = vi.mocked(useProjectStore);
 const mockUseConfigStore = vi.mocked(useConfigStore);
@@ -37,14 +70,28 @@ const mockUseEpisodeStore = vi.mocked(useEpisodeStore);
 const mockUseEpisodeScenesStore = vi.mocked(useEpisodeScenesStore);
 const mockUseCharacterRelationshipStore = vi.mocked(useCharacterRelationshipStore);
 const mockUseEmotionArcStore = vi.mocked(useEmotionArcStore);
+const mockApiWorkflowRunEpisodeCreationAgent = vi.mocked(apiWorkflowRunEpisodeCreationAgent);
+const mockApiWaitForAIJob = vi.mocked(apiWaitForAIJob);
+const mockApiCancelAIJob = vi.mocked(apiCancelAIJob);
 let updateProjectMock: ReturnType<typeof vi.fn>;
 let addCharacterMock: ReturnType<typeof vi.fn>;
 
 describe('EpisodeWorkflow', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    toastMock.mockReset();
     updateProjectMock = vi.fn();
     addCharacterMock = vi.fn();
+    mockApiWorkflowRunEpisodeCreationAgent.mockResolvedValue({ id: 'job_ep_agent_1' } as never);
+    mockApiWaitForAIJob.mockResolvedValue({
+      id: 'job_ep_agent_1',
+      result: {
+        executionMode: 'agent',
+        fallbackUsed: false,
+        stepSummaries: [],
+      },
+    } as never);
+    mockApiCancelAIJob.mockResolvedValue({ ok: true } as never);
 
     const projectState = {
       currentProject: {
@@ -66,6 +113,10 @@ describe('EpisodeWorkflow', () => {
     ) => {
       return typeof selector === 'function' ? selector(projectState) : projectState;
     }) as unknown as typeof useProjectStore);
+    (mockUseProjectStore as unknown as { getState: () => { loadProject: ReturnType<typeof vi.fn> } }).getState =
+      () => ({
+        loadProject: vi.fn().mockResolvedValue(undefined),
+      });
 
     mockUseConfigStore.mockReturnValue({ config: { aiProfileId: 'aip_1' } } as ReturnType<
       typeof useConfigStore
@@ -197,6 +248,177 @@ describe('EpisodeWorkflow', () => {
     expect(screen.getByRole('tab', { name: '4. 分镜细化' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '5. 声音与时长' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'AI代理一键生成5步' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '取消当前任务' })).toBeInTheDocument();
+  });
+
+  it('单集创作 Agent 冲突时应提示“取消并重试”并可触发重试', async () => {
+    mockUseEpisodeStore.mockReturnValue({
+      episodes: [
+        {
+          id: 'ep_1',
+          order: 1,
+          title: '第一集',
+          workflowState: 'SCENE_LIST_EDITING',
+          coreExpression: { theme: 'test' },
+        },
+      ],
+      currentEpisodeId: 'ep_1',
+      isLoading: false,
+      isRunningWorkflow: false,
+      lastJobId: null,
+      lastJobProgress: null,
+      error: null,
+      loadEpisodes: vi.fn(),
+      setCurrentEpisode: vi.fn(),
+      updateEpisode: vi.fn(),
+      planEpisodes: vi.fn(),
+      buildNarrativeCausalChain: vi.fn(),
+      generateCoreExpression: vi.fn(),
+      generateCoreExpressionBatch: vi.fn(),
+      generateSceneList: vi.fn(),
+      createEpisode: vi.fn(),
+      deleteEpisode: vi.fn(),
+    } as ReturnType<typeof useEpisodeStore>);
+
+    mockApiWorkflowRunEpisodeCreationAgent
+      .mockRejectedValueOnce(
+        new Error(
+          'Episode creation is already running with another job (run_episode_creation_agent:job_old_1)',
+        ),
+      )
+      .mockResolvedValueOnce({ id: 'job_new_1' } as never);
+
+    render(<EpisodeWorkflow />);
+    await userEvent.click(screen.getByText('单集创作'));
+    await userEvent.click(screen.getByRole('button', { name: 'AI代理一键生成5步' }));
+
+    const conflictToastCall = toastMock.mock.calls.find(
+      (call) => call?.[0]?.title === '已有任务进行中',
+    );
+    expect(conflictToastCall).toBeTruthy();
+    const action = conflictToastCall?.[0]?.action;
+    expect(action).toBeTruthy();
+
+    action.props.onClick();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockApiCancelAIJob).toHaveBeenCalledWith('job_old_1');
+    expect(mockApiWorkflowRunEpisodeCreationAgent).toHaveBeenCalledTimes(2);
+  });
+
+  it('单集创作 Agent 应自动跟随 nextJobId 续跑直到完成', async () => {
+    mockUseEpisodeStore.mockReturnValue({
+      episodes: [
+        {
+          id: 'ep_1',
+          order: 1,
+          title: '第一集',
+          workflowState: 'SCENE_LIST_EDITING',
+          coreExpression: { theme: 'test' },
+        },
+      ],
+      currentEpisodeId: 'ep_1',
+      isLoading: false,
+      isRunningWorkflow: false,
+      lastJobId: null,
+      lastJobProgress: null,
+      error: null,
+      loadEpisodes: vi.fn(),
+      setCurrentEpisode: vi.fn(),
+      updateEpisode: vi.fn(),
+      planEpisodes: vi.fn(),
+      buildNarrativeCausalChain: vi.fn(),
+      generateCoreExpression: vi.fn(),
+      generateCoreExpressionBatch: vi.fn(),
+      generateSceneList: vi.fn(),
+      createEpisode: vi.fn(),
+      deleteEpisode: vi.fn(),
+    } as ReturnType<typeof useEpisodeStore>);
+
+    mockApiWorkflowRunEpisodeCreationAgent.mockResolvedValueOnce({ id: 'job_ep_agent_1' } as never);
+    mockApiWaitForAIJob
+      .mockResolvedValueOnce({
+        id: 'job_ep_agent_1',
+        result: {
+          executionMode: 'agent',
+          fallbackUsed: false,
+          continued: true,
+          nextJobId: 'job_ep_agent_2',
+          stepSummaries: [
+            {
+              step: 'scene_refinement',
+              status: 'succeeded',
+              message: 'chunk 1',
+              chunk: 1,
+              sourceJobId: 'job_ep_agent_1',
+            },
+          ],
+          sceneChildTasks: [
+            {
+              sceneId: 's1',
+              order: 1,
+              jobId: 'job_scene_1',
+              status: 'running',
+            },
+          ],
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        id: 'job_ep_agent_2',
+        result: {
+          executionMode: 'agent',
+          fallbackUsed: false,
+          continued: false,
+          stepSummaries: [
+            {
+              step: 'sound_and_duration',
+              status: 'succeeded',
+              message: 'done',
+              chunk: 2,
+              sourceJobId: 'job_ep_agent_2',
+            },
+          ],
+          sceneChildTasks: [
+            {
+              sceneId: 's1',
+              order: 1,
+              jobId: 'job_scene_1',
+              status: 'succeeded',
+            },
+            {
+              sceneId: 's2',
+              order: 2,
+              jobId: 'job_scene_2',
+              status: 'failed',
+              error: 'scene child task failed',
+            },
+          ],
+        },
+      } as never);
+
+    render(<EpisodeWorkflow />);
+    await userEvent.click(screen.getByText('单集创作'));
+    await userEvent.click(screen.getByRole('button', { name: 'AI代理一键生成5步' }));
+
+    expect(mockApiWaitForAIJob).toHaveBeenNthCalledWith(
+      1,
+      'job_ep_agent_1',
+      expect.objectContaining({ timeoutMs: 30 * 60_000 }),
+    );
+    expect(mockApiWaitForAIJob).toHaveBeenNthCalledWith(
+      2,
+      'job_ep_agent_2',
+      expect.objectContaining({ timeoutMs: 30 * 60_000 }),
+    );
+    expect(await screen.findByText('chunk 1')).toBeInTheDocument();
+    expect(await screen.findByText('done')).toBeInTheDocument();
+    expect(screen.getByText('分片 #1')).toBeInTheDocument();
+    expect(screen.getAllByText('分片 #2').length).toBeGreaterThan(0);
+    expect(screen.getByText('分镜子任务')).toBeInTheDocument();
+    expect(screen.getByText(/job_scene_1/)).toBeInTheDocument();
+    expect(screen.getByText(/job_scene_2/)).toBeInTheDocument();
+    expect(screen.getByText('scene child task failed')).toBeInTheDocument();
   });
 
   it('场景锚点应支持复制 ZH/EN（仅复制纯提示词）', async () => {

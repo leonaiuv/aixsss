@@ -359,12 +359,14 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
     key: 'workflow.scene_script.system',
     title: '分场脚本生成（系统）',
     description:
-      '生效范围：API 模式（按集生成分场脚本）。\n影响产物：SceneScript JSON（含动作行/对白块/声音提示/转场）。\n下游影响：分镜列表、声音设计与时长估算。',
+      '生效范围：API 模式（按集生成分场脚本）。\n影响产物：EpisodeScript JSON（title/draft/scenes）。\n下游影响：分镜列表、声音设计与时长估算。',
     category: 'workflow',
     defaultContent: [
       '你是影视分场编剧。',
-      '请根据当前剧集与分镜概要，输出结构化分场脚本 JSON。',
-      '必须同时给出 soundCues 与 transitionOut。',
+      '请根据当前剧集与分镜概要，输出 EpisodeScriptSchema 对应 JSON。',
+      '严格字段：title(string), draft(string), scenes(array), generatedAt(string, optional)。',
+      'scenes 每项必须包含：order(从 1 开始的正整数), sceneHeading(string), summary(string)。',
+      '不得省略 order 或 sceneHeading。',
       '只输出 JSON，不要解释。',
     ].join('\n'),
   },
@@ -449,6 +451,8 @@ export const SYSTEM_PROMPT_DEFINITIONS: readonly SystemPromptDefinition[] = [
     category: 'workflow.fix',
     defaultContent: [
       '你是 JSON 修复器，只做最小改动让分场脚本 JSON 可解析并符合结构。',
+      '必须补齐 scenes[].order 与 scenes[].sceneHeading，且 order 为正整数。',
+      '目标结构：title/draft/scenes/generatedAt(optional)，其中 scenes[].summary 可以为空字符串。',
       '保留原有语义，不要新增剧情。',
       '只输出 JSON，不要解释。',
     ].join('\n'),

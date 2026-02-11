@@ -93,8 +93,8 @@ describe('runEpisodeCreationAgent', () => {
           { id: 's2', order: 2, status: 'pending', soundDesignJson: null, durationEstimateJson: null },
         ],
         [
-          { id: 's1', order: 1, status: 'completed', soundDesignJson: null, durationEstimateJson: null },
-          { id: 's2', order: 2, status: 'completed', soundDesignJson: null, durationEstimateJson: null },
+          { id: 's1', order: 1, status: 'completed', soundDesignJson: { cues: [] }, durationEstimateJson: { totalSec: 8 } },
+          { id: 's2', order: 2, status: 'completed', soundDesignJson: { cues: [] }, durationEstimateJson: { totalSec: 9 } },
         ],
       ];
 
@@ -139,6 +139,7 @@ describe('runEpisodeCreationAgent', () => {
       },
       aIJob: {
         findFirst: vi.fn().mockResolvedValue(input?.runningConflict ? { id: 'job_other' } : null),
+        findMany: vi.fn().mockResolvedValue([]),
       },
     };
   }
@@ -152,6 +153,7 @@ describe('runEpisodeCreationAgent', () => {
       episodeId: 'e1',
       aiProfileId: 'a1',
       apiKeySecret: 'secret',
+      currentJobId: 'job_ep_agent_1',
       updateProgress: async () => {},
     });
 
@@ -163,14 +165,101 @@ describe('runEpisodeCreationAgent', () => {
     expect(refineSceneAll).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        options: { includeSoundDesign: false, includeDurationEstimate: false },
+        options: { includeSoundDesign: true, includeDurationEstimate: true },
       }),
     );
-    expect(generateSoundDesign).toHaveBeenCalledTimes(2);
-    expect(estimateDuration).toHaveBeenCalledTimes(2);
+    expect(generateSoundDesign).not.toHaveBeenCalled();
+    expect(estimateDuration).not.toHaveBeenCalled();
     expect(res.executionMode).toBe('agent');
     expect(res.fallbackUsed).toBe(false);
     expect(res.stepSummaries).toHaveLength(5);
+    expect(res.stepSummaries.every((s) => s.sourceJobId === 'job_ep_agent_1')).toBe(true);
+  });
+
+  it('should orchestrate scene child jobs when enqueueSceneTask is provided', async () => {
+    const prisma = createPrismaMock({
+      sceneFindManySequence: [
+        [],
+        [
+          { id: 's1', order: 1, status: 'pending', soundDesignJson: null, durationEstimateJson: null },
+          { id: 's2', order: 2, status: 'pending', soundDesignJson: null, durationEstimateJson: null },
+        ],
+        [
+          { id: 's1', order: 1, status: 'completed', soundDesignJson: { cues: [] }, durationEstimateJson: { totalSec: 8 } },
+          { id: 's2', order: 2, status: 'completed', soundDesignJson: { cues: [] }, durationEstimateJson: { totalSec: 9 } },
+        ],
+      ],
+    });
+    const enqueueSceneTask = vi
+      .fn()
+      .mockResolvedValueOnce({ jobId: 'job_scene_1' })
+      .mockResolvedValueOnce({ jobId: 'job_scene_2' });
+    (
+      prisma.aIJob.findMany as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValue([{ id: 'job_scene_1', status: 'succeeded' }, { id: 'job_scene_2', status: 'succeeded' }]);
+
+    const res = await runEpisodeCreationAgent({
+      prisma: prisma as never,
+      teamId: 't1',
+      projectId: 'p1',
+      episodeId: 'e1',
+      aiProfileId: 'a1',
+      apiKeySecret: 'secret',
+      currentJobId: 'job_ep_agent_1',
+      enqueueSceneTask,
+      updateProgress: async () => {},
+    });
+
+    expect(enqueueSceneTask).toHaveBeenCalledTimes(2);
+    expect(refineSceneAll).not.toHaveBeenCalled();
+    expect(generateSoundDesign).not.toHaveBeenCalled();
+    expect(estimateDuration).not.toHaveBeenCalled();
+    expect(res.sceneChildTasks).toMatchObject([
+      { sceneId: 's1', order: 1, jobId: 'job_scene_1', status: 'succeeded' },
+      { sceneId: 's2', order: 2, jobId: 'job_scene_2', status: 'succeeded' },
+    ]);
+    expect(
+      res.stepSummaries.some(
+        (s) => s.step === 'sound_and_duration' && s.status === 'skipped',
+      ),
+    ).toBe(true);
+  });
+
+  it('should continue with next job when remaining scenes exceed current slice', async () => {
+    const prisma = createPrismaMock({
+      sceneFindManySequence: [
+        [],
+        [
+          { id: 's1', order: 1, status: 'pending', soundDesignJson: null, durationEstimateJson: null },
+          { id: 's2', order: 2, status: 'pending', soundDesignJson: null, durationEstimateJson: null },
+          { id: 's3', order: 3, status: 'pending', soundDesignJson: null, durationEstimateJson: null },
+        ],
+        [
+          { id: 's1', order: 1, status: 'completed', soundDesignJson: { cues: [] }, durationEstimateJson: { totalSec: 8 } },
+          { id: 's2', order: 2, status: 'completed', soundDesignJson: { cues: [] }, durationEstimateJson: { totalSec: 7 } },
+          { id: 's3', order: 3, status: 'pending', soundDesignJson: null, durationEstimateJson: null },
+        ],
+      ],
+    });
+
+    const enqueueContinuation = vi.fn().mockResolvedValue('job_next_1');
+    const res = await runEpisodeCreationAgent({
+      prisma: prisma as never,
+      teamId: 't1',
+      projectId: 'p1',
+      episodeId: 'e1',
+      aiProfileId: 'a1',
+      apiKeySecret: 'secret',
+      updateProgress: async () => {},
+      enqueueContinuation,
+      sceneChunkSize: 2,
+      sceneConcurrency: 2,
+    });
+
+    expect(refineSceneAll).toHaveBeenCalledTimes(2);
+    expect(enqueueContinuation).toHaveBeenCalledTimes(1);
+    expect(res.continued).toBe(true);
+    expect(res.nextJobId).toBe('job_next_1');
   });
 
   it('should skip steps that are already completed and avoid unnecessary writes', async () => {

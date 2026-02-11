@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAI-img × DMXAPI 接入"
+  short_description: "通过 DMXAPI 接入 OpenAI-img：文生图/编辑/参数矩阵"
+  default_prompt: "使用 $openai-img-skill 规划并接入 DMXAPI 的 OpenAI-img 模型，输出可直接落地的参数、调用代码与异常处理。"

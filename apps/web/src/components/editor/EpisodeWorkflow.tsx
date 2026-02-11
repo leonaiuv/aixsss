@@ -13,7 +13,7 @@ import {
   apiReorderEpisodeScenes,
   apiUpdateEpisodeScene,
 } from '@/lib/api/episodeScenes';
-import { apiWaitForAIJob } from '@/lib/api/aiJobs';
+import { apiCancelAIJob, apiWaitForAIJob } from '@/lib/api/aiJobs';
 import {
   apiWorkflowGenerateKeyframeImages,
   apiWorkflowGenerateSceneVideo,
@@ -93,6 +93,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ToastAction } from '@/components/ui/toast';
 import { WorkflowStepper } from './WorkflowStepper';
 import { BasicSettings } from './BasicSettings';
 import { SceneSortable } from './SceneSortable';
@@ -103,6 +104,7 @@ import {
   WorkflowWorkbench,
   type WorkflowAgentRunSummary,
   type WorkflowAgentStepSummary,
+  type WorkflowSceneChildTaskSummary,
 } from './WorkflowWorkbench';
 import { CharacterRelationshipGraph } from './CharacterRelationshipGraph';
 import { EmotionArcChart } from './EmotionArcChart';
@@ -188,6 +190,9 @@ type WorkflowJobResultLike = {
   executionMode?: unknown;
   fallbackUsed?: unknown;
   stepSummaries?: unknown;
+  sceneChildTasks?: unknown;
+  continued?: unknown;
+  nextJobId?: unknown;
 };
 
 type StoryboardJobState =
@@ -380,12 +385,20 @@ function normalizeSupervisorStepSummaries(value: unknown): WorkflowAgentStepSumm
     const executionModeRaw = raw.executionMode;
     const executionMode =
       executionModeRaw === 'agent' || executionModeRaw === 'legacy' ? executionModeRaw : undefined;
+    const chunk = typeof raw.chunk === 'number' && Number.isFinite(raw.chunk) && raw.chunk > 0
+      ? Math.floor(raw.chunk)
+      : undefined;
+    const sourceJobId = typeof raw.sourceJobId === 'string' && raw.sourceJobId.trim().length > 0
+      ? raw.sourceJobId.trim()
+      : undefined;
     out.push({
       step,
       status,
       message: safeText(raw.message, 400) || '-',
       ...(executionMode ? { executionMode } : {}),
       fallbackUsed: raw.fallbackUsed === true,
+      ...(typeof chunk === 'number' ? { chunk } : {}),
+      ...(sourceJobId ? { sourceJobId } : {}),
     });
   }
   return out;
@@ -402,8 +415,69 @@ function normalizeSupervisorRunSummary(value: unknown): WorkflowAgentRunSummary 
     executionMode,
     fallbackUsed: raw.fallbackUsed === true,
     stepSummaries: normalizeSupervisorStepSummaries(raw.stepSummaries),
+    sceneChildTasks: normalizeSceneChildTasks(raw.sceneChildTasks),
     finishedAt: new Date().toISOString(),
   };
+}
+
+function normalizeSceneChildTasks(value: unknown): WorkflowSceneChildTaskSummary[] {
+  if (!Array.isArray(value)) return [];
+  const out: WorkflowSceneChildTaskSummary[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as Record<string, unknown>;
+    const sceneId = typeof raw.sceneId === 'string' ? raw.sceneId.trim() : '';
+    const jobId = typeof raw.jobId === 'string' ? raw.jobId.trim() : '';
+    const order = typeof raw.order === 'number' && Number.isFinite(raw.order) ? Math.floor(raw.order) : null;
+    const statusRaw = raw.status;
+    const status =
+      statusRaw === 'queued' ||
+      statusRaw === 'running' ||
+      statusRaw === 'succeeded' ||
+      statusRaw === 'failed' ||
+      statusRaw === 'cancelled' ||
+      statusRaw === 'unknown'
+        ? statusRaw
+        : 'unknown';
+    if (!sceneId || !jobId || typeof order !== 'number' || order < 1) continue;
+    const error = typeof raw.error === 'string' ? safeText(raw.error, 220) : '';
+    const chunk =
+      typeof raw.chunk === 'number' && Number.isFinite(raw.chunk) && raw.chunk > 0
+        ? Math.floor(raw.chunk)
+        : undefined;
+    out.push({
+      sceneId,
+      order,
+      jobId,
+      status,
+      ...(error ? { error } : {}),
+      ...(typeof chunk === 'number' ? { chunk } : {}),
+    });
+  }
+  return out;
+}
+
+function parseConflictJobInfo(errorMessage: string): { type: string; jobId: string } | null {
+  const m = errorMessage.match(/\(([a-z0-9_]+):([A-Za-z0-9_-]+)\)/i);
+  if (!m) return null;
+  const type = m[1]?.trim();
+  const jobId = m[2]?.trim();
+  if (!type || !jobId) return null;
+  return { type, jobId };
+}
+
+function getSceneChildTaskStatusLabel(
+  status: WorkflowSceneChildTaskSummary['status'],
+): string {
+  const map: Record<WorkflowSceneChildTaskSummary['status'], string> = {
+    queued: '排队中',
+    running: '执行中',
+    succeeded: '成功',
+    failed: '失败',
+    cancelled: '已取消',
+    unknown: '未知',
+  };
+  return map[status] ?? '未知';
 }
 
 function getEpisodeStateLabel(state: Episode['workflowState']): string {
@@ -569,6 +643,10 @@ export function EpisodeWorkflow() {
   const [isRunningEpisodeCreationAgent, setIsRunningEpisodeCreationAgent] = useState(false);
   const [episodeCreationRunSummary, setEpisodeCreationRunSummary] =
     useState<WorkflowAgentRunSummary | null>(null);
+  const [episodeCreationRunningJobId, setEpisodeCreationRunningJobId] = useState<string | null>(
+    null,
+  );
+  const episodeCreationAbortRef = useRef<AbortController | null>(null);
   const [selectedExpansionCandidates, setSelectedExpansionCandidates] = useState<string[]>([]);
   const [isGeneratingSoundSceneId, setIsGeneratingSoundSceneId] = useState<string | null>(null);
   const [isEstimatingDurationSceneId, setIsEstimatingDurationSceneId] = useState<string | null>(
@@ -1172,6 +1250,31 @@ export function EpisodeWorkflow() {
     }
   };
 
+  const handleCancelEpisodeCreationAgent = async (jobId?: string): Promise<boolean> => {
+    const targetJobId = jobId || episodeCreationRunningJobId;
+    const controller = episodeCreationAbortRef.current;
+    if (controller && !controller.signal.aborted) {
+      controller.abort();
+      return true;
+    }
+    if (!targetJobId) return false;
+    try {
+      await apiCancelAIJob(targetJobId);
+      toast({ title: '已取消任务', description: `Job ${targetJobId} 已取消。` });
+      return true;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toast({ title: '取消失败', description: detail, variant: 'destructive' });
+      return false;
+    }
+  };
+
+  const handleCancelAndRetryEpisodeCreationAgent = async (conflictJobId: string) => {
+    const cancelled = await handleCancelEpisodeCreationAgent(conflictJobId);
+    if (!cancelled) return;
+    await handleRunEpisodeCreationAgent();
+  };
+
   const handleRunEpisodeCreationAgent = async () => {
     if (!isApiMode()) {
       toast({ title: '当前模式不支持', description: '单集创作 Agent 仅在 API 模式可用。' });
@@ -1179,6 +1282,8 @@ export function EpisodeWorkflow() {
     }
     if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
     setIsRunningEpisodeCreationAgent(true);
+    const abortController = new AbortController();
+    episodeCreationAbortRef.current = abortController;
 
     const logId = logAICall('custom', {
       skillName: 'workflow:run_episode_creation_agent',
@@ -1214,29 +1319,96 @@ export function EpisodeWorkflow() {
         episodeId: currentEpisode.id,
         aiProfileId,
       });
-      const finished = await apiWaitForAIJob(job.id, {
-        onProgress: (progress) => {
-          const next = normalizeJobProgress(progress);
-          if (typeof next.pct === 'number') {
-            updateLogProgress(logId, next.pct, next.message ?? undefined);
+      let currentJobId: string | null = job.id;
+      let executionMode: 'agent' | 'legacy' = 'legacy';
+      let fallbackUsed = false;
+      const mergedStepSummaries: WorkflowAgentStepSummary[] = [];
+      const mergedSceneChildTasks = new Map<string, WorkflowSceneChildTaskSummary>();
+      const chainResults: WorkflowJobResultLike[] = [];
+
+      for (let hop = 0; hop < 120 && currentJobId; hop += 1) {
+        setEpisodeCreationRunningJobId(currentJobId);
+        const finished = await apiWaitForAIJob(currentJobId, {
+          signal: abortController.signal,
+          timeoutMs: 30 * 60_000,
+          onProgress: (progress) => {
+            const next = normalizeJobProgress(progress);
+            if (typeof next.pct === 'number') {
+              updateLogProgress(logId, next.pct, next.message ?? undefined);
+            }
+          },
+        });
+
+        const result = (finished.result ?? null) as WorkflowJobResultLike | null;
+        if (result) {
+          chainResults.push(result);
+          if (result.executionMode === 'agent' || result.executionMode === 'legacy') {
+            executionMode = result.executionMode;
           }
-        },
+          if (result.fallbackUsed === true) {
+            fallbackUsed = true;
+          }
+          const nextStepSummaries = normalizeSupervisorStepSummaries(result.stepSummaries);
+          if (nextStepSummaries.length > 0) {
+            mergedStepSummaries.push(
+              ...nextStepSummaries.map((step) => ({
+                ...step,
+                chunk:
+                  typeof step.chunk === 'number' && Number.isFinite(step.chunk)
+                    ? step.chunk
+                    : hop + 1,
+                ...(step.sourceJobId
+                  ? { sourceJobId: step.sourceJobId }
+                  : currentJobId
+                    ? { sourceJobId: currentJobId }
+                    : {}),
+              })),
+            );
+          }
+          const nextSceneChildTasks = normalizeSceneChildTasks(result.sceneChildTasks);
+          if (nextSceneChildTasks.length > 0) {
+            for (const task of nextSceneChildTasks) {
+              const key = `${task.sceneId}:${task.jobId}`;
+              mergedSceneChildTasks.set(key, {
+                ...task,
+                chunk:
+                  typeof task.chunk === 'number' && Number.isFinite(task.chunk)
+                    ? task.chunk
+                    : hop + 1,
+              });
+            }
+          }
+        }
+
+        const nextJobIdRaw = result?.nextJobId;
+        const hasContinuation =
+          result?.continued === true &&
+          typeof nextJobIdRaw === 'string' &&
+          nextJobIdRaw.trim().length > 0;
+        if (!hasContinuation) {
+          currentJobId = null;
+          break;
+        }
+        currentJobId = nextJobIdRaw;
+      }
+
+      updateLogWithResponse(logId, {
+        content: safeJsonStringify({
+          executionMode,
+          fallbackUsed,
+          chunks: chainResults,
+        }),
       });
 
-      const result = (finished.result ?? null) as WorkflowJobResultLike | null;
-      updateLogWithResponse(logId, { content: safeJsonStringify(result) });
-
-      const executionMode =
-        result?.executionMode === 'agent' || result?.executionMode === 'legacy'
-          ? result.executionMode
-          : 'legacy';
-      const fallbackUsed = result?.fallbackUsed === true;
       const normalizedSummary =
-        normalizeSupervisorRunSummary(result) ??
         ({
           executionMode,
           fallbackUsed,
-          stepSummaries: [],
+          stepSummaries: mergedStepSummaries,
+          sceneChildTasks: Array.from(mergedSceneChildTasks.values()).sort((a, b) => {
+            if (a.order !== b.order) return a.order - b.order;
+            return a.jobId.localeCompare(b.jobId);
+          }),
           finishedAt: new Date().toISOString(),
         } satisfies WorkflowAgentRunSummary);
       setEpisodeCreationRunSummary(normalizedSummary);
@@ -1251,9 +1423,34 @@ export function EpisodeWorkflow() {
       });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      updateLogWithError(logId, detail);
-      toast({ title: '单集创作 Agent 失败', description: detail, variant: 'destructive' });
+      if (error instanceof Error && error.name === 'AbortError') {
+        updateLogWithCancelled(logId);
+        toast({ title: '已取消', description: '单集创作 Agent 已取消。' });
+      } else {
+        updateLogWithError(logId, detail);
+        const conflict = parseConflictJobInfo(detail);
+        if (conflict) {
+          toast({
+            title: '已有任务进行中',
+            description: `检测到冲突任务 ${conflict.jobId}，可取消后重试。`,
+            action: (
+              <ToastAction
+                altText="取消并重试"
+                onClick={() => {
+                  void handleCancelAndRetryEpisodeCreationAgent(conflict.jobId);
+                }}
+              >
+                取消并重试
+              </ToastAction>
+            ),
+          });
+        } else {
+          toast({ title: '单集创作 Agent 失败', description: detail, variant: 'destructive' });
+        }
+      }
     } finally {
+      episodeCreationAbortRef.current = null;
+      setEpisodeCreationRunningJobId(null);
       setIsRunningEpisodeCreationAgent(false);
     }
   };
@@ -3630,6 +3827,18 @@ ${safeJsonStringify(ep.coreExpression)}
                   )}
                   AI代理一键生成5步
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void handleCancelEpisodeCreationAgent();
+                  }}
+                  disabled={!isRunningEpisodeCreationAgent && !episodeCreationRunningJobId}
+                  className="gap-2 w-full sm:w-auto"
+                  title="取消当前单集创作 Agent 任务"
+                >
+                  取消当前任务
+                </Button>
               </div>
             </div>
           </div>
@@ -3697,10 +3906,16 @@ ${safeJsonStringify(ep.coreExpression)}
                           key={`${step.step}_${idx}`}
                           className="flex items-center justify-between rounded-md border bg-background px-3 py-2"
                         >
-                          <div className="text-sm">
-                            {EPISODE_AGENT_STEP_LABELS[step.step] ?? step.step}
+                          <div className="min-w-0">
+                            <div className="text-sm">
+                              {EPISODE_AGENT_STEP_LABELS[step.step] ?? step.step}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">{step.message}</div>
                           </div>
                           <div className="flex items-center gap-2 text-xs">
+                            {typeof step.chunk === 'number' ? (
+                              <Badge variant="outline">分片 #{step.chunk}</Badge>
+                            ) : null}
                             {step.executionMode ? (
                               <Badge variant="outline">
                                 {step.executionMode === 'agent' ? 'agent' : 'legacy'}
@@ -3727,497 +3942,543 @@ ${safeJsonStringify(ep.coreExpression)}
                       ))}
                     </div>
                   ) : null}
+                  {episodeCreationRunSummary?.sceneChildTasks?.length ? (
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-muted-foreground">分镜子任务</div>
+                      <div className="space-y-2 max-h-48 overflow-auto pr-1">
+                        {episodeCreationRunSummary.sceneChildTasks.map((task) => (
+                          <div
+                            key={`${task.sceneId}:${task.jobId}`}
+                            className="rounded-md border bg-background px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0 text-sm truncate">
+                                分镜 #{task.order} · {task.jobId}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs">
+                                {typeof task.chunk === 'number' ? (
+                                  <Badge variant="outline">分片 #{task.chunk}</Badge>
+                                ) : null}
+                                <Badge
+                                  variant={
+                                    task.status === 'succeeded'
+                                      ? 'default'
+                                      : task.status === 'queued' || task.status === 'running'
+                                        ? 'secondary'
+                                        : task.status === 'cancelled'
+                                          ? 'outline'
+                                          : 'destructive'
+                                  }
+                                >
+                                  {getSceneChildTaskStatusLabel(task.status)}
+                                </Badge>
+                              </div>
+                            </div>
+                            {task.error ? (
+                              <div className="mt-1 text-xs text-destructive truncate">{task.error}</div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </Card>
             )}
             <Tabs defaultValue="core" className="w-full">
-            <TabsList className="grid w-full grid-cols-5 mb-6">
-              <TabsTrigger value="core">1. 核心表达</TabsTrigger>
-              <TabsTrigger value="script">2. 分场脚本</TabsTrigger>
-              <TabsTrigger value="scenes">3. 分镜列表</TabsTrigger>
-              <TabsTrigger value="refine">4. 分镜细化</TabsTrigger>
-              <TabsTrigger value="sound">5. 声音与时长</TabsTrigger>
-            </TabsList>
+              <TabsList className="grid w-full grid-cols-5 mb-6">
+                <TabsTrigger value="core">1. 核心表达</TabsTrigger>
+                <TabsTrigger value="script">2. 分场脚本</TabsTrigger>
+                <TabsTrigger value="scenes">3. 分镜列表</TabsTrigger>
+                <TabsTrigger value="refine">4. 分镜细化</TabsTrigger>
+                <TabsTrigger value="sound">5. 声音与时长</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="core" className="space-y-4 focus-visible:outline-none">
-              <Card className="p-6">
-                <div className="flex items-start justify-between gap-4 mb-6">
-                  <div className="space-y-1">
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <Brain className="w-5 h-5 text-primary" />
-                      核心表达 (Core Expression)
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      定义本集的主题/情绪曲线与核心冲突，是生成分镜的灵魂。
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleGenerateCoreExpression}
-                      disabled={!aiProfileId || isRunningWorkflow}
-                      className="gap-2 shadow-sm"
-                    >
-                      {isRunningWorkflow ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      <span>AI 生成</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setCoreExpressionDialogOpen(true)}
-                      disabled={!currentEpisode}
-                    >
-                      编辑 JSON
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="bg-muted/30 rounded-lg border p-4 min-h-[200px]">
-                  {currentEpisode?.coreExpression ? (
-                    <JsonViewer value={currentEpisode.coreExpression} />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full py-10 text-muted-foreground">
-                      <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-3">
-                        <Brain className="w-6 h-6 opacity-20" />
-                      </div>
-                      <p>尚未生成核心表达。</p>
-                      <p className="text-xs mt-1">请点击右上角「AI 生成」或手动编辑。</p>
-                    </div>
-                  )}
-                </div>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="script" className="space-y-4 focus-visible:outline-none">
-              <div className="grid gap-4 xl:grid-cols-2">
-                <Card className="p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-primary" />
-                        分场脚本 (Scene Script)
-                      </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        从核心表达扩写为可编辑分场脚本，作为分镜列表前置层。
-                      </p>
-                    </div>
-                    <Button
-                      onClick={handleGenerateSceneScript}
-                      disabled={!aiProfileId || isGeneratingSceneScript}
-                      className="gap-2"
-                    >
-                      {isGeneratingSceneScript ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      AI 生成
-                    </Button>
-                  </div>
-                  <SceneScriptEditor
-                    value={(currentEpisode?.sceneScriptDraft as SceneScriptBlock[] | null) ?? []}
-                    onSave={handleSaveSceneScriptDraft}
-                    disabled={!currentEpisode}
-                  />
-                </Card>
-
-                <Card className="p-6 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+              <TabsContent value="core" className="space-y-4 focus-visible:outline-none">
+                <Card className="p-6">
+                  <div className="flex items-start justify-between gap-4 mb-6">
+                    <div className="space-y-1">
                       <h3 className="text-lg font-semibold flex items-center gap-2">
                         <Brain className="w-5 h-5 text-primary" />
-                        情绪弧线 (Emotion Arc)
+                        核心表达 (Core Expression)
                       </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        生成项目级情绪弧，辅助节奏与冲突强度把控。
+                      <p className="text-sm text-muted-foreground">
+                        定义本集的主题/情绪曲线与核心冲突，是生成分镜的灵魂。
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      onClick={handleGenerateEmotionArc}
-                      disabled={!aiProfileId || isGeneratingEmotionArc}
-                    >
-                      {isGeneratingEmotionArc ? '生成中...' : 'AI 生成'}
-                    </Button>
-                  </div>
-                  <EmotionArcChart points={emotionArc as EmotionArcPoint[]} />
-                </Card>
-              </div>
-
-              <Card className="p-6 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <Network className="w-5 h-5 text-primary" />
-                      角色关系图谱 (Character Relationships)
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      关系表为主存，图谱用于辅助检查角色冲突与协作关系。
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={handleGenerateCharacterRelationships}
-                    disabled={!aiProfileId || isGeneratingRelationships}
-                  >
-                    {isGeneratingRelationships ? '生成中...' : 'AI 生成'}
-                  </Button>
-                </div>
-                <CharacterRelationshipGraph
-                  characters={projectCharacters}
-                  relationships={characterRelationships}
-                />
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="scenes" className="space-y-4 focus-visible:outline-none">
-              <Card className="p-6">
-                <div className="flex flex-col md:flex-row items-start justify-between gap-6 mb-6">
-                  <div className="space-y-1">
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <LayoutGrid className="w-5 h-5 text-primary" />
-                      分镜列表 (Storyboard)
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      生成 8-12 条分镜节点，覆盖本集的起承转合。
-                    </p>
-                  </div>
-                  <div className="w-full md:w-auto flex flex-col gap-3 min-w-[300px]">
                     <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        min={6}
-                        max={24}
-                        value={sceneCountHint}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setSceneCountHint(v ? Number(v) : '');
-                        }}
-                        placeholder="数量 (默认12)"
-                        className="w-32"
-                      />
                       <Button
-                        onClick={handleGenerateSceneList}
-                        disabled={!canGenerateSceneList || isRunningWorkflow}
-                        className="flex-1 gap-2 shadow-sm"
+                        onClick={handleGenerateCoreExpression}
+                        disabled={!aiProfileId || isRunningWorkflow}
+                        className="gap-2 shadow-sm"
                       >
                         {isRunningWorkflow ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Sparkles className="h-4 w-4" />
                         )}
-                        <span>AI 生成列表</span>
+                        <span>AI 生成</span>
                       </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setCoreExpressionDialogOpen(true)}
+                        disabled={!currentEpisode}
+                      >
+                        编辑 JSON
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="bg-muted/30 rounded-lg border p-4 min-h-[200px]">
+                    {currentEpisode?.coreExpression ? (
+                      <JsonViewer value={currentEpisode.coreExpression} />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full py-10 text-muted-foreground">
+                        <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-3">
+                          <Brain className="w-6 h-6 opacity-20" />
+                        </div>
+                        <p>尚未生成核心表达。</p>
+                        <p className="text-xs mt-1">请点击右上角「AI 生成」或手动编辑。</p>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="script" className="space-y-4 focus-visible:outline-none">
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <Card className="p-6 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <FileText className="w-5 h-5 text-primary" />
+                          分场脚本 (Scene Script)
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          从核心表达扩写为可编辑分场脚本，作为分镜列表前置层。
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handleGenerateSceneScript}
+                        disabled={!aiProfileId || isGeneratingSceneScript}
+                        className="gap-2"
+                      >
+                        {isGeneratingSceneScript ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                        AI 生成
+                      </Button>
+                    </div>
+                    <SceneScriptEditor
+                      value={(currentEpisode?.sceneScriptDraft as SceneScriptBlock[] | null) ?? []}
+                      onSave={handleSaveSceneScriptDraft}
+                      disabled={!currentEpisode}
+                    />
+                  </Card>
+
+                  <Card className="p-6 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Brain className="w-5 h-5 text-primary" />
+                          情绪弧线 (Emotion Arc)
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          生成项目级情绪弧，辅助节奏与冲突强度把控。
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={handleGenerateEmotionArc}
+                        disabled={!aiProfileId || isGeneratingEmotionArc}
+                      >
+                        {isGeneratingEmotionArc ? '生成中...' : 'AI 生成'}
+                      </Button>
+                    </div>
+                    <EmotionArcChart points={emotionArc as EmotionArcPoint[]} />
+                  </Card>
+                </div>
+
+                <Card className="p-6 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Network className="w-5 h-5 text-primary" />
+                        角色关系图谱 (Character Relationships)
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        关系表为主存，图谱用于辅助检查角色冲突与协作关系。
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={handleGenerateCharacterRelationships}
+                      disabled={!aiProfileId || isGeneratingRelationships}
+                    >
+                      {isGeneratingRelationships ? '生成中...' : 'AI 生成'}
+                    </Button>
+                  </div>
+                  <CharacterRelationshipGraph
+                    characters={projectCharacters}
+                    relationships={characterRelationships}
+                  />
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="scenes" className="space-y-4 focus-visible:outline-none">
+                <Card className="p-6">
+                  <div className="flex flex-col md:flex-row items-start justify-between gap-6 mb-6">
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <LayoutGrid className="w-5 h-5 text-primary" />
+                        分镜列表 (Storyboard)
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        生成 8-12 条分镜节点，覆盖本集的起承转合。
+                      </p>
+                    </div>
+                    <div className="w-full md:w-auto flex flex-col gap-3 min-w-[300px]">
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min={6}
+                          max={24}
+                          value={sceneCountHint}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setSceneCountHint(v ? Number(v) : '');
+                          }}
+                          placeholder="数量 (默认12)"
+                          className="w-32"
+                        />
+                        <Button
+                          onClick={handleGenerateSceneList}
+                          disabled={!canGenerateSceneList || isRunningWorkflow}
+                          className="flex-1 gap-2 shadow-sm"
+                        >
+                          {isRunningWorkflow ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                          <span>AI 生成列表</span>
+                        </Button>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            currentEpisode?.id &&
+                            currentProject?.id &&
+                            loadScenes(currentProject.id, currentEpisode.id)
+                          }
+                          disabled={!currentEpisode?.id || isScenesLoading}
+                          className="flex-1"
+                        >
+                          <RefreshCw className="h-3 w-3 mr-2" />
+                          刷新
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSortDialogOpen(true)}
+                          disabled={scenes.length < 2}
+                          className="flex-1"
+                        >
+                          <ArrowRight className="h-3 w-3 mr-2 rotate-90" />
+                          排序
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator className="mb-6" />
+
+                  {scenesError ? (
+                    <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm flex items-center gap-2 mb-4">
+                      <AlertCircle className="w-4 h-4" />
+                      {scenesError}
+                    </div>
+                  ) : null}
+
+                  {isScenesLoading ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                      <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
+                      <span>正在加载分镜数据...</span>
+                    </div>
+                  ) : scenes.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      暂无分镜数据，请先生成。
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1">
+                      {scenes
+                        .slice()
+                        .sort((a, b) => a.order - b.order)
+                        .map((scene) => (
+                          <div
+                            key={scene.id}
+                            className="group flex flex-col md:flex-row items-start gap-4 rounded-lg border p-4 transition-all hover:bg-muted/30 hover:border-primary/30"
+                          >
+                            <div className="flex items-center gap-3 md:min-w-[120px]">
+                              <Badge
+                                variant="outline"
+                                className="h-6 w-6 rounded-full flex items-center justify-center p-0 border-primary/50 text-primary"
+                              >
+                                {scene.order}
+                              </Badge>
+                              {(() => {
+                                const statusStyle = getSceneStatusStyle(scene.status);
+                                return (
+                                  <Badge
+                                    variant="secondary"
+                                    className={cn('text-[10px] px-1.5', statusStyle.className)}
+                                  >
+                                    {statusStyle.label}
+                                  </Badge>
+                                );
+                              })()}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm leading-relaxed text-foreground/90">
+                                {scene.summary}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setRefineDialogOpen(true);
+                                  setSelectedSceneId(scene.id);
+                                }}
+                              >
+                                详情
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="refine" className="space-y-4 focus-visible:outline-none">
+                <Card className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-primary" />
+                        分镜细化 (Refinement)
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        针对每个分镜，生成具体的画面描述、镜头语言与对白。
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          currentEpisode?.id &&
-                          currentProject?.id &&
-                          loadScenes(currentProject.id, currentEpisode.id)
-                        }
-                        disabled={!currentEpisode?.id || isScenesLoading}
-                        className="flex-1"
+                        onClick={() => void handleRefineAllScenes()}
+                        className="gap-2"
+                        disabled={!aiProfileId || refineAllJobRunning || isBatchBlocked}
                       >
-                        <RefreshCw className="h-3 w-3 mr-2" />
-                        刷新
+                        <Sparkles className="w-4 h-4" />
+                        <span>{refineAllJobRunning ? '全部细化中' : '全部细化'}</span>
                       </Button>
+                      {refineAllFailedScenes.length > 0 ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => void handleRetryFailedRefineAll()}
+                          disabled={refineAllJobRunning || isBatchBlocked}
+                        >
+                          重试失败项 ({refineAllFailedScenes.length})
+                        </Button>
+                      ) : null}
                       <Button
                         variant="outline"
-                        size="sm"
-                        onClick={() => setSortDialogOpen(true)}
-                        disabled={scenes.length < 2}
-                        className="flex-1"
+                        onClick={() => setBatchRefineDialogOpen(true)}
+                        className="gap-2"
                       >
-                        <ArrowRight className="h-3 w-3 mr-2 rotate-90" />
-                        排序
+                        <Layers className="w-4 h-4" />
+                        批量任务面板
                       </Button>
                     </div>
                   </div>
-                </div>
 
-                <Separator className="mb-6" />
-
-                {scenesError ? (
-                  <div className="p-4 rounded-md bg-destructive/10 text-destructive text-sm flex items-center gap-2 mb-4">
-                    <AlertCircle className="w-4 h-4" />
-                    {scenesError}
-                  </div>
-                ) : null}
-
-                {isScenesLoading ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-                    <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
-                    <span>正在加载分镜数据...</span>
-                  </div>
-                ) : scenes.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
-                    暂无分镜数据，请先生成。
-                  </div>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1">
-                    {scenes
-                      .slice()
-                      .sort((a, b) => a.order - b.order)
-                      .map((scene) => (
-                        <div
-                          key={scene.id}
-                          className="group flex flex-col md:flex-row items-start gap-4 rounded-lg border p-4 transition-all hover:bg-muted/30 hover:border-primary/30"
-                        >
-                          <div className="flex items-center gap-3 md:min-w-[120px]">
-                            <Badge
-                              variant="outline"
-                              className="h-6 w-6 rounded-full flex items-center justify-center p-0 border-primary/50 text-primary"
-                            >
-                              {scene.order}
-                            </Badge>
-                            {(() => {
-                              const statusStyle = getSceneStatusStyle(scene.status);
+                  {refineAllProgress ? (
+                    <div className="mb-6 rounded-lg border bg-muted/30 p-4 space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {refineAllProgress.message || '全部细化进行中...'}
+                        </span>
+                        <span>
+                          {refineAllProgress.totalScenes
+                            ? `${Math.min(refineAllProgress.completedSceneIds.length + refineAllProgress.failedScenes.length, refineAllProgress.totalScenes)}/${refineAllProgress.totalScenes}`
+                            : '-'}
+                        </span>
+                      </div>
+                      <Progress
+                        value={
+                          typeof refineAllProgress.pct === 'number' ? refineAllProgress.pct : 0
+                        }
+                      />
+                      {refineAllFailedScenes.length > 0 ? (
+                        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive space-y-2">
+                          <div className="font-medium">失败列表</div>
+                          <div className="space-y-1 max-h-40 overflow-auto pr-1">
+                            {refineAllFailedScenes.map((scene) => {
+                              const sceneMeta = scenes.find((item) => item.id === scene.sceneId);
+                              const orderLabel = scene.order ?? sceneMeta?.order;
                               return (
-                                <Badge
-                                  variant="secondary"
-                                  className={cn('text-[10px] px-1.5', statusStyle.className)}
-                                >
-                                  {statusStyle.label}
-                                </Badge>
+                                <div key={scene.sceneId} className="flex flex-col gap-0.5">
+                                  <span>
+                                    {orderLabel ? `#${orderLabel}` : '分镜'}{' '}
+                                    {sceneMeta?.summary || scene.sceneId}
+                                  </span>
+                                  {scene.error ? <span>原因：{scene.error}</span> : null}
+                                </div>
                               );
-                            })()}
+                            })}
                           </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm leading-relaxed text-foreground/90">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {scenes.length === 0 ? (
+                      <div className="col-span-full text-center py-10 text-muted-foreground">
+                        暂无分镜，请先生成分镜列表。
+                      </div>
+                    ) : (
+                      scenes
+                        .slice()
+                        .sort((a, b) => a.order - b.order)
+                        .map((scene) => (
+                          <div
+                            key={scene.id}
+                            className={cn(
+                              'relative rounded-lg border p-4 transition-all hover:shadow-md hover:border-primary/50 flex flex-col gap-3',
+                              scene.status === 'completed'
+                                ? 'bg-emerald-50/30 dark:bg-emerald-900/10'
+                                : 'bg-card',
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline">#{scene.order}</Badge>
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {getSceneStatusLabel(scene.status)}
+                                </Badge>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  setRefineDialogOpen(true);
+                                  setSelectedSceneId(scene.id);
+                                }}
+                              >
+                                <ArrowRight className="h-4 w-4" />
+                              </Button>
+                            </div>
+
+                            <p className="text-sm text-muted-foreground line-clamp-3 min-h-[3em]">
                               {scene.summary}
                             </p>
-                          </div>
 
-                          <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setRefineDialogOpen(true);
-                                setSelectedSceneId(scene.id);
-                              }}
-                            >
-                              详情
-                            </Button>
+                            <div className="pt-2 mt-auto">
+                              <Button
+                                size="sm"
+                                variant={scene.status === 'completed' ? 'outline' : 'default'}
+                                className="w-full gap-2"
+                                onClick={() => handleRefineSceneAll(scene.id)}
+                                disabled={!aiProfileId || isRefining || isBatchBlocked}
+                              >
+                                {isRefining && refiningSceneId === scene.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3" />
+                                )}
+                                <span>
+                                  {scene.status === 'completed' ? '重新细化' : '一键细化'}
+                                </span>
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                    )}
                   </div>
-                )}
-              </Card>
-            </TabsContent>
+                </Card>
+              </TabsContent>
 
-            <TabsContent value="refine" className="space-y-4 focus-visible:outline-none">
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-6">
+              <TabsContent value="sound" className="space-y-4 focus-visible:outline-none">
+                <Card className="p-6 space-y-4">
                   <div className="space-y-1">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-primary" />
-                      分镜细化 (Refinement)
+                      <Volume2 className="w-5 h-5 text-primary" />
+                      声音与时长 (Sound & Duration)
                     </h3>
                     <p className="text-sm text-muted-foreground">
-                      针对每个分镜，生成具体的画面描述、镜头语言与对白。
+                      对单个分镜执行声音设计与时长估算，可与细化流程并行补齐。
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => void handleRefineAllScenes()}
-                      className="gap-2"
-                      disabled={!aiProfileId || refineAllJobRunning || isBatchBlocked}
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      <span>{refineAllJobRunning ? '全部细化中' : '全部细化'}</span>
-                    </Button>
-                    {refineAllFailedScenes.length > 0 ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => void handleRetryFailedRefineAll()}
-                        disabled={refineAllJobRunning || isBatchBlocked}
-                      >
-                        重试失败项 ({refineAllFailedScenes.length})
-                      </Button>
-                    ) : null}
-                    <Button
-                      variant="outline"
-                      onClick={() => setBatchRefineDialogOpen(true)}
-                      className="gap-2"
-                    >
-                      <Layers className="w-4 h-4" />
-                      批量任务面板
-                    </Button>
-                  </div>
-                </div>
-
-                {refineAllProgress ? (
-                  <div className="mb-6 rounded-lg border bg-muted/30 p-4 space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {refineAllProgress.message || '全部细化进行中...'}
-                      </span>
-                      <span>
-                        {refineAllProgress.totalScenes
-                          ? `${Math.min(refineAllProgress.completedSceneIds.length + refineAllProgress.failedScenes.length, refineAllProgress.totalScenes)}/${refineAllProgress.totalScenes}`
-                          : '-'}
-                      </span>
-                    </div>
-                    <Progress
-                      value={typeof refineAllProgress.pct === 'number' ? refineAllProgress.pct : 0}
-                    />
-                    {refineAllFailedScenes.length > 0 ? (
-                      <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive space-y-2">
-                        <div className="font-medium">失败列表</div>
-                        <div className="space-y-1 max-h-40 overflow-auto pr-1">
-                          {refineAllFailedScenes.map((scene) => {
-                            const sceneMeta = scenes.find((item) => item.id === scene.sceneId);
-                            const orderLabel = scene.order ?? sceneMeta?.order;
-                            return (
-                              <div key={scene.sceneId} className="flex flex-col gap-0.5">
-                                <span>
-                                  {orderLabel ? `#${orderLabel}` : '分镜'}{' '}
-                                  {sceneMeta?.summary || scene.sceneId}
-                                </span>
-                                {scene.error ? <span>原因：{scene.error}</span> : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {scenes.length === 0 ? (
-                    <div className="col-span-full text-center py-10 text-muted-foreground">
-                      暂无分镜，请先生成分镜列表。
+                    <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                      暂无分镜，请先完成分镜列表生成。
                     </div>
                   ) : (
-                    scenes
-                      .slice()
-                      .sort((a, b) => a.order - b.order)
-                      .map((scene) => (
-                        <div
-                          key={scene.id}
-                          className={cn(
-                            'relative rounded-lg border p-4 transition-all hover:shadow-md hover:border-primary/50 flex flex-col gap-3',
-                            scene.status === 'completed'
-                              ? 'bg-emerald-50/30 dark:bg-emerald-900/10'
-                              : 'bg-card',
-                          )}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline">#{scene.order}</Badge>
-                              <Badge variant="secondary" className="text-[10px]">
-                                {getSceneStatusLabel(scene.status)}
-                              </Badge>
+                    <div className="space-y-3">
+                      {scenes
+                        .slice()
+                        .sort((a, b) => a.order - b.order)
+                        .map((scene) => (
+                          <div key={scene.id} className="rounded-lg border p-4 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline">#{scene.order}</Badge>
+                                <span className="text-sm">{scene.summary}</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleGenerateSoundDesign(scene.id)}
+                                  disabled={!aiProfileId || isGeneratingSoundSceneId === scene.id}
+                                >
+                                  {isGeneratingSoundSceneId === scene.id
+                                    ? '声音生成中...'
+                                    : '生成声音'}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEstimateDuration(scene.id)}
+                                  disabled={
+                                    !aiProfileId || isEstimatingDurationSceneId === scene.id
+                                  }
+                                >
+                                  {isEstimatingDurationSceneId === scene.id
+                                    ? '估算中...'
+                                    : '估算时长'}
+                                </Button>
+                              </div>
                             </div>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6"
-                              onClick={() => {
-                                setRefineDialogOpen(true);
-                                setSelectedSceneId(scene.id);
-                              }}
-                            >
-                              <ArrowRight className="h-4 w-4" />
-                            </Button>
+                            <div className="grid gap-3 lg:grid-cols-2">
+                              <SoundDesignPanel scene={scene} />
+                              <DurationEstimateBar scene={scene} />
+                            </div>
                           </div>
-
-                          <p className="text-sm text-muted-foreground line-clamp-3 min-h-[3em]">
-                            {scene.summary}
-                          </p>
-
-                          <div className="pt-2 mt-auto">
-                            <Button
-                              size="sm"
-                              variant={scene.status === 'completed' ? 'outline' : 'default'}
-                              className="w-full gap-2"
-                              onClick={() => handleRefineSceneAll(scene.id)}
-                              disabled={!aiProfileId || isRefining || isBatchBlocked}
-                            >
-                              {isRefining && refiningSceneId === scene.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Sparkles className="h-3 w-3" />
-                              )}
-                              <span>{scene.status === 'completed' ? '重新细化' : '一键细化'}</span>
-                            </Button>
-                          </div>
-                        </div>
-                      ))
+                        ))}
+                    </div>
                   )}
-                </div>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="sound" className="space-y-4 focus-visible:outline-none">
-              <Card className="p-6 space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Volume2 className="w-5 h-5 text-primary" />
-                    声音与时长 (Sound & Duration)
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    对单个分镜执行声音设计与时长估算，可与细化流程并行补齐。
-                  </p>
-                </div>
-                {scenes.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                    暂无分镜，请先完成分镜列表生成。
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {scenes
-                      .slice()
-                      .sort((a, b) => a.order - b.order)
-                      .map((scene) => (
-                        <div key={scene.id} className="rounded-lg border p-4 space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline">#{scene.order}</Badge>
-                              <span className="text-sm">{scene.summary}</span>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleGenerateSoundDesign(scene.id)}
-                                disabled={!aiProfileId || isGeneratingSoundSceneId === scene.id}
-                              >
-                                {isGeneratingSoundSceneId === scene.id
-                                  ? '声音生成中...'
-                                  : '生成声音'}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEstimateDuration(scene.id)}
-                                disabled={!aiProfileId || isEstimatingDurationSceneId === scene.id}
-                              >
-                                {isEstimatingDurationSceneId === scene.id
-                                  ? '估算中...'
-                                  : '估算时长'}
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="grid gap-3 lg:grid-cols-2">
-                            <SoundDesignPanel scene={scene} />
-                            <DurationEstimateBar scene={scene} />
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </Card>
-            </TabsContent>
+                </Card>
+              </TabsContent>
             </Tabs>
           </>
         )}
