@@ -20,6 +20,7 @@ export const CreateAIProfileInputSchema = z.object({
   name: z.string().min(1).max(80),
   provider: ProviderTypeSchema,
   apiKey: z.string().min(1).max(500),
+  imageApiKey: z.string().min(1).max(500).optional(),
   baseURL: z.string().url().optional(),
   model: z.string().min(1).max(120),
   generationParams: z
@@ -35,6 +36,10 @@ export const CreateAIProfileInputSchema = z.object({
       // 可选：生图/生视频模型（用于同一 Provider 下多能力）
       imageModel: z.string().min(1).max(120).optional(),
       videoModel: z.string().min(1).max(120).optional(),
+      // 可选：图片供应商覆盖（用于 keyframe 走独立实现）
+      imageProvider: z.enum(['nanobananapro-dmxapi']).optional(),
+      // 可选：图片供应商专用 Base URL
+      imageBaseURL: z.string().url().optional(),
     })
     .optional(),
   pricing: AIPricingSchema.optional(),
@@ -45,6 +50,7 @@ export type CreateAIProfileInput = z.infer<typeof CreateAIProfileInputSchema>;
 export const UpdateAIProfileInputSchema = CreateAIProfileInputSchema.partial().extend({
   // 允许显式清空
   pricing: AIPricingSchema.nullable().optional(),
+  imageApiKey: z.string().min(1).max(500).nullable().optional(),
 });
 
 export type UpdateAIProfileInput = z.infer<typeof UpdateAIProfileInputSchema>;

@@ -53,6 +53,8 @@ function extractGenerationParams(raw: JsonValue | null): GenerationParams | unde
 export type ModelOverrides = {
   imageModel?: string;
   videoModel?: string;
+  imageProvider?: 'nanobananapro-dmxapi';
+  imageBaseURL?: string;
 };
 
 export function extractModelOverrides(raw: JsonValue | null): ModelOverrides | undefined {
@@ -60,6 +62,10 @@ export function extractModelOverrides(raw: JsonValue | null): ModelOverrides | u
   return {
     ...(typeof raw.imageModel === 'string' && raw.imageModel.trim() ? { imageModel: raw.imageModel.trim() } : {}),
     ...(typeof raw.videoModel === 'string' && raw.videoModel.trim() ? { videoModel: raw.videoModel.trim() } : {}),
+    ...(raw.imageProvider === 'nanobananapro-dmxapi' ? { imageProvider: 'nanobananapro-dmxapi' } : {}),
+    ...(typeof raw.imageBaseURL === 'string' && raw.imageBaseURL.trim()
+      ? { imageBaseURL: raw.imageBaseURL.trim() }
+      : {}),
   };
 }
 
@@ -125,6 +131,14 @@ export function toProviderImageConfig(profile: {
   const imageModel =
     overrides?.imageModel ??
     (profile.provider === 'doubao_ark' ? 'doubao-seedream-4-5-251128' : profile.model);
+  if (overrides?.imageProvider === 'nanobananapro-dmxapi') {
+    return {
+      kind: 'nanobanana_dmxapi',
+      apiKey: '',
+      baseURL: overrides.imageBaseURL ?? 'https://www.dmxapi.cn',
+      model: imageModel || 'gemini-3-pro-image-preview',
+    };
+  }
 
   if (profile.provider === 'gemini') {
     return {

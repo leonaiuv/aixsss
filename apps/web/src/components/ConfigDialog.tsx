@@ -262,6 +262,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('connection');
   const [provider, setProvider] = useState<ProviderType>('deepseek');
   const [apiKey, setApiKey] = useState('');
+  const [imageApiKey, setImageApiKey] = useState('');
   const [baseURL, setBaseURL] = useState('');
   const [model, setModel] = useState('');
   const [profileName, setProfileName] = useState('默认档案');
@@ -281,6 +282,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const [pricingCachedInput, setPricingCachedInput] = useState('');
   const [presetId, setPresetId] = useState<string>('');
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showImageApiKey, setShowImageApiKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [generationParams, setGenerationParams] =
     useState<AIGenerationParams>(DEFAULT_GENERATION_PARAMS);
@@ -416,6 +418,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       profileName.trim() !== activeProfile.name ||
       provider !== activeProfile.config.provider ||
       apiKey !== activeProfile.config.apiKey ||
+      imageApiKey !== (activeProfile.config.imageApiKey || '') ||
       draftBaseURL !== storedBaseURL ||
       model !== activeProfile.config.model ||
       !sameGen ||
@@ -424,6 +427,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   }, [
     activeProfile,
     apiKey,
+    imageApiKey,
     baseURL,
     generationParams,
     model,
@@ -441,6 +445,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setProfileName(profile.name);
       setProvider(profile.config.provider);
       setApiKey(profile.config.apiKey);
+      setImageApiKey(profile.config.imageApiKey || '');
       setBaseURL(profile.config.baseURL || '');
       setModel(profile.config.model);
       setGenerationParams(
@@ -462,6 +467,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       setProfileName('默认档案');
       setProvider('deepseek');
       setApiKey('');
+      setImageApiKey('');
       setBaseURL('');
       setModel('deepseek-chat');
       setGenerationParams(normalizeGenerationParams(undefined, 'deepseek', 'deepseek-chat'));
@@ -532,6 +538,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
   const getValidationErrors = (): {
     profileName?: string;
     apiKey?: string;
+    imageApiKey?: string;
     model?: string;
     baseURL?: string;
     pricing?: string;
@@ -539,6 +546,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     const errors: {
       profileName?: string;
       apiKey?: string;
+      imageApiKey?: string;
       model?: string;
       baseURL?: string;
       pricing?: string;
@@ -551,6 +559,18 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       !activeProfileId ||
       (typeof activeProfileId === 'string' && activeProfileId.startsWith('draft_'));
     if (requiresApiKey && !apiKey.trim()) errors.apiKey = 'API Key 不能为空';
+
+    const useNanoBananaImageProvider =
+      provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi';
+    const requiresImageApiKey =
+      useNanoBananaImageProvider &&
+      (!apiMode ||
+        !activeProfileId ||
+        (typeof activeProfileId === 'string' && activeProfileId.startsWith('draft_')) ||
+        !activeProfile?.hasImageApiKey);
+    if (requiresImageApiKey && !imageApiKey.trim()) {
+      errors.imageApiKey = 'NanoBanana 图片 API Key 不能为空';
+    }
 
     if (!model.trim()) {
       errors.model =
@@ -588,7 +608,10 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
   const validationErrors = getValidationErrors();
   const hasConfigValidationErrors = Boolean(
-    validationErrors.apiKey || validationErrors.model || validationErrors.baseURL,
+    validationErrors.apiKey ||
+      validationErrors.imageApiKey ||
+      validationErrors.model ||
+      validationErrors.baseURL,
   );
   const hasProfileValidationErrors = Boolean(
     validationErrors.profileName || validationErrors.pricing,
@@ -633,6 +656,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     const nextConfig = {
       provider,
       apiKey: '',
+      imageApiKey: '',
       model: defaults?.model || model || 'deepseek-chat',
       baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(defaults?.baseURL || baseURL),
       generationParams,
@@ -649,6 +673,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     const nextConfig = {
       provider,
       apiKey,
+      imageApiKey,
       model,
       baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
       generationParams,
@@ -695,6 +720,9 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     }
 
     const normalizedApiKey = apiKey.trim();
+    const normalizedImageApiKey = imageApiKey.trim();
+    const useNanoBananaImageProvider =
+      provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi';
     const normalizedModel =
       provider === 'doubao-ark' ? normalizeArkModel(model) : (model || '').trim();
 
@@ -704,6 +732,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         config: {
           provider,
           apiKey: normalizedApiKey,
+          imageApiKey: useNanoBananaImageProvider ? normalizedImageApiKey : '',
           baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
           model: normalizedModel,
           generationParams,
@@ -716,6 +745,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         config: {
           provider,
           apiKey: normalizedApiKey,
+          imageApiKey: useNanoBananaImageProvider ? normalizedImageApiKey : '',
           baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
           model: normalizedModel,
           generationParams,
@@ -752,6 +782,8 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
 
     const normalizedModel =
       provider === 'doubao-ark' ? normalizeArkModel(model) : (model || '').trim();
+    const useNanoBananaImageProvider =
+      provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi';
     if (!normalizedModel) {
       toast({
         title: '请填写模型/接入点',
@@ -787,6 +819,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
     const success = await testConnection({
       provider,
       apiKey: apiKey.trim(),
+      imageApiKey: useNanoBananaImageProvider ? imageApiKey.trim() : '',
       baseURL: provider === 'kimi' ? undefined : normalizedBaseURL(baseURL),
       model: normalizedModel,
       generationParams,
@@ -1434,6 +1467,52 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
         )}
       </div>
 
+      {/* NanoBanana 图片专用 Key（双密钥） */}
+      {provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi' ? (
+        <div className="space-y-2">
+          <Label htmlFor="imageApiKey" className="flex items-center gap-2">
+            <Key className="h-3.5 w-3.5" />
+            图片 API Key（NanoBanana）
+          </Label>
+          <div className="relative">
+            <Input
+              id="imageApiKey"
+              type={showImageApiKey ? 'text' : 'password'}
+              placeholder={
+                apiMode &&
+                activeProfileId &&
+                !activeProfileId.startsWith('draft_') &&
+                activeProfile?.hasImageApiKey
+                  ? '留空表示保持不变'
+                  : '请输入 NanoBanana 图片 API Key'
+              }
+              value={imageApiKey}
+              onChange={(e) => setImageApiKey(e.target.value)}
+              className="pr-10"
+              disabled={isLocked}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-full px-3"
+              onClick={() => setShowImageApiKey(!showImageApiKey)}
+              disabled={isLocked}
+            >
+              {showImageApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          </div>
+          {apiMode && activeProfile?.hasImageApiKey ? (
+            <p className="text-xs text-muted-foreground">
+              当前档案已保存图片专用 Key。留空将保持不变。
+            </p>
+          ) : null}
+          {validationErrors.imageApiKey && (
+            <p className="text-sm text-destructive">{validationErrors.imageApiKey}</p>
+          )}
+        </div>
+      ) : null}
+
       {/* Base URL */}
       {provider !== 'kimi' && (
         <div className="space-y-2">
@@ -1488,7 +1567,7 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
       </div>
 
       {/* 多能力模型（可选） */}
-      {provider === 'openai-compatible' || provider === 'doubao-ark' ? (
+      {provider === 'openai-compatible' || provider === 'doubao-ark' || provider === 'gemini' ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="imageModel">图片模型（可选）</Label>
@@ -1506,12 +1585,58 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
                 })
               }
               disabled={isLocked}
-              placeholder={provider === 'doubao-ark' ? 'ep-...（图片接入点）' : 'gpt-image-1'}
+              placeholder={
+                provider === 'doubao-ark'
+                  ? 'ep-...（图片接入点）'
+                  : provider === 'gemini'
+                    ? 'gemini-3-pro-image-preview'
+                    : 'gpt-image-1'
+              }
             />
             <p className="text-xs text-muted-foreground">
-              用于关键帧图片生成；豆包可填写图片推理接入点 ID（ep-...）或 Model
-              ID。留空则使用默认（Seedream 4.5）。
+              用于关键帧图片生成；
+              {provider === 'doubao-ark'
+                ? '豆包可填写图片推理接入点 ID（ep-...）或 Model ID。留空则使用默认（Seedream 4.5）。'
+                : provider === 'gemini'
+                  ? 'Gemini 可填写图片模型（如 gemini-3-pro-image-preview）。'
+                  : '留空则沿用当前模型。'}
             </p>
+
+            {provider === 'gemini' ? (
+              <div className="space-y-2 pt-2">
+                <Label>图片供应商覆盖（可选）</Label>
+                <Select
+                  value={generationParams.imageProvider ?? 'default'}
+                  onValueChange={(value) =>
+                    setGenerationParams((prev) => {
+                      if (value === 'default') {
+                        return {
+                          ...prev,
+                          imageProvider: undefined,
+                          imageBaseURL: undefined,
+                        };
+                      }
+                      return {
+                        ...prev,
+                        imageProvider: 'nanobananapro-dmxapi',
+                        imageBaseURL: prev.imageBaseURL || 'https://www.dmxapi.cn',
+                      };
+                    })
+                  }
+                >
+                  <SelectTrigger disabled={isLocked}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">默认（跟随 Gemini）</SelectItem>
+                    <SelectItem value="nanobananapro-dmxapi">NanoBanana（DMXAPI）</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  选择 NanoBanana 后，关键帧图片会走独立 DMXAPI 实现，不复用其它厂商图片接口。
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {provider === 'doubao-ark' ? (
@@ -1535,6 +1660,28 @@ export function ConfigDialog({ open, onOpenChange }: ConfigDialogProps) {
               <p className="text-xs text-muted-foreground">
                 用于视频生成；建议填写视频推理接入点 ID（ep-...）或 Model
                 ID。留空则使用默认（Seedance 1.5 Pro）。
+              </p>
+            </div>
+          ) : provider === 'gemini' && generationParams.imageProvider === 'nanobananapro-dmxapi' ? (
+            <div className="space-y-2">
+              <Label htmlFor="imageBaseURL">图片 Base URL（可选）</Label>
+              <Input
+                id="imageBaseURL"
+                value={generationParams.imageBaseURL ?? ''}
+                onChange={(e) =>
+                  setGenerationParams((prev) => {
+                    const trimmed = e.target.value.trim();
+                    return {
+                      ...prev,
+                      imageBaseURL: trimmed || undefined,
+                    };
+                  })
+                }
+                disabled={isLocked}
+                placeholder="https://www.dmxapi.cn"
+              />
+              <p className="text-xs text-muted-foreground">
+                仅对图片生成生效；留空默认使用 <code>https://www.dmxapi.cn</code>。
               </p>
             </div>
           ) : (

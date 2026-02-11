@@ -49,6 +49,7 @@ function getDefaultProfileConfig(): UserConfig {
   return {
     provider: 'deepseek',
     apiKey: '',
+    imageApiKey: '',
     model: 'deepseek-chat',
   };
 }
@@ -118,6 +119,17 @@ function buildConnectionTestResult(
       'Gemini 默认 Base URL：`https://generativelanguage.googleapis.com`（可留空使用默认值）。',
     );
     suggestions.push('模型示例：`gemini-1.5-flash`、`gemini-1.5-pro`、`gemini-pro`。');
+    const gp = config.generationParams;
+    if (
+      gp &&
+      typeof gp === 'object' &&
+      (gp as { imageProvider?: unknown }).imageProvider === 'nanobananapro-dmxapi'
+    ) {
+      suggestions.push(
+        'NanoBanana 图片覆盖已启用：关键帧图片会走 DMXAPI（默认 `https://www.dmxapi.cn`）。',
+      );
+      suggestions.push('图片模型示例：`gemini-3-pro-image-preview`、`gemini-2.5-flash-image`。');
+    }
   }
 
   if (config.provider === 'openai-compatible') {
@@ -200,12 +212,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             config: {
               provider: p.provider,
               apiKey: '', // 不在浏览器保存
+              imageApiKey: '', // 不在浏览器保存
               baseURL: p.baseURL ?? undefined,
               model: p.model,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               generationParams: (p.generationParams ?? undefined) as any,
               aiProfileId: p.id,
             },
+            hasImageApiKey: Boolean(p.hasImageApiKey),
             createdAt: p.createdAt,
             updatedAt: p.updatedAt,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -357,6 +371,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const generationParams = config.generationParams as any;
       const apiKey = config.apiKey?.trim();
+      const imageApiKey = config.imageApiKey?.trim();
 
       try {
         let aiProfileId = config.aiProfileId || existingServerId;
@@ -370,14 +385,21 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             ...(provider !== 'kimi' && baseURL ? { baseURL } : {}),
             ...(generationParams !== undefined ? { generationParams } : {}),
             ...(apiKey ? { apiKey } : {}),
+            ...(imageApiKey ? { imageApiKey } : {}),
           };
-          await apiUpdateAIProfile(aiProfileId, payload);
+          const updated = await apiUpdateAIProfile(aiProfileId, payload);
+          set((state) => ({
+            profiles: state.profiles.map((p) =>
+              p.id === aiProfileId ? { ...p, hasImageApiKey: Boolean(updated.hasImageApiKey) } : p,
+            ),
+          }));
         } else {
           if (!apiKey) throw new Error('API Key 为空：请先填写 API Key。');
           const created = await apiCreateAIProfile({
             name: '连接测试',
             provider,
             apiKey,
+            ...(imageApiKey ? { imageApiKey } : {}),
             baseURL: provider === 'kimi' ? undefined : baseURL || undefined,
             model,
             generationParams,
@@ -396,12 +418,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
                 config: {
                   provider: created.provider,
                   apiKey: '',
+                  imageApiKey: '',
                   baseURL: created.baseURL ?? undefined,
                   model: created.model,
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   generationParams: (created.generationParams ?? undefined) as any,
                   aiProfileId: created.id,
                 },
+                hasImageApiKey: Boolean(created.hasImageApiKey),
                 createdAt: created.createdAt,
                 updatedAt: created.updatedAt,
               },
@@ -623,6 +647,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               name: target.name,
               provider: cfg.provider,
               apiKey,
+              ...(cfg.imageApiKey?.trim() ? { imageApiKey: cfg.imageApiKey.trim() } : {}),
               baseURL: cfg.provider === 'kimi' ? undefined : (normalizedBaseURL ?? undefined),
               model: cfg.model,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -637,12 +662,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               config: {
                 provider: created.provider,
                 apiKey: '', // 不在浏览器保存
+                imageApiKey: '', // 不在浏览器保存
                 baseURL: created.baseURL ?? undefined,
                 model: created.model,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 generationParams: (created.generationParams ?? undefined) as any,
                 aiProfileId: created.id,
               },
+              hasImageApiKey: Boolean(created.hasImageApiKey),
               createdAt: created.createdAt,
               updatedAt: created.updatedAt,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -677,6 +704,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
                 { generationParams: cfg.generationParams as any }
               : {}),
             ...(cfg.apiKey?.trim() ? { apiKey: cfg.apiKey.trim() } : {}),
+            ...(cfg.imageApiKey?.trim() ? { imageApiKey: cfg.imageApiKey.trim() } : {}),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             pricing: (target.pricing ?? null) as any,
           };
@@ -688,12 +716,14 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             config: {
               provider: updated.provider,
               apiKey: '',
+              imageApiKey: '',
               baseURL: updated.baseURL ?? undefined,
               model: updated.model,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               generationParams: (updated.generationParams ?? undefined) as any,
               aiProfileId: updated.id,
             },
+            hasImageApiKey: Boolean(updated.hasImageApiKey),
             createdAt: updated.createdAt,
             updatedAt: updated.updatedAt,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

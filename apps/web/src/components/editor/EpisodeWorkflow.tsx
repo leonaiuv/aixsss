@@ -183,6 +183,16 @@ type BatchRefineProgress = NormalizedJobProgress & {
   failedScenes: BatchFailedScene[];
 };
 
+type SceneChildTaskStats = {
+  total: number;
+  queued: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  cancelled: number;
+  unknown: number;
+};
+
 type WorkflowJobResultLike = {
   tokenUsage?: unknown;
   extractedJson?: unknown;
@@ -385,12 +395,14 @@ function normalizeSupervisorStepSummaries(value: unknown): WorkflowAgentStepSumm
     const executionModeRaw = raw.executionMode;
     const executionMode =
       executionModeRaw === 'agent' || executionModeRaw === 'legacy' ? executionModeRaw : undefined;
-    const chunk = typeof raw.chunk === 'number' && Number.isFinite(raw.chunk) && raw.chunk > 0
-      ? Math.floor(raw.chunk)
-      : undefined;
-    const sourceJobId = typeof raw.sourceJobId === 'string' && raw.sourceJobId.trim().length > 0
-      ? raw.sourceJobId.trim()
-      : undefined;
+    const chunk =
+      typeof raw.chunk === 'number' && Number.isFinite(raw.chunk) && raw.chunk > 0
+        ? Math.floor(raw.chunk)
+        : undefined;
+    const sourceJobId =
+      typeof raw.sourceJobId === 'string' && raw.sourceJobId.trim().length > 0
+        ? raw.sourceJobId.trim()
+        : undefined;
     out.push({
       step,
       status,
@@ -428,7 +440,8 @@ function normalizeSceneChildTasks(value: unknown): WorkflowSceneChildTaskSummary
     const raw = item as Record<string, unknown>;
     const sceneId = typeof raw.sceneId === 'string' ? raw.sceneId.trim() : '';
     const jobId = typeof raw.jobId === 'string' ? raw.jobId.trim() : '';
-    const order = typeof raw.order === 'number' && Number.isFinite(raw.order) ? Math.floor(raw.order) : null;
+    const order =
+      typeof raw.order === 'number' && Number.isFinite(raw.order) ? Math.floor(raw.order) : null;
     const statusRaw = raw.status;
     const status =
       statusRaw === 'queued' ||
@@ -457,6 +470,52 @@ function normalizeSceneChildTasks(value: unknown): WorkflowSceneChildTaskSummary
   return out;
 }
 
+function mergeSceneChildTaskMap(
+  map: Map<string, WorkflowSceneChildTaskSummary>,
+  tasks: WorkflowSceneChildTaskSummary[],
+  fallbackChunk: number,
+) {
+  for (const task of tasks) {
+    const key = `${task.sceneId}:${task.jobId}`;
+    const prev = map.get(key);
+    map.set(key, {
+      ...task,
+      chunk:
+        typeof task.chunk === 'number' && Number.isFinite(task.chunk)
+          ? task.chunk
+          : prev?.chunk ?? fallbackChunk,
+    });
+  }
+}
+
+function sortSceneChildTasks(tasks: WorkflowSceneChildTaskSummary[]): WorkflowSceneChildTaskSummary[] {
+  return tasks.slice().sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    return a.jobId.localeCompare(b.jobId);
+  });
+}
+
+function countSceneChildTaskStats(tasks: WorkflowSceneChildTaskSummary[]): SceneChildTaskStats {
+  const stats: SceneChildTaskStats = {
+    total: tasks.length,
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    cancelled: 0,
+    unknown: 0,
+  };
+  for (const task of tasks) {
+    if (task.status === 'queued') stats.queued += 1;
+    else if (task.status === 'running') stats.running += 1;
+    else if (task.status === 'succeeded') stats.succeeded += 1;
+    else if (task.status === 'failed') stats.failed += 1;
+    else if (task.status === 'cancelled') stats.cancelled += 1;
+    else stats.unknown += 1;
+  }
+  return stats;
+}
+
 function parseConflictJobInfo(errorMessage: string): { type: string; jobId: string } | null {
   const m = errorMessage.match(/\(([a-z0-9_]+):([A-Za-z0-9_-]+)\)/i);
   if (!m) return null;
@@ -466,9 +525,7 @@ function parseConflictJobInfo(errorMessage: string): { type: string; jobId: stri
   return { type, jobId };
 }
 
-function getSceneChildTaskStatusLabel(
-  status: WorkflowSceneChildTaskSummary['status'],
-): string {
+function getSceneChildTaskStatusLabel(status: WorkflowSceneChildTaskSummary['status']): string {
   const map: Record<WorkflowSceneChildTaskSummary['status'], string> = {
     queued: '排队中',
     running: '执行中',
@@ -643,6 +700,9 @@ export function EpisodeWorkflow() {
   const [isRunningEpisodeCreationAgent, setIsRunningEpisodeCreationAgent] = useState(false);
   const [episodeCreationRunSummary, setEpisodeCreationRunSummary] =
     useState<WorkflowAgentRunSummary | null>(null);
+  const [episodeCreationLiveSceneChildTasks, setEpisodeCreationLiveSceneChildTasks] = useState<
+    WorkflowSceneChildTaskSummary[]
+  >([]);
   const [episodeCreationRunningJobId, setEpisodeCreationRunningJobId] = useState<string | null>(
     null,
   );
@@ -732,6 +792,28 @@ export function EpisodeWorkflow() {
     [currentProject?.contextCache?.characterExpansion],
   );
   const aiProfileId = config?.aiProfileId ?? null;
+  const displayedSceneChildTasks = useMemo(() => {
+    if (episodeCreationRunSummary?.sceneChildTasks?.length) {
+      return episodeCreationRunSummary.sceneChildTasks;
+    }
+    return episodeCreationLiveSceneChildTasks;
+  }, [episodeCreationLiveSceneChildTasks, episodeCreationRunSummary?.sceneChildTasks]);
+  const displayedSceneChildTaskStats = useMemo(
+    () => countSceneChildTaskStats(displayedSceneChildTasks),
+    [displayedSceneChildTasks],
+  );
+  const failedEpisodeSceneChildTaskSceneIds = useMemo(() => {
+    if (!displayedSceneChildTasks.length) return [];
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const task of displayedSceneChildTasks) {
+      if (task.status !== 'failed' && task.status !== 'cancelled') continue;
+      if (seen.has(task.sceneId)) continue;
+      seen.add(task.sceneId);
+      ids.push(task.sceneId);
+    }
+    return ids;
+  }, [displayedSceneChildTasks]);
   const sortedScenes = useMemo(() => {
     return scenes.slice().sort((a, b) => a.order - b.order);
   }, [scenes]);
@@ -749,6 +831,13 @@ export function EpisodeWorkflow() {
     isGlobalBatchGenerating &&
     batchGeneratingSource === 'episode_workflow' &&
     batchOperations.isProcessing;
+  const canRetryFailedEpisodeSceneChildren =
+    failedEpisodeSceneChildTaskSceneIds.length > 0 &&
+    Boolean(aiProfileId && currentProject?.id) &&
+    !isRunningEpisodeCreationAgent &&
+    !refineAllJobRunning &&
+    !isBatchRefineRunning &&
+    !isGlobalBatchGenerating;
 
   const _openBatchRefineDialog = () => {
     setBatchRefineErrors({});
@@ -1281,6 +1370,8 @@ export function EpisodeWorkflow() {
       return;
     }
     if (!aiProfileId || !currentProject?.id || !currentEpisode?.id) return;
+    setEpisodeCreationRunSummary(null);
+    setEpisodeCreationLiveSceneChildTasks([]);
     setIsRunningEpisodeCreationAgent(true);
     const abortController = new AbortController();
     episodeCreationAbortRef.current = abortController;
@@ -1336,6 +1427,16 @@ export function EpisodeWorkflow() {
             if (typeof next.pct === 'number') {
               updateLogProgress(logId, next.pct, next.message ?? undefined);
             }
+            if (progress && typeof progress === 'object') {
+              const progressRecord = progress as Record<string, unknown>;
+              const nextSceneChildTasks = normalizeSceneChildTasks(progressRecord.sceneChildTasks);
+              if (nextSceneChildTasks.length > 0) {
+                mergeSceneChildTaskMap(mergedSceneChildTasks, nextSceneChildTasks, hop + 1);
+                setEpisodeCreationLiveSceneChildTasks(
+                  sortSceneChildTasks(Array.from(mergedSceneChildTasks.values())),
+                );
+              }
+            }
           },
         });
 
@@ -1367,16 +1468,10 @@ export function EpisodeWorkflow() {
           }
           const nextSceneChildTasks = normalizeSceneChildTasks(result.sceneChildTasks);
           if (nextSceneChildTasks.length > 0) {
-            for (const task of nextSceneChildTasks) {
-              const key = `${task.sceneId}:${task.jobId}`;
-              mergedSceneChildTasks.set(key, {
-                ...task,
-                chunk:
-                  typeof task.chunk === 'number' && Number.isFinite(task.chunk)
-                    ? task.chunk
-                    : hop + 1,
-              });
-            }
+            mergeSceneChildTaskMap(mergedSceneChildTasks, nextSceneChildTasks, hop + 1);
+            setEpisodeCreationLiveSceneChildTasks(
+              sortSceneChildTasks(Array.from(mergedSceneChildTasks.values())),
+            );
           }
         }
 
@@ -1400,17 +1495,13 @@ export function EpisodeWorkflow() {
         }),
       });
 
-      const normalizedSummary =
-        ({
-          executionMode,
-          fallbackUsed,
-          stepSummaries: mergedStepSummaries,
-          sceneChildTasks: Array.from(mergedSceneChildTasks.values()).sort((a, b) => {
-            if (a.order !== b.order) return a.order - b.order;
-            return a.jobId.localeCompare(b.jobId);
-          }),
-          finishedAt: new Date().toISOString(),
-        } satisfies WorkflowAgentRunSummary);
+      const normalizedSummary = {
+        executionMode,
+        fallbackUsed,
+        stepSummaries: mergedStepSummaries,
+        sceneChildTasks: sortSceneChildTasks(Array.from(mergedSceneChildTasks.values())),
+        finishedAt: new Date().toISOString(),
+      } satisfies WorkflowAgentRunSummary;
       setEpisodeCreationRunSummary(normalizedSummary);
 
       await useProjectStore.getState().loadProject(currentProject.id);
@@ -2547,6 +2638,12 @@ export function EpisodeWorkflow() {
     if (refineAllFailedScenes.length === 0) return;
     const retrySceneIds = Array.from(new Set(refineAllFailedScenes.map((scene) => scene.sceneId)));
     await runRefineAllScenesJob(retrySceneIds);
+  };
+
+  const handleRetryFailedEpisodeSceneChildTasks = async () => {
+    if (!aiProfileId || !currentProject?.id) return;
+    if (failedEpisodeSceneChildTaskSceneIds.length === 0) return;
+    await runRefineAllScenesJob(failedEpisodeSceneChildTaskSceneIds);
   };
 
   const requestCancelBatchRefine = () => {
@@ -3910,7 +4007,9 @@ ${safeJsonStringify(ep.coreExpression)}
                             <div className="text-sm">
                               {EPISODE_AGENT_STEP_LABELS[step.step] ?? step.step}
                             </div>
-                            <div className="text-xs text-muted-foreground truncate">{step.message}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {step.message}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2 text-xs">
                             {typeof step.chunk === 'number' ? (
@@ -3942,11 +4041,35 @@ ${safeJsonStringify(ep.coreExpression)}
                       ))}
                     </div>
                   ) : null}
-                  {episodeCreationRunSummary?.sceneChildTasks?.length ? (
+                  {displayedSceneChildTasks.length ? (
                     <div className="space-y-2">
-                      <div className="text-xs font-medium text-muted-foreground">分镜子任务</div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-xs font-medium text-muted-foreground">分镜子任务</div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => {
+                            void handleRetryFailedEpisodeSceneChildTasks();
+                          }}
+                          disabled={!canRetryFailedEpisodeSceneChildren}
+                        >
+                          重试失败分镜 ({failedEpisodeSceneChildTaskSceneIds.length})
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <Badge variant="outline">总计 {displayedSceneChildTaskStats.total}</Badge>
+                        <Badge variant="outline">排队 {displayedSceneChildTaskStats.queued}</Badge>
+                        <Badge variant="outline">执行中 {displayedSceneChildTaskStats.running}</Badge>
+                        <Badge variant="outline">成功 {displayedSceneChildTaskStats.succeeded}</Badge>
+                        <Badge variant="outline">失败 {displayedSceneChildTaskStats.failed}</Badge>
+                        <Badge variant="outline">取消 {displayedSceneChildTaskStats.cancelled}</Badge>
+                        {displayedSceneChildTaskStats.unknown > 0 ? (
+                          <Badge variant="outline">未知 {displayedSceneChildTaskStats.unknown}</Badge>
+                        ) : null}
+                      </div>
                       <div className="space-y-2 max-h-48 overflow-auto pr-1">
-                        {episodeCreationRunSummary.sceneChildTasks.map((task) => (
+                        {displayedSceneChildTasks.map((task) => (
                           <div
                             key={`${task.sceneId}:${task.jobId}`}
                             className="rounded-md border bg-background px-3 py-2"
@@ -3975,7 +4098,9 @@ ${safeJsonStringify(ep.coreExpression)}
                               </div>
                             </div>
                             {task.error ? (
-                              <div className="mt-1 text-xs text-destructive truncate">{task.error}</div>
+                              <div className="mt-1 text-xs text-destructive truncate">
+                                {task.error}
+                              </div>
                             ) : null}
                           </div>
                         ))}

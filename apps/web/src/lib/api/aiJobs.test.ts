@@ -34,7 +34,9 @@ describe('apiWaitForAIJob', () => {
   });
 
   it('在无进度变化时应按超时结束', async () => {
-    vi.mocked(apiRequest).mockImplementation(async () => createJob('running', { pct: 12, message: 'same' }));
+    vi.mocked(apiRequest).mockImplementation(async () =>
+      createJob('running', { pct: 12, message: 'same' }),
+    );
 
     const p = apiWaitForAIJob('job_ep_1', {
       pollIntervalMs: 5,

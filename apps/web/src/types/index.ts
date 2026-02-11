@@ -736,6 +736,10 @@ export type ProviderType = 'deepseek' | 'kimi' | 'gemini' | 'openai-compatible' 
 export interface UserConfig {
   provider: ProviderType;
   apiKey: string;
+  /**
+   * 可选：图片专用 API Key（用于 NanoBanana 等图片链路）
+   */
+  imageApiKey?: string;
   baseURL?: string;
   model: string;
   generationParams?: AIGenerationParams;
@@ -786,6 +790,10 @@ export interface ConfigProfile {
   id: string;
   name: string;
   config: UserConfig;
+  /**
+   * 后端模式：服务端是否已保存图片专用 API Key
+   */
+  hasImageApiKey?: boolean;
   createdAt: string;
   updatedAt: string;
   lastTest?: ConnectionTestResult;
@@ -1046,8 +1054,19 @@ export interface AIGenerationParams {
    * 可选：生图模型（同一 Provider 下用于图片生成）
    * - OpenAI 示例：gpt-image-1
    * - Doubao/ARK 示例：doubao-seedream-4-5-251128
+   * - NanoBanana 示例：gemini-3-pro-image-preview
    */
   imageModel?: string;
+  /**
+   * 可选：图片供应商覆盖（用于关键帧图片生成）
+   * - nanobananapro-dmxapi: 走 DMXAPI 的 Gemini 图片端点
+   */
+  imageProvider?: 'nanobananapro-dmxapi';
+  /**
+   * 可选：图片供应商专用 Base URL
+   * - NanoBanana/DMXAPI 默认：https://www.dmxapi.cn
+   */
+  imageBaseURL?: string;
   /**
    * 可选：生视频模型（同一 Provider 下用于视频生成）
    * - Doubao/ARK 示例：doubao-seedance-1-5-pro-251215

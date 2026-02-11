@@ -198,6 +198,7 @@ describe('runEpisodeCreationAgent', () => {
       prisma.aIJob.findMany as unknown as ReturnType<typeof vi.fn>
     ).mockResolvedValue([{ id: 'job_scene_1', status: 'succeeded' }, { id: 'job_scene_2', status: 'succeeded' }]);
 
+    const progressSpy = vi.fn(async () => {});
     const res = await runEpisodeCreationAgent({
       prisma: prisma as never,
       teamId: 't1',
@@ -207,7 +208,7 @@ describe('runEpisodeCreationAgent', () => {
       apiKeySecret: 'secret',
       currentJobId: 'job_ep_agent_1',
       enqueueSceneTask,
-      updateProgress: async () => {},
+      updateProgress: progressSpy,
     });
 
     expect(enqueueSceneTask).toHaveBeenCalledTimes(2);
@@ -218,6 +219,14 @@ describe('runEpisodeCreationAgent', () => {
       { sceneId: 's1', order: 1, jobId: 'job_scene_1', status: 'succeeded' },
       { sceneId: 's2', order: 2, jobId: 'job_scene_2', status: 'succeeded' },
     ]);
+    expect(
+      progressSpy.mock.calls.some(
+        (call) =>
+          call[0] &&
+          typeof call[0] === 'object' &&
+          Array.isArray((call[0] as { sceneChildTasks?: unknown }).sceneChildTasks),
+      ),
+    ).toBe(true);
     expect(
       res.stepSummaries.some(
         (s) => s.step === 'sound_and_duration' && s.status === 'skipped',

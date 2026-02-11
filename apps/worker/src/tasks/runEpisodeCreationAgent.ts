@@ -45,6 +45,15 @@ type SceneChildTaskSummary = {
   chunk?: number;
 };
 
+type SceneChildTaskStats = {
+  total: number;
+  queued: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  cancelled: number;
+};
+
 type SceneSnapshot = {
   id: string;
   order: number;
@@ -83,6 +92,25 @@ function mapChildProgressPct(childPct: unknown, base: number, span: number): num
 function clampPositiveInt(value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallback;
   return Math.max(1, Math.floor(value));
+}
+
+function toSceneChildTaskStats(tasks: SceneChildTaskSummary[]): SceneChildTaskStats {
+  const stats: SceneChildTaskStats = {
+    total: tasks.length,
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    cancelled: 0,
+  };
+  for (const task of tasks) {
+    if (task.status === 'queued') stats.queued += 1;
+    if (task.status === 'running') stats.running += 1;
+    if (task.status === 'succeeded') stats.succeeded += 1;
+    if (task.status === 'failed') stats.failed += 1;
+    if (task.status === 'cancelled') stats.cancelled += 1;
+  }
+  return stats;
 }
 
 function sleep(ms: number) {
@@ -433,12 +461,17 @@ export async function runEpisodeCreationAgent(args: {
       }
       const slice = pending.slice(0, refinementChunkSize);
       if (enqueueSceneTask) {
+        const emitSceneChildProgress = async (pct: number, message: string) => {
+          await stepUpdateProgress({
+            pct,
+            message,
+            sceneChildTasks: sceneChildTasks.map((task) => ({ ...task })),
+            sceneChildStats: toSceneChildTaskStats(sceneChildTasks),
+          });
+        };
+
         const childJobs: Array<{ sceneId: string; jobId: string; order: number }> = [];
         await runWithConcurrency(slice, refinementConcurrency, async (scene, idx) => {
-          await stepUpdateProgress({
-            pct: Math.min(35, Math.round((idx / Math.max(1, slice.length)) * 30)),
-            message: `派发分镜子任务 #${scene.order}（${idx + 1}/${slice.length}）`,
-          });
           const child = await enqueueSceneTask({ sceneId: scene.id, order: scene.order });
           childJobs.push({ sceneId: scene.id, jobId: child.jobId, order: scene.order });
           sceneChildTasks.push({
@@ -448,6 +481,10 @@ export async function runEpisodeCreationAgent(args: {
             status: 'queued',
             chunk: currentChunk,
           });
+          await emitSceneChildProgress(
+            Math.min(35, Math.round(((idx + 1) / Math.max(1, slice.length)) * 30)),
+            `派发分镜子任务 #${scene.order}（${idx + 1}/${slice.length}）`,
+          );
         });
 
         const deadline = Date.now() + SCENE_CHILD_WAIT_TIMEOUT_MS;
@@ -488,10 +525,10 @@ export async function runEpisodeCreationAgent(args: {
           const succeeded = childJobs.filter(
             (child) => rowMap.get(child.jobId)?.status === 'succeeded',
           ).length;
-          await stepUpdateProgress({
-            pct: Math.min(99, 35 + Math.round((succeeded / Math.max(1, childJobs.length)) * 65)),
-            message: `等待分镜子任务完成（${succeeded}/${childJobs.length}）`,
-          });
+          await emitSceneChildProgress(
+            Math.min(99, 35 + Math.round((succeeded / Math.max(1, childJobs.length)) * 65)),
+            `等待分镜子任务完成（${succeeded}/${childJobs.length}）`,
+          );
           if (succeeded >= childJobs.length) break;
           if (Date.now() > deadline) {
             throw new Error(`scene child tasks timeout (${succeeded}/${childJobs.length})`);

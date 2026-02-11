@@ -638,6 +638,7 @@ function sanitizeUserConfig(value: unknown): UserConfig | null {
   return {
     provider: v.provider as UserConfig['provider'],
     apiKey: v.apiKey,
+    imageApiKey: typeof v.imageApiKey === 'string' ? v.imageApiKey : undefined,
     model: v.model,
     baseURL: typeof v.baseURL === 'string' && v.baseURL.trim() ? v.baseURL : undefined,
     generationParams: v.generationParams,
@@ -660,6 +661,7 @@ function sanitizeConfigProfile(value: unknown): ConfigProfile | null {
     id: v.id,
     name: v.name,
     config,
+    hasImageApiKey: typeof v.hasImageApiKey === 'boolean' ? v.hasImageApiKey : undefined,
     createdAt,
     updatedAt,
     lastTest: v.lastTest,

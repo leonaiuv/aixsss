@@ -69,6 +69,16 @@ export type WorkflowAgentRunSummary = {
   finishedAt: string;
 };
 
+type SceneChildTaskStats = {
+  total: number;
+  queued: number;
+  running: number;
+  succeeded: number;
+  failed: number;
+  cancelled: number;
+  unknown: number;
+};
+
 const AGENT_STEP_LABELS: Record<string, string> = {
   character_expansion: '角色体系扩充',
   narrative_phase3: '叙事因果链 Phase3',
@@ -76,6 +86,39 @@ const AGENT_STEP_LABELS: Record<string, string> = {
   character_relationships: '角色关系图谱',
   emotion_arc: '情绪弧线',
 };
+
+function countSceneChildTaskStats(tasks: WorkflowSceneChildTaskSummary[]): SceneChildTaskStats {
+  const stats: SceneChildTaskStats = {
+    total: tasks.length,
+    queued: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    cancelled: 0,
+    unknown: 0,
+  };
+  for (const task of tasks) {
+    if (task.status === 'queued') stats.queued += 1;
+    else if (task.status === 'running') stats.running += 1;
+    else if (task.status === 'succeeded') stats.succeeded += 1;
+    else if (task.status === 'failed') stats.failed += 1;
+    else if (task.status === 'cancelled') stats.cancelled += 1;
+    else stats.unknown += 1;
+  }
+  return stats;
+}
+
+function getSceneChildTaskStatusLabel(status: WorkflowSceneChildTaskSummary['status']): string {
+  const map: Record<WorkflowSceneChildTaskSummary['status'], string> = {
+    queued: '排队中',
+    running: '执行中',
+    succeeded: '成功',
+    failed: '失败',
+    cancelled: '已取消',
+    unknown: '未知',
+  };
+  return map[status] ?? '未知';
+}
 
 // --- Utility Components ---
 
@@ -351,6 +394,15 @@ export function WorkflowWorkbench(props: {
 
   const episodeMinutes = episodeMetrics.totalEstimatedSeconds / 60;
   const canRunAI = Boolean(aiProfileId);
+  const sceneChildTasks = useMemo(() => {
+    return (props.agentRunSummary?.sceneChildTasks ?? [])
+      .slice()
+      .sort((a, b) => (a.order !== b.order ? a.order - b.order : a.jobId.localeCompare(b.jobId)));
+  }, [props.agentRunSummary?.sceneChildTasks]);
+  const sceneChildTaskStats = useMemo(
+    () => countSceneChildTaskStats(sceneChildTasks),
+    [sceneChildTasks],
+  );
 
   const [continuityReport, setContinuityReport] = useState<ContinuityReport | null>(null);
   const [, setContinuityError] = useState<string | null>(null);
@@ -697,6 +749,53 @@ export function WorkflowWorkbench(props: {
                         );
                       })}
                     </div>
+
+                    {sceneChildTasks.length ? (
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-muted-foreground">分镜子任务</div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <Badge variant="outline">总计 {sceneChildTaskStats.total}</Badge>
+                          <Badge variant="outline">排队 {sceneChildTaskStats.queued}</Badge>
+                          <Badge variant="outline">执行中 {sceneChildTaskStats.running}</Badge>
+                          <Badge variant="outline">成功 {sceneChildTaskStats.succeeded}</Badge>
+                          <Badge variant="outline">失败 {sceneChildTaskStats.failed}</Badge>
+                          <Badge variant="outline">取消 {sceneChildTaskStats.cancelled}</Badge>
+                          {sceneChildTaskStats.unknown > 0 ? (
+                            <Badge variant="outline">未知 {sceneChildTaskStats.unknown}</Badge>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2 max-h-40 overflow-auto pr-1">
+                          {sceneChildTasks.map((task) => (
+                            <div
+                              key={`${task.sceneId}:${task.jobId}`}
+                              className="rounded-md border bg-background px-3 py-2 text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0 truncate">
+                                  分镜 #{task.order} · {task.jobId}
+                                </div>
+                                <Badge
+                                  variant={
+                                    task.status === 'succeeded'
+                                      ? 'default'
+                                      : task.status === 'queued' || task.status === 'running'
+                                        ? 'secondary'
+                                        : task.status === 'cancelled'
+                                          ? 'outline'
+                                          : 'destructive'
+                                  }
+                                >
+                                  {getSceneChildTaskStatusLabel(task.status)}
+                                </Badge>
+                              </div>
+                              {task.error ? (
+                                <p className="mt-1 text-destructive truncate">{task.error}</p>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <div className="text-xs text-muted-foreground">尚无最近一次 Agent 执行记录。</div>

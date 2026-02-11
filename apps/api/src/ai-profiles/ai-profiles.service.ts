@@ -93,6 +93,7 @@ export class AIProfilesService {
       baseURL: p.baseURL ?? null,
       generationParams: p.generationParams ?? null,
       pricing: p.pricing ?? null,
+      hasImageApiKey: Boolean(p.imageApiKeyEncrypted),
       createdAt: toIso(p.createdAt),
       updatedAt: toIso(p.updatedAt),
     }));
@@ -101,6 +102,11 @@ export class AIProfilesService {
   async create(teamId: string, input: CreateAIProfileInput) {
     const apiKey = normalizeApiKey(input.apiKey);
     if (!apiKey) throw new BadRequestException('API Key 不能为空（请不要包含 Bearer 前缀或多余空格）。');
+    const imageApiKey =
+      typeof input.imageApiKey === 'string' ? normalizeApiKey(input.imageApiKey) : '';
+    if (typeof input.imageApiKey === 'string' && !imageApiKey) {
+      throw new BadRequestException('图片 API Key 不能为空（请不要包含 Bearer 前缀或多余空格）。');
+    }
     const model = normalizeModel(input.model, input.provider);
     if (!model) throw new BadRequestException('模型/接入点不能为空。');
     const profile = await this.prisma.aIProfile.create({
@@ -112,6 +118,7 @@ export class AIProfilesService {
         model,
         baseURL: input.baseURL,
         apiKeyEncrypted: this.crypto.encrypt(apiKey),
+        ...(imageApiKey ? { imageApiKeyEncrypted: this.crypto.encrypt(imageApiKey) } : {}),
         generationParams: (normalizeGenerationParams(input.provider, input.generationParams) ??
           undefined) as Prisma.InputJsonValue | undefined,
         pricing: input.pricing ? (input.pricing as Prisma.InputJsonValue) : undefined,
@@ -126,6 +133,7 @@ export class AIProfilesService {
       baseURL: profile.baseURL ?? null,
       generationParams: profile.generationParams ?? null,
       pricing: profile.pricing ?? null,
+      hasImageApiKey: Boolean(profile.imageApiKeyEncrypted),
       createdAt: toIso(profile.createdAt),
       updatedAt: toIso(profile.updatedAt),
     };
@@ -172,6 +180,17 @@ export class AIProfilesService {
               return { apiKeyEncrypted: this.crypto.encrypt(apiKey) };
             })()
           : {}),
+        ...(input.imageApiKey !== undefined
+          ? (() => {
+              if (input.imageApiKey === null) return { imageApiKeyEncrypted: null };
+              const imageApiKey = normalizeApiKey(input.imageApiKey);
+              if (!imageApiKey)
+                throw new BadRequestException(
+                  '图片 API Key 不能为空（请不要包含 Bearer 前缀或多余空格）。',
+                );
+              return { imageApiKeyEncrypted: this.crypto.encrypt(imageApiKey) };
+            })()
+          : {}),
       },
     });
 
@@ -183,6 +202,7 @@ export class AIProfilesService {
       baseURL: profile.baseURL ?? null,
       generationParams: profile.generationParams ?? null,
       pricing: profile.pricing ?? null,
+      hasImageApiKey: Boolean(profile.imageApiKeyEncrypted),
       createdAt: toIso(profile.createdAt),
       updatedAt: toIso(profile.updatedAt),
     };

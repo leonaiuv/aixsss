@@ -8,6 +8,7 @@ import type {
 import { chatOpenAICompatible, generateImagesOpenAICompatible } from './openaiCompatible.js';
 import { chatDoubaoArk, generateImagesDoubaoArk } from './doubaoArk.js';
 import { chatGemini } from './gemini.js';
+import { generateImagesNanoBananaDmxapi } from './nanoBananaDmxapi.js';
 
 export async function chatWithProvider(config: ProviderChatConfig, messages: ChatMessage[]): Promise<ChatResult> {
   switch (config.kind) {
@@ -35,6 +36,8 @@ export async function generateImagesWithProvider(
       return generateImagesDoubaoArk(config, prompt);
     case 'gemini':
       throw new Error('Gemini image generation not supported yet');
+    case 'nanobanana_dmxapi':
+      return generateImagesNanoBananaDmxapi(config, prompt);
     default: {
       const _exhaustive: never = config.kind;
       throw new Error(`Unsupported provider kind: ${_exhaustive}`);

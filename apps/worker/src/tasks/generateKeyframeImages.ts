@@ -126,7 +126,14 @@ export async function generateKeyframeImages(args: {
 
   const profile = await prisma.aIProfile.findFirst({
     where: { id: aiProfileId, teamId },
-    select: { provider: true, model: true, baseURL: true, apiKeyEncrypted: true, generationParams: true },
+    select: {
+      provider: true,
+      model: true,
+      baseURL: true,
+      apiKeyEncrypted: true,
+      imageApiKeyEncrypted: true,
+      generationParams: true,
+    },
   });
   if (!profile) throw new Error('AI profile not found');
 
@@ -135,9 +142,13 @@ export async function generateKeyframeImages(args: {
   if (style) basePromptParts.push(`Style: ${style}`);
   if (scene.sceneDescription?.trim()) basePromptParts.push(`Scene: ${scene.sceneDescription.trim()}`);
 
-  const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
+  const textApiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
+  const imageApiKey = profile.imageApiKeyEncrypted
+    ? decryptApiKey(profile.imageApiKeyEncrypted, apiKeySecret)
+    : '';
   const providerConfig = toProviderImageConfig(profile);
-  providerConfig.apiKey = apiKey;
+  providerConfig.apiKey =
+    providerConfig.kind === 'nanobanana_dmxapi' ? imageApiKey.trim() || textApiKey : textApiKey;
 
   const keyframes: KeyframeKey[] = (() => {
     const json = tryParseJson(scene.shotPrompt);

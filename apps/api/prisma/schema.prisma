@@ -312,6 +312,7 @@ model AIProfile {
   model           String
   baseURL         String?
   apiKeyEncrypted String
+  imageApiKeyEncrypted String?
   generationParams Json?
   pricing         Json?
   createdAt       DateTime     @default(now())

@@ -68,4 +68,43 @@ describe('WorkflowWorkbench agent status panel', () => {
     expect(screen.getByText('Agent 执行状态')).toBeInTheDocument();
     expect(screen.getByText('运行中')).toBeInTheDocument();
   });
+
+  it('renders scene child task stats and failed details when provided', () => {
+    const summary: WorkflowAgentRunSummary = {
+      executionMode: 'agent',
+      fallbackUsed: false,
+      finishedAt: '2026-02-11T08:00:00.000Z',
+      stepSummaries: [],
+      sceneChildTasks: [
+        { sceneId: 's1', order: 1, jobId: 'job_scene_1', status: 'succeeded' },
+        { sceneId: 's2', order: 2, jobId: 'job_scene_2', status: 'running' },
+        {
+          sceneId: 's3',
+          order: 3,
+          jobId: 'job_scene_3',
+          status: 'failed',
+          error: 'scene 3 failed',
+        },
+        {
+          sceneId: 's4',
+          order: 4,
+          jobId: 'job_scene_4',
+          status: 'cancelled',
+          error: 'scene 4 cancelled',
+        },
+      ],
+    };
+
+    render(<WorkflowWorkbench {...createBaseProps()} agentRunSummary={summary} />);
+
+    expect(screen.getByText('分镜子任务')).toBeInTheDocument();
+    expect(screen.getByText('总计 4')).toBeInTheDocument();
+    expect(screen.getByText('执行中 1')).toBeInTheDocument();
+    expect(screen.getByText('失败 1')).toBeInTheDocument();
+    expect(screen.getByText('取消 1')).toBeInTheDocument();
+    expect(screen.getByText(/分镜 #3 · job_scene_3/)).toBeInTheDocument();
+    expect(screen.getByText('scene 3 failed')).toBeInTheDocument();
+    expect(screen.getByText(/分镜 #4 · job_scene_4/)).toBeInTheDocument();
+    expect(screen.getByText('scene 4 cancelled')).toBeInTheDocument();
+  });
 });

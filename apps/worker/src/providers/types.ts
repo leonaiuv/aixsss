@@ -19,6 +19,7 @@ export type GenerationParams = {
 };
 
 export type ProviderKind = 'openai_compatible' | 'doubao_ark' | 'gemini';
+export type ImageProviderKind = ProviderKind | 'nanobanana_dmxapi';
 
 export type JsonSchemaResponseFormat = {
   type: 'json_schema';
@@ -66,7 +67,7 @@ export type ImageGenerationParams = {
 };
 
 export type ProviderImageConfig = {
-  kind: ProviderKind;
+  kind: ImageProviderKind;
   apiKey: string;
   baseURL?: string;
   model?: string;

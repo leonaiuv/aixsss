@@ -16,6 +16,7 @@ export type ApiAIProfile = {
   baseURL: string | null;
   generationParams: unknown | null;
   pricing: ApiAIPricing;
+  hasImageApiKey?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -29,6 +30,7 @@ export async function apiCreateAIProfile(input: {
   name: string;
   provider: ApiAIProfile['provider'];
   apiKey: string;
+  imageApiKey?: string;
   baseURL?: string;
   model: string;
   generationParams?: unknown;
@@ -43,6 +45,7 @@ export async function apiUpdateAIProfile(
     name: string;
     provider: ApiAIProfile['provider'];
     apiKey: string;
+    imageApiKey: string | null;
     baseURL: string;
     model: string;
     generationParams: unknown | null;
