@@ -2133,7 +2133,9 @@ export function EpisodeWorkflow() {
                   : {}),
                 ...(typeof rawImage.provider === 'string' ? { provider: rawImage.provider } : {}),
                 ...(typeof rawImage.model === 'string' ? { model: rawImage.model } : {}),
-                ...(typeof rawImage.createdAt === 'string' ? { createdAt: rawImage.createdAt } : {}),
+                ...(typeof rawImage.createdAt === 'string'
+                  ? { createdAt: rawImage.createdAt }
+                  : {}),
                 ...(metadata ? { metadata } : {}),
               };
 

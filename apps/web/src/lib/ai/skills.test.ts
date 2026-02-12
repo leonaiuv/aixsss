@@ -65,7 +65,9 @@ describe('技能定义', () => {
     });
 
     it('promptTemplate 应强调固定景别顺序与输出纯 JSON', () => {
-      expect(KeyframePromptSkill.promptTemplate).toContain('ELS→LS→MLS→MS→MCU→CU→ECU→Low Angle→High Angle');
+      expect(KeyframePromptSkill.promptTemplate).toContain(
+        'ELS→LS→MLS→MS→MCU→CU→ECU→Low Angle→High Angle',
+      );
       expect(KeyframePromptSkill.promptTemplate).toContain('只输出 JSON');
     });
   });

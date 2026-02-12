@@ -897,7 +897,8 @@ export function SceneDetailModal({
                                     isGeneratingKeyframePrompt
                                   }
                                   isGenerating={
-                                    isGeneratingKeyframePrompt && generatingSingleKeyframeKey === kfKey
+                                    isGeneratingKeyframePrompt &&
+                                    generatingSingleKeyframeKey === kfKey
                                   }
                                 />
                               );
@@ -1029,7 +1030,9 @@ export function SceneDetailModal({
                                 </div>
                               )}
                               {image ? (
-                                <div className="text-[10px] text-muted-foreground">双击图片可放大</div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  双击图片可放大
+                                </div>
                               ) : null}
                             </div>
                           );

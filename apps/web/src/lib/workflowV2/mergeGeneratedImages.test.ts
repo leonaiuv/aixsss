@@ -30,10 +30,10 @@ describe('mergeGeneratedImages', () => {
   });
 
   it('应按 KF0-KF8 顺序输出，新增 keyframe 也能插入正确位置', () => {
-    const out = mergeGeneratedImages(
-      [{ keyframe: 'KF7', url: 'https://old/kf7.png' }],
-      { keyframe: 'KF2', url: 'https://new/kf2.png' },
-    );
+    const out = mergeGeneratedImages([{ keyframe: 'KF7', url: 'https://old/kf7.png' }], {
+      keyframe: 'KF2',
+      url: 'https://new/kf2.png',
+    });
 
     expect(out.map((item) => item.keyframe)).toEqual(['KF2', 'KF7']);
   });

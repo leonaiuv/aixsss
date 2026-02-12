@@ -8,8 +8,7 @@ type GeneratedImageInput = Partial<GeneratedImage> & {
 
 export function isGeneratedImageKeyframe(value: unknown): value is GeneratedImageKeyframe {
   return (
-    typeof value === 'string' &&
-    (GENERATED_IMAGE_KEYFRAMES as readonly string[]).includes(value)
+    typeof value === 'string' && (GENERATED_IMAGE_KEYFRAMES as readonly string[]).includes(value)
   );
 }
 
@@ -39,4 +38,3 @@ export function mergeGeneratedImages(
   }
   return ordered;
 }
-

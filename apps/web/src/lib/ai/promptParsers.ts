@@ -316,7 +316,10 @@ export function buildKeyframePromptFromJson(
   return parts.join(', ');
 }
 
-function buildStoryboardShotPrompt(shot: StoryboardShotV2Data | undefined, locale: PromptLocale): string {
+function buildStoryboardShotPrompt(
+  shot: StoryboardShotV2Data | undefined,
+  locale: PromptLocale,
+): string {
   if (!shot) return '';
   const parts: string[] = [];
   if (shot.shot_number || shot.type || shot.type_cn) {
@@ -509,7 +512,9 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
     };
 
     const keyframes = keyframeKeys.map((kfKey) => buildKfText(kfKey));
-    const filledKeyframeCount = keyframes.filter((kf) => Boolean(kf.zh?.trim() || kf.en?.trim())).length;
+    const filledKeyframeCount = keyframes.filter((kf) =>
+      Boolean(kf.zh?.trim() || kf.en?.trim()),
+    ).length;
 
     return {
       keyframes,

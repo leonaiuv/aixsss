@@ -42,7 +42,11 @@ type MergeSingleKeyframePromptArgs = {
 };
 
 function isStoryboardV2Json(value: unknown): value is StoryboardKeyframeJsonData {
-  return Boolean(value) && typeof value === 'object' && Array.isArray((value as { shots?: unknown }).shots);
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    Array.isArray((value as { shots?: unknown }).shots)
+  );
 }
 
 function pickLocaleText(text: LocaleText | undefined): string | undefined {
@@ -65,7 +69,10 @@ function toDefaultShot(index: number): StoryboardShotV2Data {
   };
 }
 
-function normalizeShot(index: number, shot: StoryboardShotV2Data | undefined): StoryboardShotV2Data {
+function normalizeShot(
+  index: number,
+  shot: StoryboardShotV2Data | undefined,
+): StoryboardShotV2Data {
   const base = toDefaultShot(index);
   return {
     shot_number: shot?.shot_number?.trim() || base.shot_number,
@@ -120,7 +127,9 @@ export function mergeSingleKeyframePrompt(args: MergeSingleKeyframePromptArgs): 
   const existingParsed = parseKeyframePromptText(existingPrompt || '');
   const regeneratedParsed = parseKeyframePromptText(regeneratedPrompt || '');
 
-  const existingV2 = isStoryboardV2Json(existingParsed.rawJson) ? existingParsed.rawJson : undefined;
+  const existingV2 = isStoryboardV2Json(existingParsed.rawJson)
+    ? existingParsed.rawJson
+    : undefined;
   const regeneratedV2 = isStoryboardV2Json(regeneratedParsed.rawJson)
     ? regeneratedParsed.rawJson
     : undefined;

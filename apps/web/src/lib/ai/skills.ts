@@ -91,8 +91,7 @@ export const ActionDescriptionSkill: Skill = {
 
 export const KeyframePromptSkill: Skill = {
   name: 'keyframe-prompt',
-  description:
-    '生成九宫格电影分镜 JSON（storyboard_config + shots + technical_requirements）',
+  description: '生成九宫格电影分镜 JSON（storyboard_config + shots + technical_requirements）',
   requiredContext: ['project_essence', 'confirmed_content'],
   promptTemplate: `你是一位专业的电影分镜师和提示词工程师。请根据输入内容生成适用于 Nano Banana Pro 的九宫格电影分镜 JSON。
 
