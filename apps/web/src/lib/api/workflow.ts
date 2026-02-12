@@ -1,5 +1,6 @@
 import { apiRequest } from './http';
 import type { ApiAIJob } from './aiJobs';
+import type { GeneratedImageKeyframe } from '@aixsss/shared';
 
 export async function apiWorkflowPlanEpisodes(input: {
   projectId: string;
@@ -300,12 +301,19 @@ export async function apiWorkflowGenerateKeyframeImages(input: {
   projectId: string;
   sceneId: string;
   aiProfileId: string;
+  keyframeKey?: GeneratedImageKeyframe;
 }) {
   return apiRequest<ApiAIJob>(
     `/workflow/projects/${encodeURIComponent(input.projectId)}/scenes/${encodeURIComponent(
       input.sceneId,
     )}/generate-images`,
-    { method: 'POST', body: { aiProfileId: input.aiProfileId } },
+    {
+      method: 'POST',
+      body: {
+        aiProfileId: input.aiProfileId,
+        ...(input.keyframeKey ? { keyframeKey: input.keyframeKey } : {}),
+      },
+    },
   );
 }
 

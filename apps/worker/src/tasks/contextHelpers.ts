@@ -72,6 +72,8 @@ export interface CharacterVisualData {
   name: string;
   visualDescription?: string | null;
   personality?: string | null;
+  avatar?: string | null;
+  appearances?: unknown;
 }
 
 // ============= 情感曲线计算 =============
@@ -112,6 +114,9 @@ export function extractKF8FromShotPrompt(shotPrompt: string | null | undefined):
   if (!shotPrompt?.trim()) return undefined;
   try {
     const parsed = JSON.parse(shotPrompt);
+    if (Array.isArray(parsed?.shots) && parsed.shots[8]) {
+      return JSON.stringify(parsed.shots[8], null, 2);
+    }
     const kf8 = parsed.keyframes?.KF8 || parsed.KF8;
     return kf8 ? JSON.stringify(kf8, null, 2) : undefined;
   } catch {
@@ -126,6 +131,9 @@ export function extractKF0FromShotPrompt(shotPrompt: string | null | undefined):
   if (!shotPrompt?.trim()) return undefined;
   try {
     const parsed = JSON.parse(shotPrompt);
+    if (Array.isArray(parsed?.shots) && parsed.shots[0]) {
+      return JSON.stringify(parsed.shots[0], null, 2);
+    }
     const kf0 = parsed.keyframes?.KF0 || parsed.KF0;
     return kf0 ? JSON.stringify(kf0, null, 2) : undefined;
   } catch {

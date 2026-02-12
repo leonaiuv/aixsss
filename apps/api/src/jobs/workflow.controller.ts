@@ -1,5 +1,6 @@
 import { Body, Controller, Inject, Param, Post, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
+import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { AuthUser } from '../auth/auth.types.js';
@@ -43,6 +44,10 @@ const StoryboardPlanBodySchema = WorkflowBodySchema.extend({
 
 const StoryboardGroupBodySchema = WorkflowBodySchema.extend({
   cameraMode: z.enum(['A', 'B']).optional(),
+});
+
+const GenerateKeyframeImagesBodySchema = WorkflowBodySchema.extend({
+  keyframeKey: z.enum(GENERATED_IMAGE_KEYFRAMES).optional(),
 });
 
 @UseGuards(JwtAuthGuard)
@@ -267,8 +272,10 @@ export class WorkflowController {
     @Param('sceneId') sceneId: string,
     @Body() body: unknown,
   ) {
-    const input = parseOrBadRequest(WorkflowBodySchema, body);
-    return this.jobs.enqueueGenerateKeyframeImages(user.teamId, projectId, sceneId, input.aiProfileId);
+    const input = parseOrBadRequest(GenerateKeyframeImagesBodySchema, body);
+    return this.jobs.enqueueGenerateKeyframeImages(user.teamId, projectId, sceneId, input.aiProfileId, {
+      keyframeKey: input.keyframeKey,
+    });
   }
 
   @Post('projects/:projectId/scenes/:sceneId/generate-video')

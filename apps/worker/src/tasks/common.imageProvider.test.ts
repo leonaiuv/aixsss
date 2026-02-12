@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toProviderImageConfig } from './common.js';
+import { toProviderImageConfig, toProviderKeyframeChatConfig } from './common.js';
 
 describe('toProviderImageConfig - image provider routing', () => {
   it('当 imageProvider=nanobananapro-dmxapi 时应路由到独立 provider', () => {
@@ -66,5 +66,22 @@ describe('toProviderImageConfig - image provider routing', () => {
     expect(config.kind).toBe('gemini');
     expect(config.model).toBe('gemini-3-pro-image-preview');
     expect(config.baseURL).toBe('https://generativelanguage.googleapis.com');
+  });
+
+  it('关键帧生成在 imageProvider=nanobananapro-dmxapi 时应切到 nanobanana chat provider', () => {
+    const out = toProviderKeyframeChatConfig({
+      provider: 'gemini',
+      model: 'gemini-1.5-pro',
+      baseURL: null,
+      generationParams: {
+        imageProvider: 'nanobananapro-dmxapi',
+        imageModel: 'gemini-3-pro-image-preview',
+        imageBaseURL: 'https://www.dmxapi.cn',
+      },
+    });
+
+    expect(out.providerConfig.kind).toBe('nanobanana_dmxapi');
+    expect(out.providerConfig.model).toBe('gemini-3-pro-image-preview');
+    expect(out.useImageApiKey).toBe(true);
   });
 });

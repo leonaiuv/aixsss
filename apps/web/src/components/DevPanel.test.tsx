@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DevPanel, DevPanelTrigger } from './DevPanel';
 import { useAIProgressStore, type BatchOperationType } from '@/stores/aiProgressStore';
@@ -264,6 +264,47 @@ describe('DevPanel', () => {
       // 检查是否有红色指示器存在
       const indicator = errorsTab.querySelector('.bg-red-500');
       expect(indicator).toBeTruthy();
+    });
+
+    it('超长错误信息下仍应保留错误区复制按钮', async () => {
+      const user = userEvent.setup();
+      const longError = `JSON字段校验失败:${'E'.repeat(12000)}`;
+      vi.mocked(debugLogger.getRecentErrors).mockReturnValue([
+        {
+          id: 'err-long',
+          timestamp: '2026/02/12 12:49:07',
+          callType: 'character_portrait',
+          promptTemplate: 'template',
+          filledPrompt: 'filled prompt',
+          messages: [
+            { role: 'system', content: 'system' },
+            { role: 'user', content: 'user' },
+          ],
+          context: {},
+          config: {
+            provider: 'doubao-ark',
+            model: 'ep-20260112233219-v7pw2',
+          },
+          status: 'error',
+          error: longError,
+        },
+      ] as unknown as ReturnType<typeof debugLogger.getRecentErrors>);
+
+      render(<DevPanel />);
+      await user.click(screen.getByRole('tab', { name: /错误/ }));
+      await user.click(screen.getByTitle('点击查看详细调试信息'));
+
+      const errorHeader = screen.getByText('错误信息');
+      const errorCopyBtn = within(errorHeader.parentElement as HTMLElement).getByRole('button', {
+        name: '复制',
+      });
+      expect(errorCopyBtn).toHaveClass('shrink-0');
+      expect(errorCopyBtn).toBeVisible();
+
+      const errorTextList = screen.getAllByText(new RegExp(longError.slice(0, 40)));
+      const detailErrorText = errorTextList.find((node) => node.className.includes('break-all'));
+      expect(detailErrorText).toBeTruthy();
+      expect(detailErrorText).toHaveClass('break-all');
     });
   });
 

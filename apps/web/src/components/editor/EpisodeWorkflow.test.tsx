@@ -647,8 +647,10 @@ describe('EpisodeWorkflow', () => {
 
     expect(await screen.findByText('分镜 #1')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'ZH' }));
-    await userEvent.click(screen.getByRole('button', { name: 'EN' }));
+    const zhButtons = screen.getAllByRole('button', { name: 'ZH' });
+    const enButtons = screen.getAllByRole('button', { name: 'EN' });
+    await userEvent.click(zhButtons[0]);
+    await userEvent.click(enButtons[0]);
 
     // 复制内容应包含 SCENE_ANCHOR + LOCK + AVOID（纯文本，无标签）
     expect(writeText).toHaveBeenNthCalledWith(

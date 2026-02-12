@@ -1,8 +1,13 @@
 export type ChatRole = 'system' | 'user' | 'assistant';
 
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+  | { type: 'inline_data'; inline_data: { mime_type: string; data: string } };
+
 export type ChatMessage = {
   role: ChatRole;
-  content: string;
+  content: string | ChatContentPart[];
 };
 
 export type GenerationParams = {
@@ -18,7 +23,7 @@ export type GenerationParams = {
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 };
 
-export type ProviderKind = 'openai_compatible' | 'doubao_ark' | 'gemini';
+export type ProviderKind = 'openai_compatible' | 'doubao_ark' | 'gemini' | 'nanobanana_dmxapi';
 export type ImageProviderKind = ProviderKind | 'nanobanana_dmxapi';
 
 export type JsonSchemaResponseFormat = {

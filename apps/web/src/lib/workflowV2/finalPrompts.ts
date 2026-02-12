@@ -4,7 +4,6 @@ import {
   parseMotionPromptText,
   parseSceneAnchorText,
   buildSceneAnchorPromptFromJson,
-  buildKeyframePromptFromJson,
   buildMotionPromptFromJson,
 } from '@/lib/ai/promptParsers';
 import type { Scene } from '@/types';
@@ -62,16 +61,9 @@ function buildKeyframeAvoid(scene: Scene, locale: PromptLocale): string {
  */
 function buildKeyframePrompt(scene: Scene, kfKey: string, locale: PromptLocale): string {
   const parsed = parseKeyframePromptText(scene.shotPrompt || '');
-
-  // 如果是 JSON 格式且有原始数据，使用拼接函数
-  if (parsed.isJson && parsed.rawJson) {
-    const kfData = parsed.rawJson.keyframes?.[kfKey]?.[locale];
-    return buildKeyframePromptFromJson(kfData, parsed.rawJson.camera, locale);
-  }
-
-  // 旧格式
   const idx = parsed.keyframeKeys.indexOf(kfKey);
   if (idx < 0) return '';
+
   return pickLocale(parsed.keyframes[idx], locale);
 }
 
@@ -126,23 +118,6 @@ export function buildSceneAnchorCopyText(scene: Scene): { zh: string; en: string
  */
 export function buildKeyframeCopyText(scene: Scene, kfKey: string): { zh: string; en: string } {
   const parsed = parseKeyframePromptText(scene.shotPrompt || '');
-
-  if (parsed.isJson && parsed.rawJson) {
-    return {
-      zh: buildKeyframePromptFromJson(
-        parsed.rawJson.keyframes?.[kfKey]?.zh,
-        parsed.rawJson.camera,
-        'zh',
-      ),
-      en: buildKeyframePromptFromJson(
-        parsed.rawJson.keyframes?.[kfKey]?.en,
-        parsed.rawJson.camera,
-        'en',
-      ),
-    };
-  }
-
-  // 旧格式
   const idx = parsed.keyframeKeys.indexOf(kfKey);
   if (idx < 0) return { zh: '', en: '' };
   const kf = parsed.keyframes[idx];

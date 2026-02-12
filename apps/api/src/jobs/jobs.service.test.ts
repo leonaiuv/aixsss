@@ -197,7 +197,7 @@ describe('JobsService new workflow enqueue', () => {
       id: 'job_existing',
       status: 'running',
       type: 'run_episode_creation_agent',
-      startedAt: new Date('2026-02-11T12:00:00.000Z'),
+      startedAt: new Date(), // Use current time to avoid being treated as stale
     });
 
     await expect(

@@ -134,6 +134,31 @@ export const GENERATED_IMAGE_KEYFRAMES = [
 ] as const;
 export type GeneratedImageKeyframe = (typeof GENERATED_IMAGE_KEYFRAMES)[number];
 
+export const STORYBOARD_V2_SHOT_ORDER = [
+  'ELS',
+  'LS',
+  'MLS',
+  'MS',
+  'MCU',
+  'CU',
+  'ECU',
+  'Low Angle',
+  'High Angle',
+] as const;
+export type StoryboardV2ShotType = (typeof STORYBOARD_V2_SHOT_ORDER)[number];
+
+export const STORYBOARD_V2_SHOT_CN: Record<StoryboardV2ShotType, string> = {
+  ELS: '大远景',
+  LS: '远景',
+  MLS: '中远景',
+  MS: '中景',
+  MCU: '中近景',
+  CU: '近景',
+  ECU: '特写',
+  'Low Angle': '仰拍',
+  'High Angle': '俯拍',
+};
+
 export type GeneratedImage = {
   keyframe: GeneratedImageKeyframe;
   url: string;

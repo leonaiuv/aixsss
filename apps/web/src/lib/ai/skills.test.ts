@@ -51,29 +51,27 @@ describe('技能定义', () => {
   });
 
   describe('KeyframePromptSkill', () => {
-    it('应输出九关键帧（KF0-KF8）且中英双语（JSON格式）', () => {
+    it('应输出 V2 九宫格分镜结构（storyboard_config + shots + technical_requirements）', () => {
       expect(KeyframePromptSkill.name).toBe('keyframe-prompt');
       expect(KeyframePromptSkill.outputFormat.type).toBe('json');
       expect(KeyframePromptSkill.outputFormat.maxLength).toBe(15000);
       expect(KeyframePromptSkill.maxTokens).toBe(1500);
-      expect(KeyframePromptSkill.promptTemplate).toContain('KF0');
-      expect(KeyframePromptSkill.promptTemplate).toContain('KF1');
-      expect(KeyframePromptSkill.promptTemplate).toContain('KF2');
-      expect(KeyframePromptSkill.promptTemplate).toContain('KF8');
+      expect(KeyframePromptSkill.promptTemplate).toContain('storyboard_config');
+      expect(KeyframePromptSkill.promptTemplate).toContain('shots');
+      expect(KeyframePromptSkill.promptTemplate).toContain('technical_requirements');
       expect(KeyframePromptSkill.promptTemplate).toContain('{scene_description}');
       expect(KeyframePromptSkill.promptTemplate).toContain('{characters}');
       expect(KeyframePromptSkill.promptTemplate).toContain('{style}');
     });
 
-    it('promptTemplate 应强调静止与禁止连续过程词', () => {
-      expect(KeyframePromptSkill.promptTemplate).toContain('定格瞬间');
-      expect(KeyframePromptSkill.promptTemplate).toContain('禁止');
-      expect(KeyframePromptSkill.promptTemplate).toContain('then/after');
+    it('promptTemplate 应强调固定景别顺序与输出纯 JSON', () => {
+      expect(KeyframePromptSkill.promptTemplate).toContain('ELS→LS→MLS→MS→MCU→CU→ECU→Low Angle→High Angle');
+      expect(KeyframePromptSkill.promptTemplate).toContain('只输出 JSON');
     });
   });
 
   describe('MotionPromptSkill', () => {
-    it('应基于九关键帧（KF0-KF8）差分输出运动提示词（短版+分拍版，中英双语，JSON格式）', () => {
+    it('应基于九宫格 shots 差分输出运动提示词（短版+分拍版，中英双语，JSON格式）', () => {
       expect(MotionPromptSkill.name).toBe('motion-prompt');
       expect(MotionPromptSkill.outputFormat.type).toBe('json');
       expect(MotionPromptSkill.outputFormat.maxLength).toBe(2500);

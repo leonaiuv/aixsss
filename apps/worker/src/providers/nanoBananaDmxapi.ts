@@ -1,4 +1,11 @@
-import type { ImageGenerationResult, ProviderImageConfig } from './types.js';
+import type {
+  ChatContentPart,
+  ChatMessage,
+  ChatResult,
+  ImageGenerationResult,
+  ProviderChatConfig,
+  ProviderImageConfig,
+} from './types.js';
 
 type NanoBananaErrorResponse = {
   error?: { message?: string };
@@ -16,8 +23,10 @@ type NanoBananaFileData = {
 
 type NanoBananaPart = {
   inlineData?: NanoBananaInlineData;
+  inline_data?: { mime_type?: string; data?: string };
   text?: string;
   fileData?: NanoBananaFileData;
+  file_data?: { file_uri?: string };
   thoughtSignature?: string;
 };
 
@@ -28,6 +37,11 @@ type NanoBananaResponse = {
     };
   }>;
 };
+
+type NanoBananaRequestPart =
+  | { text: string }
+  | { inline_data: { mime_type: string; data: string } }
+  | { file_data: { file_uri: string } };
 
 type NanoBananaHttpError = Error & {
   status?: number;
@@ -171,6 +185,12 @@ function extractDataUriFromText(text: string): string | null {
   return m?.[1] ?? null;
 }
 
+function extractBase64FromDataUri(uri: string): { mimeType: string; data: string } | null {
+  const m = (uri || '').match(/^data:([^;]+);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return null;
+  return { mimeType: m[1] || 'image/png', data: m[2] || '' };
+}
+
 function extractImageUrls(data: NanoBananaResponse): string[] {
   const urls: string[] = [];
   const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
@@ -196,9 +216,176 @@ function extractImageUrls(data: NanoBananaResponse): string[] {
       if (typeof fileUri === 'string' && fileUri.trim()) {
         urls.push(fileUri.trim());
       }
+
+      const fileUriSnake = part?.file_data?.file_uri;
+      if (typeof fileUriSnake === 'string' && fileUriSnake.trim()) {
+        urls.push(fileUriSnake.trim());
+      }
     }
   }
   return urls;
+}
+
+function extractTextOutputs(data: NanoBananaResponse): string {
+  const decodeInlineText = (mimeType: string | undefined, base64Data: string | undefined): string | null => {
+    const mime = (mimeType || '').trim().toLowerCase();
+    const payload = (base64Data || '').trim();
+    if (!payload) return null;
+    const isTextLike =
+      mime.startsWith('text/') ||
+      mime === 'application/json' ||
+      mime === 'application/ld+json' ||
+      mime === 'application/xml';
+    if (!isTextLike) return null;
+    try {
+      return Buffer.from(payload, 'base64').toString('utf8').trim();
+    } catch {
+      return null;
+    }
+  };
+
+  const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+  const out: string[] = [];
+  for (const candidate of candidates) {
+    const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+    for (const part of parts) {
+      if (typeof part?.text === 'string' && part.text.trim()) {
+        out.push(part.text.trim());
+        continue;
+      }
+
+      const inlineCamel = decodeInlineText(part?.inlineData?.mimeType, part?.inlineData?.data);
+      if (inlineCamel) {
+        out.push(inlineCamel);
+        continue;
+      }
+
+      const inlineSnake = decodeInlineText(part?.inline_data?.mime_type, part?.inline_data?.data);
+      if (inlineSnake) {
+        out.push(inlineSnake);
+      }
+    }
+  }
+  return out.join('\n').trim();
+}
+
+function normalizeChatParts(content: string | ChatContentPart[]): NanoBananaRequestPart[] {
+  if (typeof content === 'string') {
+    return [{ text: content }];
+  }
+  const parts: NanoBananaRequestPart[] = [];
+  for (const part of content) {
+    if (part.type === 'text') {
+      if (part.text?.trim()) parts.push({ text: part.text });
+      continue;
+    }
+    if (part.type === 'inline_data') {
+      if (part.inline_data?.mime_type && part.inline_data?.data) {
+        parts.push({
+          inline_data: {
+            mime_type: part.inline_data.mime_type,
+            data: part.inline_data.data,
+          },
+        });
+      }
+      continue;
+    }
+    if (part.type === 'image_url') {
+      const url = part.image_url?.url?.trim() ?? '';
+      if (!url) continue;
+      const inline = extractBase64FromDataUri(url);
+      if (inline) {
+        parts.push({
+          inline_data: {
+            mime_type: inline.mimeType,
+            data: inline.data,
+          },
+        });
+      } else {
+        parts.push({ file_data: { file_uri: url } });
+      }
+    }
+  }
+  return parts.length ? parts : [{ text: '' }];
+}
+
+function toDmxContents(messages: ChatMessage[]): Array<{ role: 'user' | 'model'; parts: NanoBananaRequestPart[] }> {
+  const system = messages.filter((m) => m.role === 'system');
+  const rest = messages.filter((m) => m.role !== 'system');
+
+  const merged: ChatMessage[] = [];
+  if (system.length > 0) {
+    const systemText = system
+      .flatMap((m) => normalizeChatParts(m.content))
+      .map((p) => ('text' in p ? p.text : ''))
+      .filter(Boolean)
+      .join('\n');
+    if (systemText.trim()) {
+      merged.push({
+        role: 'user',
+        content: [{ type: 'text', text: `System instruction:\n${systemText}` }],
+      });
+    }
+  }
+  merged.push(...rest);
+
+  return merged.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: normalizeChatParts(m.content),
+  }));
+}
+
+export async function chatNanoBananaDmxapi(
+  config: ProviderChatConfig,
+  messages: ChatMessage[],
+): Promise<ChatResult> {
+  const apiKey = normalizeApiKey(config.apiKey);
+  if (!apiKey) throw new Error('NanoBanana/DMXAPI API Key 为空：请在 AI 设置中填写正确的 API Key。');
+
+  const baseURL = normalizeBaseURL(config.baseURL);
+  const model = normalizeModel(config.model);
+  const url = buildUrl(baseURL, model);
+  const body: Record<string, unknown> = {
+    contents: toDmxContents(messages),
+    generationConfig: {
+      responseModalities: ['TEXT'],
+      ...(config.responseFormat ? { responseMimeType: 'application/json' } : {}),
+    },
+  };
+
+  const authModes: AuthMode[] = ['x-goog-api-key', 'authorization', 'authorization-bearer'];
+  let lastStatus = 500;
+  let lastStatusText = 'Request Failed';
+  let lastDetail = '';
+
+  for (let i = 0; i < authModes.length; i += 1) {
+    const authMode = authModes[i];
+    const response = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: buildHeaders(authMode, apiKey),
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      const data = (await response.json()) as NanoBananaResponse;
+      const text = extractTextOutputs(data);
+      if (!text) {
+        throw new Error('NanoBanana/DMXAPI 文本输出为空。');
+      }
+      return { content: text };
+    }
+
+    lastStatus = response.status;
+    lastStatusText = response.statusText;
+    lastDetail = await readErrorDetail(response);
+    const authFailed = response.status === 401 || response.status === 403;
+    const hasNext = i < authModes.length - 1;
+    if (!(authFailed && hasNext)) {
+      throwResponseError(lastStatus, lastStatusText, lastDetail);
+    }
+  }
+
+  throwResponseError(lastStatus, lastStatusText, lastDetail);
 }
 
 export async function generateImagesNanoBananaDmxapi(

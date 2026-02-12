@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { validateContinuity, validateKeyframeGroup, type FrameSpec, type KeyframeGroup } from './actionBeats.js';
+import {
+  keyframeGroupsToStoryboardPromptV2,
+  validateContinuity,
+  validateKeyframeGroup,
+  type FrameSpec,
+  type KeyframeGroup,
+} from './actionBeats.js';
 
 describe('actionBeats validators', () => {
   it('validateKeyframeGroup passes for a clear start/mid/end progression', () => {
@@ -157,5 +163,79 @@ describe('actionBeats validators', () => {
 
     const issues = validateContinuity(prevEnd, nextStart);
     expect(issues.length).toBeGreaterThan(0);
+  });
+
+  it('keyframeGroupsToStoryboardPromptV2 应输出固定 9-shot 顺序', () => {
+    const mkFrame = (suffix: string): FrameSpec => ({
+      used_anchors: ['table', 'window'],
+      subjects: [
+        {
+          character_id: 'C_A',
+          name: 'A',
+          position_in_frame: 'left',
+          body_orientation: 'toward_camera',
+          pose: `pose_${suffix}`,
+          action_snapshot: `action_${suffix}`,
+          expression: 'neutral',
+          gaze: 'forward',
+          hands: { left: 'at_side', right: 'open_empty' },
+          props: [{ name: 'cup', state: `state_${suffix}` }],
+        },
+      ],
+      composition: { rule: 'rule_of_thirds', focus: 'A', depth_hint: 'shallow' },
+      bubble_space: { need: true, area: 'top_right', size: 'medium' },
+    });
+
+    const groups: KeyframeGroup[] = [
+      {
+        beat_id: 'B1',
+        camera: { shot_size: 'LS', angle: 'eye_level', lens_hint: '35mm', aspect_ratio: '16:9' },
+        frames: {
+          start: { frame_spec: mkFrame('1s') },
+          mid: { frame_spec: mkFrame('1m') },
+          end: { frame_spec: mkFrame('1e') },
+        },
+        negative: { avoid: ['watermark'] },
+      },
+      {
+        beat_id: 'B2',
+        camera: { shot_size: 'MS', angle: 'eye_level', lens_hint: '50mm', aspect_ratio: '16:9' },
+        frames: {
+          start: { frame_spec: mkFrame('2s') },
+          mid: { frame_spec: mkFrame('2m') },
+          end: { frame_spec: mkFrame('2e') },
+        },
+        negative: { avoid: ['extra characters'] },
+      },
+      {
+        beat_id: 'B3',
+        camera: { shot_size: 'CU', angle: 'low_angle', lens_hint: '85mm', aspect_ratio: '16:9' },
+        frames: {
+          start: { frame_spec: mkFrame('3s') },
+          mid: { frame_spec: mkFrame('3m') },
+          end: { frame_spec: mkFrame('3e') },
+        },
+      },
+    ];
+
+    const out = keyframeGroupsToStoryboardPromptV2(groups);
+    const parsed = JSON.parse(out) as {
+      storyboard_config: { layout: string };
+      shots: Array<{ type: string }>;
+    };
+
+    expect(parsed.storyboard_config.layout).toBe('3x3_grid');
+    expect(parsed.shots).toHaveLength(9);
+    expect(parsed.shots.map((s) => s.type)).toEqual([
+      'ELS',
+      'LS',
+      'MLS',
+      'MS',
+      'MCU',
+      'CU',
+      'ECU',
+      'Low Angle',
+      'High Angle',
+    ]);
   });
 });

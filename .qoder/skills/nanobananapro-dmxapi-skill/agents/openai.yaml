@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nano Banana × DMXAPI 接入"
+  short_description: "通过 DMXAPI 接入 Gemini 图像：文生图/编辑/融合/多轮/返回解析"
+  default_prompt: "接入或排查 DMXAPI 的 Gemini/Nano Banana 图像能力：确认端点与鉴权头，给出最小可用调用示例（HTTP/Python），并实现健壮的响应解析（inlineData 与 data:image;base64 文本），必要时用 scripts/dmxapi_gemini_image.py 验证与定位问题。"

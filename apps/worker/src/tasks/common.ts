@@ -136,6 +136,34 @@ export function toProviderChatConfig(profile: {
   };
 }
 
+export function toProviderKeyframeChatConfig(profile: {
+  provider: 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible' | 'doubao_ark';
+  model: string;
+  baseURL: string | null;
+  generationParams: JsonValue | null;
+}): { providerConfig: ProviderChatConfig; useImageApiKey: boolean } {
+  const params = extractGenerationParams(profile.generationParams);
+  const overrides = extractModelOverrides(profile.generationParams ?? null);
+
+  if (overrides?.imageProvider === 'nanobananapro-dmxapi') {
+    return {
+      providerConfig: {
+        kind: 'nanobanana_dmxapi',
+        apiKey: '',
+        baseURL: overrides.imageBaseURL ?? 'https://www.dmxapi.cn',
+        model: overrides.imageModel || 'gemini-3-pro-image-preview',
+        params,
+      },
+      useImageApiKey: true,
+    };
+  }
+
+  return {
+    providerConfig: toProviderChatConfig(profile),
+    useImageApiKey: false,
+  };
+}
+
 export function toProviderImageConfig(profile: {
   provider: 'deepseek' | 'kimi' | 'gemini' | 'openai_compatible' | 'doubao_ark';
   model: string;

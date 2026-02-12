@@ -94,6 +94,79 @@ describe('promptParsers', () => {
       expect(parsed.rawUnlabeled).toContain('旧格式');
       expect(parsed.rawUnlabeled).toContain('another unlabeled line');
     });
+
+    it('应解析 V2 storyboard JSON 并映射为 9 帧视图', () => {
+      const text = JSON.stringify({
+        storyboard_config: {
+          layout: '3x3_grid',
+          aspect_ratio: '16:9',
+          style: 'modern_thriller',
+          visual_anchor: {
+            character: '黑色短发，深灰风衣，左眉浅疤',
+            environment: '废弃地铁站台，冷色调',
+            lighting: '戏剧侧光',
+            mood: '紧张',
+          },
+        },
+        shots: [
+          { shot_number: '分镜1', type: 'ELS', type_cn: '大远景', description: '环境全貌', angle: 'Eye level', focus: '建立环境' },
+          { shot_number: '分镜2', type: 'LS', type_cn: '远景', description: '动作展示', angle: 'Eye level', focus: '动作展示' },
+          { shot_number: '分镜3', type: 'MLS', type_cn: '中远景', description: '人物关系', angle: 'Slight low angle', focus: '人物关系' },
+          { shot_number: '分镜4', type: 'MS', type_cn: '中景', description: '肢体语言', angle: 'Eye level', focus: '肢体语言' },
+          { shot_number: '分镜5', type: 'MCU', type_cn: '中近景', description: '情绪表达', angle: 'Slight high angle', focus: '情绪表达' },
+          { shot_number: '分镜6', type: 'CU', type_cn: '近景', description: '眼神细节', angle: 'Straight on', focus: '眼神细节' },
+          { shot_number: '分镜7', type: 'ECU', type_cn: '特写', description: '关键道具', angle: 'Macro', focus: '关键道具' },
+          { shot_number: '分镜8', type: 'Low Angle', type_cn: '仰拍', description: '权力关系', angle: 'Extreme low angle', focus: '权力关系' },
+          { shot_number: '分镜9', type: 'High Angle', type_cn: '俯拍', description: '上帝视角', angle: 'Top-down', focus: '上帝视角' },
+        ],
+        technical_requirements: {
+          consistency: 'ABSOLUTE: Same character face, same costume, same lighting across all 9 panels',
+          composition: "Label '分镜X' top-left corner, no timecode, cinematic 2.39:1 ratio",
+          quality: 'Photorealistic, 8K, film grain',
+        },
+      });
+
+      const parsed = parseKeyframePromptText(text);
+      expect(parsed.isStructured).toBe(true);
+      expect(parsed.keyframes).toHaveLength(9);
+      expect(parsed.filledKeyframeCount).toBe(9);
+      expect(parsed.keyframes[0].zh).toContain('ELS');
+      expect(parsed.keyframes[8].zh).toContain('High Angle');
+      expect(parsed.avoid).toBeUndefined();
+    });
+
+    it('V2 quality 中包含 avoid=... 时应提取负面词', () => {
+      const text = JSON.stringify({
+        storyboard_config: {
+          layout: '3x3_grid',
+          aspect_ratio: '16:9',
+          style: 'modern_thriller',
+          visual_anchor: {
+            character: '主角',
+            environment: '环境',
+            lighting: '灯光',
+            mood: '紧张',
+          },
+        },
+        shots: Array.from({ length: 9 }).map((_, i) => ({
+          shot_number: `分镜${i + 1}`,
+          type: ['ELS', 'LS', 'MLS', 'MS', 'MCU', 'CU', 'ECU', 'Low Angle', 'High Angle'][i],
+          type_cn: 'x',
+          description: `描述${i + 1}`,
+          angle: 'Eye level',
+          focus: '测试',
+        })),
+        technical_requirements: {
+          consistency: 'ABSOLUTE',
+          composition: 'Label',
+          quality: 'Photorealistic, 8K, film grain, avoid=no text; no watermark',
+        },
+      });
+
+      const parsed = parseKeyframePromptText(text);
+      expect(parsed.avoid?.zh).toBe('no text; no watermark');
+      expect(parsed.avoid?.en).toBe('no text; no watermark');
+    });
   });
 
   describe('parseSceneAnchorText', () => {

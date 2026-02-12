@@ -6,3 +6,5 @@ export * from './finalPrompts';
 export * from './assets';
 export * from './promptLayers';
 export * from './copyText';
+export * from './keyframePromptMerge';
+export * from './mergeGeneratedImages';

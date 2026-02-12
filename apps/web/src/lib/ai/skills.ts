@@ -92,12 +92,12 @@ export const ActionDescriptionSkill: Skill = {
 export const KeyframePromptSkill: Skill = {
   name: 'keyframe-prompt',
   description:
-    '生成九张静止关键帧（3段×起/中/终）的"主体差分提示词"JSON（适配图生图/参考图流程，中英双语）',
+    '生成九宫格电影分镜 JSON（storyboard_config + shots + technical_requirements）',
   requiredContext: ['project_essence', 'confirmed_content'],
-  promptTemplate: `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 9 张「静止」关键帧的"主体差分提示词"JSON：KF0-KF8（按顺序）。
+  promptTemplate: `你是一位专业的电影分镜师和提示词工程师。请根据输入内容生成适用于 Nano Banana Pro 的九宫格电影分镜 JSON。
 
 ## 输入
-当前分镜概要（决定九帧的动作分解）:
+当前分镜内容:
 {current_scene_summary}
 
 场景锚点 JSON（环境一致性）:
@@ -110,75 +110,40 @@ export const KeyframePromptSkill: Skill = {
 {characters}
 
 ## 关键规则（必须遵守）
-1. 只描述主体（人物/物品）在场景中的【位置、姿势、动作定格、交互关系】，不要描述人物外貌细节（发型/脸/服装款式等由定妆照资产保证）。
-2. 必须列出所有出场角色名，每个主要角色在每个关键帧至少有一个 subjects 描述。
-3. 默认同一场景/光照/透视，背景参考图不变：不要改背景、不要新增场景物件。
-4. 每个关键帧都是"定格瞬间"，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
-5. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
-6. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名，不要重新描述环境细节。
-7. KF0-KF8 需要形成“序列感”：相邻两帧至少 2 个可见差异；每三帧一组应体现 start/mid/end 的推进。
-8. 只输出 JSON，不要代码块、不要解释、不要多余文字。
+1. shots 必须严格固定为 9 条，顺序必须为 ELS→LS→MLS→MS→MCU→CU→ECU→Low Angle→High Angle，不可调换。
+2. 分镜1-3 建立环境；分镜4-6 人物情绪；分镜7-9 戏剧张力。
+3. 每个 description 必须包含：画面内容 + 光影 + 氛围；描述用中文，type/angle/focus 保留英文术语。
+4. visual_anchor.character 一旦定义，9 格主角外观不得改变；光线与色调保持一致。
+5. 只输出 JSON，不要代码块、不要解释、不要多余文字。
 
 ## 输出格式（严格 JSON）
 {
-  "camera": {
-    "type": "特写/中景/全景/远景",
-    "angle": "正面/侧面/俯视/仰视/3/4侧面",
-    "aspectRatio": "画面比例（如 16:9/3:4/1:1）"
+  "storyboard_config": {
+    "layout": "3x3_grid",
+    "aspect_ratio": "16:9",
+    "style": "cinematic_sci_fi/wuxia_fantasy/modern_thriller/historical_drama",
+    "visual_anchor": {
+      "character": "主角外貌+服装+标志性特征（中文）",
+      "environment": "场景环境+光线+色调（中文）",
+      "lighting": "灯光风格",
+      "mood": "整体情绪氛围"
+    }
   },
-  "keyframes": {
-    "KF0": {
-      "zh": {
-        "subjects": [
-          {
-            "name": "角色/物品名（点名即可）",
-            "position": "画面位置（如：画面左侧/中央偏右/前景）",
-            "pose": "姿势状态（如：站立/坐姿/倚靠）",
-            "action": "动作定格（如：右手举起/双手交叉胸前）",
-            "expression": "表情（仅特写镜头需要，如：微笑/凝视）",
-            "gaze": "视线方向（如：看向镜头/看向画面右侧）",
-            "interaction": "与其他主体或场景的交互（如：手扶栏杆/与B角色对视）"
-          }
-        ],
-        "usedAnchors": ["引用的场景锚点1", "锚点2"],
-        "composition": "构图说明（如：三分法左侧/居中对称）",
-        "bubbleSpace": "气泡留白区域（如：右上角/无需留白）"
-      },
-      "en": {
-        "subjects": [
-          {
-            "name": "character/object name",
-            "position": "position in frame",
-            "pose": "pose state",
-            "action": "frozen action",
-            "expression": "expression (for close-up only)",
-            "gaze": "gaze direction",
-            "interaction": "interaction with others or scene"
-          }
-        ],
-        "usedAnchors": ["anchor1", "anchor2"],
-        "composition": "composition notes",
-        "bubbleSpace": "bubble space area"
-      }
-    },
-    "KF1": {
-      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
-      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
-    },
-    "KF2": {
-      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
-      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
-    },
-    "KF3": { "zh": {...}, "en": {...} },
-    "KF4": { "zh": {...}, "en": {...} },
-    "KF5": { "zh": {...}, "en": {...} },
-    "KF6": { "zh": {...}, "en": {...} },
-    "KF7": { "zh": {...}, "en": {...} },
-    "KF8": { "zh": {...}, "en": {...} }
+  "shots": [
+    { "shot_number": "分镜1", "type": "ELS", "type_cn": "大远景", "description": "...", "angle": "Eye level", "focus": "建立环境" },
+    { "shot_number": "分镜2", "type": "LS", "type_cn": "远景", "description": "...", "angle": "Eye level", "focus": "动作展示" },
+    { "shot_number": "分镜3", "type": "MLS", "type_cn": "中远景", "description": "...", "angle": "Slight low angle", "focus": "人物关系" },
+    { "shot_number": "分镜4", "type": "MS", "type_cn": "中景", "description": "...", "angle": "Eye level", "focus": "肢体语言" },
+    { "shot_number": "分镜5", "type": "MCU", "type_cn": "中近景", "description": "...", "angle": "Slight high angle", "focus": "情绪表达" },
+    { "shot_number": "分镜6", "type": "CU", "type_cn": "近景", "description": "...", "angle": "Straight on", "focus": "眼神细节" },
+    { "shot_number": "分镜7", "type": "ECU", "type_cn": "特写", "description": "...", "angle": "Macro", "focus": "关键道具" },
+    { "shot_number": "分镜8", "type": "Low Angle", "type_cn": "仰拍", "description": "...", "angle": "Extreme low angle", "focus": "权力关系" },
+    { "shot_number": "分镜9", "type": "High Angle", "type_cn": "俯拍", "description": "...", "angle": "Top-down", "focus": "上帝视角" }
   },
-  "avoid": {
-    "zh": "避免元素（如：多余角色/背景变化/文字水印/运动模糊/解剖错误）",
-    "en": "Elements to avoid (e.g., extra characters, background changes, text/watermark, motion blur, bad anatomy)"
+  "technical_requirements": {
+    "consistency": "ABSOLUTE: Same character face, same costume, same lighting across all 9 panels",
+    "composition": "Label '分镜X' top-left corner, no timecode, cinematic 2.39:1 ratio",
+    "quality": "Photorealistic, 8K, film grain"
   }
 }`,
   outputFormat: { type: 'json', maxLength: 15000 },
@@ -187,19 +152,19 @@ export const KeyframePromptSkill: Skill = {
 
 export const MotionPromptSkill: Skill = {
   name: 'motion-prompt',
-  description: '生成图生视频用的运动/时空提示词JSON（基于九关键帧差分）',
+  description: '生成图生视频用的运动/时空提示词 JSON（基于九宫格 shots 差分）',
   requiredContext: ['project_essence', 'confirmed_content'],
-  promptTemplate: `你是图生视频(I2V)提示词工程师。请基于「九张静止关键帧 KF0-KF8」生成"描述变化"的运动/时空提示词JSON，用于多家视频模型。
+  promptTemplate: `你是图生视频(I2V)提示词工程师。请基于「九宫格静止分镜 shots[分镜1-分镜9]」生成"描述变化"的运动/时空提示词JSON，用于多家视频模型。
 
 ## 输入
 场景锚点 JSON:
 {scene_description}
 
-9关键帧 JSON（静止描述，包含 KF0-KF8）:
+9宫格分镜 JSON（静止描述，包含 shots[分镜1-分镜9]）:
 {shot_prompt}
 
 ## 关键规则（必须遵守）
-1. 只描述"从 KF0→…→KF8 发生了什么变化"，不要重述静态画面细节。
+1. 只描述"从 分镜1→…→分镜9 发生了什么变化"，不要重述静态画面细节。
 2. 变化分三类：主体变化（人物/物品）/ 镜头变化 / 环境变化；每类最多 2 个要点，避免打架。
 3. 给两种输出：短版（适配多数模型）+ 分拍版（0-1s/1-2s/2-3s 时间节拍）。
 4. 强约束必须写明：保持同一人物身份/脸/服装/发型/背景锚点不变；禁止凭空新增物体；禁止场景跳变；禁止文字水印。

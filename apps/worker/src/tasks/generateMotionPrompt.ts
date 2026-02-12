@@ -46,7 +46,7 @@ function buildUserPrompt(args: {
   parts.push('场景锚点 JSON:');
   parts.push(args.sceneAnchor || '-');
   parts.push('');
-  parts.push('9关键帧 JSON（静止描述，包含 KF0-KF8）:');
+  parts.push('9宫格分镜 JSON（静止描述，包含 shots[分镜1-分镜9]）:');
   parts.push(args.shotPrompt || '-');
 
   if (args.panelHints) {

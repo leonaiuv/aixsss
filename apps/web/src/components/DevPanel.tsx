@@ -1361,7 +1361,7 @@ function ErrorDetailDialog({ entry, onClose }: { entry: AICallLogEntry; onClose:
               {entry.timestamp}
             </Badge>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -1369,12 +1369,12 @@ function ErrorDetailDialog({ entry, onClose }: { entry: AICallLogEntry; onClose:
         <ScrollArea className="max-h-[calc(90vh-64px)]">
           <div className="p-5 space-y-4">
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-destructive">错误信息</p>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                <p className="text-xs font-semibold text-destructive min-w-0">错误信息</p>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 text-[10px]"
+                  className="h-7 text-[10px] shrink-0"
                   onClick={() => handleCopy(entry.error || '', '错误信息')}
                   disabled={!entry.error}
                 >
@@ -1382,7 +1382,7 @@ function ErrorDetailDialog({ entry, onClose }: { entry: AICallLogEntry; onClose:
                   复制
                 </Button>
               </div>
-              <p className="text-xs font-mono break-words whitespace-pre-wrap">
+              <p className="text-xs font-mono break-all whitespace-pre-wrap max-w-full">
                 {entry.error || '未知错误'}
               </p>
             </div>
@@ -1399,9 +1399,9 @@ function ErrorDetailDialog({ entry, onClose }: { entry: AICallLogEntry; onClose:
             </div>
 
             <div className="rounded-lg border bg-card/30 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 min-w-0">
                 <p className="text-xs font-semibold text-muted-foreground">发送给 AI 的 Messages</p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1419,12 +1419,12 @@ function ErrorDetailDialog({ entry, onClose }: { entry: AICallLogEntry; onClose:
             </div>
 
             <div className="rounded-lg border bg-card/30 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 min-w-0">
                 <p className="text-xs font-semibold text-muted-foreground">拼接后的提示词</p>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 text-[10px]"
+                  className="h-7 text-[10px] shrink-0"
                   onClick={() => handleCopy(entry.filledPrompt || '', '提示词')}
                   disabled={!entry.filledPrompt}
                 >

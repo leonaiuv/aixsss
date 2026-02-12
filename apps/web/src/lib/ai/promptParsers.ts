@@ -1,4 +1,4 @@
-import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
+import { GENERATED_IMAGE_KEYFRAMES, STORYBOARD_V2_SHOT_ORDER } from '@aixsss/shared';
 
 export type PromptLocale = 'zh' | 'en';
 
@@ -94,11 +94,42 @@ export interface KeyframeLocaleData {
   bubbleSpace?: string;
 }
 
-export interface KeyframeJsonData {
+export interface LegacyKeyframeJsonData {
   camera?: { type?: string; angle?: string; aspectRatio?: string };
   keyframes?: Record<string, { zh?: KeyframeLocaleData; en?: KeyframeLocaleData } | undefined>;
   avoid?: { zh?: string; en?: string };
 }
+
+export interface StoryboardShotV2Data {
+  shot_number?: string;
+  type?: string;
+  type_cn?: string;
+  description?: string;
+  angle?: string;
+  focus?: string;
+}
+
+export interface StoryboardKeyframeJsonData {
+  storyboard_config?: {
+    layout?: string;
+    aspect_ratio?: string;
+    style?: string;
+    visual_anchor?: {
+      character?: string;
+      environment?: string;
+      lighting?: string;
+      mood?: string;
+    };
+  };
+  shots?: StoryboardShotV2Data[];
+  technical_requirements?: {
+    consistency?: string;
+    composition?: string;
+    quality?: string;
+  };
+}
+
+export type KeyframeJsonData = LegacyKeyframeJsonData | StoryboardKeyframeJsonData;
 
 export interface MotionJsonData {
   motion?: {
@@ -118,6 +149,13 @@ export interface MotionJsonData {
 
 function normalizeNewlines(text: string): string {
   return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function extractAvoidFromQuality(quality: string | undefined): string | undefined {
+  const text = (quality || '').trim();
+  if (!text) return undefined;
+  const match = text.match(/(?:^|,)\s*avoid\s*=\s*(.+)$/i);
+  return match?.[1]?.trim() || undefined;
 }
 
 // ==================== JSON 解析工具 ====================
@@ -217,7 +255,7 @@ export function buildSceneAnchorPromptFromJson(
  */
 export function buildKeyframePromptFromJson(
   kfData: KeyframeLocaleData | undefined,
-  camera: KeyframeJsonData['camera'],
+  camera: LegacyKeyframeJsonData['camera'],
   locale: PromptLocale,
 ): string {
   if (!kfData) return '';
@@ -275,6 +313,28 @@ export function buildKeyframePromptFromJson(
     );
   }
 
+  return parts.join(', ');
+}
+
+function buildStoryboardShotPrompt(shot: StoryboardShotV2Data | undefined, locale: PromptLocale): string {
+  if (!shot) return '';
+  const parts: string[] = [];
+  if (shot.shot_number || shot.type || shot.type_cn) {
+    parts.push(
+      locale === 'zh'
+        ? `镜头: ${shot.shot_number || '-'} | ${shot.type || '-'} (${shot.type_cn || '-'})`
+        : `Shot: ${shot.shot_number || '-'} | ${shot.type || '-'} (${shot.type_cn || '-'})`,
+    );
+  }
+  if (shot.angle) {
+    parts.push(locale === 'zh' ? `角度: ${shot.angle}` : `Angle: ${shot.angle}`);
+  }
+  if (shot.focus) {
+    parts.push(locale === 'zh' ? `焦点: ${shot.focus}` : `Focus: ${shot.focus}`);
+  }
+  if (shot.description) {
+    parts.push(locale === 'zh' ? `描述: ${shot.description}` : `Description: ${shot.description}`);
+  }
   return parts.join(', ');
 }
 
@@ -403,28 +463,60 @@ export function parseKeyframePromptText(text: string): ParsedKeyframePrompts {
   const jsonResult = tryParseJson<KeyframeJsonData>(text);
   if (jsonResult.valid && jsonResult.data) {
     const json = jsonResult.data;
-    const kfs = json.keyframes || {};
+    if (Array.isArray((json as StoryboardKeyframeJsonData).shots)) {
+      const v2 = json as StoryboardKeyframeJsonData;
+      const shots = v2.shots || [];
+      const keyframes = keyframeKeys.map((_, idx) => {
+        const shot = shots[idx];
+        const value = buildStoryboardShotPrompt(shot, 'zh');
+        return {
+          zh: value || undefined,
+          en: buildStoryboardShotPrompt(shot, 'en') || value || undefined,
+        };
+      });
+      const filledKeyframeCount = keyframes.filter((kf) => Boolean(kf.zh || kf.en)).length;
+      const firstShot = shots[0];
+      const camera = {
+        type: firstShot?.type,
+        angle: firstShot?.angle,
+        aspectRatio: v2.storyboard_config?.aspect_ratio,
+      };
+      return {
+        keyframes,
+        keyframeKeys,
+        filledKeyframeCount,
+        avoid: (() => {
+          const avoid = extractAvoidFromQuality(v2.technical_requirements?.quality);
+          return avoid ? { zh: avoid, en: avoid } : undefined;
+        })(),
+        camera,
+        isStructured:
+          shots.length === STORYBOARD_V2_SHOT_ORDER.length &&
+          shots.every((s, idx) => s?.type === STORYBOARD_V2_SHOT_ORDER[idx]),
+        isJson: true,
+        rawJson: json,
+      };
+    }
 
-    // 将 JSON 结构转换为拼接后的字符串
+    const legacy = json as LegacyKeyframeJsonData;
+    const kfs = legacy.keyframes || {};
     const buildKfText = (kfKey: string): LocaleText => {
       const kf = kfs[kfKey] as { zh?: KeyframeLocaleData; en?: KeyframeLocaleData } | undefined;
       return {
-        zh: buildKeyframePromptFromJson(kf?.zh, json.camera, 'zh') || undefined,
-        en: buildKeyframePromptFromJson(kf?.en, json.camera, 'en') || undefined,
+        zh: buildKeyframePromptFromJson(kf?.zh, legacy.camera, 'zh') || undefined,
+        en: buildKeyframePromptFromJson(kf?.en, legacy.camera, 'en') || undefined,
       };
     };
 
     const keyframes = keyframeKeys.map((kfKey) => buildKfText(kfKey));
-    const filledKeyframeCount = keyframes.filter((kf) =>
-      Boolean(kf.zh?.trim() || kf.en?.trim()),
-    ).length;
+    const filledKeyframeCount = keyframes.filter((kf) => Boolean(kf.zh?.trim() || kf.en?.trim())).length;
 
     return {
       keyframes,
       keyframeKeys,
       filledKeyframeCount,
-      avoid: json.avoid,
-      camera: json.camera,
+      avoid: legacy.avoid,
+      camera: legacy.camera,
       isStructured: true,
       isJson: true,
       rawJson: json,

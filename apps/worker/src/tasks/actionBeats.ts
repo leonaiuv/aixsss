@@ -5,6 +5,7 @@ import { chatWithProvider } from '../providers/index.js';
 import { parseJsonFromText } from './aiJson.js';
 import { mergeTokenUsage, type TokenUsage } from './common.js';
 import { loadSystemPrompt } from './systemPrompts.js';
+import { STORYBOARD_V2_SHOT_CN, STORYBOARD_V2_SHOT_ORDER } from '@aixsss/shared';
 
 const CONTINUOUS_WORD_PATTERNS: RegExp[] = [
   /\b(then|after|before|while|when)\b/i,
@@ -1104,144 +1105,131 @@ export async function repairContinuityJson(args: {
   return { frameSpec: out.json, tokenUsage: out.tokenUsage };
 }
 
-type LegacyKeyframeLocaleBlock = {
-  subjects?: Array<{
-    name?: string;
-    position?: string;
-    pose?: string;
-    action?: string;
-    expression?: string;
-    gaze?: string;
-    interaction?: string;
-  }>;
-  usedAnchors?: string[];
-  composition?: string;
-  bubbleSpace?: string;
+type StoryboardShotV2 = {
+  shot_number: string;
+  type: (typeof STORYBOARD_V2_SHOT_ORDER)[number];
+  type_cn: string;
+  description: string;
+  angle: string;
+  focus: string;
 };
 
-type LegacyKeyframeJsonData = {
-  camera?: {
-    type?: string;
-    angle?: string;
-    aspectRatio?: string;
+type StoryboardPromptV2 = {
+  storyboard_config: {
+    layout: '3x3_grid';
+    aspect_ratio: '16:9';
+    style: string;
+    visual_anchor: {
+      character: string;
+      environment: string;
+      lighting: string;
+      mood: string;
+    };
   };
-  keyframes?: Record<string, { zh?: LegacyKeyframeLocaleBlock; en?: LegacyKeyframeLocaleBlock } | undefined>;
-  avoid?: { zh?: string; en?: string };
+  shots: StoryboardShotV2[];
+  technical_requirements: {
+    consistency: string;
+    composition: string;
+    quality: string;
+  };
 };
 
-function buildLegacyComposition(frame: FrameSpec): string | undefined {
-  const c = frame.composition;
-  if (!c) return undefined;
-  const parts = [c.rule, c.focus, c.depth_hint].filter(Boolean);
-  return parts.length ? parts.join(' / ') : undefined;
-}
-
-function buildLegacyBubbleSpace(frame: FrameSpec): string | undefined {
-  const b = frame.bubble_space;
-  if (!b) return undefined;
-  if (b.need === false) return 'none';
-  const parts = [b.area, b.size].filter(Boolean);
-  return parts.length ? parts.join(' / ') : undefined;
-}
-
-function buildLegacyInteraction(subject: FrameSpec['subjects'][number]): string | undefined {
-  const parts: string[] = [];
-  if (subject.hands) {
-    if (subject.hands.left) parts.push(`left_hand=${subject.hands.left}`);
-    if (subject.hands.right) parts.push(`right_hand=${subject.hands.right}`);
-  }
-  if (Array.isArray(subject.props) && subject.props.length) {
-    parts.push(
-      `props=${subject.props
-        .map((p) => `${p.name}:${p.state}`)
+function describeFrame(frame: FrameSpec): string {
+  const subjects = frame.subjects
+    .map((s) => `${s.name}在${s.position_in_frame}，${s.pose}，${s.action_snapshot}`)
+    .join('；');
+  const anchors = frame.used_anchors?.length ? `锚点：${frame.used_anchors.join('、')}` : '';
+  const composition = frame.composition
+    ? [frame.composition.rule, frame.composition.focus, frame.composition.depth_hint]
         .filter(Boolean)
-        .join(',')}`,
-    );
+        .join('，')
+    : '';
+  return [subjects, anchors, composition, '光影统一，氛围持续推进。'].filter(Boolean).join(' ');
+}
+
+function defaultAngleByShotType(type: (typeof STORYBOARD_V2_SHOT_ORDER)[number]): string {
+  switch (type) {
+    case 'ELS':
+    case 'LS':
+    case 'MS':
+      return 'Eye level';
+    case 'MLS':
+      return 'Slight low angle';
+    case 'MCU':
+      return 'Slight high angle';
+    case 'CU':
+      return 'Straight on';
+    case 'ECU':
+      return 'Macro';
+    case 'Low Angle':
+      return 'Extreme low angle';
+    case 'High Angle':
+      return 'Top-down';
+    default:
+      return 'Eye level';
   }
-  return parts.length ? parts.join(' ; ') : undefined;
 }
 
-function frameSpecToLegacyBlock(frame: FrameSpec): LegacyKeyframeLocaleBlock {
-  return {
-    subjects: frame.subjects.map((s) => ({
-      name: s.name,
-      position: s.position_in_frame,
-      pose: s.pose,
-      action: s.action_snapshot,
-      expression: s.expression,
-      gaze: s.gaze,
-      interaction: buildLegacyInteraction(s),
-    })),
-    usedAnchors: frame.used_anchors,
-    composition: buildLegacyComposition(frame),
-    bubbleSpace: buildLegacyBubbleSpace(frame),
-  };
+function focusByIndex(index: number): string {
+  if (index <= 2) return '建立环境';
+  if (index <= 5) return '人物情绪';
+  return '戏剧张力';
 }
 
-export function keyframeGroupToLegacyShotPrompt(group: KeyframeGroup): string {
-  const start = group.frames.start.frame_spec;
-  const mid = group.frames.mid.frame_spec;
-  const end = group.frames.end.frame_spec;
-  const avoidText = group.negative?.avoid?.length ? group.negative.avoid.join('; ') : '';
+export function keyframeGroupsToStoryboardPromptV2(groups: KeyframeGroup[], options?: { maxGroups?: number }): string {
+  const maxGroups = Math.max(1, Math.min(3, options?.maxGroups ?? 3));
+  const selected = (groups ?? []).slice(0, maxGroups);
+  if (selected.length < maxGroups) {
+    throw new Error(`Expected at least ${maxGroups} keyframe groups, got ${selected.length}`);
+  }
 
-  const data: LegacyKeyframeJsonData = {
-    camera: {
-      type: group.camera?.shot_size,
-      angle: group.camera?.angle,
-      aspectRatio: group.camera?.aspect_ratio,
+  const frames: FrameSpec[] = [];
+  for (const group of selected) {
+    frames.push(group.frames.start.frame_spec, group.frames.mid.frame_spec, group.frames.end.frame_spec);
+  }
+  if (frames.length !== STORYBOARD_V2_SHOT_ORDER.length) {
+    throw new Error(`Expected exactly 9 frames, got ${frames.length}`);
+  }
+
+  const firstFrame = frames[0];
+  const avoidList = selected.flatMap((g) => g.negative?.avoid ?? []).filter(Boolean);
+
+  const data: StoryboardPromptV2 = {
+    storyboard_config: {
+      layout: '3x3_grid',
+      aspect_ratio: '16:9',
+      style: 'cinematic_storyboard',
+      visual_anchor: {
+        character: firstFrame.subjects.map((s) => `${s.name}:${s.pose}`).join('；') || '主角外观保持一致',
+        environment: firstFrame.used_anchors?.length
+          ? `场景锚点：${firstFrame.used_anchors.join('、')}`
+          : '统一环境与空间关系',
+        lighting: '统一主光方向与色温，不跨镜头跳变',
+        mood: firstFrame.subjects.map((s) => s.expression).filter(Boolean).join(' / ') || '紧张',
+      },
     },
-    keyframes: {
-      KF0: { zh: frameSpecToLegacyBlock(start), en: frameSpecToLegacyBlock(start) },
-      KF1: { zh: frameSpecToLegacyBlock(mid), en: frameSpecToLegacyBlock(mid) },
-      KF2: { zh: frameSpecToLegacyBlock(end), en: frameSpecToLegacyBlock(end) },
+    shots: frames.map((frame, idx) => {
+      const type = STORYBOARD_V2_SHOT_ORDER[idx];
+      const group = selected[Math.floor(idx / 3)];
+      return {
+        shot_number: `分镜${idx + 1}`,
+        type,
+        type_cn: STORYBOARD_V2_SHOT_CN[type],
+        description: describeFrame(frame),
+        angle: group?.camera?.angle || defaultAngleByShotType(type),
+        focus: focusByIndex(idx),
+      };
+    }),
+    technical_requirements: {
+      consistency: 'ABSOLUTE: Same character face, same costume, same lighting across all 9 panels',
+      composition: "Label '分镜X' top-left corner, no timecode, cinematic 2.39:1 ratio",
+      quality: `Photorealistic, 8K, film grain${avoidList.length ? `, avoid=${Array.from(new Set(avoidList)).join('; ')}` : ''}`,
     },
-    avoid: { zh: avoidText, en: avoidText },
   };
 
   return JSON.stringify(data, null, 2);
 }
 
 export function keyframeGroupsToLegacyShotPrompt(groups: KeyframeGroup[], options?: { maxGroups?: number }): string {
-  const maxGroups = Math.max(1, Math.min(3, options?.maxGroups ?? 3));
-  const selected = (groups ?? []).slice(0, maxGroups);
-
-  if (selected.length < maxGroups) {
-    throw new Error(`Expected at least ${maxGroups} keyframe groups, got ${selected.length}`);
-  }
-
-  const avoidList = selected.flatMap((g) => g.negative?.avoid ?? []).filter(Boolean);
-  const avoidText = Array.from(new Set(avoidList)).join('; ');
-
-  const keyframes: NonNullable<LegacyKeyframeJsonData['keyframes']> = {};
-  let idx = 0;
-
-  for (const group of selected) {
-    const start = group.frames.start.frame_spec;
-    const mid = group.frames.mid.frame_spec;
-    const end = group.frames.end.frame_spec;
-
-    const pushFrame = (frame: FrameSpec) => {
-      const key = `KF${idx}`;
-      keyframes[key] = { zh: frameSpecToLegacyBlock(frame), en: frameSpecToLegacyBlock(frame) };
-      idx += 1;
-    };
-
-    pushFrame(start);
-    pushFrame(mid);
-    pushFrame(end);
-  }
-
-  const first = selected[0];
-
-  const data: LegacyKeyframeJsonData = {
-    camera: {
-      type: first.camera?.shot_size,
-      angle: first.camera?.angle,
-      aspectRatio: first.camera?.aspect_ratio,
-    },
-    keyframes,
-    avoid: { zh: avoidText, en: avoidText },
-  };
-
-  return JSON.stringify(data, null, 2);
+  return keyframeGroupsToStoryboardPromptV2(groups, options);
 }

@@ -1006,7 +1006,13 @@ export class JobsService {
     return mapJob(jobRow);
   }
 
-  async enqueueGenerateKeyframeImages(teamId: string, projectId: string, sceneId: string, aiProfileId: string) {
+  async enqueueGenerateKeyframeImages(
+    teamId: string,
+    projectId: string,
+    sceneId: string,
+    aiProfileId: string,
+    options?: { keyframeKey?: string },
+  ) {
     await this.requireProject(teamId, projectId);
     await this.requireScene(projectId, sceneId);
     await this.requireAIProfile(teamId, aiProfileId);
@@ -1024,7 +1030,14 @@ export class JobsService {
 
     await this.queue.add(
       'generate_keyframe_images',
-      { teamId, projectId, sceneId, aiProfileId, jobId: jobRow.id },
+      {
+        teamId,
+        projectId,
+        sceneId,
+        aiProfileId,
+        jobId: jobRow.id,
+        ...(options?.keyframeKey ? { keyframeKey: options.keyframeKey } : {}),
+      },
       {
         jobId: jobRow.id,
         attempts: 2,

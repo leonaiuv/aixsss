@@ -8,7 +8,7 @@ import type {
 import { chatOpenAICompatible, generateImagesOpenAICompatible } from './openaiCompatible.js';
 import { chatDoubaoArk, generateImagesDoubaoArk } from './doubaoArk.js';
 import { chatGemini } from './gemini.js';
-import { generateImagesNanoBananaDmxapi } from './nanoBananaDmxapi.js';
+import { chatNanoBananaDmxapi, generateImagesNanoBananaDmxapi } from './nanoBananaDmxapi.js';
 
 export async function chatWithProvider(config: ProviderChatConfig, messages: ChatMessage[]): Promise<ChatResult> {
   switch (config.kind) {
@@ -18,6 +18,8 @@ export async function chatWithProvider(config: ProviderChatConfig, messages: Cha
       return chatDoubaoArk(config, messages);
     case 'gemini':
       return chatGemini(config, messages);
+    case 'nanobanana_dmxapi':
+      return chatNanoBananaDmxapi(config, messages);
     default: {
       const _exhaustive: never = config.kind;
       throw new Error(`Unsupported provider kind: ${_exhaustive}`);

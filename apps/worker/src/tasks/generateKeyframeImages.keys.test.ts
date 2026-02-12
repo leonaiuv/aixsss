@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../providers/index.js', () => ({
   generateImagesWithProvider: vi.fn(),
@@ -17,9 +17,14 @@ import { generateKeyframeImages } from './generateKeyframeImages.js';
 describe('generateKeyframeImages - dual api keys', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network disabled')));
     (generateImagesWithProvider as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       images: [{ url: 'https://example.com/1.png' }],
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('NanoBanana 模式应优先使用图片专用 key', async () => {

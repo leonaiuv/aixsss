@@ -4,33 +4,50 @@ import { chatWithProvider } from '../providers/index.js';
 import type { ChatMessage } from '../providers/types.js';
 import { decryptApiKey } from '../crypto/apiKeyCrypto.js';
 import { fixStructuredOutput, responseFormatForFixableOutputType } from './formatFix.js';
-import { mergeTokenUsage, styleFullPrompt, toProviderChatConfig } from './common.js';
+import {
+  mergeTokenUsage,
+  styleFullPrompt,
+  toProviderChatConfig,
+  toProviderKeyframeChatConfig,
+} from './common.js';
 import { formatPanelScriptHints, getExistingPanelScript } from './panelScriptHints.js';
 import {
   generateActionPlanJson,
   generateKeyframeGroupsJson,
-  keyframeGroupsToLegacyShotPrompt,
+  keyframeGroupsToStoryboardPromptV2,
 } from './actionBeats.js';
 import {
   buildCharacterVisualContext,
   buildCoreExpressionContext,
+  buildNarrativeContext,
   calculateEmotionalPosition,
   parseCoreExpression,
   type CharacterVisualData,
 } from './contextHelpers.js';
+import { loadSystemPrompt } from './systemPrompts.js';
+import { buildMultimodalUserContent, buildVisualReferenceBundle } from './referenceBundle.js';
 
-function buildPrompt(args: {
+function inferMoodFromSummary(summary: string): string {
+  const text = (summary || '').trim();
+  if (!text) return '紧张';
+  if (/(浪漫|爱情|温柔|甜蜜|相拥|告白)/.test(text)) return '浪漫';
+  if (/(悬疑|诡异|秘密|真相|追踪|潜伏)/.test(text)) return '悬疑';
+  if (/(追逐|战斗|爆炸|冲突|打斗|对决)/.test(text)) return '动作';
+  if (/(科幻|太空|未来|机甲|赛博|星际)/.test(text)) return '科幻';
+  return '紧张';
+}
+
+function buildFallbackUserPrompt(args: {
   style: string;
   currentSummary: string;
   sceneAnchor: string;
-  characters: string;
   panelHints: string;
-  // 新增上下文
-  castCharactersVisual?: string;
+  mood: string;
+  castCharactersVisual: string;
   coreExpressionContext?: string;
   emotionalPosition?: '起' | '承' | '转' | '合';
+  referenceSummary?: string;
 }): string {
-  // 构建叙事上下文部分
   let narrativeSection = '';
   if (args.coreExpressionContext || args.emotionalPosition) {
     const parts: string[] = ['## 叙事导演意图'];
@@ -42,103 +59,29 @@ function buildPrompt(args: {
       parts.push(args.coreExpressionContext);
     }
     parts.push('');
-    parts.push('请基于上述叙事意图来设计角色的表情、姿态和画面氛围。');
-    parts.push('');
     narrativeSection = parts.join('\n');
   }
 
-  // 角色视觉描述部分
-  const characterSection = args.castCharactersVisual
-    ? `出场角色（包含视觉特征参考，但仅用于理解角色，关键帧中只需点名，外观由定妆照资产保证）:\n${args.castCharactersVisual}`
-    : `出场角色（仅用于点名，不要写长外观描述，角色外观由定妆照资产保证）:\n${args.characters}`;
-
-  return `你是专业的绘图/视频关键帧提示词工程师。用户已经用"场景锚点"生成了一张无人物的场景图（背景参考图），角色定妆照也已预先生成。现在请为 img2img/图生图 输出 9 张「静止」关键帧的"主体差分提示词"JSON：KF0-KF8（按顺序）。
-
-${narrativeSection}## 输入
-当前分镜概要（决定九帧的动作分解）:
+  return `${narrativeSection}## 输入
+当前分镜内容:
 ${args.currentSummary}
 
-场景锚点 JSON（环境一致性）:
+场景锚点 JSON:
 ${args.sceneAnchor}
 
 视觉风格参考:
 ${args.style}
 
-${characterSection}
-${args.panelHints}
+情绪基调:
+${args.mood}
 
-## 关键规则（必须遵守）
-1. 只描述主体（人物/物品）在场景中的【位置、姿势、动作定格、交互关系】，不要描述人物外貌细节（发型/脸/服装款式等由定妆照资产保证）。
-2. 9 帧必须连贯：相邻两帧之间人物位置/朝向/道具状态要有合理衔接，禁止无理由跳变。
-3. 默认同一场景/光照/透视，背景参考图不变：不要改背景、不要新增场景物件。
-4. 每个关键帧都是"定格瞬间"，禁止写连续过程词：then/after/starts to/slowly/gradually/随后/然后/开始/逐渐。
-5. 禁止 walking/running/moving 等连续动作表达；允许用静态姿态词：standing/sitting/leaning/holding/hand raised/frozen moment/static pose。
-6. 场景定位只允许引用场景锚点 anchors 中的 2-4 个锚点名，不要重新描述环境细节。
-7. KF0-KF8 需要形成“序列感”：相邻两帧至少 2 个可见差异；每三帧一组应体现 start/mid/end 的推进。
-8. 只输出 JSON，不要代码块、不要解释、不要多余文字。
+人物参考与特征（文本锚点）:
+${args.castCharactersVisual}
 
-## 输出格式（严格 JSON）
-{
-  "camera": {
-    "type": "特写/中景/全景/远景",
-    "angle": "正面/侧面/俯视/仰视/3/4侧面",
-    "aspectRatio": "画面比例（如 16:9/3:4/1:1）"
-  },
-  "keyframes": {
-    "KF0": {
-      "zh": {
-        "subjects": [
-          {
-            "name": "角色/物品名（点名即可）",
-            "position": "画面位置（如：画面左侧/中央偏右/前景）",
-            "pose": "姿势状态（如：站立/坐姿/倚靠）",
-            "action": "动作定格（如：右手举起/双手交叉胸前）",
-            "expression": "表情（仅特写镜头需要，如：微笑/凝视）",
-            "gaze": "视线方向（如：看向镜头/看向画面右侧）",
-            "interaction": "与其他主体或场景的交互（如：手扶栏杆/与B角色对视）"
-          }
-        ],
-        "usedAnchors": ["引用的场景锚点1", "锚点2"],
-        "composition": "构图说明（如：三分法左侧/居中对称）",
-        "bubbleSpace": "气泡留白区域（如：右上角/无需留白）"
-      },
-      "en": {
-        "subjects": [
-          {
-            "name": "character/object name",
-            "position": "position in frame",
-            "pose": "pose state",
-            "action": "frozen action",
-            "expression": "expression (for close-up only)",
-            "gaze": "gaze direction",
-            "interaction": "interaction with others or scene"
-          }
-        ],
-        "usedAnchors": ["anchor1", "anchor2"],
-        "composition": "composition notes",
-        "bubbleSpace": "bubble space area"
-      }
-    },
-    "KF1": {
-      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
-      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
-    },
-    "KF2": {
-      "zh": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." },
-      "en": { "subjects": [...], "usedAnchors": [...], "composition": "...", "bubbleSpace": "..." }
-    },
-    "KF3": { "zh": {...}, "en": {...} },
-    "KF4": { "zh": {...}, "en": {...} },
-    "KF5": { "zh": {...}, "en": {...} },
-    "KF6": { "zh": {...}, "en": {...} },
-    "KF7": { "zh": {...}, "en": {...} },
-    "KF8": { "zh": {...}, "en": {...} }
-  },
-  "avoid": {
-    "zh": "避免元素（如：多余角色/背景变化/文字水印/运动模糊/解剖错误）",
-    "en": "Elements to avoid (e.g., extra characters, background changes, text/watermark, motion blur, bad anatomy)"
-  }
-}`;
+参考图摘要:
+${args.referenceSummary || '-'}
+
+${args.panelHints}`;
 }
 
 export async function generateKeyframePrompt(args: {
@@ -154,7 +97,7 @@ export async function generateKeyframePrompt(args: {
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, teamId, deletedAt: null },
-    select: { id: true, style: true, artStyleConfig: true, protagonist: true },
+    select: { id: true, style: true, artStyleConfig: true, protagonist: true, contextCache: true },
   });
   if (!project) throw new Error('Project not found');
 
@@ -197,6 +140,7 @@ export async function generateKeyframePrompt(args: {
       model: true,
       baseURL: true,
       apiKeyEncrypted: true,
+      imageApiKeyEncrypted: true,
       generationParams: true,
     },
   });
@@ -207,7 +151,7 @@ export async function generateKeyframePrompt(args: {
   // 查询完整角色信息（包括视觉描述）
   const characterRows = await prisma.character.findMany({
     where: { projectId },
-    select: { id: true, name: true, appearance: true, personality: true },
+    select: { id: true, name: true, appearance: true, personality: true, avatar: true, appearances: true },
   });
   const characterNameById = new Map(characterRows.map((c) => [c.id, c.name]));
   const panelHints = formatPanelScriptHints(getExistingPanelScript(scene.contextSummary), {
@@ -225,6 +169,8 @@ export async function generateKeyframePrompt(args: {
         name: char.name,
         visualDescription: char.appearance || undefined,
         personality: char.personality || undefined,
+        avatar: char.avatar || undefined,
+        appearances: char.appearances ?? undefined,
       } as CharacterVisualData;
     })
     .filter((c): c is CharacterVisualData => c !== null);
@@ -252,20 +198,45 @@ export async function generateKeyframePrompt(args: {
   // 构建角色视觉上下文
   const castCharactersVisual = buildCharacterVisualContext(castCharacters);
 
-  const prompt = buildPrompt({
+  const narrativeContext = buildNarrativeContext(project.contextCache, scene.order, totalScenes);
+  const mood = narrativeContext.emotionalTone || inferMoodFromSummary(scene.summary || '');
+  const referenceBundle = buildVisualReferenceBundle({
+    contextSummary: scene.contextSummary,
+    castCharacters: castCharacters.map((c) => ({
+      id: c.id,
+      name: c.name,
+      avatar: c.avatar,
+      appearances: c.appearances,
+    })),
+  });
+
+  const prompt = buildFallbackUserPrompt({
     style,
     currentSummary: scene.summary || '-',
     sceneAnchor: scene.sceneDescription,
-    characters: project.protagonist || '-',
     panelHints,
+    mood,
     castCharactersVisual,
+    referenceSummary: `sceneRefs=${referenceBundle.sceneRefs.length}, characterRefs=${referenceBundle.characterRefs.length}`,
     coreExpressionContext: coreExpressionContext || undefined,
     emotionalPosition,
   });
 
-  const apiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
+  const textApiKey = decryptApiKey(profile.apiKeyEncrypted, apiKeySecret);
+  const imageApiKey = profile.imageApiKeyEncrypted
+    ? decryptApiKey(profile.imageApiKeyEncrypted, apiKeySecret)
+    : '';
   const providerConfig = toProviderChatConfig(profile);
-  providerConfig.apiKey = apiKey;
+  providerConfig.apiKey = textApiKey;
+  const keyframeRoute = toProviderKeyframeChatConfig(profile);
+  if (keyframeRoute.useImageApiKey) {
+    if (!imageApiKey.trim()) {
+      throw new Error('图片 API Key 未配置：关键帧多模态生成需要图片 API Key。');
+    }
+    keyframeRoute.providerConfig.apiKey = imageApiKey.trim();
+  } else {
+    keyframeRoute.providerConfig.apiKey = textApiKey;
+  }
 
   let tokenUsage: ReturnType<typeof mergeTokenUsage> = undefined;
 
@@ -300,7 +271,7 @@ export async function generateKeyframePrompt(args: {
     });
     tokenUsage = mergeTokenUsage(tokenUsage, keyframeGroupsRes.tokenUsage);
 
-    const legacyShotPrompt = keyframeGroupsToLegacyShotPrompt(
+    const legacyShotPrompt = keyframeGroupsToStoryboardPromptV2(
       keyframeGroupsRes.keyframeGroups.groups,
     );
 
@@ -326,11 +297,23 @@ export async function generateKeyframePrompt(args: {
       tokenUsage: tokenUsage ?? null,
     };
   } catch (err) {
-    await updateProgress({ pct: 25, message: '动作拆解失败，回退到直接生成 9 帧 KF0-KF8...' });
+    await updateProgress({ pct: 25, message: '动作拆解失败，回退到直接生成 9 宫格分镜 JSON...' });
 
-    const messages: ChatMessage[] = [{ role: 'user', content: prompt }];
+    const keyframeSystemPrompt = await loadSystemPrompt({
+      prisma,
+      teamId,
+      key: 'workflow.keyframe_prompt.legacy.system',
+    });
+    const userContent =
+      keyframeRoute.providerConfig.kind === 'nanobanana_dmxapi'
+        ? buildMultimodalUserContent({ text: prompt, references: referenceBundle, maxImages: 12 })
+        : prompt;
+    const messages: ChatMessage[] = [
+      { role: 'system', content: keyframeSystemPrompt },
+      { role: 'user', content: userContent },
+    ];
     const fallbackConfig = {
-      ...providerConfig,
+      ...keyframeRoute.providerConfig,
       responseFormat: responseFormatForFixableOutputType('keyframe_prompt'),
     };
     const res = await chatWithProvider(fallbackConfig, messages);

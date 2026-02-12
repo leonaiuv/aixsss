@@ -43,19 +43,27 @@ function buildUrl(baseURL: string, model: string): string {
   return `${base}/v1beta/models/${model}:generateContent`;
 }
 
+function toPlainText(content: ChatMessage['content']): string {
+  if (typeof content === 'string') return content;
+  return content
+    .map((part) => (part.type === 'text' ? part.text : ''))
+    .filter(Boolean)
+    .join('\n');
+}
+
 function toGeminiContents(messages: ChatMessage[]) {
   const system = messages.find((m) => m.role === 'system');
   const contents = messages
     .filter((m) => m.role !== 'system')
     .map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
+      parts: [{ text: toPlainText(m.content) }],
     }));
 
   if (system) {
     contents.unshift({
       role: 'user',
-      parts: [{ text: `System instruction: ${system.content}` }],
+      parts: [{ text: `System instruction: ${toPlainText(system.content)}` }],
     });
   }
 
@@ -120,5 +128,4 @@ export async function chatGemini(config: ProviderChatConfig, messages: ChatMessa
       : undefined,
   };
 }
-
 

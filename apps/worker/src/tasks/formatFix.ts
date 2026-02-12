@@ -3,8 +3,8 @@ import type { ChatMessage, ChatResult, ProviderChatConfig, ResponseFormat } from
 import { chatWithProvider } from '../providers/index.js';
 import { mergeTokenUsage, type TokenUsage } from './common.js';
 import { loadSystemPrompt } from './systemPrompts.js';
-import { GENERATED_IMAGE_KEYFRAMES } from '@aixsss/shared';
 import { parseJsonFromText } from './aiJson.js';
+import { STORYBOARD_V2_SHOT_ORDER } from '@aixsss/shared';
 
 export type FixableOutputType = 'scene_anchor' | 'keyframe_prompt' | 'motion_prompt';
 
@@ -75,36 +75,60 @@ function schemaSceneAnchor(): Record<string, unknown> {
 }
 
 function schemaKeyframePrompt(): Record<string, unknown> {
-  const frame: Record<string, unknown> = {
-    type: 'object',
-    additionalProperties: true,
-    required: ['zh', 'en'],
-    properties: {
-      zh: { type: 'object', additionalProperties: true },
-      en: { type: 'object', additionalProperties: true },
-    },
-  };
-
-  const keyframesProps: Record<string, unknown> = {};
-  const keyframesRequired: string[] = [];
-  for (const kf of GENERATED_IMAGE_KEYFRAMES) {
-    keyframesProps[kf] = frame;
-    keyframesRequired.push(kf);
-  }
-
   return {
     type: 'object',
     additionalProperties: true,
-    required: ['camera', 'keyframes', 'avoid'],
+    required: ['storyboard_config', 'shots', 'technical_requirements'],
     properties: {
-      camera: { type: 'object', additionalProperties: true },
-      keyframes: {
+      storyboard_config: {
         type: 'object',
         additionalProperties: true,
-        required: keyframesRequired,
-        properties: keyframesProps,
+        required: ['layout', 'aspect_ratio', 'style', 'visual_anchor'],
+        properties: {
+          layout: { type: 'string' },
+          aspect_ratio: { type: 'string' },
+          style: { type: 'string' },
+          visual_anchor: {
+            type: 'object',
+            additionalProperties: true,
+            required: ['character', 'environment', 'lighting', 'mood'],
+            properties: {
+              character: { type: 'string' },
+              environment: { type: 'string' },
+              lighting: { type: 'string' },
+              mood: { type: 'string' },
+            },
+          },
+        },
       },
-      avoid: { type: 'object', additionalProperties: true },
+      shots: {
+        type: 'array',
+        minItems: 9,
+        maxItems: 9,
+        items: {
+          type: 'object',
+          additionalProperties: true,
+          required: ['shot_number', 'type', 'type_cn', 'description', 'angle', 'focus'],
+          properties: {
+            shot_number: { type: 'string' },
+            type: { type: 'string' },
+            type_cn: { type: 'string' },
+            description: { type: 'string' },
+            angle: { type: 'string' },
+            focus: { type: 'string' },
+          },
+        },
+      },
+      technical_requirements: {
+        type: 'object',
+        additionalProperties: true,
+        required: ['consistency', 'composition', 'quality'],
+        properties: {
+          consistency: { type: 'string' },
+          composition: { type: 'string' },
+          quality: { type: 'string' },
+        },
+      },
     },
   };
 }
@@ -156,20 +180,33 @@ function isValidSceneAnchorJson(obj: unknown): boolean {
 function isValidKeyframeJson(obj: unknown): boolean {
   if (!obj || typeof obj !== 'object') return false;
   const o = obj as Record<string, unknown>;
-  const keyframes = o.keyframes as Record<string, unknown> | undefined;
-  if (!keyframes || typeof keyframes !== 'object') return false;
+  const storyboardConfig = o.storyboard_config as Record<string, unknown> | undefined;
+  const technical = o.technical_requirements as Record<string, unknown> | undefined;
+  const shots = Array.isArray(o.shots) ? o.shots : null;
+  if (!storyboardConfig || typeof storyboardConfig !== 'object') return false;
+  if (!technical || typeof technical !== 'object') return false;
+  if (!shots || shots.length !== STORYBOARD_V2_SHOT_ORDER.length) return false;
+  if (typeof storyboardConfig.layout !== 'string') return false;
+  if (typeof storyboardConfig.aspect_ratio !== 'string') return false;
+  if (typeof storyboardConfig.style !== 'string') return false;
+  if (typeof technical.consistency !== 'string') return false;
+  if (typeof technical.composition !== 'string') return false;
+  if (typeof technical.quality !== 'string') return false;
 
-  // 需要包含完整 9 帧（KF0-KF8），否则视为不结构化以触发 format-fix。
-  const hasAllKeyframes = GENERATED_IMAGE_KEYFRAMES.every((kf) => {
-    const entry = keyframes[kf];
-    return entry && typeof entry === 'object';
-  });
+  for (let i = 0; i < STORYBOARD_V2_SHOT_ORDER.length; i += 1) {
+    const shot = shots[i];
+    if (!shot || typeof shot !== 'object') return false;
+    const s = shot as Record<string, unknown>;
+    if (typeof s.shot_number !== 'string') return false;
+    if (typeof s.type !== 'string') return false;
+    if (s.type !== STORYBOARD_V2_SHOT_ORDER[i]) return false;
+    if (typeof s.type_cn !== 'string') return false;
+    if (typeof s.description !== 'string') return false;
+    if (typeof s.angle !== 'string') return false;
+    if (typeof s.focus !== 'string') return false;
+  }
 
-  return (
-    typeof o.camera === 'object' &&
-    typeof o.avoid === 'object' &&
-    hasAllKeyframes
-  );
+  return true;
 }
 
 /**
@@ -276,4 +313,3 @@ export async function fixStructuredOutput(args: {
 
   return { content: fixedCleaned, tokenUsage: merged, fixed: true };
 }
-

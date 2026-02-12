@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { Queue, Worker } from 'bullmq';
 import type { JobProgress } from 'bullmq';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { GENERATED_IMAGE_KEYFRAMES, type GeneratedImageKeyframe } from '@aixsss/shared';
 import { EnvSchema } from './config/env.js';
 import { generateSceneList } from './tasks/generateSceneList.js';
 import { generateSceneAnchor } from './tasks/generateSceneAnchor.js';
@@ -321,7 +322,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
@@ -347,7 +348,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
@@ -858,6 +859,11 @@ async function main() {
             return result;
           }
           case 'generate_keyframe_images': {
+            const keyframeKey =
+              typeof data.keyframeKey === 'string' &&
+              (GENERATED_IMAGE_KEYFRAMES as readonly string[]).includes(data.keyframeKey)
+                ? (data.keyframeKey as GeneratedImageKeyframe)
+                : undefined;
             const result = await generateKeyframeImages({
               prisma,
               teamId,
@@ -866,6 +872,7 @@ async function main() {
               aiProfileId,
               apiKeySecret: env.API_KEY_ENCRYPTION_KEY,
               updateProgress,
+              keyframeKey,
             });
 
             const latest = await prisma.aIJob.findFirst({ where: { id: jobId }, select: { status: true } });
@@ -875,7 +882,7 @@ async function main() {
                 data: {
                   status: 'succeeded',
                   finishedAt: new Date(),
-                  result,
+                  result: result as unknown as Prisma.InputJsonValue,
                   error: null,
                 },
               });
